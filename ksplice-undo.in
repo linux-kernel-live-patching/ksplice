@@ -1,0 +1,104 @@
+#!/usr/bin/perl
+
+# Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+# 02110-1301, USA.
+
+use Getopt::Long;
+use Cwd 'abs_path', 'getcwd';
+use Pod::Usage;
+use strict;
+use warnings;
+use lib 'KSPLICE_DATA_DIR';
+use ksplice;
+
+my ($help, $wantversion, $debug) = (0, 0, 0);
+GetOptions("help|?" => \$help,
+	"version" => \$wantversion,
+	"verbose|v!" => \$verbose,
+	"debug" => \$debug) or pod2usage(1);
+
+if($wantversion) {
+	print $version_str;
+	exit(0);
+}
+pod2usage(1) if($help || scalar(@ARGV != 1));
+
+my $kid = $ARGV[0];
+$kid =~ s/^ksplice[_-]//;
+
+if($debug) {
+	runval("echo 2 > /sys/module/ksplice_$kid/parameters/debug");
+}
+
+check_in_proc($kid);
+runval("echo 1 > /proc/ksplice_$kid");
+if(runval_raw("rmmod ksplice_$kid") != 0) {
+	my $dmesg = runstr("dmesg | grep ksplice");
+	while($dmesg =~ /ksplice: Preparing to reverse/) {
+		$dmesg = $';
+	}
+
+	if($dmesg =~ /to-be-reversed code is busy/) {
+		print <<END
+
+Ksplice has aborted the undo operation because it appears that the code that
+you are trying to change is continuously in use by the system.  More
+specifically, Ksplice has been unable to find a moment when one or more of the
+to-be-changed functions is not on a thread's kernel stack.
+
+END
+	}
+
+	die;
+}
+
+exit(0);
+
+=head1 NAME
+
+ksplice-undo - Undo a Ksplice update that has been applied to the running kernel
+
+=head1 SYNOPSIS
+
+B<ksplice-undo> I<KSPLICE_ID>
+
+=head1 DESCRIPTION
+
+B<ksplice-undo> takes as input a Ksplice identification tag, as reported by
+L<ksplice-view(8)>, and it reverses that update within the running binary kernel.
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--debug>
+
+Reverses the update with debugging output enabled.  Recommended only for
+debugging.
+
+=back
+
+=head1 SEE ALSO
+
+L<ksplice-create(8)>, L<ksplice-apply(8)>, L<ksplice-view(8)>
+
+=head1 COPYRIGHT
+
+Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>.
+
+This is free software and documentation.  You can redistribute and/or modify it
+under the terms of the GNU General Public License, version 2.
+
+=cut

@@ -1,0 +1,99 @@
+package ksplice;
+use Cwd 'abs_path';
+use File::Temp qw/:mktemp/;
+use strict;
+use warnings;
+require Exporter;
+our @ISA = qw(Exporter);
+our @EXPORT = qw($datadir $libexecdir $verbose $version_str init_tmpdir runcd runstr runval runval_raw runsuc unpack_update check_in_proc);
+
+our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
+our $version_str = "Ksplice version PACKAGE_VERSION\n";
+our $verbose = 0;
+
+sub init_tmpdir {
+	my $argdir = $ENV{TMPDIR};
+	$argdir = "/tmp" if(!defined $argdir || ! -d $argdir);
+	die if(! -d $argdir);
+
+	my $tmpdir = mkdtemp("$argdir/ksplice-tmp-XXXXXX");
+	die if(!defined $tmpdir || ! -d $tmpdir);
+	return $tmpdir;
+}
+
+sub runcd {
+	my ($dir) = @_;
+	print "chdir($dir)\n" if($verbose);
+	if(!chdir($dir)) {
+		die "Failed during: chdir($dir)\n";
+	}
+}
+
+sub runval {
+	my (@cmd) = @_;
+	if(runval_raw(@cmd) != 0) {
+		die "Failed during: @cmd\n";
+	}
+}
+
+sub runval_raw {
+	my (@cmd) = @_;
+	my ($out, $err);
+	print "@cmd\n" if($verbose);
+	if(!$verbose) {
+		open $out, ">&STDOUT" or die "Can't dup STDOUT: $!";
+		open $err, ">&STDERR" or die "Can't dup STDERR: $!";
+		open STDOUT, '>', "/dev/null" or die "Can't hide STDOUT: $!";
+		open STDERR, '>', "/dev/null" or die "Can't hide STDERR: $!";
+	}
+	my $val = system(@cmd);
+	if(!$verbose) {
+		open STDOUT, ">&", $out or die "Can't restore STDOUT: $!";
+		open STDERR, ">&", $err or die "Can't restore STDERR: $!";
+	}
+	return $val;
+}
+
+sub runstr {
+	my ($cmd) = @_;
+	print "$cmd\n" if($verbose);
+	return scalar(`$cmd`);
+}
+
+sub runsuc {
+	my ($cmd, $args) = @_;
+	print "$libexecdir/$cmd $args\n" if($verbose);
+	my $output = `$libexecdir/$cmd $args`;
+	if($output =~ /ksplice: success/) {
+		$output = $`;
+	}
+	else {
+		print "Output: $output\n";
+		die "Failed during: $libexecdir/$cmd $args";
+	}
+	return $output;
+}
+
+sub unpack_update {
+	my ($file) = @_;
+	runval("tar zxf $file");
+	my $ksplice = `find */ -maxdepth 0`;
+	chomp($ksplice);
+	chop($ksplice); # remove the trailing slash
+	return $ksplice;
+}
+
+sub check_in_proc {
+	my ($kid) = @_;
+
+	if(! -e "/proc/1") {
+		print "/proc not mounted?\n";
+		exit(1);
+	}
+	if(! -e "/proc/ksplice_$kid") {
+		print "Ksplice id $kid is not present in the kernel\n";
+		exit(1);
+	}
+}
+
+1;

@@ -1,0 +1,555 @@
+#!/usr/bin/perl
+
+# Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+# 02110-1301, USA.
+
+use Getopt::Long;
+use Cwd 'abs_path', 'getcwd';
+use Pod::Usage;
+use strict;
+use warnings;
+use lib 'KSPLICE_DATA_DIR';
+use ksplice;
+
+my ($patchfile, $diffext, $orig_config_dir, $postdir, $jobs);
+my ($help, $wantversion, $prebuild, $apply, $patch_opt) = (0, 0, 0, 0, "-p1");
+GetOptions("help|?" => \$help,
+	"version" => \$wantversion,
+	"verbose|v!" => \$verbose,
+	"patch=s" => \$patchfile,
+	"diffext=s" => \$diffext,
+	"prebuild" => \$prebuild,
+	"jobs|j:i" => \$jobs,
+	"config=s" => \$orig_config_dir,
+	"apply" => \$apply,
+	"postdir=s" => \$postdir,
+	"patch-opt=s@" => \$patch_opt) or pod2usage(1);
+
+if($wantversion) {
+	print $version_str;
+	exit(0);
+}
+pod2usage(1) if($help || scalar(@ARGV) != 1);
+my $actions = (defined $patchfile) + (defined $diffext) + ($prebuild);
+pod2usage(1) if($actions != 1);
+
+my ($linuxtree) = (abs_path($ARGV[0]));
+
+my $tmpdir = init_tmpdir();
+runval("cp", "--", $patchfile, "$tmpdir/patch") if(defined $patchfile);
+$patchfile = "$tmpdir/patch";
+
+$patch_opt = "-p0" if(defined $diffext);
+$patch_opt = join(" ", @$patch_opt) if(ref $patch_opt);
+
+if(!defined $orig_config_dir) {
+	$orig_config_dir = "$linuxtree/ksplice";
+}
+else {
+	$orig_config_dir = abs_path($orig_config_dir);
+	if($orig_config_dir =~ $linuxtree) {
+		die "Aborting: User-specified ORIG_CONFIG cannot be KERNEL_SOURCE or a subdirectory";
+	}
+}
+if(!defined $orig_config_dir || ! -d $orig_config_dir) {
+	die "Failed to find ORIG_CONFIG directory ($orig_config_dir)";
+}
+if(! -e "$orig_config_dir/.config") {
+	die "Failed to find .config file in ORIG_CONFIG directory";
+}
+if(! -e "$orig_config_dir/System.map") {
+	die "Failed to find System.map file in ORIG_CONFIG directory";
+}
+
+if(!defined $postdir) {
+	$postdir = "$orig_config_dir/post";
+}
+elsif($postdir =~ $linuxtree) {
+	die "Aborting: User-specified postdir cannot be KERNEL_SOURCE or a subdirectory";
+}
+
+runval("cp", "--", "$orig_config_dir/.config", $linuxtree);
+
+my @chars = ('a'..'z', 0..9);
+my $kid = "";
+for(my $z = 0; $z < 8; $z++) {
+	$kid .= $chars[int(rand(36))];
+}
+my $ksplice = "ksplice-$kid";
+
+my %syms;
+load_system_map();
+
+print "Starting kernel builds (this process might take a long time)...\n";
+if(!$verbose) {
+	print "For output during this process, run ksplice-create with the option -v\n";
+}
+
+###################################################################
+# PHASE 1: Determine which object files are modified by the patch #
+# - performs the pre and post kernel builds                       #
+# - uses objdiff to identify which ELF sections have changed and  #
+#   which ELF symbols are entry points to those sections          #
+###################################################################
+
+# We will refer to the object files modified by the patch as the "target object
+# files", the ELF sections changed by the patch as the "target sections", and
+# the entry points of those sections as the "target entry points".
+
+my $origdir = getcwd();
+runcd($linuxtree);
+if(defined $diffext) {
+	runval("$libexecdir/gendiff-reversed >$patchfile . $diffext");
+}
+
+my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : ());
+@jlevel = (defined $jobs ? ("-j$jobs") : ());
+my @flags = ('CFLAGS_KERNEL=-ffunction-sections -fdata-sections', 'CFLAGS_MODULE=-DMODULE -ffunction-sections -fdata-sections', @jlevel);
+my $make1 = runval_raw("make", @flags);
+my $objs = runstr('find * -name "*.o" | grep -v tmp_versions | grep -v built-in | grep -v piggy.o | grep -v setup | grep -v mod | grep -v ksplice/post');
+
+runval("rsync", "-a", "--delete", "--link-dest=$linuxtree", "--exclude=ksplice/post/*", "--", "$linuxtree/", "$postdir/");
+exit(0) if($prebuild);
+runcd($postdir);
+runval("patch $patch_opt < $patchfile");
+if(runval_raw("make", @flags) != 0 && $make1 == 0) {
+	# We do not complain if both builds failed because, on some kernels,
+	# -ffunction-sections interferes with the vmlinux linking process.
+	die "Aborting: Applying the patch appears to break the kernel build";
+}
+
+my $old_verbose = $verbose;
+my %objdiff;
+foreach my $obj (split(/\s+/, $objs)) {
+	next unless($obj);
+	$verbose = 0; # We don't want to print every cmp
+	next if(runval_raw("cmp >/dev/null 2>/dev/null -s $linuxtree/$obj $postdir/$obj") == 0);
+	$verbose = $old_verbose;
+
+	# We want to skip object files that contain more than one GCC comment
+	# since these object files have been produced through linking and only
+	# contain duplicate code for our purposes.
+	next if(runstr("objdump -s -j .comment $postdir/$obj | grep GCC | wc -l") !~ /\b[01]\b/);
+
+	$objdiff{$obj} = runsuc("objdiff", "$linuxtree/$obj $postdir/$obj");
+	print $objdiff{$obj} if($verbose);
+	delete $objdiff{$obj} if($objdiff{$obj} =~ /^\s*$/s);
+}
+die "Aborting because no changes detected" if(scalar(keys %objdiff) == 0);
+$verbose = $old_verbose;
+
+my ($arch) = (runstr("objdump -h $linuxtree/" . (keys(%objdiff))[0]) =~ /file format elf(\d\d)/);
+die if($arch != 32 && $arch != 64);
+my ($word) = ($arch == 64 ? "quad" : "long");
+
+##############################################################################
+# PHASE 2: Perform processing on the target object files                     #
+# - uses objmanip's keep mode to remove sections, uniqify section names, and #
+#   remove ELF relocation entries (this reloc info will be saved elsewhere)  #
+# - uses objmanip's globalize mode to create global copies of all symbols    #
+##############################################################################
+
+runval("mkdir", "-p", "--", "$tmpdir/collect");
+runcd("$tmpdir/collect");
+
+my ($patchlist, $relocs_primary, $relocs_helper) = ("", "", "");
+
+my $obj_id = 0;
+foreach my $obj (keys %objdiff) {
+	my (%text_remove, %data_remove);
+	my ($sections, $entrysyms) = split("\n", $objdiff{$obj});
+
+	runval("cp", "--", "$postdir/${obj}", "${obj_id}.primary");
+	runval("cp", "--", "$linuxtree/${obj}", "${obj_id}.helper");
+
+	my $tag = "${obj_id}_${kid}";
+	$relocs_primary .= runsuc("objmanip", "${obj_id}.primary keep-primary ____${tag} _post $sections");
+	runsuc("objmanip", "${obj_id}.primary globalize ____${tag}_post");
+
+	$relocs_helper .= runsuc("objmanip", "${obj_id}.helper keep-helper ____${tag} _pre");
+	runsuc("objmanip", "${obj_id}.helper globalize ____${tag}_pre");
+
+	foreach my $sym (split(/\s/, $entrysyms)) {
+		$patchlist .= "${sym}____${tag}_pre ${sym}____${tag}_post\n";
+	}
+
+	$obj_id++;
+}
+
+################################################################################
+# PHASE 3: Combine the target object files and prepare for kernel module build #
+# - links the many target object files into two "collection" object files      #
+# - saves the reloc info extracted earlier in ELF sect .ksplice.ksplice_relocs #
+# - uses objmanip's sizelist mode to save the names and sizes of target funcs  #
+# - uses ld-script to aggregate all ELF text sections into .text               #
+# - saves the list of target entry syms in ELF sect .ksplice.ksplice_patches   #
+# - writes modcommon.auto.h automatically-generated header file                #
+################################################################################
+
+runval("ld", "-r", "-o", "collection.o.primary",
+	map { "$_.primary" } (0 .. $obj_id-1));
+runval("ld", "-r", "-o", "collection.o.helper",
+	map { "$_.helper" } (0 .. $obj_id-1));
+
+parse_and_save(\&parse_relocs, $relocs_primary, "collection.o.primary",
+		"ksplice_relocs", "_global");
+parse_and_save(\&parse_relocs, $relocs_helper, "collection.o.helper",
+		"ksplice_relocs", "_global");
+
+runcd($tmpdir);
+runval("rsync", "-a", "--delete", "--", "$datadir/kmodsrc/", "kmodsrc/");
+runval("mv", "collect/collection.o.primary", "collect/collection.o.helper", "kmodsrc");
+runcd("kmodsrc");
+
+my $sizelist_primary = runsuc("objmanip", "collection.o.primary sizelist");
+parse_and_save(\&parse_sizelist, $sizelist_primary, "collection.o.primary", "ksplice_sizes");
+my $sizelist_helper = runsuc("objmanip", "collection.o.helper sizelist");
+parse_and_save(\&parse_sizelist, $sizelist_helper, "collection.o.helper", "ksplice_sizes");
+
+runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary.postld", "collection.o.primary");
+runval("cp", "collection.o.primary.postld", "collection.o.primary");
+runval("ld", "--script=ld-script", "-r", "-o", "collection.o.helper.postld", "collection.o.helper");
+runval("cp", "collection.o.helper.postld", "collection.o.helper");
+
+parse_and_save(\&parse_patchlist, $patchlist, "collection.o.primary", "ksplice_patches");
+
+my $kallsyms_lookup_name_addr = (keys %{find_sym_system_map("kallsyms_lookup_name")})[0];
+open(AUTOH, ">", "modcommon.auto.h") || die;
+print AUTOH <<END;
+#define ksplice_name "ksplice_$kid"
+#define STR2ADDR ((void *)0x${kallsyms_lookup_name_addr})
+
+extern struct reloc_addrmap *reloc_addrmaps_$kid;
+extern struct reloc_nameval *reloc_namevals_$kid;
+extern struct safety_record *safety_records_$kid;
+int ksplice_do_primary_$kid(void);
+#define reloc_addrmaps reloc_addrmaps_$kid
+#define reloc_namevals reloc_namevals_$kid
+#define safety_records safety_records_$kid
+#define ksplice_do_primary ksplice_do_primary_$kid
+END
+close(AUTOH);
+
+###############################################################################
+# PHASE 4: Build the kernel modules and create the update tarball             #
+# - builds primary and helper kernel modules                                  #
+# - uses objmanip's rmsyms mode to remove relocations to non-exported symbols #
+# - creates a tarball of the primary module and the helper module             #
+###############################################################################
+
+runval("KSPLICE=$ksplice KERNELSRC=$linuxtree make modules");
+
+my $kallsyms_list = "kallsyms_addresses kallsyms_num_syms kallsyms_names kallsyms_token_table kallsyms_token_index";
+my $relocs = runsuc("objmanip", "$ksplice.ko rmsyms __kernel_text_address tasklist_lock stop_machine_run $kallsyms_list");
+parse_and_save(\&parse_relocs, $relocs, "$ksplice.ko", "ksplice_init_relocs", "");
+$relocs = runsuc("objmanip", "$ksplice-helper.ko rmsyms $kallsyms_list");
+parse_and_save(\&parse_relocs, $relocs, "$ksplice-helper.ko", "ksplice_init_relocs", "");
+
+runcd($tmpdir);
+runval("mkdir", $ksplice);
+runval("mv", "--", $patchfile, "kmodsrc/$ksplice.ko", "kmodsrc/$ksplice-helper.ko", $ksplice);
+runval("mkdir", "$ksplice/debug");
+runval("mv", "collect", "kmodsrc", "$ksplice/debug");
+runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
+runval("cp", "--", "$ksplice.tar.gz", $origdir);
+runcd($origdir);
+runval("rm", "-rf", "--", "$tmpdir");
+
+print "Ksplice update tarball written to $ksplice.tar.gz\n";
+
+if($apply) {
+	print "Now running ksplice-apply to apply update...\n";
+	exec("ksplice-apply", $ksplice) || die;
+}
+
+exit(0);
+
+sub load_system_map {
+	open(SYMS, "<", "$orig_config_dir/System.map") or die;
+	my $line;
+	while(defined($line = <SYMS>)) {
+		my ($addr, $type, $sym, $mod) = split(/\s+/, $line);
+		next if($sym =~ /init_module/ ||
+			$sym =~ /cleanup_module/ ||
+			$sym =~ /this_module/);
+
+		$syms{$sym}{$addr} = $addr;
+	}
+	close(SYMS);
+}
+
+sub find_sym_system_map {
+	my ($sym) = @_;
+	$sym =~ s/[.]text[.]//g;
+	$sym =~ s/[.]bss[.]//g;
+	$sym =~ s/[.]data[.]//g;
+	$sym =~ s/____.*//g;
+	if(defined $syms{$sym}) {
+		return $syms{$sym};
+	}
+	return {};
+}
+
+sub parse_and_save {
+	my ($funcref, $entries, $objfile, $suffix, @other) = @_;
+	my @entries = split(/\n/, $entries);
+
+	my @tosave;
+	foreach my $entry (@entries) {
+		print $entry, "\n" if($verbose);
+		&$funcref(\@tosave, $entry, @other);
+	}
+	save_using_asm(\@tosave, $objfile, $suffix);
+}
+
+BEGIN { # to make asm_id a static local variable
+my ${asm_id} = "0";
+sub save_using_asm {
+	my ($tosaveref, $objfile, $suffix) = @_;
+
+	open(ASM, ">", "asm${asm_id}.s");
+	print ASM ".section .ksplice.${suffix}_str, \"a\"\n";
+	print ASM "${suffix}_str:\n";
+	print ASM ".section .ksplice.${suffix}, \"a\"\n";
+	print ASM "${suffix}:\n";
+
+	my $num = 0;
+	foreach my $entryref (@$tosaveref) {
+		my @entry = @{$entryref};
+
+		if($entry[0] eq "str") {
+			print ASM ".section .ksplice.${suffix}_str, \"a\"\n";
+			print ASM $suffix, $num, ": .string \"", $entry[1], "\"\n";
+			print ASM ".section .ksplice.${suffix}, \"a\"\n";
+			print ASM ".$word ${suffix}", $num++, "\n";
+		}
+		elsif($entry[0] eq "array" && scalar(@entry) == 1) {
+			print ASM ".section .ksplice.${suffix}, \"a\"\n";
+			print ASM ".$word 0x0\n";
+		}
+		elsif($entry[0] eq "array") {
+			print ASM ".section .ksplice.${suffix}_array, \"a\"\n";
+			print ASM $suffix, $num, ":\n";
+			for(my $i = 1; $i < scalar(@entry); $i++) {
+				print ASM ".$word 0x", $entry[$i], "\n";
+			}
+			print ASM ".section .ksplice.${suffix}, \"a\"\n";
+			print ASM ".$word ${suffix}", $num++, "\n";
+		}
+		elsif($entry[0] eq "word") {
+			print ASM ".section .ksplice.${suffix}, \"a\"\n";
+			print ASM ".$word 0x", $entry[1], "\n";
+		}
+		elsif($entry[0] eq "ptr") {
+			print ASM ".section .ksplice.${suffix}, \"a\"\n";
+			print ASM ".$word ", $entry[1], "\n";
+		}
+		else { die; }
+	}
+	print ASM ".section .ksplice.${suffix}, \"a\"\n";
+	print ASM ".$word 0\n";
+	print ASM ".globl ${suffix}\n";
+	close(ASM);
+
+	runval("gcc", "-mcmodel=kernel", "-c", "asm${asm_id}.s", "-o", "asm${asm_id}.o");
+	runval("ld", "-r", "-o", "$objfile.new", $objfile, "asm${asm_id}.o");
+	runval("mv", "$objfile.new", $objfile);
+	${asm_id}++;
+}
+} # close BEGIN
+
+sub parse_relocs {
+	my ($tosaveref, $entry, $globalizer) = @_;
+	my ($sym, $sect, $addr, $pcrel, $addend) = split(/\s/, $entry);
+
+	my ($func) = ($sect =~ /(.*)____/);
+	$sym =~ s/([.]data[.]__func__[.])\d+/$1${func}/g;
+
+	my @symvals = keys(%{find_sym_system_map($sym)});
+	my @sectvals = keys(%{find_sym_system_map($sect)});
+
+	push @$tosaveref, (["str", $sym], ["str", $sect],
+			["ptr", "${sect}${globalizer}"],
+			["word", $addr],
+			["word", scalar(@symvals)],
+			["array", @symvals],
+			["word", scalar(@sectvals)],
+			["array", @sectvals],
+			["word", $pcrel],
+			["word", $addend]);
+}
+
+sub parse_sizelist {
+	my ($tosaveref, $entry) = @_;
+	# grab the size and the symbol name from the end of the line
+	my ($size, $sym) = ($entry =~ /\s([a-z0-9]+)\s+(\S+)$/);
+
+	my @vals = keys(%{find_sym_system_map($sym)});
+
+	push @$tosaveref, (["str", $sym], ["word", $size],
+		["ptr", "${sym}_global"], ["word", scalar(@vals)],
+		["array", @vals]);
+}
+
+sub parse_patchlist {
+	my ($tosaveref, $entry) = @_;
+	my ($oldsym, $replsym) = split(/\s/, $entry);
+
+	my $oldaddr = 0;
+	my @vals = keys(%{find_sym_system_map($oldsym)});
+	$oldaddr = $vals[0] if(scalar(@vals) == 1);
+
+	push @$tosaveref, (["str", $oldsym], ["str", $replsym],
+		["word", $oldaddr], ["ptr", "${replsym}_global"],
+		["word", 0]);
+}
+
+=head1 NAME
+
+ksplice-create - Create a set of kernel modules for a rebootless kernel update
+
+=head1 SYNOPSIS
+
+B<ksplice-create> [B<--config=>I<ORIG_CONFIG>] B<--patch=>I<PATCH_FILE> I<KERNEL_SOURCE>
+
+B<ksplice-create> [B<--config=>I<ORIG_CONFIG>] B<--diffext=>I<EXTENSION> I<KERNEL_SOURCE>
+
+B<ksplice-create> [B<--config=>I<ORIG_CONFIG>] B<--prebuild> I<KERNEL_SOURCE>
+
+=head1 DESCRIPTION
+
+B<ksplice-create> creates a set of Ksplice kernel modules that, when loaded,
+will apply a user-specified source code patch to the running binary kernel.
+
+Before you use B<ksplice-create> on a patch, you should confirm that the
+desired source code change does not make any semantic changes to kernel data
+structures--that is, changes that would require existing instances of kernel
+data structures to be transformed (e.g., a patch that adds a field to a global
+data structure would require the existing data structures to change).  If you
+use Ksplice on a patch that changes data structure semantics, Ksplice will not
+detect the problem and you could experience kernel problems as a result.
+
+The to-be-applied source code patch can be specified by providing a L<patch(1)>
+file (B<--patch=>I<PATCH_FILE>) or by providing a file extension
+(B<--diffext=>I<EXTENSION>).
+
+If a file extension is specified, then the desired source code patch will be
+determined by comparing all of the files in the I<KERNEL_SOURCE> directory tree
+whose names end with the extra extension I<EXTENSION> against the corresponding
+files without the extra extension.  Only the new files containing the extra
+extension in their filenames should be modified.
+
+Here is an example of using a file extension to specify a patch:
+
+ $ cp KERNEL_SOURCE/kernel/sys.c KERNEL_SOURCE/kernel/sys.c.prctl_fixed
+ [edit sys.c.prctl_fixed to include the desired changes]
+ $ ksplice-create --diffext=.prctl_fixed KERNEL_SOURCE
+
+KERNEL_SOURCE must be a directory containing the to-be-updated kernel's
+original source code.  If your Linux distribution applies patches to the Linux
+kernel during the kernel build process, then those patches must be applied to
+the I<KERNEL_SOURCE> directory before invoking B<ksplice-create> on that
+directory.  B<ksplice-create> will not modify the source code in the
+I<KERNEL_SOURCE> directory tree, but it will perform a kernel build in that
+directory tree.
+
+I<ORIG_CONFIG> can be used to specify the directory containing the
+to-be-updated kernel's original F<.config> file and original F<System.map> file
+(the files should have exactly those names).  I<ORIG_CONFIG> defaults to
+I<KERNEL_SOURCE>B</ksplice>.
+
+The default L<gcc(1)> compiler and L<as(1)> assembler on the system should be as
+close to the compiler and assembler originally used to build the running kernel
+as possible.  If the current compiler and linker are too different from the
+original compiler and linker, B<ksplice-apply> will abort when applying the
+update.
+
+B<ksplice-create> outputs a L<tar(1)> file, compressed with L<gzip(1)>,
+containing the desired Ksplice update modules.  This tarball will be created in
+the current directory, and it can be manipulated using the other Ksplice
+utilities, such as B<ksplice-apply>.
+
+The first time that B<ksplice-create> is invoked on a I<KERNEL_SOURCE>
+directory, it must build that kernel from scratch, which is much slower than
+the rest of the update-creation process.  B<--prebuild> can be used to perform
+this initial kernel build (and set up a tentative B<post> directory tree)
+without providing a source code patch.
+
+In order to patch a function that has previously been patched by Ksplice, the
+user needs to ensure that the I<KERNEL_SOURCE> directory provided to Ksplice
+contains the source for the currently running kernel, including any patches
+that have previously been applied by Ksplice.
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-v>, B<--verbose>
+
+Prints the commands being executed, the output of the commands being executed,
+and various other pieces of information.
+
+=item B<-j> I<JOBS>, B<--jobs=>I<JOBS>
+
+Specifies the number of jobs to run simultaneously while performing kernel
+builds.  B<ksplice-create> also honors the environment variable
+CONCURRENCY_LEVEL.
+
+=item B<--apply>
+
+Immediately applies the generated update to the running kernel by invoking
+B<ksplice-apply>.
+
+=item B<--postdir=>I<DIRECTORY>
+
+Specifies a directory that is B<dedicated to Ksplice> to be used as the Ksplice
+I<post> directory.  Defaults to I<ORIG_CONFIG>B</post>.  If this directory
+exists, the directory's contents will be removed.  If it does not exist, it
+will be created.
+
+=item B<--patch-opt=>I<OPTIONS>
+
+Can be used to pass options to L<patch(1)>.  If this option is NOT specified, then
+B<-p1> is passed to B<patch>.  If this option is specified, then only the
+specified options will be passed to B<patch>.  This option can be repeated in
+order to pass multiple options to B<patch>.  This option is ignored when the
+to-be-applied source code patch is specified using B<--diffext>.
+
+=back
+
+=head1 BUGS
+
+In this Ksplice version, Ksplice kernel modules do not enforce dependencies.
+For example, if you patch a Linux kernel module using Ksplice, you are
+responsible for ensuring that you do not remove that module from the kernel
+until after you have reversed the Ksplice update.  (If you try to reverse a
+Ksplice update after you have already removed the relevant module from the
+kernel, this version of Ksplice will write to memory addresses that are no
+longer occupied by that module).
+
+Please report bugs to <PACKAGE_BUGREPORT>.
+
+=head1 SEE ALSO
+
+L<ksplice-apply(8)>, L<ksplice-view(8)>, L<ksplice-undo(8)>
+
+=head1 COPYRIGHT
+
+Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>.
+
+This is free software and documentation.  You can redistribute and/or modify it
+under the terms of the GNU General Public License, version 2.
+
+=cut

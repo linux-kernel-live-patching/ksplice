@@ -1,0 +1,22 @@
+Ksplice
+Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.
+
+Installation instructions:
+ $ ./configure
+ $ make
+ $ make install
+
+Notable Runtime Dependencies:
+ - gcc
+ - perl
+ - rsync
+ - patch
+
+Notable Build Dependencies:
+ - GNU binary file descriptor (BFD) library (tested against v2.15 through v2.18)
+   (available in Debian's binutils-dev package and in other distributions)
+
+For more information about Ksplice, please see <http://web.mit.edu/ksplice>.

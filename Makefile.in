@@ -1,0 +1,94 @@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+bindir = @bindir@
+sbindir = @sbindir@
+libexecdir = @libexecdir@
+mandir = @mandir@
+datadir = @datadir@
+datarootdir = @datarootdir@
+
+CC = @CC@
+CFLAGS = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@
+CCFLAGS = $(CFLAGS) @bfd_include_dir@
+LDFLAGS = @LDFLAGS@
+LIBS = @LIBS@
+SED = @SED@
+PACKAGE_VERSION = @PACKAGE_VERSION@
+PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+
+perl_primary = ksplice-create ksplice-view ksplice-apply ksplice-undo ksplice.pm
+perl_man = $(patsubst %,%.8,$(perl_primary))
+
+have_static := $(wildcard objmanip-static)
+
+default: $(perl_primary) $(perl_man) objutils
+	@echo "Ready for 'make install'"
+
+ifeq ($(strip $(have_static)),)
+
+objutils: objdiff objmanip
+
+install-objdiff: objdiff
+	install -m755 -D objdiff $(DESTDIR)$(libexecdir)/ksplice/objdiff
+
+install-objmanip: objmanip
+	install -m755 -D objmanip $(DESTDIR)$(libexecdir)/ksplice/objmanip
+
+else
+
+objutils:
+
+install-objdiff:
+	install -m755 -D objdiff-static $(DESTDIR)$(libexecdir)/ksplice/objdiff
+
+install-objmanip:
+	install -m755 -D objmanip-static $(DESTDIR)$(libexecdir)/ksplice/objmanip
+
+endif
+
+$(perl_primary): %: %.in Makefile
+	$(SED) 's|PACKAGE_VERSION|$(PACKAGE_VERSION)|;s|PACKAGE_BUGREPORT|$(PACKAGE_BUGREPORT)|;s|KSPLICE_DATA_DIR|$(datadir)/ksplice|;s|KSPLICE_LIBEXEC_DIR|$(libexecdir)/ksplice|' $< > $@
+
+$(perl_man): %.8: %
+	pod2man --center="Ksplice" --release="Ksplice v$(PACKAGE_VERSION)" --section=8 $< $@
+
+objdiff objmanip: objdiff.c objmanip.c objcommon.c objcommon.h allcommon-user
+	$(CC) $(CCFLAGS) $(LDFLAGS) $@.c objcommon.c allcommon-user $(LIBS) -o $@
+
+allcommon-user: kmodsrc/allcommon.c kmodsrc/allcommon.h
+	$(CC) -c kmodsrc/allcommon.c -o $@
+
+install: default install-objmanip install-objdiff
+	install -m644 -D ksplice-create.8 $(DESTDIR)$(mandir)/man8/ksplice-create.8
+	install -m644 -D ksplice-apply.8 $(DESTDIR)$(mandir)/man8/ksplice-apply.8
+	install -m644 -D ksplice-undo.8 $(DESTDIR)$(mandir)/man8/ksplice-undo.8
+	install -m644 -D ksplice-view.8 $(DESTDIR)$(mandir)/man8/ksplice-view.8
+	install -m755 -D ksplice-create $(DESTDIR)$(bindir)/ksplice-create
+	install -m755 -D ksplice-view $(DESTDIR)$(bindir)/ksplice-view
+	install -m755 -D ksplice-apply $(DESTDIR)$(sbindir)/ksplice-apply
+	install -m755 -D ksplice-undo $(DESTDIR)$(sbindir)/ksplice-undo
+	install -m755 -D gendiff-reversed $(DESTDIR)$(libexecdir)/ksplice/gendiff-reversed
+	install -m644 -D ksplice.pm $(DESTDIR)$(datadir)/ksplice/ksplice.pm
+	install -m644 -D kmodsrc/helper.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.c
+	install -m644 -D kmodsrc/helper.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.h
+	install -m644 -D kmodsrc/primary.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/primary.c
+	install -m644 -D kmodsrc/primary.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/primary.h
+	install -m644 -D kmodsrc/modcommon.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/modcommon.c
+	install -m644 -D kmodsrc/modcommon.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/modcommon.h
+	install -m644 -D kmodsrc/allcommon.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/allcommon.c
+	install -m644 -D kmodsrc/allcommon.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/allcommon.h
+	install -m644 -D kmodsrc/jumps.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/jumps.h
+	install -m644 -D kmodsrc/nops.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/nops.h
+	install -m644 -D kmodsrc/Makefile $(DESTDIR)$(datadir)/ksplice/kmodsrc/Makefile
+	install -m644 -D kmodsrc/ld-script $(DESTDIR)$(datadir)/ksplice/kmodsrc/ld-script
+
+clean:
+	rm -f $(perl_primary)
+	rm -f $(perl_man)
+	rm -f objdiff objmanip allcommon-user
+	rm -f Makefile
+
+distclean: clean
+	rm -f objdiff-static objmanip-static
+	rm -f configure

@@ -1,0 +1,99 @@
+#!/usr/bin/perl
+
+# Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+# 02110-1301, USA.
+
+use Getopt::Long;
+use Cwd 'abs_path', 'getcwd';
+use Pod::Usage;
+use strict;
+use warnings;
+use lib 'KSPLICE_DATA_DIR';
+use ksplice;
+
+my ($kid, $file);
+my ($help, $wantversion) = (0, 0);
+GetOptions("help|?" => \$help,
+	"version" => \$wantversion,
+	"verbose|v!" => \$verbose,
+	"id=s" => \$kid,
+	"file=s" => \$file) or pod2usage(1);
+
+if($wantversion) {
+	print $version_str;
+	exit(0);
+}
+pod2usage(1) if($help || scalar(@ARGV) != 0);
+my $actions = (defined $kid) + (defined $file);
+pod2usage(1) if($actions > 1);
+
+view_kid() if(defined $kid);
+view_file() if(defined $file);
+view_list() if($actions == 0);
+
+exit(0);
+
+sub view_kid {
+	$kid =~ s/^ksplice[_-]//;
+
+	check_in_proc($kid);
+	print "Ksplice id $kid is present in the kernel\n";
+	print runstr("cat /proc/ksplice_$kid");
+}
+
+sub view_file {
+	$file = abs_path($file);
+
+	my $tmpdir = init_tmpdir();
+	runcd($tmpdir);
+	runval("cp $file .");
+	my $ksplice = unpack_update($file);
+	print runstr("cat $ksplice/patch");
+	runval("rm -rf $tmpdir");
+}
+
+sub view_list {
+	print runstr("lsmod | grep ksplice");
+}
+
+=head1 NAME
+
+ksplice-view - View in-kernel or on-disk Ksplice kernel updates
+
+=head1 SYNOPSIS
+
+B<ksplice-view> [B<--id=>I<KSPLICE_ID> | B<--file=>I<UPDATE_TARBALL>]
+
+=head1 DESCRIPTION
+
+When called with no arguments, B<ksplice-view> lists the identification tags of
+all of the Ksplice updates that are currently present in the running kernel.
+
+B<ksplice-view> can report about a specific Ksplice update when given the
+update's identification tag (if the update is in the kernel) or given the
+update's tarball filename I<UPDATE_TARBALL> (if the update is on disk).
+
+=head1 SEE ALSO
+
+L<ksplice-create(8)>, L<ksplice-apply(8)>, L<ksplice-undo(8)>
+
+=head1 COPYRIGHT
+
+Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>.
+
+This is free software and documentation.  You can redistribute and/or modify it
+under the terms of the GNU General Public License, version 2.
+
+=cut

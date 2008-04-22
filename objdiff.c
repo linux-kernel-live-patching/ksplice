@@ -1,0 +1,163 @@
+/*  Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License, version 2.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+ *  02110-1301, USA.
+ */
+
+/*
+ * "objdiff old.o new.o" prints two lists to STDOUT, one per line:
+ * (1) the names of the ELF sections in new.o that either
+ *     (a) do not appear in old.o, or
+ *     (b) have different contents in old.o and new.o
+ * (2) the names of the "entry point" ELF symbols in new.o
+ *     corresponding to the ELF sections in list (1)
+ */
+
+#include "objcommon.h"
+#include "objdiff.h"
+
+bfd *newbfd;
+asymbol **new_sympp, **old_sympp;
+int new_symcount, old_symcount;
+
+int
+main(int argc, char **argv)
+{
+	bfd_init();
+	bfd *oldbfd = bfd_openr(argv[1], NULL);
+	assert(oldbfd != NULL);
+	newbfd = bfd_openr(argv[2], NULL);
+	assert(newbfd != NULL);
+
+	char **matching;
+	assert(bfd_check_format_matches(oldbfd, bfd_object, &matching));
+	assert(bfd_check_format_matches(newbfd, bfd_object, &matching));
+
+	new_symcount = get_syms(newbfd, &new_sympp);
+	old_symcount = get_syms(oldbfd, &old_sympp);
+
+	foreach_nonmatching(oldbfd, newbfd, print_newbfd_section_name);
+	printf("\n");
+	foreach_nonmatching(oldbfd, newbfd, print_newbfd_entry_symbols);
+	printf("\n");
+
+	assert(bfd_close(oldbfd));
+	assert(bfd_close(newbfd));
+	printf("ksplice: success\n");
+}
+
+void
+foreach_nonmatching(bfd * oldbfd, bfd * newbfd, section_fn s_fn)
+{
+	asection *newp, *oldp;
+	for (newp = newbfd->sections; newp != NULL; newp = newp->next) {
+		if (!starts_with(newp->name, ".text"))
+			continue;
+		oldp = bfd_get_section_by_name(oldbfd, newp->name);
+		if (oldp == NULL) {
+			if (s_fn == print_newbfd_section_name)
+				s_fn(newp);
+			continue;
+		}
+		int newsize = bfd_get_section_size(newp);
+		int oldsize = bfd_get_section_size(oldp);
+		if (newsize == oldsize) {
+			void *newmem = malloc(newsize);
+			void *oldmem = malloc(oldsize);
+			assert(bfd_get_section_contents
+			       (oldbfd, oldp, oldmem, 0, oldsize));
+			assert(bfd_get_section_contents
+			       (newbfd, newp, newmem, 0, newsize));
+			if (memcmp(newmem, oldmem, newsize) == 0 &&
+			    reloc_cmp(oldbfd, oldp, newbfd, newp) == 0)
+				continue;
+		}
+		s_fn(newp);
+	}
+}
+
+/*
+ * reloc_cmp checks to see whether the old section and the new section
+ * reference different read-only data in their relocations -- if a hard-coded
+ * string has been changed between the old file and the new file, reloc_cmp
+ * will detect the difference.
+ */
+int
+reloc_cmp(bfd * oldbfd, asection * oldp, bfd * newbfd, asection * newp)
+{
+	int i;
+	struct supersect *old_ss, *new_ss;
+
+	old_ss = fetch_supersect(oldbfd, oldp, old_sympp);
+	new_ss = fetch_supersect(newbfd, newp, new_sympp);
+
+	if (old_ss->num_relocs != new_ss->num_relocs)
+		return -1;
+
+	for (i = 0; i < old_ss->num_relocs; i++) {
+		struct supersect *ro_old_ss, *ro_new_ss;
+
+		asection *ro_oldp = (*old_ss->relocs[i]->sym_ptr_ptr)->section;
+		asection *ro_newp = (*new_ss->relocs[i]->sym_ptr_ptr)->section;
+
+		ro_old_ss = fetch_supersect(oldbfd, ro_oldp, old_sympp);
+		ro_new_ss = fetch_supersect(newbfd, ro_newp, new_sympp);
+
+		if (!starts_with(ro_old_ss->name, ".rodata"))
+			continue;
+
+		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
+			return -1;
+
+		int old_offset =
+		    *(int *) (old_ss->contents + old_ss->relocs[i]->address);
+		int new_offset =
+		    *(int *) (new_ss->contents + new_ss->relocs[i]->address);
+
+		if (starts_with(ro_old_ss->name, ".rodata.str")) {
+			if (strcmp
+			    (ro_old_ss->contents + old_offset,
+			     ro_new_ss->contents + new_offset) != 0)
+				return -1;
+			continue;
+		}
+
+		if (ro_old_ss->contents_size != ro_new_ss->contents_size)
+			return -1;
+
+		if (memcmp(ro_old_ss->contents,
+			   ro_new_ss->contents, ro_old_ss->contents_size) != 0)
+			return -1;
+	}
+
+	return 0;
+}
+
+void
+print_newbfd_section_name(asection * sect)
+{
+	printf("%s ", sect->name);
+}
+
+void
+print_newbfd_entry_symbols(asection * sect)
+{
+	int i;
+	for (i = 0; i < new_symcount; i++) {
+		if (strlen(new_sympp[i]->name) != 0 &&
+		    !starts_with(new_sympp[i]->name, ".text") &&
+		    strcmp(new_sympp[i]->section->name, sect->name) == 0) {
+			printf("%s ", new_sympp[i]->name);
+		}
+	}
+}
