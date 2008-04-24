@@ -254,7 +254,7 @@ runval("KSPLICE=$ksplice KERNELSRC=$linuxtree make modules");
 my $kallsyms_list = "kallsyms_addresses kallsyms_num_syms kallsyms_names kallsyms_token_table kallsyms_token_index";
 my $relocs = runsuc("objmanip", "$ksplice.ko rmsyms __kernel_text_address tasklist_lock stop_machine_run $kallsyms_list");
 parse_and_save(\&parse_relocs, $relocs, "$ksplice.ko", "ksplice_init_relocs", "");
-$relocs = runsuc("objmanip", "$ksplice-helper.ko rmsyms $kallsyms_list");
+$relocs = runsuc("objmanip", "$ksplice-helper.ko rmsyms init_mm $kallsyms_list");
 parse_and_save(\&parse_relocs, $relocs, "$ksplice-helper.ko", "ksplice_init_relocs", "");
 
 runcd($tmpdir);
