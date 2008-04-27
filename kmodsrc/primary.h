@@ -12,5 +12,5 @@ int ksplice_on_each_task(int (*func) (struct task_struct * t, void *d),
 			 void *data);
 int check_task(struct task_struct *t, void *d);
 int check_stack(struct thread_info *tinfo, long *stack);
-int check_address_for_conflict(long *addr);
+int check_address_for_conflict(long addr);
 int valid_stack_ptr(struct thread_info *tinfo, void *p);

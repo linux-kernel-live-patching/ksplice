@@ -17,8 +17,10 @@
 #include "modcommon.h"
 #include "primary.h"
 #include <linux/kthread.h>
-#include <linux/stop_machine.h>
 #include <linux/proc_fs.h>
+#include <linux/sched.h>
+#include <linux/stop_machine.h>
+#include <linux/time.h>
 #include <asm/uaccess.h>
 
 #ifndef task_thread_info
@@ -95,8 +97,12 @@ ksplice_do_primary(void)
 
 	local_safety = safety_records;
 
-	for (i = 0; !applied && i < 10; i++) {
+	for (i = 0; !applied && i < 5; i++) {
+		bust_spinlocks(1);
 		stop_machine_run(__apply_patches, NULL, NR_CPUS);
+		bust_spinlocks(0);
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(1000));
 	}
 	if (!applied) {
 		remove_proc_entry(ksplice_name, &proc_root);
@@ -150,8 +156,12 @@ procfile_write(struct file *file, const char *buffer, unsigned long count,
 	int i;
 	printk("ksplice: Preparing to reverse %s\n", ksplice_name);
 
-	for (i = 0; applied && i < 10; i++) {
+	for (i = 0; applied && i < 5; i++) {
+		bust_spinlocks(1);
 		stop_machine_run(__reverse_patches, NULL, NR_CPUS);
+		bust_spinlocks(0);
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(1000));
 	}
 	if (applied)
 		print_abort("stack check: to-be-reversed code is busy");
@@ -222,82 +232,99 @@ int
 ksplice_on_each_task(int (*func) (struct task_struct * t, void *d), void *data)
 {
 	struct task_struct *g, *p;
+	int status = 0;
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		if (func(p, data) != 0) {
-			read_unlock(&tasklist_lock);
-			return -1;
-		}
+		if (func(p, data) != 0)
+			status = -1;
 	}
 	while_each_thread(g, p);
 	read_unlock(&tasklist_lock);
-	return 0;
+	return status;
 }
 
 int
 check_task(struct task_struct *t, void *d)
 {
+	int status;
 	long addr = KSPLICE_EIP(t);
-	int conflict = check_address_for_conflict(&addr);
+	int conflict = check_address_for_conflict(addr);
 	if (debug >= 2) {
-		printk("ksplice: stack check: pid %d eip %08lx",
-		       t->pid, KSPLICE_EIP(t));
+		printk("ksplice: stack check: pid %d (%s) eip %08lx",
+		       t->pid, t->comm, KSPLICE_EIP(t));
 		if (conflict)
 			printk(" [<-- CONFLICT]: ");
 		else
 			printk(": ");
 	}
-	if (conflict)
-		return -1;
+	if (task_curr(t)) {
+		if (strcmp(t->comm, "kstopmachine") != 0) {
+			if (debug >= 2)
+				printk("unexpected running task!\n");
+			return -1;
+		}
 
-	return check_stack(task_thread_info(t), (long *) KSPLICE_ESP(t));
+		if (t != current) {
+			if (debug >= 2)
+				printk("\n");
+			return 0;
+		}
+
+		status =
+		    check_stack(task_thread_info(t),
+				(long *) __builtin_frame_address(0));
+	} else {
+		status =
+		    check_stack(task_thread_info(t), (long *) KSPLICE_ESP(t));
+	}
+
+	if (conflict)
+		status = -1;
+	return status;
 }
 
 /* Modified version of Linux's print_context_stack */
 int
 check_stack(struct thread_info *tinfo, long *stack)
 {
-	int conflict;
-	long *addr = kmalloc(sizeof (*addr), GFP_KERNEL);
+	int conflict, status = 0;
+	long addr;
 
 	while (valid_stack_ptr(tinfo, stack)) {
-		*addr = *stack++;
-		if (__kernel_text_address(*addr)) {
+		addr = *stack++;
+		if (__kernel_text_address(addr)) {
 			conflict = check_address_for_conflict(addr);
+			if (conflict)
+				status = -1;
 			if (debug >= 2) {
-				printk("%08lx ", *addr);
+				printk("%08lx ", addr);
 				if (conflict)
-					printk("[<-- CONFLICT]\n");
-			}
-			if (conflict) {
-				kfree(addr);
-				return -1;
+					printk("[<-- CONFLICT] ");
 			}
 		}
 	}
 	if (debug >= 2)
-		printk("ok\n");
+		printk("\n");
 
-	kfree(addr);
-	return 0;
+	return status;
 }
 
 int
-check_address_for_conflict(long *addr)
+check_address_for_conflict(long addr)
 {
 	struct safety_record *r = local_safety;
 	struct ksplice_size *s = &ksplice_sizes;
 
 	for (; r != NULL; r = r->next) {
-		if (r->care == 1 && *addr > r->addr
-		    && *addr <= (r->addr + r->size)) {
+		if (r->care == 1 && addr > r->addr
+		    && addr <= (r->addr + r->size)) {
 			return -1;
 		}
 	}
 	for (; applied && s->name != NULL; s++) {
-		if (*addr > s->thismod_addr
-		    && *addr <= (s->thismod_addr + s->size)) {
+		if (addr > s->thismod_addr
+		    && addr <= (s->thismod_addr + s->size)) {
 			return -1;
 		}
 	}
@@ -309,5 +336,6 @@ check_address_for_conflict(long *addr)
 int
 valid_stack_ptr(struct thread_info *tinfo, void *p)
 {
-	return p > (void *) tinfo && p < (void *) tinfo + THREAD_SIZE - 3;
+	return p > (void *) tinfo
+	    && p <= (void *) tinfo + THREAD_SIZE - sizeof (long);
 }

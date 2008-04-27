@@ -226,6 +226,7 @@ runval("cp", "collection.o.helper.postld", "collection.o.helper");
 parse_and_save(\&parse_patchlist, $patchlist, "collection.o.primary", "ksplice_patches");
 
 my $kallsyms_lookup_name_addr = (keys %{find_sym_system_map("kallsyms_lookup_name")})[0];
+$kallsyms_lookup_name_addr = "" if(!defined $kallsyms_lookup_name_addr);
 open(AUTOH, ">", "modcommon.auto.h") || die;
 print AUTOH <<END;
 #define ksplice_name "ksplice_$kid"
@@ -252,7 +253,7 @@ close(AUTOH);
 runval("KSPLICE=$ksplice KERNELSRC=$linuxtree make modules");
 
 my $kallsyms_list = "kallsyms_addresses kallsyms_num_syms kallsyms_names kallsyms_token_table kallsyms_token_index";
-my $relocs = runsuc("objmanip", "$ksplice.ko rmsyms __kernel_text_address tasklist_lock stop_machine_run $kallsyms_list");
+my $relocs = runsuc("objmanip", "$ksplice.ko rmsyms bust_spinlocks task_curr __kernel_text_address tasklist_lock stop_machine_run $kallsyms_list");
 parse_and_save(\&parse_relocs, $relocs, "$ksplice.ko", "ksplice_init_relocs", "");
 $relocs = runsuc("objmanip", "$ksplice-helper.ko rmsyms init_mm $kallsyms_list");
 parse_and_save(\&parse_relocs, $relocs, "$ksplice-helper.ko", "ksplice_init_relocs", "");

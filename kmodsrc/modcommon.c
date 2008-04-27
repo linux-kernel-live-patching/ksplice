@@ -178,7 +178,10 @@ void
 kernel_lookup(const char *name_wlabel, struct ansglob **globptr)
 {
 	char namebuf[KSYM_NAME_LEN + 1];
-	unsigned long i, off;
+	unsigned long i;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+	unsigned long off;
+#endif
 
 	const char *name = dup_wolabel(name_wlabel);
 

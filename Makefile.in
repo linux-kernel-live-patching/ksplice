@@ -87,8 +87,8 @@ clean:
 	rm -f $(perl_primary)
 	rm -f $(perl_man)
 	rm -f objdiff objmanip allcommon-user
-	rm -f Makefile
 
 distclean: clean
+	rm -f Makefile
 	rm -f objdiff-static objmanip-static
 	rm -f configure
