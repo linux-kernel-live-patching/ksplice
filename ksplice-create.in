@@ -111,7 +111,7 @@ if(!$verbose) {
 my $origdir = getcwd();
 runcd($linuxtree);
 if(defined $diffext) {
-	runval("$libexecdir/gendiff-reversed >$patchfile . $diffext");
+	runval("$libexecdir/ksplice-gendiff-reversed >$patchfile . $diffext");
 }
 
 my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : ());
@@ -147,7 +147,7 @@ foreach my $obj (split(/\s+/, $objs)) {
 	print $objdiff{$obj} if($verbose);
 	delete $objdiff{$obj} if($objdiff{$obj} =~ /^\s*$/s);
 }
-die "Aborting because no changes detected" if(scalar(keys %objdiff) == 0);
+die "Aborting: No changes detected" if(scalar(keys %objdiff) == 0);
 $verbose = $old_verbose;
 
 my ($arch) = (runstr("objdump -h $linuxtree/" . (keys(%objdiff))[0]) =~ /file format elf(\d\d)/);

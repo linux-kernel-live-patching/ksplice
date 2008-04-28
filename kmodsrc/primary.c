@@ -258,25 +258,21 @@ check_task(struct task_struct *t, void *d)
 		else
 			printk(": ");
 	}
-	if (task_curr(t)) {
-		if (strcmp(t->comm, "kstopmachine") != 0) {
-			if (debug >= 2)
-				printk("unexpected running task!\n");
-			return -1;
-		}
-
-		if (t != current) {
-			if (debug >= 2)
-				printk("\n");
-			return 0;
-		}
-
+	if (t == current) {
 		status =
 		    check_stack(task_thread_info(t),
 				(long *) __builtin_frame_address(0));
-	} else {
+	} else if (!task_curr(t)) {
 		status =
 		    check_stack(task_thread_info(t), (long *) KSPLICE_ESP(t));
+	} else if (strcmp(t->comm, "kstopmachine") == 0) {
+		if (debug >= 2)
+			printk("\n");
+		return 0;
+	} else {
+		if (debug >= 2)
+			printk("unexpected running task!\n");
+		return -1;
 	}
 
 	if (conflict)

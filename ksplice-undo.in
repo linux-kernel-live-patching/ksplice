@@ -39,7 +39,15 @@ my $kid = $ARGV[0];
 $kid =~ s/^ksplice[_-]//;
 
 if($debug) {
-	runval("echo 2 > /sys/module/ksplice_$kid/parameters/debug");
+	if(! -d "/sys/module/ksplice_$kid") {
+		die "/sys/module/ksplice_$kid does not exist";
+	}
+	elsif(! -d "/sys/module/ksplice_$kid/parameters") {
+		runval("echo 2 > /sys/module/ksplice_$kid/debug");
+	}
+	else {
+		runval("echo 2 > /sys/module/ksplice_$kid/parameters/debug");
+	}
 }
 
 check_in_proc($kid);

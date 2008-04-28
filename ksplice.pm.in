@@ -62,14 +62,14 @@ sub runstr {
 
 sub runsuc {
 	my ($cmd, $args) = @_;
-	print "$libexecdir/$cmd $args\n" if($verbose);
-	my $output = `$libexecdir/$cmd $args`;
+	print "$libexecdir/ksplice-$cmd $args\n" if($verbose);
+	my $output = `$libexecdir/ksplice-$cmd $args`;
 	if($output =~ /ksplice: success/) {
 		$output = $`;
 	}
 	else {
 		print "Output: $output\n";
-		die "Failed during: $libexecdir/$cmd $args";
+		die "Failed during: $libexecdir/ksplice-$cmd $args";
 	}
 	return $output;
 }

@@ -30,25 +30,25 @@ ifeq ($(strip $(have_static)),)
 objutils: objdiff objmanip
 
 install-objdiff: objdiff
-	install -m755 -D objdiff $(DESTDIR)$(libexecdir)/ksplice/objdiff
+	install -m755 -D objdiff $(DESTDIR)$(libexecdir)/ksplice-objdiff
 
 install-objmanip: objmanip
-	install -m755 -D objmanip $(DESTDIR)$(libexecdir)/ksplice/objmanip
+	install -m755 -D objmanip $(DESTDIR)$(libexecdir)/ksplice-objmanip
 
 else
 
 objutils:
 
 install-objdiff:
-	install -m755 -D objdiff-static $(DESTDIR)$(libexecdir)/ksplice/objdiff
+	install -m755 -D objdiff-static $(DESTDIR)$(libexecdir)/ksplice-objdiff
 
 install-objmanip:
-	install -m755 -D objmanip-static $(DESTDIR)$(libexecdir)/ksplice/objmanip
+	install -m755 -D objmanip-static $(DESTDIR)$(libexecdir)/ksplice-objmanip
 
 endif
 
 $(perl_primary): %: %.in Makefile
-	$(SED) 's|PACKAGE_VERSION|$(PACKAGE_VERSION)|;s|PACKAGE_BUGREPORT|$(PACKAGE_BUGREPORT)|;s|KSPLICE_DATA_DIR|$(datadir)/ksplice|;s|KSPLICE_LIBEXEC_DIR|$(libexecdir)/ksplice|' $< > $@
+	$(SED) 's|PACKAGE_VERSION|$(PACKAGE_VERSION)|;s|PACKAGE_BUGREPORT|$(PACKAGE_BUGREPORT)|;s|KSPLICE_DATA_DIR|$(datadir)/ksplice|;s|KSPLICE_LIBEXEC_DIR|$(libexecdir)|' $< > $@
 
 $(perl_man): %.8: %
 	pod2man --center="Ksplice" --release="Ksplice v$(PACKAGE_VERSION)" --section=8 $< $@
@@ -68,7 +68,7 @@ install: default install-objmanip install-objdiff
 	install -m755 -D ksplice-view $(DESTDIR)$(bindir)/ksplice-view
 	install -m755 -D ksplice-apply $(DESTDIR)$(sbindir)/ksplice-apply
 	install -m755 -D ksplice-undo $(DESTDIR)$(sbindir)/ksplice-undo
-	install -m755 -D gendiff-reversed $(DESTDIR)$(libexecdir)/ksplice/gendiff-reversed
+	install -m755 -D gendiff-reversed $(DESTDIR)$(libexecdir)/ksplice-gendiff-reversed
 	install -m644 -D ksplice.pm $(DESTDIR)$(datadir)/ksplice/ksplice.pm
 	install -m644 -D kmodsrc/helper.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.c
 	install -m644 -D kmodsrc/helper.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.h
@@ -91,4 +91,4 @@ clean:
 distclean: clean
 	rm -f Makefile
 	rm -f objdiff-static objmanip-static
-	rm -f configure
+	rm -f configure config.status config.log
