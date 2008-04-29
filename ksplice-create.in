@@ -145,14 +145,10 @@ foreach my $obj (split(/\s+/, $objs)) {
 
 	$objdiff{$obj} = runsuc("objdiff", "$linuxtree/$obj $postdir/$obj");
 	print $objdiff{$obj} if($verbose);
-	delete $objdiff{$obj} if($objdiff{$obj} =~ /^\s*$/s);
+	delete $objdiff{$obj} if($objdiff{$obj} =~ /^\d\d\s*$/s);
 }
 die "Aborting: No changes detected" if(scalar(keys %objdiff) == 0);
 $verbose = $old_verbose;
-
-my ($arch) = (runstr("objdump -h $linuxtree/" . (keys(%objdiff))[0]) =~ /file format elf(\d\d)/);
-die if($arch != 32 && $arch != 64);
-my ($word) = ($arch == 64 ? "quad" : "long");
 
 ##############################################################################
 # PHASE 2: Perform processing on the target object files                     #
@@ -164,12 +160,14 @@ my ($word) = ($arch == 64 ? "quad" : "long");
 runval("mkdir", "-p", "--", "$tmpdir/collect");
 runcd("$tmpdir/collect");
 
-my ($patchlist, $relocs_primary, $relocs_helper) = ("", "", "");
+my ($word, $patchlist, $relocs_primary, $relocs_helper) = ("", "", "", "");
 
 my $obj_id = 0;
 foreach my $obj (keys %objdiff) {
 	my (%text_remove, %data_remove);
-	my ($sections, $entrysyms) = split("\n", $objdiff{$obj});
+	my ($bits, $sections, $entrysyms) = split("\n", $objdiff{$obj});
+	die if($bits != 32 && $bits != 64);
+	($word) = ($bits == 64 ? "quad" : "long");
 
 	runval("cp", "--", "$postdir/${obj}", "${obj_id}.primary");
 	runval("cp", "--", "$linuxtree/${obj}", "${obj_id}.helper");

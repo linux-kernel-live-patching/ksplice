@@ -21,6 +21,9 @@
  *     (b) have different contents in old.o and new.o
  * (2) the names of the "entry point" ELF symbols in new.o
  *     corresponding to the ELF sections in list (1)
+ *
+ * Before printing these two lists, objdiff prints the number of bits
+ * per address on the target architecture.
  */
 
 #include "objcommon.h"
@@ -46,6 +49,7 @@ main(int argc, char **argv)
 	new_symcount = get_syms(newbfd, &new_sympp);
 	old_symcount = get_syms(oldbfd, &old_sympp);
 
+	printf("%d\n", bfd_arch_bits_per_address(oldbfd));
 	foreach_nonmatching(oldbfd, newbfd, print_newbfd_section_name);
 	printf("\n");
 	foreach_nonmatching(oldbfd, newbfd, print_newbfd_entry_symbols);
