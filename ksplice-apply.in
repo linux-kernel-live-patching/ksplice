@@ -77,6 +77,14 @@ functions is not on a thread's kernel stack.
 
 END
 	}
+	if($dmesg =~ /System[.]map does not match kernel/) {
+		print <<END
+
+Ksplice has aborted the upgrade because it appears that the System.map file
+provided to ksplice-create does not match the running kernel.
+
+END
+	}
 
 	die;
 }
@@ -142,11 +150,11 @@ No debugging output.
 
 =item Z<> B<1>
 
-Provides basic pre-run matching debugging output.
+Provides basic (pre-run matching and kernel stack check) debugging output.
 
 =item Z<> B<2>
 
-Also provides kernel stack check debugging output.
+Also provides full kernel stack check debugging output.
 
 =item Z<> B<3>
 

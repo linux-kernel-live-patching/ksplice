@@ -27,7 +27,7 @@ my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
 	"verbose|v!" => \$verbose,
-	"debug" => \$debug) or pod2usage(1);
+	"debug=i" => \$debug) or pod2usage(1);
 
 if($wantversion) {
 	print $version_str;
@@ -43,10 +43,10 @@ if($debug) {
 		die "/sys/module/ksplice_$kid does not exist";
 	}
 	elsif(! -d "/sys/module/ksplice_$kid/parameters") {
-		runval("echo 2 > /sys/module/ksplice_$kid/debug");
+		runval("echo $debug > /sys/module/ksplice_$kid/debug");
 	}
 	else {
-		runval("echo 2 > /sys/module/ksplice_$kid/parameters/debug");
+		runval("echo $debug > /sys/module/ksplice_$kid/parameters/debug");
 	}
 }
 
@@ -94,7 +94,24 @@ L<ksplice-view(8)>, and it reverses that update within the running binary kernel
 =item B<--debug>
 
 Reverses the update with debugging output enabled.  Recommended only for
-debugging.
+debugging.  I<DEBUG_LEVEL> should be an integer between 0 and 2.  B<--debug=2>
+provides the most debugging information.
+
+=over
+
+=item Z<> B<0>
+
+No debugging output.
+
+=item Z<> B<1>
+
+Provides basic kernel stack check debugging output.
+
+=item Z<> B<2>
+
+Provides full kernel stack check debugging output.
+
+=back
 
 =back
 

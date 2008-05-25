@@ -236,8 +236,14 @@ ksplice_on_each_task(int (*func) (struct task_struct * t, void *d), void *data)
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		if (func(p, data) != 0)
+		if (func(p, data) != 0) {
+			if(debug == 1) {
+				debug = 2;
+				func(p, data);
+				debug = 1;
+			}
 			status = -1;
+		}
 	}
 	while_each_thread(g, p);
 	read_unlock(&tasklist_lock);

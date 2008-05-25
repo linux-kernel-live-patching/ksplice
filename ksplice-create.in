@@ -25,6 +25,7 @@ use ksplice;
 
 my ($patchfile, $diffext, $orig_config_dir, $postdir, $jobs);
 my ($help, $wantversion, $prebuild, $apply, $patch_opt) = (0, 0, 0, 0, "-p1");
+Getopt::Long::Configure("bundling");
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
 	"verbose|v!" => \$verbose,
@@ -223,12 +224,14 @@ runval("cp", "collection.o.helper.postld", "collection.o.helper");
 
 parse_and_save(\&parse_patchlist, $patchlist, "collection.o.primary", "ksplice_patches");
 
-my $kallsyms_lookup_name_addr = (keys %{find_sym_system_map("kallsyms_lookup_name")})[0];
+my $kallsyms_lookup_name_addr = (find_sym_system_map("kallsyms_lookup_name"))[0];
+my $map_printk = (find_sym_system_map("printk"))[0];
 $kallsyms_lookup_name_addr = "" if(!defined $kallsyms_lookup_name_addr);
 open(AUTOH, ">", "modcommon.auto.h") || die;
 print AUTOH <<END;
 #define ksplice_name "ksplice_$kid"
 #define STR2ADDR ((void *)0x${kallsyms_lookup_name_addr})
+#define map_printk ((long)0x${map_printk})
 
 extern struct reloc_addrmap *reloc_addrmaps_$kid;
 extern struct reloc_nameval *reloc_namevals_$kid;
@@ -284,7 +287,7 @@ sub load_system_map {
 			$sym =~ /cleanup_module/ ||
 			$sym =~ /this_module/);
 
-		$syms{$sym}{$addr} = $addr;
+		$syms{$sym}{$addr} = 1;
 	}
 	close(SYMS);
 }
@@ -296,9 +299,9 @@ sub find_sym_system_map {
 	$sym =~ s/[.]data[.]//g;
 	$sym =~ s/____.*//g;
 	if(defined $syms{$sym}) {
-		return $syms{$sym};
+		return keys(%{$syms{$sym}});
 	}
-	return {};
+	return ();
 }
 
 sub parse_and_save {
@@ -376,8 +379,8 @@ sub parse_relocs {
 	my ($func) = ($sect =~ /(.*)____/);
 	$sym =~ s/([.]data[.]__func__[.])\d+/$1${func}/g;
 
-	my @symvals = keys(%{find_sym_system_map($sym)});
-	my @sectvals = keys(%{find_sym_system_map($sect)});
+	my @symvals = find_sym_system_map($sym);
+	my @sectvals = find_sym_system_map($sect);
 
 	push @$tosaveref, (["str", $sym], ["str", $sect],
 			["ptr", "${sect}${globalizer}"],
@@ -395,7 +398,7 @@ sub parse_sizelist {
 	# grab the size and the symbol name from the end of the line
 	my ($size, $sym) = ($entry =~ /\s([a-z0-9]+)\s+(\S+)$/);
 
-	my @vals = keys(%{find_sym_system_map($sym)});
+	my @vals = find_sym_system_map($sym);
 
 	push @$tosaveref, (["str", $sym], ["word", $size],
 		["ptr", "${sym}_global"], ["word", scalar(@vals)],
@@ -407,7 +410,7 @@ sub parse_patchlist {
 	my ($oldsym, $replsym) = split(/\s/, $entry);
 
 	my $oldaddr = 0;
-	my @vals = keys(%{find_sym_system_map($oldsym)});
+	my @vals = find_sym_system_map($oldsym);
 	$oldaddr = $vals[0] if(scalar(@vals) == 1);
 
 	push @$tosaveref, (["str", $oldsym], ["str", $replsym],

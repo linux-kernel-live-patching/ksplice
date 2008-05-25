@@ -17,9 +17,8 @@ void brute_search_all_mods(struct ksplice_size *s);
 static inline int
 virtual_address_mapped(long addr)
 {
-	long va = (long) addr;
 	pgd_t *pgd;
-#if defined(pud_present)
+#if defined(pud_page)
 	pud_t *pud;
 #endif
 	pmd_t *pmd;
@@ -28,20 +27,20 @@ virtual_address_mapped(long addr)
 	if (addr > init_mm.start_code && addr < init_mm.end_code)
 		return 1;
 
-	pgd = pgd_offset_k(va);
+	pgd = pgd_offset_k(addr);
 	if (pgd_none(*pgd))
 		return 0;
 
-#if defined(pud_present)
-	pud = pud_offset(pgd, va);
-	pmd = pmd_offset(pud, va);
+#if defined(pud_page)
+	pud = pud_offset(pgd, addr);
+	pmd = pmd_offset(pud, addr);
 #else
-	pmd = pmd_offset(pgd, va);
+	pmd = pmd_offset(pgd, addr);
 #endif
 
 	if (pmd_none(*pmd))
 		return 0;
-	ptep = pte_offset_map(pmd, va);
+	ptep = pte_offset_map(pmd, addr);
 	if (!pte_present(*ptep)) {
 		pte_unmap(ptep);
 		return 0;
