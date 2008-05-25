@@ -191,6 +191,7 @@ main(int argc, char **argv)
 	assert(bfd_close(obfd));
 	assert(bfd_close(ibfd));
 	printf("ksplice: success\n");
+	return(EXIT_SUCCESS);
 }
 
 void
@@ -310,7 +311,7 @@ rm_from_special(bfd * ibfd, struct specsect *s)
 	int orig_num_relocs = ss->num_relocs;
 	ss->num_relocs = 0;
 	int new_num_entries = 0;
-	int i, j, orig_buffer_index, end_last_entry = 0, modifier = 0;
+	int i, orig_buffer_index, end_last_entry = 0, modifier = 0;
 	for (i = 0; i < orig_num_relocs; i++) {
 		asymbol *sym_ptr = *orig_relocs[i]->sym_ptr_ptr;
 		if (s->odd_relocs && i % 2 == 1) {
@@ -505,8 +506,6 @@ void
 mark_symbols_used_in_relocations(bfd * ibfd, asection * isection,
 				 void *symbolsarg)
 {
-	asymbol **symbols = symbolsarg;
-
 	if (isection->output_section == NULL)
 		return;
 
