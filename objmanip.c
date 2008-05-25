@@ -247,7 +247,7 @@ print_reloc(bfd * ibfd, asection * isection, arelent * orig_reloc,
 
 	printf("%s%s ", new_symname, addstr_all);
 	printf("%s%s%s ", canonical_sym(new_sectname), addstr_all, addstr_sect);
-	printf("%08x ", orig_reloc->address);
+	printf("%08x ", (int)orig_reloc->address);
 	printf("%d %08x\n", orig_reloc->howto->pc_relative, addend);
 }
 
