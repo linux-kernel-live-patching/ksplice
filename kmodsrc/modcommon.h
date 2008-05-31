@@ -100,4 +100,13 @@ struct reloc_addrmap *find_addrmap(long addr);
 void set_temp_myst_relocs(int status_val);
 void release_list(struct starts_with_next *p);
 
+#define clear_list(head, type, member) \
+	do {							\
+		struct list_head *_pos, *_n;			\
+		list_for_each_safe(_pos, _n, head) {		\
+			list_del(_pos);				\
+			kfree(list_entry(_pos, type, member));	\
+		}						\
+	} while (0)
+
 #include "modcommon.auto.h"
