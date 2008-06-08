@@ -110,3 +110,21 @@ void release_list(struct starts_with_next *p);
 	} while (0)
 
 #include "modcommon.auto.h"
+
+#define _STR(x) #x
+#define STR(x) _STR(x)
+#define ksplice_name "ksplice_" STR(KSPLICE_ID)
+
+#define _PASTE(x,y) x##y
+#define PASTE(x,y) _PASTE(x,y)
+#define KSPLICE_UNIQ(s) PASTE(s##_,KSPLICE_ID)
+
+#define reloc_addrmaps KSPLICE_UNIQ(reloc_addrmaps)
+#define reloc_namevals KSPLICE_UNIQ(reloc_namevals)
+#define safety_records KSPLICE_UNIQ(safety_records)
+#define ksplice_do_primary KSPLICE_UNIQ(ksplice_do_primary)
+
+extern struct reloc_addrmap *reloc_addrmaps;
+extern struct reloc_nameval *reloc_namevals;
+extern struct safety_record *safety_records;
+int ksplice_do_primary(void);

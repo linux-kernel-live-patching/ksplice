@@ -229,18 +229,9 @@ my $map_printk = (find_sym_system_map("printk"))[0];
 $kallsyms_lookup_name_addr = "" if(!defined $kallsyms_lookup_name_addr);
 open(AUTOH, ">", "modcommon.auto.h") || die;
 print AUTOH <<END;
-#define ksplice_name "ksplice_$kid"
+#define KSPLICE_ID $kid
 #define STR2ADDR ((void *)0x${kallsyms_lookup_name_addr})
 #define map_printk ((long)0x${map_printk})
-
-extern struct reloc_addrmap *reloc_addrmaps_$kid;
-extern struct reloc_nameval *reloc_namevals_$kid;
-extern struct safety_record *safety_records_$kid;
-int ksplice_do_primary_$kid(void);
-#define reloc_addrmaps reloc_addrmaps_$kid
-#define reloc_namevals reloc_namevals_$kid
-#define safety_records safety_records_$kid
-#define ksplice_do_primary ksplice_do_primary_$kid
 END
 close(AUTOH);
 
