@@ -36,10 +36,6 @@ struct ksplice_size {
 	long *sym_addrs;
 };
 
-struct starts_with_next {
-	struct starts_with_next *next;
-};
-
 struct reloc_nameval {
 	struct list_head list;
 	char *name;
@@ -56,7 +52,7 @@ struct reloc_addrmap {
 };
 
 struct safety_record {
-	struct safety_record *next;	/* must be first */
+	struct list_head list;
 	long addr;
 	int size;
 	int care;
@@ -102,7 +98,6 @@ void release(struct list_head *globptr);
 struct reloc_nameval *find_nameval(char *name, int create);
 struct reloc_addrmap *find_addrmap(long addr);
 void set_temp_myst_relocs(int status_val);
-void release_list(struct starts_with_next *p);
 
 #define clear_list(head, type, member) \
 	do {							\
@@ -131,6 +126,6 @@ void release_list(struct starts_with_next *p);
 
 extern struct list_head reloc_addrmaps;
 extern struct list_head reloc_namevals;
-extern struct safety_record *safety_records;
+extern struct list_head safety_records;
 extern enum ksplice_state_enum ksplice_state;
 int ksplice_do_primary(void);

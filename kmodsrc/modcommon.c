@@ -382,13 +382,3 @@ set_temp_myst_relocs(int status_val)
 		}
 	}
 }
-
-void
-release_list(struct starts_with_next *p)
-{
-	while (p != NULL) {
-		struct starts_with_next *next = p->next;
-		kfree(p);
-		p = next;
-	}
-}

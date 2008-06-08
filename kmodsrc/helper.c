@@ -48,9 +48,8 @@ cleanup_module(void)
 {
 	clear_list(&reloc_namevals, struct reloc_nameval, list);
 	clear_list(&reloc_addrmaps, struct reloc_addrmap, list);
-
-	/* These pointers should always be NULL when no helper module is loaded */
-	release_list((struct starts_with_next *) safety_records);
+	if (ksplice_state == KSPLICE_PREPARING)
+		clear_list(&safety_records, struct safety_record, list);
 }
 
 int
@@ -202,9 +201,8 @@ try_addr(struct ksplice_size *s, long run_addr, long pre_addr,
 		tmp = kmalloc(sizeof (*tmp), GFP_KERNEL);
 		tmp->addr = run_addr;
 		tmp->size = s->size;
-		tmp->next = safety_records;
 		tmp->care = 0;
-		safety_records = tmp;
+		list_add(&tmp->list, &safety_records);
 
 		if (create_nameval) {
 			struct reloc_nameval *nv = find_nameval(s->name, 1);

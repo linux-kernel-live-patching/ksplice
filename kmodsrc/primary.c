@@ -48,14 +48,13 @@ extern struct ksplice_size ksplice_sizes;
 
 LIST_HEAD(reloc_addrmaps);
 LIST_HEAD(reloc_namevals);
-struct safety_record *safety_records = NULL;
+LIST_HEAD(safety_records);
 EXPORT_SYMBOL(reloc_addrmaps);
 EXPORT_SYMBOL(reloc_namevals);
 EXPORT_SYMBOL(safety_records);
 
 enum ksplice_state_enum ksplice_state = KSPLICE_PREPARING;
 EXPORT_SYMBOL(ksplice_state);
-static struct safety_record *local_safety;
 
 int
 init_module(void)
@@ -95,8 +94,6 @@ ksplice_do_primary(void)
 	proc_entry->uid = 0;
 	proc_entry->gid = 0;
 	proc_entry->size = 0;
-
-	local_safety = safety_records;
 
 	for (i = 0; ksplice_state != KSPLICE_APPLIED && i < 5; i++) {
 		bust_spinlocks(1);
@@ -174,12 +171,14 @@ int
 __apply_patches(void *unused)
 {
 	struct ksplice_patch *p;
+	struct list_head *pos;
+	struct safety_record *rec;
 
-	struct safety_record *r = local_safety;
-	for (; r != NULL; r = r->next) {
+	list_for_each(pos, &safety_records) {
+		rec = list_entry(pos, struct safety_record, list);
 		for (p = &ksplice_patches; p->oldstr; p++) {
-			if (p->oldaddr == r->addr) {
-				r->care = 1;
+			if (p->oldaddr == rec->addr) {
+				rec->care = 1;
 			}
 		}
 	}
@@ -191,7 +190,6 @@ __apply_patches(void *unused)
 		return 0;
 
 	ksplice_state = KSPLICE_APPLIED;
-	safety_records = NULL;
 
 	for (p = &ksplice_patches; p->oldstr; p++) {
 		memcpy((void *) p->saved, (void *) p->oldaddr, 5);
@@ -205,6 +203,7 @@ int
 __reverse_patches(void *unused)
 {
 	struct ksplice_patch *p;
+	struct list_head *pos, *n;
 
 	if (ksplice_state != KSPLICE_APPLIED)
 		return 0;
@@ -212,7 +211,7 @@ __reverse_patches(void *unused)
 	if (ksplice_on_each_task(check_task, NULL) != 0)
 		return 0;
 
-	release_list((struct starts_with_next *) local_safety);
+	clear_list(&safety_records, struct safety_record, list);
 	ksplice_state = KSPLICE_REVERSED;
 	module_put(THIS_MODULE);
 
@@ -316,12 +315,14 @@ check_stack(struct thread_info *tinfo, long *stack)
 int
 check_address_for_conflict(long addr)
 {
-	struct safety_record *r = local_safety;
 	struct ksplice_size *s = &ksplice_sizes;
+	struct list_head *pos;
+	struct safety_record *rec;
 
-	for (; r != NULL; r = r->next) {
-		if (r->care == 1 && addr > r->addr
-		    && addr <= (r->addr + r->size)) {
+	list_for_each(pos, &safety_records) {
+		rec = list_entry(pos, struct safety_record, list);
+		if (rec->care == 1 && addr > rec->addr
+		    && addr <= (rec->addr + rec->size)) {
 			return -1;
 		}
 	}
