@@ -46,9 +46,10 @@ init_module(void)
 void
 cleanup_module(void)
 {
+	clear_list(&reloc_namevals, struct reloc_nameval, list);
+	clear_list(&reloc_addrmaps, struct reloc_addrmap, list);
+
 	/* These pointers should always be NULL when no helper module is loaded */
-	release_list((struct starts_with_next *) reloc_namevals);
-	release_list((struct starts_with_next *) reloc_addrmaps);
 	release_list((struct starts_with_next *) safety_records);
 }
 

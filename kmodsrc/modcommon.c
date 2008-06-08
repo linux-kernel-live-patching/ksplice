@@ -102,10 +102,9 @@ process_reloc(struct ksplice_reloc *r)
 		map = kmalloc(sizeof (*map), GFP_KERNEL);
 		map->addr = blank_addr;
 		map->nameval = find_nameval(r->sym_name, 1);
-		map->next = reloc_addrmaps;
 		map->addend = r->addend;
 		map->flags = r->flags;
-		reloc_addrmaps = map;
+		list_add(&map->list, &reloc_addrmaps);
 		return 0;
 	}
 	sym_addr = list_entry(glob.next, struct ansglob, list)->val;
@@ -123,10 +122,9 @@ process_reloc(struct ksplice_reloc *r)
 		map->nameval = find_nameval("ksplice_zero", 1);
 		map->nameval->val = 0;
 		map->nameval->status = VAL;
-		map->next = reloc_addrmaps;
 		map->addend = sym_addr + r->addend;
 		map->flags = r->flags;
-		reloc_addrmaps = map;
+		list_add(&map->list, &reloc_addrmaps);
 
 	} else if ((r->flags & PCREL) && !(helper && safe)) {
 		*(int *) blank_addr =
@@ -334,10 +332,12 @@ release(struct list_head *globptr)
 struct reloc_nameval *
 find_nameval(char *name, int create)
 {
-	struct reloc_nameval *new;
-	struct reloc_nameval *nv = reloc_namevals;
-	for (; nv != NULL; nv = nv->next) {
-		char *newname = nv->name;
+	struct list_head *pos;
+	struct reloc_nameval *nv, *new;
+	char *newname;
+	list_for_each(pos, &reloc_namevals) {
+		nv = list_entry(pos, struct reloc_nameval, list);
+		newname = nv->name;
 		if (starts_with(newname, ".text.")) {
 			newname += 6;
 		}
@@ -347,20 +347,22 @@ find_nameval(char *name, int create)
 	}
 	if (!create)
 		return NULL;
+
 	new = kmalloc(sizeof (*new), GFP_KERNEL);
 	new->name = name;
-	new->next = reloc_namevals;
 	new->val = 0;
 	new->status = NOVAL;
-	reloc_namevals = new;
+	list_add(&new->list, &reloc_namevals);
 	return new;
 }
 
 struct reloc_addrmap *
 find_addrmap(long addr)
 {
-	struct reloc_addrmap *map = reloc_addrmaps;
-	for (; map != NULL; map = map->next) {
+	struct list_head *pos;
+	struct reloc_addrmap *map;
+	list_for_each(pos, &reloc_addrmaps) {
+		map = list_entry(pos, struct reloc_addrmap, list);
 		if (addr >= map->addr && addr <= map->addr + 3) {
 			return map;
 		}
@@ -371,8 +373,10 @@ find_addrmap(long addr)
 void
 set_temp_myst_relocs(int status_val)
 {
-	struct reloc_nameval *nv = reloc_namevals;
-	for (; nv != NULL; nv = nv->next) {
+	struct list_head *pos;
+	struct reloc_nameval *nv;
+	list_for_each(pos, &reloc_namevals) {
+		nv = list_entry(pos, struct reloc_nameval, list);
 		if (nv->status == TEMP) {
 			nv->status = status_val;
 		}

@@ -46,8 +46,8 @@ extern int debug;
 extern struct ksplice_patch ksplice_patches;
 extern struct ksplice_size ksplice_sizes;
 
-struct reloc_addrmap *reloc_addrmaps = NULL;
-struct reloc_nameval *reloc_namevals = NULL;
+LIST_HEAD(reloc_addrmaps);
+LIST_HEAD(reloc_namevals);
 struct safety_record *safety_records = NULL;
 EXPORT_SYMBOL(reloc_addrmaps);
 EXPORT_SYMBOL(reloc_namevals);

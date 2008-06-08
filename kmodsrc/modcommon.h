@@ -41,14 +41,14 @@ struct starts_with_next {
 };
 
 struct reloc_nameval {
-	struct reloc_nameval *next;	/* must be first */
+	struct list_head list;
 	char *name;
 	long val;
 	enum { NOVAL, TEMP, VAL } status;
 };
 
 struct reloc_addrmap {
-	struct reloc_addrmap *next;	/* must be first */
+	struct list_head list;
 	long addr;
 	long addend;
 	int flags;
@@ -124,7 +124,7 @@ void release_list(struct starts_with_next *p);
 #define safety_records KSPLICE_UNIQ(safety_records)
 #define ksplice_do_primary KSPLICE_UNIQ(ksplice_do_primary)
 
-extern struct reloc_addrmap *reloc_addrmaps;
-extern struct reloc_nameval *reloc_namevals;
+extern struct list_head reloc_addrmaps;
+extern struct list_head reloc_namevals;
 extern struct safety_record *safety_records;
 int ksplice_do_primary(void);
