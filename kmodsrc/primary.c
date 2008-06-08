@@ -53,7 +53,9 @@ EXPORT_SYMBOL(reloc_addrmaps);
 EXPORT_SYMBOL(reloc_namevals);
 EXPORT_SYMBOL(safety_records);
 
-static int applied = 0;
+static enum {
+	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
+} ksplice_state = KSPLICE_PREPARING;
 static struct safety_record *local_safety;
 
 int
@@ -97,14 +99,14 @@ ksplice_do_primary(void)
 
 	local_safety = safety_records;
 
-	for (i = 0; !applied && i < 5; i++) {
+	for (i = 0; ksplice_state != KSPLICE_APPLIED && i < 5; i++) {
 		bust_spinlocks(1);
 		stop_machine_run(__apply_patches, NULL, NR_CPUS);
 		bust_spinlocks(0);
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (!applied) {
+	if (ksplice_state != KSPLICE_APPLIED) {
 		remove_proc_entry(ksplice_name, &proc_root);
 		print_abort("stack check: to-be-replaced code is busy");
 		return -1;
@@ -156,14 +158,14 @@ procfile_write(struct file *file, const char *buffer, unsigned long count,
 	int i;
 	printk("ksplice: Preparing to reverse %s\n", ksplice_name);
 
-	for (i = 0; applied && i < 5; i++) {
+	for (i = 0; ksplice_state == KSPLICE_APPLIED && i < 5; i++) {
 		bust_spinlocks(1);
 		stop_machine_run(__reverse_patches, NULL, NR_CPUS);
 		bust_spinlocks(0);
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (applied)
+	if (ksplice_state == KSPLICE_APPLIED)
 		print_abort("stack check: to-be-reversed code is busy");
 
 	return count;
@@ -189,7 +191,7 @@ __apply_patches(void *unused)
 	if (!try_module_get(THIS_MODULE))
 		return 0;
 
-	applied = 1;
+	ksplice_state = KSPLICE_APPLIED;
 	safety_records = NULL;
 
 	for (p = &ksplice_patches; p->oldstr; p++) {
@@ -205,14 +207,14 @@ __reverse_patches(void *unused)
 {
 	struct ksplice_patch *p;
 
-	if (!applied)
+	if (ksplice_state != KSPLICE_APPLIED)
 		return 0;
 
 	if (ksplice_on_each_task(check_task, NULL) != 0)
 		return 0;
 
 	release_list((struct starts_with_next *) local_safety);
-	applied = 0;
+	ksplice_state = KSPLICE_REVERSED;
 	module_put(THIS_MODULE);
 
 	p = &ksplice_patches;
@@ -324,7 +326,7 @@ check_address_for_conflict(long addr)
 			return -1;
 		}
 	}
-	for (; applied && s->name != NULL; s++) {
+	for (; ksplice_state == KSPLICE_APPLIED && s->name != NULL; s++) {
 		if (addr > s->thismod_addr
 		    && addr <= (s->thismod_addr + s->size)) {
 			return -1;
