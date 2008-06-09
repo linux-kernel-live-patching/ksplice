@@ -60,7 +60,7 @@ process_reloc(struct ksplice_reloc *r)
 
 #define blank_addr (r->blank_sect_addr+r->blank_offset)
 
-	struct ansglob *glob = NULL;
+	LIST_HEAD(glob);
 	if (CONFIG_KALLSYMS_VAL || !safe) {
 		for (i = 0; i < r->num_sym_addrs; i++) {
 			int adjustment = (long)printk-map_printk;
@@ -87,7 +87,7 @@ process_reloc(struct ksplice_reloc *r)
 	}
 
 	compute_address(r->sym_name, &glob);
-	if (!singular(glob)) {
+	if (!singular(&glob)) {
 		release(&glob);
 		if (!(helper && safe)) {
 			failed_to_find(r->sym_name);
@@ -108,7 +108,7 @@ process_reloc(struct ksplice_reloc *r)
 		reloc_addrmaps = map;
 		return 0;
 	}
-	sym_addr = glob->val;
+	sym_addr = list_entry(glob.next, struct ansglob, list)->val;
 	release(&glob);
 
 	if (debug >= 4) {
@@ -140,7 +140,7 @@ process_reloc(struct ksplice_reloc *r)
 }
 
 void
-compute_address(char *sym_name, struct ansglob **globptr)
+compute_address(char *sym_name, struct list_head *globptr)
 {
 	int i, have_added_val = 0;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
@@ -180,7 +180,7 @@ compute_address(char *sym_name, struct ansglob **globptr)
 #ifdef CONFIG_KALLSYMS
 /* Modified version of Linux's kallsyms_lookup_name */
 void
-kernel_lookup(const char *name_wlabel, struct ansglob **globptr)
+kernel_lookup(const char *name_wlabel, struct list_head *globptr)
 {
 	char namebuf[KSYM_NAME_LEN + 1];
 	unsigned long i;
@@ -261,17 +261,17 @@ ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 #endif				/* LINUX_VERSION_CODE */
 
 void
-this_module_lookup(const char *name, struct ansglob **globptr)
+this_module_lookup(const char *name, struct list_head *globptr)
 {
 	ksplice_mod_find_sym(THIS_MODULE, name, globptr);
-	if (*globptr == NULL && starts_with(name, ".text.")) {
+	if (list_empty(globptr) && starts_with(name, ".text.")) {
 		ksplice_mod_find_sym(THIS_MODULE, name + strlen(".text."),
 				     globptr);
 	}
 }
 
 void
-other_module_lookup(const char *name_wlabel, struct ansglob **globptr)
+other_module_lookup(const char *name_wlabel, struct list_head *globptr)
 {
 	struct module *m;
 	const char *name = dup_wolabel(name_wlabel);
@@ -289,7 +289,7 @@ other_module_lookup(const char *name_wlabel, struct ansglob **globptr)
 /* Modified version of Linux's mod_find_symname */
 void
 ksplice_mod_find_sym(struct module *m, const char *name,
-		     struct ansglob **globptr)
+		     struct list_head *globptr)
 {
 	int i;
 	if (strlen(m->name) <= 1)
@@ -312,27 +312,23 @@ ksplice_mod_find_sym(struct module *m, const char *name,
 #endif				/* CONFIG_KALLSYMS */
 
 void
-add2glob(struct ansglob **globptr, long val)
+add2glob(struct list_head *globptr, long val)
 {
-	struct ansglob *tmp = *globptr, *new;
-	for (; tmp != NULL; tmp = tmp->next) {
+	struct ansglob *tmp, *new;
+
+	list_for_each_entry(tmp, globptr, list) {
 		if (tmp->val == val)
 			return;
 	}
 	new = kmalloc(sizeof (*new), GFP_KERNEL);
 	new->val = val;
-	new->next = *globptr;
-	*globptr = new;
+	list_add(&new->list, globptr);
 }
 
 void
-release(struct ansglob **globptr)
+release(struct list_head *globptr)
 {
-	while (*globptr != NULL) {
-		struct ansglob *next = (*globptr)->next;
-		kfree(*globptr);
-		*globptr = next;
-	}
+	clear_list(globptr, struct ansglob, list);
 }
 
 struct reloc_nameval *

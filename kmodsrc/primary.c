@@ -120,7 +120,7 @@ int
 resolve_patch_symbols(void)
 {
 	struct ksplice_patch *p;
-	struct ansglob *glob = NULL;
+	LIST_HEAD(glob);
 
 	for (p = &ksplice_patches; p->oldstr; p++) {
 		p->saved = kmalloc(5, GFP_KERNEL);
@@ -129,12 +129,12 @@ resolve_patch_symbols(void)
 			add2glob(&glob, p->oldaddr);
 
 		compute_address(p->oldstr, &glob);
-		if (!singular(glob)) {
+		if (!singular(&glob)) {
 			release(&glob);
 			failed_to_find(p->oldstr);
 			return -1;
 		}
-		p->oldaddr = glob->val;
+		p->oldaddr = list_entry(glob.next, struct ansglob, list)->val;
 		release(&glob);
 	}
 

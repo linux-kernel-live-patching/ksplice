@@ -134,14 +134,15 @@ search_for_match(struct ksplice_size *s, int *stage)
 {
 	int i, saved_debug;
 	long run_addr;
-	struct ansglob *glob = NULL, *g;
+	LIST_HEAD(glob);
+	struct ansglob *g;
 
 	for (i = 0; i < s->num_sym_addrs; i++) {
 		add2glob(&glob, s->sym_addrs[i]);
 	}
 
 	compute_address(s->name, &glob);
-	if (*stage <= 1 && !singular(glob)) {
+	if (*stage <= 1 && !singular(&glob)) {
 		release(&glob);
 		return 1;
 	}
@@ -151,11 +152,11 @@ search_for_match(struct ksplice_size *s, int *stage)
 		       s->name);
 	}
 
-	for (g = glob; g != NULL; g = g->next) {
+	list_for_each_entry(g, &glob, list) {
 		run_addr = g->val;
 
 		yield();
-		if (try_addr(s, run_addr, s->thismod_addr, !singular(glob))) {
+		if (try_addr(s, run_addr, s->thismod_addr, !singular(&glob))) {
 			release(&glob);
 			return 0;
 		}
