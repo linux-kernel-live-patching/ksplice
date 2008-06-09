@@ -60,7 +60,7 @@ process_reloc(struct ksplice_reloc *r)
 
 #define blank_addr (r->blank_sect_addr+r->blank_offset)
 
-	LIST_HEAD(glob);
+	LIST_HEAD(vals);
 	if (CONFIG_KALLSYMS_VAL || !safe) {
 		for (i = 0; i < r->num_sym_addrs; i++) {
 			int adjustment = (long)printk-map_printk;
@@ -68,7 +68,7 @@ process_reloc(struct ksplice_reloc *r)
 				print_abort("System.map does not match kernel");
 				return -1;
 			}
-			add2glob(&glob, r->sym_addrs[i]+adjustment);
+			add_candidate_val(&vals, r->sym_addrs[i]+adjustment);
 		}
 	}
 
@@ -82,13 +82,13 @@ process_reloc(struct ksplice_reloc *r)
 			     (helper ? "_h" : ""), r->sym_name,
 			     r->blank_offset);
 		}
-		release(&glob);
+		release_vals(&vals);
 		return 0;
 	}
 
-	compute_address(r->sym_name, &glob);
-	if (!singular(&glob)) {
-		release(&glob);
+	compute_address(r->sym_name, &vals);
+	if (!singular(&vals)) {
+		release_vals(&vals);
 		if (!(helper && safe)) {
 			failed_to_find(r->sym_name);
 			return -1;
@@ -107,8 +107,8 @@ process_reloc(struct ksplice_reloc *r)
 		list_add(&map->list, &reloc_addrmaps);
 		return 0;
 	}
-	sym_addr = list_entry(glob.next, struct ansglob, list)->val;
-	release(&glob);
+	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
+	release_vals(&vals);
 
 	if (debug >= 4) {
 		printk("ksplice%s: reloc: %s:%08lx ",
@@ -138,7 +138,7 @@ process_reloc(struct ksplice_reloc *r)
 }
 
 void
-compute_address(char *sym_name, struct list_head *globptr)
+compute_address(char *sym_name, struct list_head *vals)
 {
 	int i, have_added_val = 0;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
@@ -150,9 +150,9 @@ compute_address(char *sym_name, struct list_head *globptr)
 		struct reloc_nameval *nv = find_nameval(sym_name, 0);
 		if (nv != NULL && nv->status != NOVAL) {
 			if (!have_added_val)
-				release(globptr);
+				release_vals(vals);
 			have_added_val = 1;
-			add2glob(globptr, nv->val);
+			add_candidate_val(vals, nv->val);
 
 			if (debug >= 1) {
 				printk("ksplice: using detected sym %s=%08lx\n",
@@ -164,13 +164,13 @@ compute_address(char *sym_name, struct list_head *globptr)
 		return;
 
 #ifdef CONFIG_KALLSYMS
-	kernel_lookup(sym_name, globptr);
-	other_module_lookup(sym_name, globptr);
+	kernel_lookup(sym_name, vals);
+	other_module_lookup(sym_name, vals);
 #endif
 
 	for (i = 0; prefix[i] != NULL; i++) {
 		if (starts_with(sym_name, prefix[i])) {
-			compute_address(sym_name + strlen(prefix[i]), globptr);
+			compute_address(sym_name + strlen(prefix[i]), vals);
 		}
 	}
 }
@@ -178,7 +178,7 @@ compute_address(char *sym_name, struct list_head *globptr)
 #ifdef CONFIG_KALLSYMS
 /* Modified version of Linux's kallsyms_lookup_name */
 void
-kernel_lookup(const char *name_wlabel, struct list_head *globptr)
+kernel_lookup(const char *name_wlabel, struct list_head *vals)
 {
 	char namebuf[KSYM_NAME_LEN + 1];
 	unsigned long i;
@@ -196,7 +196,7 @@ kernel_lookup(const char *name_wlabel, struct list_head *globptr)
 		off = ksplice_kallsyms_expand_symbol(off, namebuf);
 
 		if (strcmp(namebuf, name) == 0) {
-			add2glob(globptr, kallsyms_addresses[i]);
+			add_candidate_val(vals, kallsyms_addresses[i]);
 		}
 	}
 #else
@@ -208,7 +208,7 @@ kernel_lookup(const char *name_wlabel, struct list_head *globptr)
 		strlcpy(namebuf + prefix, knames, KSYM_NAME_LEN - prefix);
 
 		if (strcmp(namebuf, name) == 0) {
-			add2glob(globptr, kallsyms_addresses[i]);
+			add_candidate_val(vals, kallsyms_addresses[i]);
 		}
 
 		knames += strlen(knames) + 1;
@@ -259,17 +259,17 @@ ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 #endif				/* LINUX_VERSION_CODE */
 
 void
-this_module_lookup(const char *name, struct list_head *globptr)
+this_module_lookup(const char *name, struct list_head *vals)
 {
-	ksplice_mod_find_sym(THIS_MODULE, name, globptr);
-	if (list_empty(globptr) && starts_with(name, ".text.")) {
+	ksplice_mod_find_sym(THIS_MODULE, name, vals);
+	if (list_empty(vals) && starts_with(name, ".text.")) {
 		ksplice_mod_find_sym(THIS_MODULE, name + strlen(".text."),
-				     globptr);
+				     vals);
 	}
 }
 
 void
-other_module_lookup(const char *name_wlabel, struct list_head *globptr)
+other_module_lookup(const char *name_wlabel, struct list_head *vals)
 {
 	struct module *m;
 	const char *name = dup_wolabel(name_wlabel);
@@ -277,7 +277,7 @@ other_module_lookup(const char *name_wlabel, struct list_head *globptr)
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
-			ksplice_mod_find_sym(m, name, globptr);
+			ksplice_mod_find_sym(m, name, vals);
 		}
 	}
 
@@ -287,7 +287,7 @@ other_module_lookup(const char *name_wlabel, struct list_head *globptr)
 /* Modified version of Linux's mod_find_symname */
 void
 ksplice_mod_find_sym(struct module *m, const char *name,
-		     struct list_head *globptr)
+		     struct list_head *vals)
 {
 	int i;
 	if (strlen(m->name) <= 1)
@@ -302,7 +302,7 @@ ksplice_mod_find_sym(struct module *m, const char *name,
 		if (strcmp(cursym_name, name) == 0 &&
 		    m->symtab[i].st_value != 0) {
 
-			add2glob(globptr, m->symtab[i].st_value);
+			add_candidate_val(vals, m->symtab[i].st_value);
 		}
 		kfree(cursym_name);
 	}
@@ -310,23 +310,23 @@ ksplice_mod_find_sym(struct module *m, const char *name,
 #endif				/* CONFIG_KALLSYMS */
 
 void
-add2glob(struct list_head *globptr, long val)
+add_candidate_val(struct list_head *vals, long val)
 {
-	struct ansglob *tmp, *new;
+	struct candidate_val *tmp, *new;
 
-	list_for_each_entry(tmp, globptr, list) {
+	list_for_each_entry(tmp, vals, list) {
 		if (tmp->val == val)
 			return;
 	}
 	new = kmalloc(sizeof (*new), GFP_KERNEL);
 	new->val = val;
-	list_add(&new->list, globptr);
+	list_add(&new->list, vals);
 }
 
 void
-release(struct list_head *globptr)
+release_vals(struct list_head *vals)
 {
-	clear_list(globptr, struct ansglob, list);
+	clear_list(vals, struct candidate_val, list);
 }
 
 struct reloc_nameval *

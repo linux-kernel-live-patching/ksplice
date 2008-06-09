@@ -62,7 +62,7 @@ enum ksplice_state_enum {
 	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
 };
 
-struct ansglob {
+struct candidate_val {
 	struct list_head list;
 	long val;
 };
@@ -80,21 +80,21 @@ print_abort(const char *str)
 
 int process_ksplice_relocs(int caller_is_helper);
 int process_reloc(struct ksplice_reloc *r);
-void compute_address(char *sym_name, struct list_head *globptr);
-void kernel_lookup(const char *name_wlabel, struct list_head *globptr);
+void compute_address(char *sym_name, struct list_head *vals);
+void kernel_lookup(const char *name_wlabel, struct list_head *vals);
 
 #ifdef CONFIG_KALLSYMS
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 long ksplice_kallsyms_expand_symbol(unsigned long off, char *result);
 #endif
-void this_module_lookup(const char *name, struct list_head *globptr);
-void other_module_lookup(const char *name_wlabel, struct list_head *globptr);
+void this_module_lookup(const char *name, struct list_head *vals);
+void other_module_lookup(const char *name_wlabel, struct list_head *vals);
 void ksplice_mod_find_sym(struct module *m, const char *name,
-			  struct list_head *globptr);
+			  struct list_head *vals);
 #endif
 
-void add2glob(struct list_head *globptr, long val);
-void release(struct list_head *globptr);
+void add_candidate_val(struct list_head *vals, long val);
+void release_vals(struct list_head *vals);
 struct reloc_nameval *find_nameval(char *name, int create);
 struct reloc_addrmap *find_addrmap(long addr);
 void set_temp_myst_relocs(int status_val);

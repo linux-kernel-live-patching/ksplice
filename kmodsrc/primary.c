@@ -118,22 +118,22 @@ int
 resolve_patch_symbols(void)
 {
 	struct ksplice_patch *p;
-	LIST_HEAD(glob);
+	LIST_HEAD(vals);
 
 	for (p = &ksplice_patches; p->oldstr; p++) {
 		p->saved = kmalloc(5, GFP_KERNEL);
 
 		if (p->oldaddr != 0)
-			add2glob(&glob, p->oldaddr);
+			add_candidate_val(&vals, p->oldaddr);
 
-		compute_address(p->oldstr, &glob);
-		if (!singular(&glob)) {
-			release(&glob);
+		compute_address(p->oldstr, &vals);
+		if (!singular(&vals)) {
+			release_vals(&vals);
 			failed_to_find(p->oldstr);
 			return -1;
 		}
-		p->oldaddr = list_entry(glob.next, struct ansglob, list)->val;
-		release(&glob);
+		p->oldaddr = list_entry(vals.next, struct candidate_val, list)->val;
+		release_vals(&vals);
 	}
 
 	return 0;
