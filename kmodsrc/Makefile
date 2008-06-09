@@ -1,6 +1,13 @@
 ifneq ($(KERNELRELEASE),)
 
+ifeq ($(KSPLICE_ID),)
+    $(error "You must set KSPLICE_ID.")
+endif
 EXTRA_CFLAGS += "-DKSPLICE_ID=$(KSPLICE_ID)"
+
+ifeq ($(map_printk),)
+    $(error "You must set map_printk.")
+endif
 EXTRA_CFLAGS += "-Dmap_printk=((long)0x$(map_printk))"
 
 KSPLICE = ksplice-$(KSPLICE_ID)
