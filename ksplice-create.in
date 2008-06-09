@@ -116,7 +116,7 @@ if(defined $diffext) {
 }
 
 my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : ());
-@jlevel = (defined $jobs ? ("-j$jobs") : ());
+@jlevel = ("-j$jobs") if(defined $jobs);
 my @flags = ('CFLAGS_KERNEL=-ffunction-sections -fdata-sections', 'CFLAGS_MODULE=-DMODULE -ffunction-sections -fdata-sections', @jlevel);
 my $make1 = runval_raw("make", @flags);
 my $objs = runstr('find * -name "*.o" | grep -v tmp_versions | grep -v built-in | grep -v piggy.o | grep -v setup | grep -v mod | grep -v ksplice/post');
