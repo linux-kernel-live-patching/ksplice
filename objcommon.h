@@ -20,6 +20,5 @@ struct supersect {
 	struct supersect *next;
 };
 
-long get_syms(bfd * abfd, asymbol *** syms_ptr);
-struct supersect *fetch_supersect(bfd * abfd, asection * sect,
-				  asymbol ** sympp);
+long get_syms(bfd *abfd, asymbol ***syms_ptr);
+struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp);

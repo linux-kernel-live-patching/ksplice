@@ -33,8 +33,7 @@ bfd *newbfd;
 asymbol **new_sympp, **old_sympp;
 int new_symcount, old_symcount;
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	bfd_init();
 	bfd *oldbfd = bfd_openr(argv[1], NULL);
@@ -58,11 +57,10 @@ main(int argc, char **argv)
 	assert(bfd_close(oldbfd));
 	assert(bfd_close(newbfd));
 	printf("ksplice: success\n");
-	return(EXIT_SUCCESS);
+	return (EXIT_SUCCESS);
 }
 
-void
-foreach_nonmatching(bfd * oldbfd, bfd * newbfd, section_fn s_fn)
+void foreach_nonmatching(bfd *oldbfd, bfd *newbfd, section_fn s_fn)
 {
 	asection *newp, *oldp;
 	for (newp = newbfd->sections; newp != NULL; newp = newp->next) {
@@ -97,8 +95,7 @@ foreach_nonmatching(bfd * oldbfd, bfd * newbfd, section_fn s_fn)
  * string has been changed between the old file and the new file, reloc_cmp
  * will detect the difference.
  */
-int
-reloc_cmp(bfd * oldbfd, asection * oldp, bfd * newbfd, asection * newp)
+int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
 {
 	int i;
 	struct supersect *old_ss, *new_ss;
@@ -125,9 +122,9 @@ reloc_cmp(bfd * oldbfd, asection * oldp, bfd * newbfd, asection * newp)
 			return -1;
 
 		int old_offset =
-		    *(int *) (old_ss->contents + old_ss->relocs[i]->address);
+		    *(int *)(old_ss->contents + old_ss->relocs[i]->address);
 		int new_offset =
-		    *(int *) (new_ss->contents + new_ss->relocs[i]->address);
+		    *(int *)(new_ss->contents + new_ss->relocs[i]->address);
 
 		if (starts_with(ro_old_ss->name, ".rodata.str")) {
 			if (strcmp
@@ -148,14 +145,12 @@ reloc_cmp(bfd * oldbfd, asection * oldp, bfd * newbfd, asection * newp)
 	return 0;
 }
 
-void
-print_newbfd_section_name(asection * sect)
+void print_newbfd_section_name(asection *sect)
 {
 	printf("%s ", sect->name);
 }
 
-void
-print_newbfd_entry_symbols(asection * sect)
+void print_newbfd_entry_symbols(asection *sect)
 {
 	int i;
 	for (i = 0; i < new_symcount; i++) {

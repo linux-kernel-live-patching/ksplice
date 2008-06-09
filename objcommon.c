@@ -16,23 +16,21 @@
 
 #include "objcommon.h"
 
-long
-get_syms(bfd * abfd, asymbol *** syms_ptr)
+long get_syms(bfd *abfd, asymbol ***syms_ptr)
 {
 	long storage_needed = bfd_get_symtab_upper_bound(abfd);
 	if (storage_needed == 0)
 		return 0;
 	assert(storage_needed >= 0);
 
-	*syms_ptr = (asymbol **) malloc(storage_needed);
+	*syms_ptr = (asymbol **)malloc(storage_needed);
 	long num_syms = bfd_canonicalize_symtab(abfd, *syms_ptr);
 	assert(num_syms >= 0);
 
 	return num_syms;
 }
 
-struct supersect *
-fetch_supersect(bfd * abfd, asection * sect, asymbol ** sympp)
+struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp)
 {
 	static struct supersect *supersects = NULL;
 
@@ -43,7 +41,7 @@ fetch_supersect(bfd * abfd, asection * sect, asymbol ** sympp)
 		}
 	}
 
-	struct supersect *new = malloc(sizeof (*new));
+	struct supersect *new = malloc(sizeof(*new));
 	new->parent = abfd;
 	new->name = malloc(strlen(sect->name) + 1);
 	strcpy(new->name, sect->name);
@@ -51,12 +49,12 @@ fetch_supersect(bfd * abfd, asection * sect, asymbol ** sympp)
 	supersects = new;
 
 	new->contents_size = bfd_get_section_size(sect);
-	new->contents = (void *) malloc(align(new->contents_size, 4));
+	new->contents = (void *)malloc(align(new->contents_size, 4));
 	assert(bfd_get_section_contents
 	       (abfd, sect, new->contents, 0, new->contents_size));
 
 	int relsize = bfd_get_reloc_upper_bound(abfd, sect);
-	new->relocs = (void *) malloc(relsize);
+	new->relocs = (void *)malloc(relsize);
 	new->num_relocs =
 	    bfd_canonicalize_reloc(abfd, sect, new->relocs, sympp);
 	assert(new->num_relocs >= 0);

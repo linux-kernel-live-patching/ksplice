@@ -72,8 +72,7 @@ struct candidate_val {
 		printk("ksplice: Failed to find symbol %s at %s:%d\n", \
 		sym_name, __FILE__, __LINE__)
 
-static inline void
-print_abort(const char *str)
+static inline void print_abort(const char *str)
 {
 	printk("ksplice: Aborted. (%s)\n", str);
 }

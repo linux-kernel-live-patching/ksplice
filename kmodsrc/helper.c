@@ -29,8 +29,7 @@ extern struct ksplice_size ksplice_sizes;
 #undef max
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
-int
-init_module(void)
+int init_module(void)
 {
 	printk("ksplice_h: Preparing and checking %s\n", ksplice_name);
 
@@ -43,8 +42,7 @@ init_module(void)
 	return 0;
 }
 
-void
-cleanup_module(void)
+void cleanup_module(void)
 {
 	clear_list(&reloc_namevals, struct reloc_nameval, list);
 	clear_list(&reloc_addrmaps, struct reloc_addrmap, list);
@@ -52,8 +50,7 @@ cleanup_module(void)
 		clear_list(&safety_records, struct safety_record, list);
 }
 
-int
-ksplice_do_helper(void)
+int ksplice_do_helper(void)
 {
 	struct ksplice_size *s;
 	int i, record_count = 0, ret;
@@ -71,7 +68,7 @@ ksplice_do_helper(void)
 	/* old kernels do not have kcalloc */
 	finished = ksplice_kcalloc(record_count);
 
-      start:
+start:
 	for (s = &ksplice_sizes, i = 0; s->name != NULL; s++, i++) {
 		if (s->size == 0)
 			finished[i] = 1;
@@ -118,8 +115,7 @@ ksplice_do_helper(void)
 }
 
 /* old kernels do not have kcalloc */
-void *
-ksplice_kcalloc(int size)
+void *ksplice_kcalloc(int size)
 {
 	char *mem = kmalloc(size, GFP_KERNEL);
 	int i;
@@ -129,8 +125,7 @@ ksplice_kcalloc(int size)
 	return mem;
 }
 
-int
-search_for_match(struct ksplice_size *s, int *stage)
+int search_for_match(struct ksplice_size *s, int *stage)
 {
 	int i, saved_debug;
 	long run_addr;
@@ -198,7 +193,7 @@ try_addr(struct ksplice_size *s, long run_addr, long pre_addr,
 			       s->name, run_addr);
 		}
 
-		tmp = kmalloc(sizeof (*tmp), GFP_KERNEL);
+		tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
 		tmp->addr = run_addr;
 		tmp->size = s->size;
 		tmp->care = 0;
@@ -215,8 +210,7 @@ try_addr(struct ksplice_size *s, long run_addr, long pre_addr,
 	return 0;
 }
 
-int
-run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
+int run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
 {
 	int run_o, pre_o, lenient = 0, prev_c3 = 0, recent_5b = 0;
 	unsigned char run, pre;
@@ -236,8 +230,8 @@ run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
 
 		if (!virtual_address_mapped(run_addr + run_o))
 			return 1;
-		run = *(unsigned char *) (run_addr + run_o);
-		pre = *(unsigned char *) (pre_addr + pre_o);
+		run = *(unsigned char *)(run_addr + run_o);
+		pre = *(unsigned char *)(pre_addr + pre_o);
 
 		if (rerun)
 			printk("%02x/%02x ", run, pre);
@@ -284,10 +278,10 @@ run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
 		if (rerun) {
 			printk("[p_o=%08x] ! %02x/%02x %02x/%02x",
 			       pre_o,
-			       *(unsigned char *) (run_addr + run_o + 1),
-			       *(unsigned char *) (pre_addr + pre_o + 1),
-			       *(unsigned char *) (run_addr + run_o + 2),
-			       *(unsigned char *) (pre_addr + pre_o + 2));
+			       *(unsigned char *)(run_addr + run_o + 1),
+			       *(unsigned char *)(pre_addr + pre_o + 1),
+			       *(unsigned char *)(run_addr + run_o + 2),
+			       *(unsigned char *)(pre_addr + pre_o + 2));
 		}
 		return 1;
 	}
@@ -299,8 +293,8 @@ handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 		  int *run_o, struct reloc_addrmap *map, int rerun)
 {
 	int expected;
-	int offset = (int) (pre_addr + *pre_o - map->addr);
-	int run_reloc = *(int *) (run_addr + *run_o - offset);
+	int offset = (int)(pre_addr + *pre_o - map->addr);
+	int run_reloc = *(int *)(run_addr + *run_o - offset);
 
 	if (debug >= 3 && !rerun) {
 		printk("ksplice_h: run-pre: reloc at r_a=%08lx p_o=%08x: ",
@@ -335,15 +329,14 @@ handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 
 /* TODO: The recommended way to pad 64bit code is to use NOPs preceded by
    maximally four 0x66 prefixes.  */
-int
-match_nop(long addr, int *o, int *other_o)
+int match_nop(long addr, int *o, int *other_o)
 {
 	int i, j;
 	for (i = NUM_NOPS - 1; i >= 0; i--) {
 		for (j = 0; j < i + 1; j++) {
 			if (!virtual_address_mapped(addr + *o + j))
 				break;
-			if (*(unsigned char *) (addr + *o + j) != nops[i][j])
+			if (*(unsigned char *)(addr + *o + j) != nops[i][j])
 				break;
 		}
 		if (j == i + 1) {
@@ -356,8 +349,7 @@ match_nop(long addr, int *o, int *other_o)
 	return 0;
 }
 
-void
-brute_search_all_mods(struct ksplice_size *s)
+void brute_search_all_mods(struct ksplice_size *s)
 {
 	struct module *m;
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {

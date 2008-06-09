@@ -108,16 +108,15 @@ struct wsect *wanted_sections = NULL;
 
 struct specsect special_sections[] =
     { {".altinstructions", 1, ".altinstr_replacement",
-       2 * sizeof (char *) + 4 * sizeof (char)},
-{".smp_locks", 0, NULL, sizeof (char *)},
-{".parainstructions", 0, NULL, sizeof (char *) + 4 * sizeof (char)},
+       2 * sizeof(char *) + 4 * sizeof(char)},
+{".smp_locks", 0, NULL, sizeof(char *)},
+{".parainstructions", 0, NULL, sizeof(char *) + 4 * sizeof(char)},
 {NULL}
 };
 
 #define mode(str) starts_with(modestr, str)
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	char *debug_name = malloc(strlen(argv[1]) + 4 + strlen(argv[2]) + 1);
 	sprintf(debug_name, "%s.pre%s", argv[1], argv[2]);
@@ -191,15 +190,14 @@ main(int argc, char **argv)
 	assert(bfd_close(obfd));
 	assert(bfd_close(ibfd));
 	printf("ksplice: success\n");
-	return(EXIT_SUCCESS);
+	return (EXIT_SUCCESS);
 }
 
-void
-rm_some_relocs(bfd * ibfd, asection * isection)
+void rm_some_relocs(bfd *ibfd, asection *isection)
 {
 	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
-	arelent **orig_relocs = malloc(ss->num_relocs * sizeof (*orig_relocs));
-	memcpy(orig_relocs, ss->relocs, ss->num_relocs * sizeof (*orig_relocs));
+	arelent **orig_relocs = malloc(ss->num_relocs * sizeof(*orig_relocs));
+	memcpy(orig_relocs, ss->relocs, ss->num_relocs * sizeof(*orig_relocs));
 	int orig_num_relocs = ss->num_relocs;
 	ss->num_relocs = 0;
 
@@ -225,9 +223,8 @@ rm_some_relocs(bfd * ibfd, asection * isection)
 	}
 }
 
-void
-print_reloc(bfd * ibfd, asection * isection, arelent * orig_reloc,
-	    struct supersect *ss)
+void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
+		 struct supersect *ss)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
 
@@ -251,17 +248,15 @@ print_reloc(bfd * ibfd, asection * isection, arelent * orig_reloc,
 	printf("%d %08x\n", orig_reloc->howto->pc_relative, addend);
 }
 
-int
-blot_section(bfd * abfd, asection * sect, int offset)
+int blot_section(bfd *abfd, asection *sect, int offset)
 {
 	struct supersect *ss = fetch_supersect(abfd, sect, isympp);
-	int tmp = *((int *) (ss->contents + offset));
-	*((int *) (ss->contents + offset)) = 0x77777777;
+	int tmp = *((int *)(ss->contents + offset));
+	*((int *)(ss->contents + offset)) = 0x77777777;
 	return tmp;
 }
 
-const char *
-canonical_sym(const char *sect_wlabel)
+const char *canonical_sym(const char *sect_wlabel)
 {
 	const char *sect = sect_wlabel;
 	if (!mode("sizelist"))
@@ -286,8 +281,7 @@ canonical_sym(const char *sect_wlabel)
 	DIE;
 }
 
-void
-rm_from_special(bfd * ibfd, struct specsect *s)
+void rm_from_special(bfd *ibfd, struct specsect *s)
 {
 	asection *isection = bfd_get_section_by_name(ibfd, s->sectname);
 	if (isection == NULL)
@@ -296,8 +290,8 @@ rm_from_special(bfd * ibfd, struct specsect *s)
 	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
 	void *orig_buffer = malloc(ss->contents_size);
 	memcpy(orig_buffer, ss->contents, ss->contents_size);
-	arelent **orig_relocs = malloc(ss->num_relocs * sizeof (*orig_relocs));
-	memcpy(orig_relocs, ss->relocs, ss->num_relocs * sizeof (*orig_relocs));
+	arelent **orig_relocs = malloc(ss->num_relocs * sizeof(*orig_relocs));
+	memcpy(orig_relocs, ss->relocs, ss->num_relocs * sizeof(*orig_relocs));
 
 	assert(align(ss->contents_size, 4) % s->entry_size == 0);
 	if (s->odd_relocs) {
@@ -348,8 +342,7 @@ rm_from_special(bfd * ibfd, struct specsect *s)
 	ss->contents_size = new_num_entries * s->entry_size;
 }
 
-void
-mark_wanted_if_referenced(bfd * abfd, asection * sect, void *ignored)
+void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 {
 	if (want_section(sect->name, NULL))
 		return;
@@ -360,8 +353,8 @@ mark_wanted_if_referenced(bfd * abfd, asection * sect, void *ignored)
 	bfd_map_over_sections(abfd, check_for_ref_to_section, sect);
 }
 
-void
-check_for_ref_to_section(bfd * abfd, asection * looking_at, void *looking_for)
+void check_for_ref_to_section(bfd *abfd, asection *looking_at,
+			      void *looking_for)
 {
 	if (!want_section(looking_at->name, NULL))
 		return;
@@ -370,9 +363,9 @@ check_for_ref_to_section(bfd * abfd, asection * looking_at, void *looking_for)
 	int i;
 	for (i = 0; i < ss->num_relocs; i++) {
 		asymbol *sym_ptr = *ss->relocs[i]->sym_ptr_ptr;
-		if (sym_ptr->section == (asection *) looking_for) {
-			struct wsect *w = malloc(sizeof (*w));
-			w->name = strdup(((asection *) looking_for)->name);
+		if (sym_ptr->section == (asection *)looking_for) {
+			struct wsect *w = malloc(sizeof(*w));
+			w->name = strdup(((asection *)looking_for)->name);
 			w->next = wanted_sections;
 			wanted_sections = w;
 		}
@@ -380,8 +373,7 @@ check_for_ref_to_section(bfd * abfd, asection * looking_at, void *looking_for)
 }
 
 /* Modified function from GNU Binutils objcopy.c */
-bfd_boolean
-copy_object(bfd * ibfd, bfd * obfd)
+bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 {
 	assert(bfd_set_format(obfd, bfd_get_format(ibfd)));
 
@@ -414,8 +406,7 @@ copy_object(bfd * ibfd, bfd * obfd)
 	   section.  */
 
 	bfd_map_over_sections(ibfd, mark_symbols_used_in_relocations, isympp);
-	asymbol **osympp =
-	    (void *) malloc((2 * symcount + 1) * sizeof (*osympp));
+	asymbol **osympp = (void *)malloc((2 * symcount + 1) * sizeof(*osympp));
 	symcount = filter_symbols(ibfd, obfd, osympp, isympp, symcount);
 
 	bfd_set_symtab(obfd, osympp, symcount);
@@ -433,8 +424,7 @@ copy_object(bfd * ibfd, bfd * obfd)
 }
 
 /* Modified function from GNU Binutils objcopy.c */
-void
-setup_section(bfd * ibfd, asection * isection, void *obfdarg)
+void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 {
 	bfd *obfd = obfdarg;
 	bfd_vma vma;
@@ -467,8 +457,7 @@ setup_section(bfd * ibfd, asection * isection, void *obfdarg)
 }
 
 /* Modified function from GNU Binutils objcopy.c */
-void
-copy_section(bfd * ibfd, asection * isection, void *obfdarg)
+void copy_section(bfd *ibfd, asection *isection, void *obfdarg)
 {
 	bfd *obfd = obfdarg;
 
@@ -502,9 +491,8 @@ copy_section(bfd * ibfd, asection * isection, void *obfdarg)
  *
  * Ignore relocations which will not appear in the output file.
  */
-void
-mark_symbols_used_in_relocations(bfd * ibfd, asection * isection,
-				 void *symbolsarg)
+void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
+				      void *symbolsarg)
 {
 	if (isection->output_section == NULL)
 		return;
@@ -530,9 +518,8 @@ mark_symbols_used_in_relocations(bfd * ibfd, asection * isection,
  * We don't copy in place, because that confuses the relocs.
  * Return the number of symbols to print.
  */
-unsigned int
-filter_symbols(bfd * abfd, bfd * obfd, asymbol ** osyms,
-	       asymbol ** isyms, long symcount)
+unsigned int filter_symbols(bfd *abfd, bfd *obfd, asymbol **osyms,
+			    asymbol **isyms, long symcount)
 {
 	asymbol **from = isyms, **to = osyms;
 	long src_count = 0, dst_count = 0;
@@ -612,8 +599,7 @@ filter_symbols(bfd * abfd, bfd * obfd, asymbol ** osyms,
 	return dst_count;
 }
 
-int
-exists_sym_with_name(asymbol ** syms, int symcount, const char *desired)
+int exists_sym_with_name(asymbol **syms, int symcount, const char *desired)
 {
 	int i;
 	for (i = 0; i < symcount; i++) {
@@ -623,8 +609,7 @@ exists_sym_with_name(asymbol ** syms, int symcount, const char *desired)
 	return 0;
 }
 
-int
-match_varargs(const char *str)
+int match_varargs(const char *str)
 {
 	int i;
 	for (i = 0; i < varargs_count; i++) {
@@ -637,8 +622,7 @@ match_varargs(const char *str)
 	return 0;
 }
 
-int
-want_section(const char *name, char **newname)
+int want_section(const char *name, char **newname)
 {
 	static const char *static_want[] =
 	    { ".altinstructions", ".altinstr_replacement", ".smp_locks",
@@ -669,7 +653,7 @@ want_section(const char *name, char **newname)
 	}
 	return 0;
 
-      success:
+success:
 
 	if (newname != NULL) {
 		*newname =
@@ -680,8 +664,7 @@ want_section(const char *name, char **newname)
 	return 1;
 }
 
-struct specsect *
-is_special(const char *name)
+struct specsect *is_special(const char *name)
 {
 	int i;
 	for (i = 0; special_sections[i].sectname != NULL; i++) {

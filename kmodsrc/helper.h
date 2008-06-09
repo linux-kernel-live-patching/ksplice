@@ -14,8 +14,7 @@ int handle_myst_reloc(long pre_addr, int *pre_z, long run_addr,
 int match_nop(long addr, int *main_o, int *other_o);
 void brute_search_all_mods(struct ksplice_size *s);
 
-static inline int
-virtual_address_mapped(long addr)
+static inline int virtual_address_mapped(long addr)
 {
 	pgd_t *pgd;
 #if defined(pud_page)
@@ -50,21 +49,20 @@ virtual_address_mapped(long addr)
 	return 1;
 }
 
-static inline int
-brute_search(struct ksplice_size *s, void *start, long len)
+static inline int brute_search(struct ksplice_size *s, void *start, long len)
 {
 	long addr;
 	char run, pre;
 
-	for (addr = (long) start; addr < (long) start + len; addr++) {
+	for (addr = (long)start; addr < (long)start + len; addr++) {
 		if (addr % 100000 == 0)
 			yield();
 
 		if (!virtual_address_mapped(addr))
 			return 1;
 
-		run = *(unsigned char *) (addr);
-		pre = *(unsigned char *) (s->thismod_addr);
+		run = *(unsigned char *)(addr);
+		pre = *(unsigned char *)(s->thismod_addr);
 
 		if (run != pre)
 			return 1;

@@ -7,6 +7,7 @@
 
 #define NUM_NOPS 15
 
+/* *INDENT-OFF* */
 static const unsigned char nops[NUM_NOPS][15] =
 { {0x90},					/* nop                  */
 {0x89, 0xf6},					/* movl %esi,%esi       */
@@ -33,3 +34,4 @@ static const unsigned char nops[NUM_NOPS][15] =
 {0xeb, 0x0d, 0x90, 0x90, 0x90, 0x90, 0x90,	/* jmp .+15; lotsa nops */
  0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90}
 };
+/* *INDENT-ON* */
