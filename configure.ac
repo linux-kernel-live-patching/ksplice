@@ -37,9 +37,8 @@ else
   LIBS="$ac_libbfd $LIBS"
 fi
 
-bfd_include_dir=
 if test "$ac_bfd_include_dir" != "NONE"; then
-  bfd_include_dir="-I$ac_bfd_include_dir"
+  CPPFLAGS="$CPPFLAGS -I$ac_bfd_include_dir"
 fi
 
 if ! test -e "objdiff-static" || ! test -e "objmanip-static"; then
@@ -100,6 +99,5 @@ AC_PROG_PERL_MODULES(Cwd,,AC_MSG_ERROR(Required perl module Cwd not found))
 AC_PROG_PERL_MODULES(Pod::Usage,,AC_MSG_ERROR(Required perl module Pod::Usage not found))
 AC_PROG_PERL_MODULES(File::Temp,,AC_MSG_ERROR(Required perl module File::Temp not found))
 
-AC_SUBST(bfd_include_dir)
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
