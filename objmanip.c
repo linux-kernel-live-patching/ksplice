@@ -190,7 +190,7 @@ int main(int argc, char **argv)
 	assert(bfd_close(obfd));
 	assert(bfd_close(ibfd));
 	printf("ksplice: success\n");
-	return (EXIT_SUCCESS);
+	return EXIT_SUCCESS;
 }
 
 void rm_some_relocs(bfd *ibfd, asection *isection)

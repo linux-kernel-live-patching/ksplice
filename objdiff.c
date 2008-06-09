@@ -57,7 +57,7 @@ int main(int argc, char **argv)
 	assert(bfd_close(oldbfd));
 	assert(bfd_close(newbfd));
 	printf("ksplice: success\n");
-	return (EXIT_SUCCESS);
+	return EXIT_SUCCESS;
 }
 
 void foreach_nonmatching(bfd *oldbfd, bfd *newbfd, section_fn s_fn)
