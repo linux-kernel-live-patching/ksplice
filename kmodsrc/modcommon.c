@@ -273,10 +273,10 @@ this_module_lookup(const char *name, struct ansglob **globptr)
 void
 other_module_lookup(const char *name_wlabel, struct ansglob **globptr)
 {
-	struct module *m, *n;
+	struct module *m;
 	const char *name = dup_wolabel(name_wlabel);
 
-	list_for_each_entry_safe(m, n, &(THIS_MODULE->list), list) {
+	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
 			ksplice_mod_find_sym(m, name, globptr);

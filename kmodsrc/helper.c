@@ -359,8 +359,8 @@ match_nop(long addr, int *o, int *other_o)
 void
 brute_search_all_mods(struct ksplice_size *s)
 {
-	struct module *m, *n;
-	list_for_each_entry_safe(m, n, &(THIS_MODULE->list), list) {
+	struct module *m;
+	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
 			if (brute_search(s, m->module_core, m->core_size) == 0)
