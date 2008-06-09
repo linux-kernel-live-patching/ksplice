@@ -62,6 +62,10 @@ struct safety_record {
 	int care;
 };
 
+enum ksplice_state_enum {
+	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
+};
+
 struct ansglob {
 	struct list_head list;
 	long val;
@@ -122,9 +126,11 @@ void release_list(struct starts_with_next *p);
 #define reloc_addrmaps KSPLICE_UNIQ(reloc_addrmaps)
 #define reloc_namevals KSPLICE_UNIQ(reloc_namevals)
 #define safety_records KSPLICE_UNIQ(safety_records)
+#define ksplice_state KSPLICE_UNIQ(ksplice_state)
 #define ksplice_do_primary KSPLICE_UNIQ(ksplice_do_primary)
 
 extern struct list_head reloc_addrmaps;
 extern struct list_head reloc_namevals;
 extern struct safety_record *safety_records;
+extern enum ksplice_state_enum ksplice_state;
 int ksplice_do_primary(void);

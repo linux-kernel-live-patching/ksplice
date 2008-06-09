@@ -53,9 +53,8 @@ EXPORT_SYMBOL(reloc_addrmaps);
 EXPORT_SYMBOL(reloc_namevals);
 EXPORT_SYMBOL(safety_records);
 
-static enum {
-	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
-} ksplice_state = KSPLICE_PREPARING;
+enum ksplice_state_enum ksplice_state = KSPLICE_PREPARING;
+EXPORT_SYMBOL(ksplice_state);
 static struct safety_record *local_safety;
 
 int
