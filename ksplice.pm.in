@@ -55,30 +55,32 @@ sub runval_raw {
 }
 
 sub runstr {
-	my ($cmd) = @_;
-	print "$cmd\n" if($verbose);
-	return scalar(`$cmd`);
+	my @cmd = @_;
+	print "@cmd\n" if($verbose);
+	local $/;
+	open PIPE, '-|', @cmd;
+	my $output = <PIPE>;
+	close PIPE;
+	return $output;
 }
 
 sub runsuc {
-	my ($cmd, $args) = @_;
-	print "$libexecdir/ksplice-$cmd $args\n" if($verbose);
-	my $output = `$libexecdir/ksplice-$cmd $args`;
+	my ($cmd, @args) = @_;
+	my $output = runstr("$libexecdir/ksplice-$cmd", @args);
 	if($output =~ /ksplice: success/) {
 		$output = $`;
 	}
 	else {
 		print "Output: $output\n";
-		die "Failed during: $libexecdir/ksplice-$cmd $args";
+		die "Failed during: $libexecdir/ksplice-$cmd @args";
 	}
 	return $output;
 }
 
 sub unpack_update {
 	my ($file) = @_;
-	runval("tar zxf $file");
-	my $ksplice = `find */ -maxdepth 0`;
-	chomp($ksplice);
+	runval("tar", "zxf", $file);
+	my ($ksplice) = glob('*/');
 	chop($ksplice); # remove the trailing slash
 	return $ksplice;
 }
