@@ -189,7 +189,6 @@ int main(int argc, char **argv)
 	copy_object(ibfd, obfd);
 	assert(bfd_close(obfd));
 	assert(bfd_close(ibfd));
-	printf("ksplice: success\n");
 	return EXIT_SUCCESS;
 }
 

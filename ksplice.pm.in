@@ -58,19 +58,16 @@ sub runstr {
 	my @cmd = @_;
 	print "@cmd\n" if($verbose);
 	local $/;
-	open PIPE, '-|', @cmd;
+	open PIPE, '-|', @cmd or die "Can't run @cmd: $!";
 	my $output = <PIPE>;
-	close PIPE;
+	close PIPE or $! == 0 or die "Can't run @cmd: $!";
 	return $output;
 }
 
 sub runsuc {
 	my ($cmd, @args) = @_;
 	my $output = runstr("$libexecdir/ksplice-$cmd", @args);
-	if($output =~ /ksplice: success/) {
-		$output = $`;
-	}
-	else {
+	if($? != 0) {
 		print "Output: $output\n";
 		die "Failed during: $libexecdir/ksplice-$cmd @args";
 	}
