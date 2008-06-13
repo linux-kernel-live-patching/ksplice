@@ -117,75 +117,52 @@ if(defined $diffext) {
 
 my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : ());
 @jlevel = ("-j$jobs") if(defined $jobs);
-my @flags = ('CFLAGS_KERNEL=-ffunction-sections -fdata-sections', 'CFLAGS_MODULE=-DMODULE -ffunction-sections -fdata-sections', @jlevel);
-my $make1 = runval_raw("make", @flags);
-my $objs = runstr('find * -name "*.o" | grep -v tmp_versions | grep -v built-in | grep -v piggy.o | grep -v setup | grep -v mod | grep -v ksplice/post');
+my @make_ksplice = ("make", "-f", "$datadir/Makefile.ksplice", @jlevel);
 
-runval("rsync", "-a", "--delete", "--link-dest=$linuxtree", "--exclude=ksplice/post/*", "--", "$linuxtree/", "$postdir/");
+sub revert_orig() {
+	for (split(/\0/, runstr(qw(find -name *.KSPLICE_pre -print0)))) {
+		s/\.KSPLICE_pre$//;
+		rename("$_.KSPLICE_pre", $_);
+		unlink("$_.KSPLICE") if(-e "$_.KSPLICE");
+	}
+}
+revert_orig();
+
+if(runval_raw(@make_ksplice, "KSPLICE_MODE=snap") != 0) {
+	die "Aborting: Prebuild failed";
+}
 exit(0) if($prebuild);
-runcd($postdir);
-runval("patch $patch_opt < $patchfile");
-if(runval_raw("make", @flags) != 0 && $make1 == 0) {
-	# We do not complain if both builds failed because, on some kernels,
-	# -ffunction-sections interferes with the vmlinux linking process.
+runval("patch $patch_opt -bz .KSPLICE_pre < $patchfile");
+if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
+	revert_orig();
 	die "Aborting: Applying the patch appears to break the kernel build";
 }
 
-my $old_verbose = $verbose;
-my %objdiff;
-foreach my $obj (split(/\s+/, $objs)) {
-	next unless($obj);
-	$verbose = 0; # We don't want to print every cmp
-	next if(runval_raw("cmp >/dev/null 2>/dev/null -s $linuxtree/$obj $postdir/$obj") == 0);
-	$verbose = $old_verbose;
-
-	# We want to skip object files that contain more than one GCC comment
-	# since these object files have been produced through linking and only
-	# contain duplicate code for our purposes.
-	next if(runstr("objdump -s -j .comment $postdir/$obj | grep GCC | wc -l") !~ /\b[01]\b/);
-
-	$objdiff{$obj} = runsuc("objdiff", "$linuxtree/$obj", "$postdir/$obj");
-	print $objdiff{$obj} if($verbose);
-	delete $objdiff{$obj} if($objdiff{$obj} =~ /^\d\d\s*$/s);
+if(!-s "vmlinux.o.KSPLICE") {
+	revert_orig();
+	die "Aborting: No changes detected";
 }
-die "Aborting: No changes detected" if(scalar(keys %objdiff) == 0);
-$verbose = $old_verbose;
-
-##############################################################################
-# PHASE 2: Perform processing on the target object files                     #
-# - uses objmanip's keep mode to remove sections, uniqify section names, and #
-#   remove ELF relocation entries (this reloc info will be saved elsewhere)  #
-# - uses objmanip's globalize mode to create global copies of all symbols    #
-##############################################################################
 
 runval("mkdir", "-p", "--", "$tmpdir/collect");
+
+runval("cp", "vmlinux.o.KSPLICE", "$tmpdir/collect/collection.o.KSPLICE");
+runval("cp", "vmlinux.o.KSPLICE_primary", "$tmpdir/collect/collection.o.primary");
+runval("cp", "vmlinux.o.KSPLICE_helper", "$tmpdir/collect/collection.o.helper");
+
+revert_orig();
+
 runcd("$tmpdir/collect");
 
-my ($word, $patchlist, $relocs_primary, $relocs_helper) = ("", "", "", "");
+open IN, "collection.o.KSPLICE";
+chomp(my $bits = <IN>);
+my $word = ($bits == 64 ? "quad" : "long");
 
-my $obj_id = 0;
-foreach my $obj (keys %objdiff) {
-	my (%text_remove, %data_remove);
-	my ($bits, $sections, $entrysyms) = split("\n", $objdiff{$obj});
-	die if($bits != 32 && $bits != 64);
-	($word) = ($bits == 64 ? "quad" : "long");
+my ($patchlist, $relocs_primary, $relocs_helper) = ('', '', '');
+$patchlist .= $_ while (($_ = <IN>) ne "\n");
+$relocs_primary .= $_ while (($_ = <IN>) ne "\n");
+$relocs_helper .= $_ while (($_ = <IN>) ne "\n");
 
-	runval("cp", "--", "$postdir/${obj}", "${obj_id}.primary");
-	runval("cp", "--", "$linuxtree/${obj}", "${obj_id}.helper");
-
-	my $tag = "${obj_id}_${kid}";
-	$relocs_primary .= runsuc("objmanip", "${obj_id}.primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
-	runsuc("objmanip", "${obj_id}.primary", "globalize", "____${tag}_post");
-
-	$relocs_helper .= runsuc("objmanip", "${obj_id}.helper", "keep-helper", "____${tag}", "_pre");
-	runsuc("objmanip", "${obj_id}.helper", "globalize", "____${tag}_pre");
-
-	foreach my $sym (split(/\s/, $entrysyms)) {
-		$patchlist .= "${sym}____${tag}_pre ${sym}____${tag}_post\n";
-	}
-
-	$obj_id++;
-}
+close IN;
 
 ################################################################################
 # PHASE 3: Combine the target object files and prepare for kernel module build #
@@ -195,11 +172,6 @@ foreach my $obj (keys %objdiff) {
 # - uses ld-script to aggregate all ELF text sections into .text               #
 # - saves the list of target entry syms in ELF sect .ksplice.ksplice_patches   #
 ################################################################################
-
-runval("ld", "-r", "-o", "collection.o.primary",
-	map { "$_.primary" } (0 .. $obj_id-1));
-runval("ld", "-r", "-o", "collection.o.helper",
-	map { "$_.helper" } (0 .. $obj_id-1));
 
 parse_and_save(\&parse_relocs, $relocs_primary, "collection.o.primary",
 		"ksplice_relocs", "_global");

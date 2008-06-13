@@ -1,0 +1,141 @@
+#!/usr/bin/perl
+
+# Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
+#                     Jeffrey Brian Arnold <jbarnold@mit.edu>,
+#                     Tim Abbott <tabbott@mit.edu>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+# 02110-1301, USA.
+
+use strict;
+use warnings;
+use lib 'KSPLICE_DATA_DIR';
+use ksplice;
+use File::Copy;
+use Digest::MD5;
+
+my $kid = "somekid";
+
+sub empty_diff {
+	my ($out) = @_;
+	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
+	unlink "$obj.KSPLICE_primary" if (-e "$obj.KSPLICE_primary");
+	unlink "$obj.KSPLICE_helper" if (-e "$obj.KSPLICE_helper");
+	open OUT, '>', "$out.tmp";
+	close OUT;
+	rename "$out.tmp", $out;
+}
+
+sub do_snap {
+	my ($out) = @_;
+	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
+	die if (!-e $obj);
+	unlink "$obj.KSPLICE_pre" if (-e "$obj.KSPLICE_pre");
+	empty_diff($out);
+}
+
+sub do_diff {
+	my ($out) = @_;
+	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
+	my $obj_old = "$obj.KSPLICE_pre";
+	return do_snap($out) if (!-e $obj_old);
+	die if (!-e $obj);
+	if (system('cmp', '-s', '--', $obj_old, $obj) == 0) {
+		unlink $obj_old;
+		return empty_diff($out);
+	}
+
+	my ($bits, $sections, $entrysyms) = split("\n", runsuc("objdiff", $obj_old, $obj));
+	die if ($bits ne '32' && $bits ne '64');
+	return empty_diff($out) if ($sections eq '' && $entrysyms eq '');
+
+	copy($obj, "$obj.KSPLICE_primary");
+	copy($obj_old, "$obj.KSPLICE_helper");
+
+	open OBJ, '<', $obj or die;
+	open OBJ_OLD, '<', $obj_old or die;
+	my $tag = Digest::MD5->new->addfile(*OBJ)->addfile(*OBJ_OLD)->hexdigest;
+	close OBJ;
+	close OBJ_OLD;
+
+	my $relocs_primary = runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
+	runsuc("objmanip", "$obj.KSPLICE_primary", "globalize", "____${tag}_post");
+
+	my $relocs_helper = runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
+	runsuc("objmanip", "$obj.KSPLICE_helper", "globalize", "____${tag}_pre");
+
+	my $patchlist = "";
+	foreach my $sym (split(/\s/, $entrysyms)) {
+		$patchlist .= "${sym}____${tag}_pre ${sym}____${tag}_post\n";
+	}
+
+	open OUT, '>', "$out.tmp";
+	print OUT "$bits\n$patchlist\n$relocs_primary\n$relocs_helper\n";
+	close OUT;
+	rename "$out.tmp", $out;
+}
+
+sub do_combine {
+	my ($out, @ins) = @_;
+	my @objs;
+	my ($outbits, $patchlist, $relocs_primary, $relocs_helper) = (undef, '', '', '');
+	foreach my $in (@ins) {
+		next if (!-s $in);
+		my ($obj) = $in =~ /^(.*)\.KSPLICE$/ or die;
+		push @objs, $obj;
+
+		open IN, '<', $in;
+
+		chomp(my $bits = <IN>);
+		die if (defined $outbits && $outbits ne $bits);
+		$outbits = $bits;
+
+		$patchlist .= $_ while (($_ = <IN>) ne "\n");
+		$relocs_primary .= $_ while (($_ = <IN>) ne "\n");
+		$relocs_helper .= $_ while (($_ = <IN>) ne "\n");
+
+		close IN;
+	}
+
+	return empty_diff($out) unless (defined $outbits);
+
+	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
+	if (@objs == 1) {
+		copy "$objs[0].KSPLICE_primary", "$obj.KSPLICE_primary";
+		copy "$objs[0].KSPLICE_helper", "$obj.KSPLICE_helper";
+	} else {
+		system("ld", "-r", "-o",
+		       map { "$_.KSPLICE_primary" } ($obj, @objs));
+		system("ld", "-r", "-o",
+		       map { "$_.KSPLICE_helper" } ($obj, @objs));
+	}
+
+	open OUT, '>', "$out.tmp";
+	print OUT "$outbits\n$patchlist\n$relocs_primary\n$relocs_helper\n";
+	close OUT;
+	rename "$out.tmp", $out;
+}
+
+my %handlers = (
+	'snap' => \&do_snap,
+	'diff' => \&do_diff,
+	'combine' => \&do_combine,
+);
+
+my ($cmd, @args) = @ARGV;
+if (exists $handlers{$cmd}) {
+	my $handler = $handlers{$cmd};
+	&$handler(@args);
+} else {
+	print "Usage: ksplice.pl ", join('|', keys %handlers), " ...\n";
+};

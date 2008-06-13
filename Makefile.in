@@ -19,7 +19,7 @@ SED = @SED@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
 
-perl_primary = ksplice-create ksplice-view ksplice-apply ksplice-undo ksplice.pm
+perl_primary = ksplice-create ksplice-view ksplice-apply ksplice-undo ksplice.pm ksplice.pl
 perl_man = $(patsubst %,%.8,$(perl_primary))
 
 have_static := $(wildcard $(srcdir)/objmanip-static)
@@ -65,6 +65,8 @@ install: default install-objmanip install-objdiff
 	install -m755 -D ksplice-apply $(DESTDIR)$(sbindir)/ksplice-apply
 	install -m755 -D ksplice-undo $(DESTDIR)$(sbindir)/ksplice-undo
 	install -m755 -D $(srcdir)/gendiff-reversed $(DESTDIR)$(libexecdir)/ksplice-gendiff-reversed
+	install -m755 -D $(srcdir)/Makefile.ksplice $(DESTDIR)$(datadir)/ksplice/Makefile.ksplice
+	install -m755 -D $(srcdir)/ksplice.pl $(DESTDIR)$(datadir)/ksplice/ksplice.pl
 	install -m644 -D ksplice.pm $(DESTDIR)$(datadir)/ksplice/ksplice.pm
 	install -m644 -D $(srcdir)/kmodsrc/helper.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.c
 	install -m644 -D $(srcdir)/kmodsrc/helper.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.h
