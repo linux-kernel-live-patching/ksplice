@@ -93,6 +93,8 @@ my $ksplice = "ksplice-$kid";
 my %syms;
 load_system_map();
 
+my $map_printk = (find_sym_system_map("printk"))[0];
+
 print "Starting kernel builds (this process might take a long time)...\n";
 if(!$verbose) {
 	print "For output during this process, run ksplice-create with the option -v\n";
@@ -138,31 +140,41 @@ if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
 	die "Aborting: Applying the patch appears to break the kernel build";
 }
 
-if(!-s "vmlinux.o.KSPLICE") {
+runval("mkdir", "-p", "--", "$tmpdir/collect");
+
+my @modules = ();
+foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
+	open MOD, '<', $_;
+	chomp(my $module = <MOD>);
+	close MOD;
+	runval("cp", "$module.o.KSPLICE", "$tmpdir/collect/");
+	runval("cp", "$module.o.KSPLICE_primary", "$tmpdir/collect/");
+	runval("cp", "$module.o.KSPLICE_helper", "$tmpdir/collect/");
+	$module =~ s/^.*\///;
+	push @modules, $module;
+}
+
+if(!@modules) {
 	revert_orig();
 	die "Aborting: No changes detected";
 }
 
-runval("mkdir", "-p", "--", "$tmpdir/collect");
-
-runval("cp", "vmlinux.o.KSPLICE", "$tmpdir/collect/collection.o.KSPLICE");
-runval("cp", "vmlinux.o.KSPLICE_primary", "$tmpdir/collect/collection.o.primary");
-runval("cp", "vmlinux.o.KSPLICE_helper", "$tmpdir/collect/collection.o.helper");
-
 revert_orig();
 
-runcd("$tmpdir/collect");
+my $word;
+for my $module (@modules) {
+	runcd("$tmpdir/collect");
+	open IN, '<', "$module.o.KSPLICE";
+	chomp(my $bits = <IN>);
+	die if($bits != 32 && $bits != 64);
+	$word = ($bits == 64 ? "quad" : "long");
 
-open IN, "collection.o.KSPLICE";
-chomp(my $bits = <IN>);
-my $word = ($bits == 64 ? "quad" : "long");
+	my ($patchlist, $relocs_primary, $relocs_helper) = ('', '', '');
+	$patchlist .= $_ while (($_ = <IN>) ne "\n");
+	$relocs_primary .= $_ while (($_ = <IN>) ne "\n");
+	$relocs_helper .= $_ while (($_ = <IN>) ne "\n");
 
-my ($patchlist, $relocs_primary, $relocs_helper) = ('', '', '');
-$patchlist .= $_ while (($_ = <IN>) ne "\n");
-$relocs_primary .= $_ while (($_ = <IN>) ne "\n");
-$relocs_helper .= $_ while (($_ = <IN>) ne "\n");
-
-close IN;
+	close IN;
 
 ################################################################################
 # PHASE 3: Combine the target object files and prepare for kernel module build #
@@ -173,29 +185,28 @@ close IN;
 # - saves the list of target entry syms in ELF sect .ksplice.ksplice_patches   #
 ################################################################################
 
-parse_and_save(\&parse_relocs, $relocs_primary, "collection.o.primary",
-		"ksplice_relocs", "_global");
-parse_and_save(\&parse_relocs, $relocs_helper, "collection.o.helper",
-		"ksplice_relocs", "_global");
+	parse_and_save(\&parse_relocs, $relocs_primary, "$module.o.KSPLICE_primary",
+		       "ksplice_relocs", "_global");
+	parse_and_save(\&parse_relocs, $relocs_helper, "$module.o.KSPLICE_helper",
+		       "ksplice_relocs", "_global");
 
-runcd($tmpdir);
-runval("rsync", "-a", "--delete", "--", "$datadir/kmodsrc/", "kmodsrc/");
-runval("mv", "collect/collection.o.primary", "collect/collection.o.helper", "kmodsrc");
-runcd("kmodsrc");
+	runcd($tmpdir);
+	runval("rsync", "-a", "--delete", "--", "$datadir/kmodsrc/", "kmodsrc-$module/");
+	runval("mv", "collect/$module.o.KSPLICE_primary", "kmodsrc-$module/collection.o.primary");
+	runval("mv", "collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
+	runcd("kmodsrc-$module");
 
-my $sizelist_primary = runsuc("objmanip", "collection.o.primary", "sizelist");
-parse_and_save(\&parse_sizelist, $sizelist_primary, "collection.o.primary", "ksplice_sizes");
-my $sizelist_helper = runsuc("objmanip", "collection.o.helper", "sizelist");
-parse_and_save(\&parse_sizelist, $sizelist_helper, "collection.o.helper", "ksplice_sizes");
+	my $sizelist_primary = runsuc("objmanip", "collection.o.primary", "sizelist");
+	parse_and_save(\&parse_sizelist, $sizelist_primary, "collection.o.primary", "ksplice_sizes");
+	my $sizelist_helper = runsuc("objmanip", "collection.o.helper", "sizelist");
+	parse_and_save(\&parse_sizelist, $sizelist_helper, "collection.o.helper", "ksplice_sizes");
 
-runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary.postld", "collection.o.primary");
-runval("cp", "collection.o.primary.postld", "collection.o.primary");
-runval("ld", "--script=ld-script", "-r", "-o", "collection.o.helper.postld", "collection.o.helper");
-runval("cp", "collection.o.helper.postld", "collection.o.helper");
+	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary.postld", "collection.o.primary");
+	runval("cp", "collection.o.primary.postld", "collection.o.primary");
+	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.helper.postld", "collection.o.helper");
+	runval("cp", "collection.o.helper.postld", "collection.o.helper");
 
-parse_and_save(\&parse_patchlist, $patchlist, "collection.o.primary", "ksplice_patches");
-
-my $map_printk = (find_sym_system_map("printk"))[0];
+	parse_and_save(\&parse_patchlist, $patchlist, "collection.o.primary", "ksplice_patches");
 
 ###############################################################################
 # PHASE 4: Build the kernel modules and create the update tarball             #
@@ -204,19 +215,32 @@ my $map_printk = (find_sym_system_map("printk"))[0];
 # - creates a tarball of the primary module and the helper module             #
 ###############################################################################
 
-runval("make", "modules", "KSPLICE_ID=$kid", "map_printk=$map_printk", "KERNELSRC=$linuxtree");
+	my $kid_m = "${kid}_$module";
+	$kid_m =~ s/-/_/g;
+	my $ksplice_m = "ksplice-$kid_m";
+	runval("make", "modules", "KSPLICE_ID=$kid_m", "map_printk=$map_printk", "KERNELSRC=$linuxtree");
 
-my @kallsyms_list = qw(kallsyms_addresses kallsyms_num_syms kallsyms_names kallsyms_token_table kallsyms_token_index);
-my $relocs = runsuc("objmanip", "$ksplice.ko", "rmsyms", qw(bust_spinlocks task_curr __kernel_text_address tasklist_lock stop_machine_run), @kallsyms_list);
-parse_and_save(\&parse_relocs, $relocs, "$ksplice.ko", "ksplice_init_relocs", "");
-$relocs = runsuc("objmanip", "$ksplice-helper.ko", "rmsyms", qw(init_mm), @kallsyms_list);
-parse_and_save(\&parse_relocs, $relocs, "$ksplice-helper.ko", "ksplice_init_relocs", "");
+	my @kallsyms_list = qw(kallsyms_addresses kallsyms_num_syms kallsyms_names kallsyms_token_table kallsyms_token_index);
+	my $relocs = runsuc("objmanip", "$ksplice_m.ko", "rmsyms", qw(bust_spinlocks task_curr __kernel_text_address tasklist_lock stop_machine_run), @kallsyms_list);
+	parse_and_save(\&parse_relocs, $relocs, "$ksplice_m.ko", "ksplice_init_relocs", "");
+	$relocs = runsuc("objmanip", "$ksplice_m-helper.ko", "rmsyms", qw(init_mm), @kallsyms_list);
+	parse_and_save(\&parse_relocs, $relocs, "$ksplice_m-helper.ko", "ksplice_init_relocs", "");
+}
 
 runcd($tmpdir);
 runval("mkdir", $ksplice);
-runval("mv", "--", $patchfile, "kmodsrc/$ksplice.ko", "kmodsrc/$ksplice-helper.ko", $ksplice);
+runval("mv", "--", $patchfile, $ksplice);
+for my $module (@modules) {
+	my $kid_m = "${kid}_$module";
+	$kid_m =~ s/-/_/g;
+	my $ksplice_m = "ksplice-$kid_m";
+	runval("mv", "--", "kmodsrc-$module/$ksplice_m.ko", "kmodsrc-$module/$ksplice_m-helper.ko", $ksplice);
+}
 runval("mkdir", "$ksplice/debug");
-runval("mv", "collect", "kmodsrc", "$ksplice/debug");
+runval("mv", "collect", "$ksplice/debug");
+for my $module (@modules) {
+	runval("mv", "kmodsrc-$module", "$ksplice/debug");
+}
 runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
 runval("cp", "--", "$ksplice.tar.gz", $origdir);
 runcd($origdir);

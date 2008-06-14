@@ -17,6 +17,7 @@ quiet_cmd_ksplice-diff = DIFF    $(@:.KSPLICE=)
 cmd_ksplice-diff = $(ksplice-script) diff $@
 quiet_cmd_ksplice-cow = COW     $@
 cmd_ksplice-cow = cp -a $@ $@.KSPLICE_pre
+rule_ksplice-mod = $(Q)if [ -s $< ]; then echo $(<:.o.KSPLICE=) > $@; elif [ -e $@ ]; then rm -f $@; fi
 
 ifeq ($(KERNELRELEASE),)
 
@@ -26,7 +27,7 @@ include scripts/Makefile.lib
 include Makefile
 CFLAGS_KERNEL += -ffunction-sections -fdata-sections
 CFLAGS_MODULE += -ffunction-sections -fdata-sections
-ksplice-deps += vmlinux.o.KSPLICE
+ksplice-deps += $(MODVERDIR)/vmlinux.mod.KSPLICE
 ksplice-dirs += $(addprefix _ksplice_,$(vmlinux-dirs))
 ksplice-before += prepare0 prepare scripts
 
@@ -37,10 +38,13 @@ vmlinux.o.KSPLICE: $(ksplice-vmlinux-objs:=.KSPLICE) FORCE
 ksplice-targets += vmlinux.o.KSPLICE
 $(ksplice-vmlinux-objs:=.KSPLICE): $(ksplice-dirs) ;
 
+$(MODVERDIR)/vmlinux.mod.KSPLICE: vmlinux.o.KSPLICE
+	$(rule_ksplice-mod)
+
 else	# KERNELRELEASE
 
 include $(srctree)/scripts/Makefile.build
-ksplice-deps += $(builtin-target:=.KSPLICE) $(lib-target:=.KSPLICE) $(obj-m:=.KSPLICE)
+ksplice-deps += $(builtin-target:=.KSPLICE) $(lib-target:=.KSPLICE) $(addprefix $(MODVERDIR)/,$(notdir $(obj-m:.o=.mod.KSPLICE)))
 ksplice-dirs += $(addprefix _ksplice_,$(subdir-ym))
 
 ifdef builtin-target
@@ -74,6 +78,10 @@ $(obj)/%.o.KSPLICE: $(obj)/%.o
 endif
 
 $(sort $(subdir-obj-y:=.KSPLICE)): $(ksplice-dirs) ;
+
+$(MODVERDIR)/%.mod.KSPLICE: $(obj)/%.o.KSPLICE
+	$(rule_ksplice-mod)
+.PRECIOUS: $(obj)/%.o.KSPLICE
 
 endif	# KERNELRELEASE
 
