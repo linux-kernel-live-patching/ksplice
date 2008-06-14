@@ -159,6 +159,9 @@ void compute_address(char *sym_name, struct list_head *vals)
 	if (have_added_val)
 		return;
 
+	if (starts_with(sym_name, ".rodata"))
+		return;
+
 #ifdef CONFIG_KALLSYMS
 	kernel_lookup(sym_name, vals);
 	other_module_lookup(sym_name, vals);
