@@ -39,22 +39,27 @@ my $file = abs_path($ARGV[0]);
 
 my $tmpdir = init_tmpdir();
 runcd($tmpdir);
-runval("cp $file .");
 my $ksplice = unpack_update($file);
+runcd($ksplice);
 
-if(runval_raw("insmod $ksplice/$ksplice.ko debug=$debug") != 0) {
-	die;
-}
-if(runval_raw("insmod $ksplice/$ksplice-helper.ko debug=$debug") != 0) {
-	runval_raw("rmmod $ksplice");
-	my $dmesg = runstr("dmesg | grep ksplice");
-	while($dmesg =~ /ksplice_h: Preparing and checking/) {
-		$dmesg = $';
+foreach my $helper (glob('*-helper.ko')) {
+
+	(my $primary = $helper) =~ s/\-helper.ko$/.ko/;
+	die unless(-e $primary && -e $helper);
+
+	if(runval_raw("insmod $primary debug=$debug") != 0) {
+		die "$primary";
 	}
+	if(runval_raw("insmod $helper debug=$debug") != 0) {
+		runval_raw("rmmod $primary");
+		my $dmesg = runstr("dmesg | grep ksplice");
+		while($dmesg =~ /ksplice_h: Preparing and checking/) {
+			$dmesg = $';
+		}
 
-	my $bugreport = 'PACKAGE_BUGREPORT';
-	if($dmesg =~ /could not match some sections/) {
-		print <<END
+		my $bugreport = 'PACKAGE_BUGREPORT';
+		if($dmesg =~ /could not match some sections/) {
+			print <<END
 
 Ksplice has aborted the upgrade because Ksplice has been unable to match the
 object code produced by your current compiler and assembler against the running
@@ -66,9 +71,9 @@ used to build the running kernel.  If you are using exactly the same compiler
 and assembler, feel free to report a bug to $bugreport.
 
 END
-	}
-	if($dmesg =~ /to-be-replaced code is busy/) {
-		print <<END
+		}
+		if($dmesg =~ /to-be-replaced code is busy/) {
+			print <<END
 
 Ksplice has aborted the upgrade because it appears that the code that you are
 trying to patch is continuously in use by the system.  More specifically,
@@ -76,20 +81,22 @@ Ksplice has been unable to find a moment when one or more of the to-be-patched
 functions is not on a thread's kernel stack.
 
 END
-	}
-	if($dmesg =~ /System[.]map does not match kernel/) {
-		print <<END
+		}
+		if($dmesg =~ /System[.]map does not match kernel/) {
+			print <<END
 
 Ksplice has aborted the upgrade because it appears that the System.map file
 provided to ksplice-create does not match the running kernel.
 
 END
+		}
+
+		die;
+	}
+	if(runval_raw("rmmod $helper") != 0) {
+		die;
 	}
 
-	die;
-}
-if(runval_raw("rmmod $ksplice-helper") != 0) {
-	die;
 }
 
 runval("rm -rf $tmpdir");
