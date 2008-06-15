@@ -194,7 +194,6 @@ foreach my $obj (keys %objdiff) {
 # - uses objmanip's sizelist mode to save the names and sizes of target funcs  #
 # - uses ld-script to aggregate all ELF text sections into .text               #
 # - saves the list of target entry syms in ELF sect .ksplice.ksplice_patches   #
-# - writes modcommon.auto.h automatically-generated header file                #
 ################################################################################
 
 runval("ld", "-r", "-o", "collection.o.primary",
@@ -224,15 +223,7 @@ runval("cp", "collection.o.helper.postld", "collection.o.helper");
 
 parse_and_save(\&parse_patchlist, $patchlist, "collection.o.primary", "ksplice_patches");
 
-my $kallsyms_lookup_name_addr = (find_sym_system_map("kallsyms_lookup_name"))[0];
 my $map_printk = (find_sym_system_map("printk"))[0];
-$kallsyms_lookup_name_addr = "" if(!defined $kallsyms_lookup_name_addr);
-open(AUTOH, ">", "modcommon.auto.h") || die;
-print AUTOH <<END;
-#define KSPLICE_ID $kid
-#define map_printk ((long)0x${map_printk})
-END
-close(AUTOH);
 
 ###############################################################################
 # PHASE 4: Build the kernel modules and create the update tarball             #
@@ -241,7 +232,7 @@ close(AUTOH);
 # - creates a tarball of the primary module and the helper module             #
 ###############################################################################
 
-runval("KSPLICE=$ksplice KERNELSRC=$linuxtree make modules");
+runval("make", "modules", "KSPLICE_ID=$kid", "map_printk=$map_printk", "KERNELSRC=$linuxtree");
 
 my $kallsyms_list = "kallsyms_addresses kallsyms_num_syms kallsyms_names kallsyms_token_table kallsyms_token_index";
 my $relocs = runsuc("objmanip", "$ksplice.ko rmsyms bust_spinlocks task_curr __kernel_text_address tasklist_lock stop_machine_run $kallsyms_list");

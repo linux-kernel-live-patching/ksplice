@@ -107,8 +107,6 @@ void set_temp_myst_relocs(int status_val);
 		}						\
 	} while (0)
 
-#include "modcommon.auto.h"
-
 #define _STR(x) #x
 #define STR(x) _STR(x)
 #define ksplice_name "ksplice_" STR(KSPLICE_ID)
