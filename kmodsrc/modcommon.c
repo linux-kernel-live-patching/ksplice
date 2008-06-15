@@ -22,7 +22,6 @@
 static const int CONFIG_KALLSYMS_VAL = 1;
 extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
 extern u8 kallsyms_names[];
-long (*str2addr) (const char *name) = STR2ADDR;
 #else
 static const int CONFIG_KALLSYMS_VAL = 0;
 #endif

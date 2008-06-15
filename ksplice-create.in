@@ -230,7 +230,6 @@ $kallsyms_lookup_name_addr = "" if(!defined $kallsyms_lookup_name_addr);
 open(AUTOH, ">", "modcommon.auto.h") || die;
 print AUTOH <<END;
 #define KSPLICE_ID $kid
-#define STR2ADDR ((void *)0x${kallsyms_lookup_name_addr})
 #define map_printk ((long)0x${map_printk})
 END
 close(AUTOH);
