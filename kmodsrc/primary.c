@@ -198,7 +198,6 @@ int __apply_patches(void *unused)
 int __reverse_patches(void *unused)
 {
 	struct ksplice_patch *p;
-	struct list_head *pos, *n;
 
 	if (ksplice_state != KSPLICE_APPLIED)
 		return 0;
