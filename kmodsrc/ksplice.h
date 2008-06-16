@@ -21,20 +21,20 @@ struct ksplice_reloc {
 	long size;
 };
 
-struct ksplice_patch {
-	char *oldstr;
-	char *replstr;
-	long oldaddr;
-	long repladdr;
-	char *saved;
-};
-
 struct ksplice_size {
 	char *name;
 	long size;
 	long thismod_addr;
 	long num_sym_addrs;
 	long *sym_addrs;
+};
+
+struct ksplice_patch {
+	char *oldstr;
+	char *replstr;
+	long oldaddr;
+	long repladdr;
+	char *saved;
 };
 
 struct module_pack {
