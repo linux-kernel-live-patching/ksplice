@@ -298,9 +298,8 @@ int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 	return 0;
 }
 
-int
-handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
-		  int *run_o, struct reloc_addrmap *map, int rerun)
+int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
+		      int *run_o, struct reloc_addrmap *map, int rerun)
 {
 	int expected;
 	int offset = (int)(pre_addr + *pre_o - map->addr);

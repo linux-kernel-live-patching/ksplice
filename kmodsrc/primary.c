@@ -151,17 +151,14 @@ int resolve_patch_symbols(struct module_pack *pack)
 	return 0;
 }
 
-int
-procfile_read(char *buffer,
-	      char **buffer_location,
-	      off_t offset, int buffer_length, int *eof, void *data)
+int procfile_read(char *buffer, char **buffer_location,
+		  off_t offset, int buffer_length, int *eof, void *data)
 {
 	return 0;
 }
 
-int
-procfile_write(struct file *file, const char *buffer, unsigned long count,
-	       void *data)
+int procfile_write(struct file *file, const char *buffer, unsigned long count,
+		   void *data)
 {
 	int i;
 	struct module_pack *pack = data;

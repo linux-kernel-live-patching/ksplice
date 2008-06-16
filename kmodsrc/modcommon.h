@@ -119,7 +119,7 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr);
 void set_temp_myst_relocs(struct module_pack *pack, int status_val);
 
-#define clear_list(head, type, member) \
+#define clear_list(head, type, member)				\
 	do {							\
 		struct list_head *_pos, *_n;			\
 		list_for_each_safe(_pos, _n, head) {		\
