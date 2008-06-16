@@ -24,7 +24,7 @@ use lib 'KSPLICE_DATA_DIR';
 use ksplice;
 
 my ($patchfile, $diffext, $orig_config_dir, $postdir, $jobs);
-my ($help, $wantversion, $prebuild, $apply, $patch_opt) = (0, 0, 0, 0, "-p1");
+my ($help, $wantversion, $prebuild, $skip_prebuild, $apply, $patch_opt) = (0, 0, 0, 0, 0, "-p1");
 Getopt::Long::Configure("bundling");
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
@@ -32,6 +32,7 @@ GetOptions("help|?" => \$help,
 	"patch=s" => \$patchfile,
 	"diffext=s" => \$diffext,
 	"prebuild" => \$prebuild,
+	"skip-prebuild" => \$skip_prebuild,
 	"jobs|j:i" => \$jobs,
 	"config=s" => \$orig_config_dir,
 	"apply" => \$apply,
@@ -130,7 +131,8 @@ sub revert_orig() {
 }
 revert_orig();
 
-if(runval_raw(@make_ksplice, "KSPLICE_MODE=snap") != 0) {
+if(!$skip_prebuild &&
+   runval_raw(@make_ksplice, "KSPLICE_MODE=snap") != 0) {
 	die "Aborting: Prebuild failed";
 }
 exit(0) if($prebuild);
