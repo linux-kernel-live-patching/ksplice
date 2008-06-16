@@ -1,5 +1,7 @@
 ifneq ($(KERNELRELEASE),)
 
+EXTRA_CFLAGS += -DKSPLICE_STANDALONE
+
 ifeq ($(KSPLICE_ID),)
     $(error "You must set KSPLICE_ID.")
 endif

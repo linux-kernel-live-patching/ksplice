@@ -141,8 +141,12 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r);
 void compute_address(struct module_pack *pack, char *sym_name,
 		     struct list_head *vals);
 
+#ifndef KSPLICE_STANDALONE
+void accumulate_matching_names(void *data, const char *sym_name, long sym_val);
+#endif
+
 #ifdef CONFIG_KALLSYMS
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+#if defined KSPLICE_STANDALONE && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 long ksplice_kallsyms_expand_symbol(unsigned long off, char *result);
 #endif
 void kernel_lookup(const char *name_wlabel, struct list_head *vals);
@@ -197,6 +201,7 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s,
 int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 	     long pre_addr, int create_nameval);
 
+#ifdef KSPLICE_STANDALONE
 void *ksplice_kcalloc(int size);
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s);
 
@@ -228,3 +233,4 @@ static inline int brute_search(struct module_pack *pack, struct ksplice_size *s,
 
 	return 1;
 }
+#endif /* KSPLICE_STANDALONE */

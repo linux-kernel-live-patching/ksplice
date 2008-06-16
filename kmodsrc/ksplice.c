@@ -23,8 +23,14 @@
 #include <linux/time.h>
 #include <asm/uaccess.h>
 #include "ksplice.h"
+#ifdef KSPLICE_STANDALONE
 #include <linux/version.h>
 #include "ksplice-run-pre.h"
+#else
+#include <asm/ksplice-run-pre.h>
+#endif
+
+#ifdef KSPLICE_STANDALONE
 
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
@@ -54,13 +60,36 @@ extern struct ksplice_reloc ksplice_init_relocs;
 
 static int safe = 0;
 
+#else /* KSPLICE_STANDALONE */
+#define safe 1			/* TODO: remove this line */
+#define KSPLICE_EIP(x) ((x)->thread.ip)
+#define KSPLICE_ESP(x) ((x)->thread.sp)
+#endif /* KSPLICE_STANDALONE */
+
 static int debug;
 module_param(debug, int, 0600);
+
+#ifndef KSPLICE_STANDALONE
+/* THIS_MODULE everywhere is wrong! */
+
+int init_module(void)
+{
+	return 0;
+}
+
+void cleanup_module(void)
+{
+}
+#endif
 
 void cleanup_ksplice_module(struct module_pack *pack)
 {
 	remove_proc_entry(pack->name, &proc_root);
 }
+
+#ifndef KSPLICE_STANDALONE
+EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
+#endif
 
 int activate_primary(struct module_pack *pack)
 {
@@ -338,9 +367,11 @@ int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
 
+#ifdef KSPLICE_STANDALONE
 	if (process_ksplice_relocs(pack, &ksplice_init_relocs) != 0)
 		return -1;
 	safe = 1;
+#endif
 
 	printk("ksplice_h: Preparing and checking %s\n", pack->name);
 
@@ -355,8 +386,14 @@ int init_ksplice_module(struct module_pack *pack)
 	return ret;
 }
 
+#ifndef KSPLICE_STANDALONE
+EXPORT_SYMBOL_GPL(init_ksplice_module);
+#endif
+
 /* old kernels do not have kcalloc */
+#ifdef KSPLICE_STANDALONE
 #define kcalloc(n, size, flags) ksplice_kcalloc(n)
+#endif
 
 int activate_helper(struct module_pack *pack)
 {
@@ -423,6 +460,7 @@ start:
 	return -1;
 }
 
+#ifdef KSPLICE_STANDALONE
 /* old kernels do not have kcalloc */
 void *ksplice_kcalloc(int size)
 {
@@ -433,11 +471,15 @@ void *ksplice_kcalloc(int size)
 	}
 	return mem;
 }
+#endif
 
 int search_for_match(struct module_pack *pack, struct ksplice_size *s,
 		     int *stage)
 {
-	int i, saved_debug;
+	int i;
+#ifdef KSPLICE_STANDALONE
+	int saved_debug;
+#endif
 	long run_addr;
 	LIST_HEAD(vals);
 	struct candidate_val *v;
@@ -469,6 +511,7 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s,
 	}
 	release_vals(&vals);
 
+#ifdef KSPLICE_STANDALONE
 	if (*stage <= 2)
 		return 1;
 
@@ -476,6 +519,7 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s,
 	debug = 0;
 	brute_search_all_mods(pack, s);
 	debug = saved_debug;
+#endif
 	return 1;
 }
 
@@ -568,6 +612,7 @@ int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 	return 0;
 }
 
+#ifdef KSPLICE_STANDALONE
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 {
 	struct module *m;
@@ -583,6 +628,7 @@ void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 		}
 	}
 }
+#endif
 
 int process_ksplice_relocs(struct module_pack *pack,
 			   struct ksplice_reloc *relocs)
@@ -743,6 +789,7 @@ void compute_address(struct module_pack *pack, char *sym_name,
 	}
 }
 
+#ifdef KSPLICE_STANDALONE
 #ifdef CONFIG_KALLSYMS
 /* Modified version of Linux's kallsyms_lookup_name */
 void kernel_lookup(const char *name_wlabel, struct list_head *vals)
@@ -863,6 +910,52 @@ ksplice_mod_find_sym(struct module *m, const char *name, struct list_head *vals)
 	}
 }
 #endif /* CONFIG_KALLSYMS */
+#else /* KSPLICE_STANDALONE */
+struct accumulate_struct {
+	const char *desired_name;
+	struct list_head *vals;
+};
+
+void accumulate_matching_names(void *data, const char *sym_name, long sym_val)
+{
+	struct accumulate_struct *acc = data;
+
+	if (strncmp(sym_name, acc->desired_name, strlen(acc->desired_name)) !=
+	    0)
+		return;
+
+	sym_name = dup_wolabel(sym_name);
+	/* TODO: possibly remove "&& sym_val != 0" */
+	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0) {
+		add_candidate_val(acc->vals, sym_val);
+	}
+	kfree(sym_name);
+}
+
+void kernel_lookup(const char *name_wlabel, struct list_head *vals)
+{
+	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
+	kallsyms_on_each_symbol(accumulate_matching_names, &acc);
+	kfree(acc.desired_name);
+}
+
+void other_module_lookup(const char *name_wlabel, struct list_head *vals,
+			 const char *ksplice_name)
+{
+	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
+	struct module *m;
+
+	list_for_each_entry(m, &(THIS_MODULE->list), list) {
+		if (!starts_with(m->name, ksplice_name)
+		    && !ends_with(m->name, "_helper")) {
+			module_on_each_symbol(m, accumulate_matching_names,
+					      &acc);
+		}
+	}
+
+	kfree(acc.desired_name);
+}
+#endif /* KSPLICE_STANDALONE */
 
 void add_candidate_val(struct list_head *vals, long val)
 {
