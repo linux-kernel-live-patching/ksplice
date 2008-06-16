@@ -21,7 +21,7 @@
 #include <linux/kthread.h>
 
 /* defined by modcommon.c */
-extern int safe, helper, debug;
+extern int safe, debug;
 
 /* defined by ksplice-create */
 extern struct ksplice_reloc ksplice_init_relocs, ksplice_relocs;
@@ -33,20 +33,24 @@ extern struct ksplice_size ksplice_sizes;
 int init_module(void)
 {
 	int ret = 0;
+	struct module_pack *pack = &KSPLICE_UNIQ(pack);
 
-	if (process_ksplice_relocs(&ksplice_init_relocs) != 0)
+	pack->helper_relocs = &ksplice_relocs;
+	pack->helper_sizes = &ksplice_sizes;
+
+	if (process_ksplice_relocs(pack, &ksplice_init_relocs) != 0)
 		return -1;
 	safe = 1;
 
-	printk("ksplice_h: Preparing and checking %s\n", ksplice_name);
+	printk("ksplice_h: Preparing and checking %s\n", pack->name);
 
-	if (activate_helper() != 0 || activate_primary() != 0)
+	if (activate_helper(pack) != 0 || activate_primary(pack) != 0)
 		ret = -1;
 
-	clear_list(&reloc_namevals, struct reloc_nameval, list);
-	clear_list(&reloc_addrmaps, struct reloc_addrmap, list);
-	if (ksplice_state == KSPLICE_PREPARING)
-		clear_list(&safety_records, struct safety_record, list);
+	clear_list(pack->reloc_namevals, struct reloc_nameval, list);
+	clear_list(pack->reloc_addrmaps, struct reloc_addrmap, list);
+	if (pack->state == KSPLICE_PREPARING)
+		clear_list(pack->safety_records, struct safety_record, list);
 
 	return ret;
 }
@@ -58,7 +62,7 @@ void cleanup_module(void)
 /* old kernels do not have kcalloc */
 #define kcalloc(n, size, flags) ksplice_kcalloc(n)
 
-int activate_helper(void)
+int activate_helper(struct module_pack *pack)
 {
 	struct ksplice_size *s;
 	int i, record_count = 0, ret;
@@ -66,25 +70,25 @@ int activate_helper(void)
 	int numfinished, oldfinished = 0;
 	int restart_count = 0, stage = 1;
 
-	helper = 1;
+	pack->helper = 1;
 
-	if (process_ksplice_relocs(&ksplice_relocs) != 0)
+	if (process_ksplice_relocs(pack, pack->helper_relocs) != 0)
 		return -1;
 
-	for (s = &ksplice_sizes; s->name != NULL; s++) {
+	for (s = pack->helper_sizes; s->name != NULL; s++) {
 		record_count++;
 	}
 
 	finished = kcalloc(record_count, 1, GFP_KERNEL);
 
 start:
-	for (s = &ksplice_sizes, i = 0; s->name != NULL; s++, i++) {
+	for (s = pack->helper_sizes, i = 0; s->name != NULL; s++, i++) {
 		if (s->size == 0)
 			finished[i] = 1;
 		if (finished[i])
 			continue;
 
-		ret = search_for_match(s, &stage);
+		ret = search_for_match(pack, s, &stage);
 		if (ret < 0) {
 			kfree(finished);
 			return ret;
@@ -134,7 +138,8 @@ void *ksplice_kcalloc(int size)
 	return mem;
 }
 
-int search_for_match(struct ksplice_size *s, int *stage)
+int search_for_match(struct module_pack *pack, struct ksplice_size *s,
+		     int *stage)
 {
 	int i, saved_debug;
 	long run_addr;
@@ -145,7 +150,7 @@ int search_for_match(struct ksplice_size *s, int *stage)
 		add_candidate_val(&vals, s->sym_addrs[i]);
 	}
 
-	compute_address(s->name, &vals);
+	compute_address(pack, s->name, &vals);
 	if (*stage <= 1 && !singular(&vals)) {
 		release_vals(&vals);
 		return 1;
@@ -160,7 +165,8 @@ int search_for_match(struct ksplice_size *s, int *stage)
 		run_addr = v->val;
 
 		yield();
-		if (try_addr(s, run_addr, s->thismod_addr, !singular(&vals))) {
+		if (try_addr
+		    (pack, s, run_addr, s->thismod_addr, !singular(&vals))) {
 			release_vals(&vals);
 			return 0;
 		}
@@ -172,30 +178,29 @@ int search_for_match(struct ksplice_size *s, int *stage)
 
 	saved_debug = debug;
 	debug = 0;
-	brute_search_all_mods(s);
+	brute_search_all_mods(pack, s);
 	debug = saved_debug;
 	return 1;
 }
 
-int
-try_addr(struct ksplice_size *s, long run_addr, long pre_addr,
-	 int create_nameval)
+int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
+	     long pre_addr, int create_nameval)
 {
 	struct safety_record *tmp;
 
-	if (run_pre_cmp(run_addr, pre_addr, s->size, 0) != 0) {
-		set_temp_myst_relocs(NOVAL);
+	if (run_pre_cmp(pack, run_addr, pre_addr, s->size, 0) != 0) {
+		set_temp_myst_relocs(pack, NOVAL);
 		if (debug >= 1) {
 			printk("ksplice_h: run-pre: sect %s does not match ",
 			       s->name);
 			printk("(r_a=%08lx p_a=%08lx s=%ld)\n",
 			       run_addr, pre_addr, s->size);
 			printk("ksplice_h: run-pre: ");
-			run_pre_cmp(run_addr, pre_addr, s->size, 1);
+			run_pre_cmp(pack, run_addr, pre_addr, s->size, 1);
 			printk("\n");
 		}
 	} else {
-		set_temp_myst_relocs(VAL);
+		set_temp_myst_relocs(pack, VAL);
 
 		if (debug >= 3) {
 			printk("ksplice_h: run-pre: found sect %s=%08lx\n",
@@ -206,10 +211,11 @@ try_addr(struct ksplice_size *s, long run_addr, long pre_addr,
 		tmp->addr = run_addr;
 		tmp->size = s->size;
 		tmp->care = 0;
-		list_add(&tmp->list, &safety_records);
+		list_add(&tmp->list, pack->safety_records);
 
 		if (create_nameval) {
-			struct reloc_nameval *nv = find_nameval(s->name, 1);
+			struct reloc_nameval *nv =
+			    find_nameval(pack, s->name, 1);
 			nv->val = run_addr;
 			nv->status = VAL;
 		}
@@ -219,7 +225,8 @@ try_addr(struct ksplice_size *s, long run_addr, long pre_addr,
 	return 0;
 }
 
-int run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
+int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
+		 int size, int rerun)
 {
 	int run_o = 0, pre_o = 0, lenient = 0, prev_c3 = 0, recent_5b = 0;
 	unsigned char run, pre;
@@ -239,7 +246,7 @@ int run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
 		if (!virtual_address_mapped(run_addr + run_o))
 			return 1;
 
-		if ((map = find_addrmap(pre_addr + pre_o)) != NULL) {
+		if ((map = find_addrmap(pack, pre_addr + pre_o)) != NULL) {
 			if (handle_myst_reloc
 			    (pre_addr, &pre_o, run_addr, &run_o, map,
 			     rerun) == 1)
@@ -360,15 +367,17 @@ int match_nop(long addr, int *o)
 	return 0;
 }
 
-void brute_search_all_mods(struct ksplice_size *s)
+void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 {
 	struct module *m;
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {
-		if (!starts_with(m->name, ksplice_name)
+		if (!starts_with(m->name, pack->name)
 		    && !ends_with(m->name, "_helper")) {
-			if (brute_search(s, m->module_core, m->core_size) == 0)
+			if (brute_search(pack, s, m->module_core, m->core_size)
+			    == 0)
 				return;
-			if (brute_search(s, m->module_init, m->init_size) == 0)
+			if (brute_search(pack, s, m->module_init, m->init_size)
+			    == 0)
 				return;
 		}
 	}

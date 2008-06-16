@@ -26,21 +26,22 @@ extern u8 kallsyms_names[];
 static const int CONFIG_KALLSYMS_VAL = 0;
 #endif /* CONFIG_KALLSYMS */
 
-int safe = 0, helper = 0;
+int safe = 0;
 int debug;
 module_param(debug, int, 0600);
 
-int process_ksplice_relocs(struct ksplice_reloc *relocs)
+int process_ksplice_relocs(struct module_pack *pack,
+			   struct ksplice_reloc *relocs)
 {
 	struct ksplice_reloc *r;
 	for (r = relocs; r->sym_name != NULL; r++) {
-		if (process_reloc(r) != 0)
+		if (process_reloc(pack, r) != 0)
 			return -1;
 	}
 	return 0;
 }
 
-int process_reloc(struct ksplice_reloc *r)
+int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 {
 	int i;
 	long sym_addr;
@@ -50,7 +51,7 @@ int process_reloc(struct ksplice_reloc *r)
 
 	LIST_HEAD(vals);
 	if (CONFIG_KALLSYMS_VAL || !safe) {
-		int adjustment = (long)printk - map_printk;
+		int adjustment = (long)printk - pack->map_printk;
 		if (adjustment & 0xfffff) {
 			print_abort("System.map does not match kernel");
 			return -1;
@@ -69,17 +70,17 @@ int process_reloc(struct ksplice_reloc *r)
 		if (debug >= 4) {
 			printk
 			    ("ksplice%s: reloc: skipped %s:%08lx (altinstr)\n",
-			     (helper ? "_h" : ""), r->sym_name,
+			     (pack->helper ? "_h" : ""), r->sym_name,
 			     r->blank_offset);
 		}
 		release_vals(&vals);
 		return 0;
 	}
 
-	compute_address(r->sym_name, &vals);
+	compute_address(pack, r->sym_name, &vals);
 	if (!singular(&vals)) {
 		release_vals(&vals);
-		if (!(helper && safe)) {
+		if (!(pack->helper && safe)) {
 			failed_to_find(r->sym_name);
 			return -1;
 		}
@@ -91,11 +92,11 @@ int process_reloc(struct ksplice_reloc *r)
 
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		map->addr = blank_addr;
-		map->nameval = find_nameval(r->sym_name, 1);
+		map->nameval = find_nameval(pack, r->sym_name, 1);
 		map->addend = r->addend;
 		map->flags = r->flags;
 		map->size = r->size;
-		list_add(&map->list, &reloc_addrmaps);
+		list_add(&map->list, pack->reloc_addrmaps);
 		return 0;
 	}
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
@@ -103,20 +104,21 @@ int process_reloc(struct ksplice_reloc *r)
 
 	if (debug >= 4) {
 		printk("ksplice%s: reloc: %s:%08lx ",
-		       (helper ? "_h" : ""), r->sym_name, r->blank_offset);
+		       (pack->helper ? "_h" : ""), r->sym_name,
+		       r->blank_offset);
 		printk("(S=%08lx A=%08lx ", sym_addr, r->addend);
 	}
 
-	if ((r->flags & PCREL) && (helper && safe)) {
+	if ((r->flags & PCREL) && (pack->helper && safe)) {
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		map->addr = blank_addr;
-		map->nameval = find_nameval("ksplice_zero", 1);
+		map->nameval = find_nameval(pack, "ksplice_zero", 1);
 		map->nameval->val = 0;
 		map->nameval->status = VAL;
 		map->addend = sym_addr + r->addend;
-		map->flags = r->flags;
 		map->size = r->size;
-		list_add(&map->list, &reloc_addrmaps);
+		map->flags = r->flags;
+		list_add(&map->list, pack->reloc_addrmaps);
 
 	} else {
 		long val;
@@ -145,7 +147,8 @@ int process_reloc(struct ksplice_reloc *r)
 	return 0;
 }
 
-void compute_address(char *sym_name, struct list_head *vals)
+void compute_address(struct module_pack *pack, char *sym_name,
+		     struct list_head *vals)
 {
 	int i, have_added_val = 0;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
@@ -153,8 +156,8 @@ void compute_address(char *sym_name, struct list_head *vals)
 	if (!safe)
 		return;
 
-	if (!helper) {
-		struct reloc_nameval *nv = find_nameval(sym_name, 0);
+	if (!pack->helper) {
+		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
 		if (nv != NULL && nv->status != NOVAL) {
 			if (!have_added_val)
 				release_vals(vals);
@@ -175,12 +178,13 @@ void compute_address(char *sym_name, struct list_head *vals)
 
 #ifdef CONFIG_KALLSYMS
 	kernel_lookup(sym_name, vals);
-	other_module_lookup(sym_name, vals);
+	other_module_lookup(sym_name, vals, pack->name);
 #endif
 
 	for (i = 0; prefix[i] != NULL; i++) {
 		if (starts_with(sym_name, prefix[i])) {
-			compute_address(sym_name + strlen(prefix[i]), vals);
+			compute_address(pack, sym_name + strlen(prefix[i]),
+					vals);
 		}
 	}
 }
@@ -266,7 +270,8 @@ long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 }
 #endif /* LINUX_VERSION_CODE */
 
-void other_module_lookup(const char *name_wlabel, struct list_head *vals)
+void other_module_lookup(const char *name_wlabel, struct list_head *vals,
+			 const char *ksplice_name)
 {
 	struct module *m;
 	const char *name = dup_wolabel(name_wlabel);
@@ -323,12 +328,13 @@ void release_vals(struct list_head *vals)
 	clear_list(vals, struct candidate_val, list);
 }
 
-struct reloc_nameval *find_nameval(char *name, int create)
+struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
+				   int create)
 {
 	struct list_head *pos;
 	struct reloc_nameval *nv, *new;
 	char *newname;
-	list_for_each(pos, &reloc_namevals) {
+	list_for_each(pos, pack->reloc_namevals) {
 		nv = list_entry(pos, struct reloc_nameval, list);
 		newname = nv->name;
 		if (starts_with(newname, ".text.")) {
@@ -345,15 +351,15 @@ struct reloc_nameval *find_nameval(char *name, int create)
 	new->name = name;
 	new->val = 0;
 	new->status = NOVAL;
-	list_add(&new->list, &reloc_namevals);
+	list_add(&new->list, pack->reloc_namevals);
 	return new;
 }
 
-struct reloc_addrmap *find_addrmap(long addr)
+struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr)
 {
 	struct list_head *pos;
 	struct reloc_addrmap *map;
-	list_for_each(pos, &reloc_addrmaps) {
+	list_for_each(pos, pack->reloc_addrmaps) {
 		map = list_entry(pos, struct reloc_addrmap, list);
 		if (addr >= map->addr && addr < map->addr + map->size) {
 			return map;
@@ -362,11 +368,11 @@ struct reloc_addrmap *find_addrmap(long addr)
 	return NULL;
 }
 
-void set_temp_myst_relocs(int status_val)
+void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 {
 	struct list_head *pos;
 	struct reloc_nameval *nv;
-	list_for_each(pos, &reloc_namevals) {
+	list_for_each(pos, pack->reloc_namevals) {
 		nv = list_entry(pos, struct reloc_nameval, list);
 		if (nv->status == TEMP) {
 			nv->status = status_val;

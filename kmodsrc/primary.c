@@ -40,7 +40,7 @@
 #endif /* __ASM_X86_PROCESSOR_H */
 
 /* defined by modcommon.c */
-extern int safe, helper, debug;
+extern int safe, debug;
 
 /* defined by ksplice-create */
 extern struct ksplice_reloc ksplice_init_relocs, ksplice_relocs;
@@ -50,16 +50,23 @@ extern struct ksplice_size ksplice_sizes;
 LIST_HEAD(reloc_addrmaps);
 LIST_HEAD(reloc_namevals);
 LIST_HEAD(safety_records);
-EXPORT_SYMBOL(reloc_addrmaps);
-EXPORT_SYMBOL(reloc_namevals);
-EXPORT_SYMBOL(safety_records);
 
-enum ksplice_state_enum ksplice_state = KSPLICE_PREPARING;
-EXPORT_SYMBOL(ksplice_state);
+struct module_pack KSPLICE_UNIQ(pack) = {
+	.name = "ksplice_" STR(KSPLICE_ID),
+	.map_printk = MAP_PRINTK,
+	.primary_relocs = &ksplice_relocs,
+	.primary_sizes = &ksplice_sizes,
+	.patches = &ksplice_patches,
+	.reloc_addrmaps = &reloc_addrmaps,
+	.reloc_namevals = &reloc_namevals,
+	.safety_records = &safety_records,
+};
+EXPORT_SYMBOL_GPL(KSPLICE_UNIQ(pack));
 
 int init_module(void)
 {
-	if (process_ksplice_relocs(&ksplice_init_relocs) != 0)
+	struct module_pack *pack = &KSPLICE_UNIQ(pack);
+	if (process_ksplice_relocs(pack, &ksplice_init_relocs) != 0)
 		return -1;
 	safe = 1;
 
@@ -68,68 +75,70 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-	remove_proc_entry(ksplice_name, &proc_root);
+	struct module_pack *pack = &KSPLICE_UNIQ(pack);
+	remove_proc_entry(pack->name, &proc_root);
 }
 
-int activate_primary(void)
+int activate_primary(struct module_pack *pack)
 {
 	int i;
 	struct proc_dir_entry *proc_entry;
 
-	helper = 0;
+	pack->helper = 0;
 
-	if (process_ksplice_relocs(&ksplice_relocs) != 0)
+	if (process_ksplice_relocs(pack, pack->primary_relocs) != 0)
 		return -1;
 
-	if (resolve_patch_symbols() != 0)
+	if (resolve_patch_symbols(pack) != 0)
 		return -1;
 
-	proc_entry = create_proc_entry(ksplice_name, 0644, NULL);
+	proc_entry = create_proc_entry(pack->name, 0644, NULL);
 	if (proc_entry == NULL) {
-		remove_proc_entry(ksplice_name, &proc_root);
+		remove_proc_entry(pack->name, &proc_root);
 		print_abort("primary module: could not create proc entry");
 		return -1;
 	}
 
 	proc_entry->read_proc = procfile_read;
 	proc_entry->write_proc = procfile_write;
+	proc_entry->data = pack;
 	proc_entry->owner = THIS_MODULE;
 	proc_entry->mode = S_IFREG | S_IRUSR | S_IWUSR;
 	proc_entry->uid = 0;
 	proc_entry->gid = 0;
 	proc_entry->size = 0;
 
-	for (i = 0; ksplice_state != KSPLICE_APPLIED && i < 5; i++) {
+	for (i = 0; pack->state != KSPLICE_APPLIED && i < 5; i++) {
 		bust_spinlocks(1);
-		stop_machine_run(__apply_patches, NULL, NR_CPUS);
+		stop_machine_run(__apply_patches, pack, NR_CPUS);
 		bust_spinlocks(0);
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (ksplice_state != KSPLICE_APPLIED) {
-		remove_proc_entry(ksplice_name, &proc_root);
+	if (pack->state != KSPLICE_APPLIED) {
+		remove_proc_entry(pack->name, &proc_root);
 		print_abort("stack check: to-be-replaced code is busy");
 		return -1;
 	}
 
-	printk("ksplice: Update %s applied successfully\n", ksplice_name);
+	printk("ksplice: Update %s applied successfully\n", pack->name);
 	return 0;
 }
 
 EXPORT_SYMBOL(activate_primary);
 
-int resolve_patch_symbols(void)
+int resolve_patch_symbols(struct module_pack *pack)
 {
 	struct ksplice_patch *p;
 	LIST_HEAD(vals);
 
-	for (p = &ksplice_patches; p->oldstr; p++) {
+	for (p = pack->patches; p->oldstr; p++) {
 		p->saved = kmalloc(5, GFP_KERNEL);
 
 		if (p->oldaddr != 0)
 			add_candidate_val(&vals, p->oldaddr);
 
-		compute_address(p->oldstr, &vals);
+		compute_address(pack, p->oldstr, &vals);
 		if (!singular(&vals)) {
 			release_vals(&vals);
 			failed_to_find(p->oldstr);
@@ -156,45 +165,47 @@ procfile_write(struct file *file, const char *buffer, unsigned long count,
 	       void *data)
 {
 	int i;
-	printk("ksplice: Preparing to reverse %s\n", ksplice_name);
+	struct module_pack *pack = data;
+	printk("ksplice: Preparing to reverse %s\n", pack->name);
 
-	for (i = 0; ksplice_state == KSPLICE_APPLIED && i < 5; i++) {
+	for (i = 0; pack->state == KSPLICE_APPLIED && i < 5; i++) {
 		bust_spinlocks(1);
-		stop_machine_run(__reverse_patches, NULL, NR_CPUS);
+		stop_machine_run(__reverse_patches, pack, NR_CPUS);
 		bust_spinlocks(0);
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (ksplice_state == KSPLICE_APPLIED)
+	if (pack->state == KSPLICE_APPLIED)
 		print_abort("stack check: to-be-reversed code is busy");
 
 	return count;
 }
 
-int __apply_patches(void *unused)
+int __apply_patches(void *packptr)
 {
+	struct module_pack *pack = packptr;
 	struct ksplice_patch *p;
 	struct list_head *pos;
 	struct safety_record *rec;
 
-	list_for_each(pos, &safety_records) {
+	list_for_each(pos, pack->safety_records) {
 		rec = list_entry(pos, struct safety_record, list);
-		for (p = &ksplice_patches; p->oldstr; p++) {
+		for (p = pack->patches; p->oldstr; p++) {
 			if (p->oldaddr == rec->addr) {
 				rec->care = 1;
 			}
 		}
 	}
 
-	if (check_each_task() != 0)
+	if (check_each_task(pack) != 0)
 		return 0;
 
 	if (!try_module_get(THIS_MODULE))
 		return 0;
 
-	ksplice_state = KSPLICE_APPLIED;
+	pack->state = KSPLICE_APPLIED;
 
-	for (p = &ksplice_patches; p->oldstr; p++) {
+	for (p = pack->patches; p->oldstr; p++) {
 		memcpy((void *)p->saved, (void *)p->oldaddr, 5);
 		*((u8 *) p->oldaddr) = 0xE9;
 		*((u32 *) (p->oldaddr + 1)) = p->repladdr - (p->oldaddr + 5);
@@ -202,21 +213,22 @@ int __apply_patches(void *unused)
 	return 0;
 }
 
-int __reverse_patches(void *unused)
+int __reverse_patches(void *packptr)
 {
+	struct module_pack *pack = packptr;
 	struct ksplice_patch *p;
 
-	if (ksplice_state != KSPLICE_APPLIED)
+	if (pack->state != KSPLICE_APPLIED)
 		return 0;
 
-	if (check_each_task() != 0)
+	if (check_each_task(pack) != 0)
 		return 0;
 
-	clear_list(&safety_records, struct safety_record, list);
-	ksplice_state = KSPLICE_REVERSED;
+	clear_list(pack->safety_records, struct safety_record, list);
+	pack->state = KSPLICE_REVERSED;
 	module_put(THIS_MODULE);
 
-	p = &ksplice_patches;
+	p = pack->patches;
 	for (; p->oldstr; p++) {
 		memcpy((void *)p->oldaddr, (void *)p->saved, 5);
 		kfree(p->saved);
@@ -224,21 +236,21 @@ int __reverse_patches(void *unused)
 		*((u32 *) (p->repladdr + 1)) = p->oldaddr - (p->repladdr + 5);
 	}
 
-	printk("ksplice: Update %s reversed successfully\n", ksplice_name);
+	printk("ksplice: Update %s reversed successfully\n", pack->name);
 	return 0;
 }
 
-int check_each_task(void)
+int check_each_task(struct module_pack *pack)
 {
 	struct task_struct *g, *p;
 	int status = 0;
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		if (check_task(p) != 0) {
+		if (check_task(pack, p) != 0) {
 			if (debug == 1) {
 				debug = 2;
-				check_task(p);
+				check_task(pack, p);
 				debug = 1;
 			}
 			status = -1;
@@ -249,11 +261,11 @@ int check_each_task(void)
 	return status;
 }
 
-int check_task(struct task_struct *t)
+int check_task(struct module_pack *pack, struct task_struct *t)
 {
 	int status;
 	long addr = KSPLICE_EIP(t);
-	int conflict = check_address_for_conflict(addr);
+	int conflict = check_address_for_conflict(pack, addr);
 	if (debug >= 2) {
 		printk("ksplice: stack check: pid %d (%s) eip %08lx",
 		       t->pid, t->comm, KSPLICE_EIP(t));
@@ -264,11 +276,12 @@ int check_task(struct task_struct *t)
 	}
 	if (t == current) {
 		status =
-		    check_stack(task_thread_info(t),
+		    check_stack(pack, task_thread_info(t),
 				(long *)__builtin_frame_address(0));
 	} else if (!task_curr(t)) {
 		status =
-		    check_stack(task_thread_info(t), (long *)KSPLICE_ESP(t));
+		    check_stack(pack, task_thread_info(t),
+				(long *)KSPLICE_ESP(t));
 	} else if (strcmp(t->comm, "kstopmachine") == 0) {
 		if (debug >= 2)
 			printk("\n");
@@ -285,7 +298,8 @@ int check_task(struct task_struct *t)
 }
 
 /* Modified version of Linux's print_context_stack */
-int check_stack(struct thread_info *tinfo, long *stack)
+int check_stack(struct module_pack *pack, struct thread_info *tinfo,
+		long *stack)
 {
 	int conflict, status = 0;
 	long addr;
@@ -293,7 +307,7 @@ int check_stack(struct thread_info *tinfo, long *stack)
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
 		if (__kernel_text_address(addr)) {
-			conflict = check_address_for_conflict(addr);
+			conflict = check_address_for_conflict(pack, addr);
 			if (conflict)
 				status = -1;
 			if (debug >= 2) {
@@ -309,13 +323,13 @@ int check_stack(struct thread_info *tinfo, long *stack)
 	return status;
 }
 
-int check_address_for_conflict(long addr)
+int check_address_for_conflict(struct module_pack *pack, long addr)
 {
-	struct ksplice_size *s = &ksplice_sizes;
+	struct ksplice_size *s = pack->primary_sizes;
 	struct list_head *pos;
 	struct safety_record *rec;
 
-	list_for_each(pos, &safety_records) {
+	list_for_each(pos, pack->safety_records) {
 		rec = list_entry(pos, struct safety_record, list);
 		if (rec->care == 1 && addr > rec->addr
 		    && addr <= (rec->addr + rec->size)) {
