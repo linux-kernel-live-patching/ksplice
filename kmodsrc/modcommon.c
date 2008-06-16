@@ -59,12 +59,12 @@ int process_reloc(struct ksplice_reloc *r)
 
 	LIST_HEAD(vals);
 	if (CONFIG_KALLSYMS_VAL || !safe) {
+		int adjustment = (long)printk - map_printk;
+		if (adjustment & 0xfffff) {
+			print_abort("System.map does not match kernel");
+			return -1;
+		}
 		for (i = 0; i < r->num_sym_addrs; i++) {
-			int adjustment = (long)printk - map_printk;
-			if (adjustment & 0xfffff) {
-				print_abort("System.map does not match kernel");
-				return -1;
-			}
 			add_candidate_val(&vals, r->sym_addrs[i] + adjustment);
 		}
 	}
