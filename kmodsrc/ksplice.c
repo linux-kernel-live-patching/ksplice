@@ -192,11 +192,9 @@ int __apply_patches(void *packptr)
 {
 	struct module_pack *pack = packptr;
 	struct ksplice_patch *p;
-	struct list_head *pos;
 	struct safety_record *rec;
 
-	list_for_each(pos, pack->safety_records) {
-		rec = list_entry(pos, struct safety_record, list);
+	list_for_each_entry(rec, pack->safety_records, list) {
 		for (p = pack->patches; p->oldstr; p++) {
 			if (p->oldaddr == rec->addr) {
 				rec->care = 1;
@@ -333,11 +331,9 @@ int check_stack(struct module_pack *pack, struct thread_info *tinfo,
 int check_address_for_conflict(struct module_pack *pack, long addr)
 {
 	struct ksplice_size *s = pack->primary_sizes;
-	struct list_head *pos;
 	struct safety_record *rec;
 
-	list_for_each(pos, pack->safety_records) {
-		rec = list_entry(pos, struct safety_record, list);
+	list_for_each_entry(rec, pack->safety_records, list) {
 		if (rec->care == 1 && addr > rec->addr
 		    && addr <= (rec->addr + rec->size)) {
 			return -1;
@@ -966,11 +962,9 @@ void release_vals(struct list_head *vals)
 struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 				   int create)
 {
-	struct list_head *pos;
 	struct reloc_nameval *nv, *new;
 	char *newname;
-	list_for_each(pos, pack->reloc_namevals) {
-		nv = list_entry(pos, struct reloc_nameval, list);
+	list_for_each_entry(nv, pack->reloc_namevals, list) {
 		newname = nv->name;
 		if (starts_with(newname, ".text.")) {
 			newname += 6;
@@ -992,10 +986,8 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 
 struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr)
 {
-	struct list_head *pos;
 	struct reloc_addrmap *map;
-	list_for_each(pos, pack->reloc_addrmaps) {
-		map = list_entry(pos, struct reloc_addrmap, list);
+	list_for_each_entry(map, pack->reloc_addrmaps, list) {
 		if (addr >= map->addr && addr < map->addr + map->size) {
 			return map;
 		}
@@ -1005,10 +997,8 @@ struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr)
 
 void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 {
-	struct list_head *pos;
 	struct reloc_nameval *nv;
-	list_for_each(pos, pack->reloc_namevals) {
-		nv = list_entry(pos, struct reloc_nameval, list);
+	list_for_each_entry(nv, pack->reloc_namevals, list) {
 		if (nv->status == TEMP) {
 			nv->status = status_val;
 		}
