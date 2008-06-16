@@ -68,6 +68,9 @@ struct reloc_addrmap {
 	int size;
 };
 
+struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
+				   int create);
+struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr);
 int handle_myst_reloc(long pre_addr, int *pre_z, long run_addr,
 		      int *run_z, struct reloc_addrmap *map, int rerun);
 
@@ -116,9 +119,6 @@ void ksplice_mod_find_sym(struct module *m, const char *name,
 
 void add_candidate_val(struct list_head *vals, long val);
 void release_vals(struct list_head *vals);
-struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
-				   int create);
-struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr);
 void set_temp_myst_relocs(struct module_pack *pack, int status_val);
 
 #define clear_list(head, type, member)				\
