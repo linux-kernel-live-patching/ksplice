@@ -52,7 +52,7 @@ const char *dup_wolabel(const char *sym_name)
 
 	entire_strlen = strlen(sym_name);
 	new_strlen = entire_strlen - label_strlen;
-	newstr = malloc(new_strlen + 1);
+	newstr = kmalloc(new_strlen + 1, GFP_KERNEL);
 	memcpy(newstr, sym_name, new_strlen);
 	newstr[new_strlen] = 0;
 	return newstr;

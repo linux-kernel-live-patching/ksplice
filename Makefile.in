@@ -49,11 +49,8 @@ $(perl_primary): %: %.in Makefile
 $(perl_man): %.8: %
 	pod2man --center="Ksplice" --release="Ksplice v$(PACKAGE_VERSION)" --section=8 $< $@
 
-objdiff objmanip: %: %.c objcommon.c objcommon.h allcommon-user.o
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(srcdir)/objcommon.c allcommon-user.o $(LIBS) -o $@
-
-allcommon-user.o: kmodsrc/allcommon.c kmodsrc/allcommon.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+objdiff objmanip: %: %.c objcommon.c objcommon.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(srcdir)/objcommon.c $(LIBS) -o $@
 
 install: default install-objmanip install-objdiff
 	install -m644 -D ksplice-create.8 $(DESTDIR)$(mandir)/man8/ksplice-create.8

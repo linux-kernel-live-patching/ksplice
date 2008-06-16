@@ -61,3 +61,45 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp)
 
 	return new;
 }
+
+int label_offset(const char *sym_name)
+{
+	int i;
+	for (i = 0;
+	     sym_name[i] != 0 && sym_name[i + 1] != 0 && sym_name[i + 2] != 0
+	     && sym_name[i + 3] != 0; i++) {
+		if (sym_name[i] == '_' && sym_name[i + 1] == '_'
+		    && sym_name[i + 2] == '_' && sym_name[i + 3] == '_') {
+			return i + 4;
+		}
+	}
+	return -1;
+}
+
+const char *only_label(const char *sym_name)
+{
+	int offset = label_offset(sym_name);
+	if (offset == -1)
+		return NULL;
+	return &sym_name[offset];
+}
+
+const char *dup_wolabel(const char *sym_name)
+{
+	int offset, entire_strlen, label_strlen, new_strlen;
+	char *newstr;
+
+	offset = label_offset(sym_name);
+	if (offset == -1) {
+		label_strlen = 0;
+	} else {
+		label_strlen = strlen(&sym_name[offset]) + strlen("____");
+	}
+
+	entire_strlen = strlen(sym_name);
+	new_strlen = entire_strlen - label_strlen;
+	newstr = malloc(new_strlen + 1);
+	memcpy(newstr, sym_name, new_strlen);
+	newstr[new_strlen] = 0;
+	return newstr;
+}

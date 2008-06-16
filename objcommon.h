@@ -1,6 +1,7 @@
-#include "kmodsrc/allcommon.h"
 #include <bfd.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define DIE do { printf("ksplice: died at line %d of %s\n", __LINE__, __FILE__); fflush(0); exit(1); } while(0)
 #define assert(x) do { if(!(x)) DIE; } while(0)
@@ -22,3 +23,10 @@ struct supersect {
 
 long get_syms(bfd *abfd, asymbol ***syms_ptr);
 struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp);
+
+#define starts_with(str, prefix) (!strncmp(str, prefix, strlen(prefix)))
+#define ends_with(str, suffix) (strlen(str) > strlen(suffix) && !strcmp(&str[strlen(str)-strlen(suffix)], suffix))
+
+int label_offset(const char *sym_name);
+const char *only_label(const char *sym_name);
+const char *dup_wolabel(const char *sym_name);
