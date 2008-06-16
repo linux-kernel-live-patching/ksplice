@@ -68,6 +68,41 @@ struct reloc_addrmap {
 	int size;
 };
 
+static inline int virtual_address_mapped(long addr)
+{
+	pgd_t *pgd;
+#if defined(pud_page)
+	pud_t *pud;
+#endif
+	pmd_t *pmd;
+	pte_t *ptep;
+
+	if (addr > init_mm.start_code && addr < init_mm.end_code)
+		return 1;
+
+	pgd = pgd_offset_k(addr);
+	if (pgd_none(*pgd))
+		return 0;
+
+#if defined(pud_page)
+	pud = pud_offset(pgd, addr);
+	pmd = pmd_offset(pud, addr);
+#else
+	pmd = pmd_offset(pgd, addr);
+#endif
+
+	if (pmd_none(*pmd))
+		return 0;
+	ptep = pte_offset_map(pmd, addr);
+	if (!pte_present(*ptep)) {
+		pte_unmap(ptep);
+		return 0;
+	}
+	pte_unmap(ptep);
+
+	return 1;
+}
+
 struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 				   int create);
 struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr);
@@ -164,41 +199,6 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 
 void *ksplice_kcalloc(int size);
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s);
-
-static inline int virtual_address_mapped(long addr)
-{
-	pgd_t *pgd;
-#if defined(pud_page)
-	pud_t *pud;
-#endif
-	pmd_t *pmd;
-	pte_t *ptep;
-
-	if (addr > init_mm.start_code && addr < init_mm.end_code)
-		return 1;
-
-	pgd = pgd_offset_k(addr);
-	if (pgd_none(*pgd))
-		return 0;
-
-#if defined(pud_page)
-	pud = pud_offset(pgd, addr);
-	pmd = pmd_offset(pud, addr);
-#else
-	pmd = pmd_offset(pgd, addr);
-#endif
-
-	if (pmd_none(*pmd))
-		return 0;
-	ptep = pte_offset_map(pmd, addr);
-	if (!pte_present(*ptep)) {
-		pte_unmap(ptep);
-		return 0;
-	}
-	pte_unmap(ptep);
-
-	return 1;
-}
 
 static inline int brute_search(struct module_pack *pack, struct ksplice_size *s,
 			       void *start, long len)
