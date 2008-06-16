@@ -79,7 +79,7 @@ static inline void print_abort(const char *str)
 	printk("ksplice: Aborted. (%s)\n", str);
 }
 
-int process_ksplice_relocs(int caller_is_helper);
+int process_ksplice_relocs(struct ksplice_reloc *relocs);
 int process_reloc(struct ksplice_reloc *r);
 void compute_address(char *sym_name, struct list_head *vals);
 void kernel_lookup(const char *name_wlabel, struct list_head *vals);

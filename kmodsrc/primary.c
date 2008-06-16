@@ -40,9 +40,10 @@
 #endif /* __ASM_X86_PROCESSOR_H */
 
 /* defined by modcommon.c */
-extern int debug;
+extern int safe, helper, debug;
 
 /* defined by ksplice-create */
+extern struct ksplice_reloc ksplice_init_relocs, ksplice_relocs;
 extern struct ksplice_patch ksplice_patches;
 extern struct ksplice_size ksplice_sizes;
 
@@ -58,6 +59,10 @@ EXPORT_SYMBOL(ksplice_state);
 
 int init_module(void)
 {
+	if (process_ksplice_relocs(&ksplice_init_relocs) != 0)
+		return -1;
+	safe = 1;
+
 	return 0;
 }
 
@@ -71,7 +76,9 @@ int activate_primary(void)
 	int i;
 	struct proc_dir_entry *proc_entry;
 
-	if (process_ksplice_relocs(0) != 0)
+	helper = 0;
+
+	if (process_ksplice_relocs(&ksplice_relocs) != 0)
 		return -1;
 
 	if (resolve_patch_symbols() != 0)

@@ -21,9 +21,10 @@
 #include <linux/kthread.h>
 
 /* defined by modcommon.c */
-extern int debug;
+extern int safe, helper, debug;
 
 /* defined by ksplice-create */
+extern struct ksplice_reloc ksplice_init_relocs, ksplice_relocs;
 extern struct ksplice_size ksplice_sizes;
 
 #undef max
@@ -31,6 +32,10 @@ extern struct ksplice_size ksplice_sizes;
 
 int init_module(void)
 {
+	if (process_ksplice_relocs(&ksplice_init_relocs) != 0)
+		return -1;
+	safe = 1;
+
 	printk("ksplice_h: Preparing and checking %s\n", ksplice_name);
 
 	if (activate_helper() != 0)
@@ -61,7 +66,9 @@ int activate_helper(void)
 	int numfinished, oldfinished = 0;
 	int restart_count = 0, stage = 1;
 
-	if (process_ksplice_relocs(1) != 0)
+	helper = 1;
+
+	if (process_ksplice_relocs(&ksplice_relocs) != 0)
 		return -1;
 
 	for (s = &ksplice_sizes; s->name != NULL; s++) {

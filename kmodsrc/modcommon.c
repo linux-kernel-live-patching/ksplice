@@ -26,23 +26,14 @@ extern u8 kallsyms_names[];
 static const int CONFIG_KALLSYMS_VAL = 0;
 #endif /* CONFIG_KALLSYMS */
 
-/* defined by ksplice-create */
-extern struct ksplice_reloc ksplice_init_relocs, ksplice_relocs;
-
-static int safe = 0, helper = 0;
+int safe = 0, helper = 0;
 int debug;
 module_param(debug, int, 0600);
 
-int process_ksplice_relocs(int caller_is_helper)
+int process_ksplice_relocs(struct ksplice_reloc *relocs)
 {
 	struct ksplice_reloc *r;
-	helper = caller_is_helper;
-	for (r = &ksplice_init_relocs; r->sym_name != NULL; r++) {
-		if (process_reloc(r) != 0)
-			return -1;
-	}
-	safe = 1;
-	for (r = &ksplice_relocs; r->sym_name != NULL; r++) {
+	for (r = relocs; r->sym_name != NULL; r++) {
 		if (process_reloc(r) != 0)
 			return -1;
 	}
