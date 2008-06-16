@@ -647,12 +647,9 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 		}
 	}
 
-	if ((r->size == 4 && *(int *)blank_addr == 0x77777777)
+	if ((r->size == 4 && *(int *)blank_addr != 0x77777777)
 	    || (r->size == 8 &&
-		*(long long *)blank_addr == 0x7777777777777777ll)) {
-		r->flags |= SAFE;
-	}
-	if (!(r->flags & SAFE)) {
+		*(long long *)blank_addr != 0x7777777777777777ll)) {
 		if (debug >= 4) {
 			printk
 			    ("ksplice%s: reloc: skipped %s:%08lx (altinstr)\n",
