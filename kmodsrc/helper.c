@@ -32,27 +32,27 @@ extern struct ksplice_size ksplice_sizes;
 
 int init_module(void)
 {
+	int ret = 0;
+
 	if (process_ksplice_relocs(&ksplice_init_relocs) != 0)
 		return -1;
 	safe = 1;
 
 	printk("ksplice_h: Preparing and checking %s\n", ksplice_name);
 
-	if (activate_helper() != 0)
-		return -1;
+	if (activate_helper() != 0 || activate_primary() != 0)
+		ret = -1;
 
-	if (activate_primary() != 0)
-		return -1;
-
-	return 0;
-}
-
-void cleanup_module(void)
-{
 	clear_list(&reloc_namevals, struct reloc_nameval, list);
 	clear_list(&reloc_addrmaps, struct reloc_addrmap, list);
 	if (ksplice_state == KSPLICE_PREPARING)
 		clear_list(&safety_records, struct safety_record, list);
+
+	return ret;
+}
+
+void cleanup_module(void)
+{
 }
 
 /* old kernels do not have kcalloc */
