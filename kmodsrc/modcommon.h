@@ -21,10 +21,6 @@ struct ksplice_reloc {
 	long size;
 };
 
-/* ksplice_reloc flags bits */
-#define PCREL (1 << 0)
-#define SAFE (1 << 1)
-
 struct ksplice_patch {
 	char *oldstr;
 	char *replstr;
@@ -72,6 +68,10 @@ struct reloc_addrmap {
 	struct reloc_nameval *nameval;
 	int size;
 };
+
+/* ksplice_reloc flags bits */
+#define PCREL (1 << 0)
+#define SAFE (1 << 1)
 
 struct safety_record {
 	struct list_head list;
