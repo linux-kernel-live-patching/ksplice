@@ -68,6 +68,9 @@ struct reloc_addrmap {
 	int size;
 };
 
+int handle_myst_reloc(long pre_addr, int *pre_z, long run_addr,
+		      int *run_z, struct reloc_addrmap *map, int rerun);
+
 /* ksplice_reloc flags bits */
 #define PCREL (1 << 0)
 #define SAFE (1 << 1)
@@ -159,8 +162,6 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s,
 		     int *stage);
 int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 	     long pre_addr, int create_nameval);
-int handle_myst_reloc(long pre_addr, int *pre_z, long run_addr,
-		      int *run_z, struct reloc_addrmap *map, int rerun);
 
 void *ksplice_kcalloc(int size);
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s);
