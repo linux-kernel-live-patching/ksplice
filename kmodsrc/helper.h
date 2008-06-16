@@ -8,11 +8,10 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s,
 		     int *stage);
 int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 	     long pre_addr, int create_nameval);
-int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
-		int size, int rerun);
+static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
+		       int size, int rerun);
 int handle_myst_reloc(long pre_addr, int *pre_z, long run_addr,
 		      int *run_z, struct reloc_addrmap *map, int rerun);
-int match_nop(long addr, int *main_o);
 
 void *ksplice_kcalloc(int size);
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s);
