@@ -52,8 +52,9 @@ extern u8 kallsyms_names[];
 /* defined by ksplice-create */
 extern struct ksplice_reloc ksplice_init_relocs;
 
-int safe = 0;
-int debug;
+static int safe = 0;
+
+static int debug;
 module_param(debug, int, 0600);
 
 void cleanup_ksplice_module(struct module_pack *pack)
