@@ -162,7 +162,7 @@ void compute_address(char *sym_name, struct list_head *vals)
 	if (!safe)
 		return;
 
-	if (!(helper && safe)) {
+	if (!helper) {
 		struct reloc_nameval *nv = find_nameval(sym_name, 0);
 		if (nv != NULL && nv->status != NOVAL) {
 			if (!have_added_val)
