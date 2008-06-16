@@ -272,8 +272,7 @@ int check_each_task(struct module_pack *pack)
 int check_task(struct module_pack *pack, struct task_struct *t)
 {
 	int status;
-	long addr = KSPLICE_EIP(t);
-	int conflict = check_address_for_conflict(pack, addr);
+	int conflict = check_address_for_conflict(pack, KSPLICE_EIP(t));
 	if (debug >= 2) {
 		printk("ksplice: stack check: pid %d (%s) eip %08lx",
 		       t->pid, t->comm, KSPLICE_EIP(t));
