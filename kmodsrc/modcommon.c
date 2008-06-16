@@ -19,11 +19,11 @@
 #include <linux/stop_machine.h>
 
 #ifdef CONFIG_KALLSYMS
-static const int CONFIG_KALLSYMS_VAL = 1;
+#define CONFIG_KALLSYMS_VAL 1
 extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
 extern u8 kallsyms_names[];
 #else /* CONFIG_KALLSYMS */
-static const int CONFIG_KALLSYMS_VAL = 0;
+#define CONFIG_KALLSYMS_VAL 0
 #endif /* CONFIG_KALLSYMS */
 
 int safe = 0;
