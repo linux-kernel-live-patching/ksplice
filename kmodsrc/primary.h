@@ -1,5 +1,6 @@
 int init_module(void);
 void cleanup_module(void);
+void cleanup_ksplice_module(struct module_pack *pack);
 int activate_primary(struct module_pack *pack);
 int resolve_patch_symbols(struct module_pack *pack);
 int procfile_read(char *buffer, char **buffer_location, off_t offset,

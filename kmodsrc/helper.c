@@ -32,11 +32,17 @@ extern struct ksplice_size ksplice_sizes;
 
 int init_module(void)
 {
-	int ret = 0;
 	struct module_pack *pack = &KSPLICE_UNIQ(pack);
 
 	pack->helper_relocs = &ksplice_relocs;
 	pack->helper_sizes = &ksplice_sizes;
+
+	return init_ksplice_module(pack);
+}
+
+int init_ksplice_module(struct module_pack *pack)
+{
+	int ret = 0;
 
 	if (process_ksplice_relocs(pack, &ksplice_init_relocs) != 0)
 		return -1;

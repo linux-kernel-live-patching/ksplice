@@ -2,6 +2,7 @@
 #include <linux/sched.h>
 
 int init_module(void);
+int init_ksplice_module(struct module_pack *pack);
 void cleanup_module(void);
 int activate_helper(struct module_pack *pack);
 int search_for_match(struct module_pack *pack, struct ksplice_size *s,

@@ -76,7 +76,11 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-	struct module_pack *pack = &KSPLICE_UNIQ(pack);
+	cleanup_ksplice_module(&KSPLICE_UNIQ(pack));
+}
+
+void cleanup_ksplice_module(struct module_pack *pack)
+{
 	remove_proc_entry(pack->name, &proc_root);
 }
 
