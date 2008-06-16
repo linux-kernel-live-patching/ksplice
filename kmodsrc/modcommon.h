@@ -100,12 +100,12 @@ int process_ksplice_relocs(struct module_pack *pack,
 int process_reloc(struct module_pack *pack, struct ksplice_reloc *r);
 void compute_address(struct module_pack *pack, char *sym_name,
 		     struct list_head *vals);
-void kernel_lookup(const char *name_wlabel, struct list_head *vals);
 
 #ifdef CONFIG_KALLSYMS
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 long ksplice_kallsyms_expand_symbol(unsigned long off, char *result);
 #endif
+void kernel_lookup(const char *name_wlabel, struct list_head *vals);
 void other_module_lookup(const char *name_wlabel, struct list_head *vals,
 			 const char *ksplice_name);
 void ksplice_mod_find_sym(struct module *m, const char *name,
