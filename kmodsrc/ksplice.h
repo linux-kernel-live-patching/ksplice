@@ -120,6 +120,10 @@ void ksplice_mod_find_sym(struct module *m, const char *name,
 void add_candidate_val(struct list_head *vals, long val);
 void release_vals(struct list_head *vals);
 void set_temp_myst_relocs(struct module_pack *pack, int status_val);
+int starts_with(const char *str, const char *prefix);
+int ends_with(const char *str, const char *suffix);
+int label_offset(const char *sym_name);
+const char *dup_wolabel(const char *sym_name);
 
 #define clear_list(head, type, member)				\
 	do {							\
@@ -129,11 +133,6 @@ void set_temp_myst_relocs(struct module_pack *pack, int status_val);
 			kfree(list_entry(_pos, type, member));	\
 		}						\
 	} while (0)
-
-int starts_with(const char *str, const char *prefix);
-int ends_with(const char *str, const char *suffix);
-int label_offset(const char *sym_name);
-const char *dup_wolabel(const char *sym_name);
 
 int init_module(void);
 void cleanup_module(void);
