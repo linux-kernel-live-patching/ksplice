@@ -41,14 +41,6 @@ int label_offset(const char *sym_name)
 	return -1;
 }
 
-const char *only_label(const char *sym_name)
-{
-	int offset = label_offset(sym_name);
-	if (offset == -1)
-		return NULL;
-	return &sym_name[offset];
-}
-
 const char *dup_wolabel(const char *sym_name)
 {
 	int offset, entire_strlen, label_strlen, new_strlen;
