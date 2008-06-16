@@ -106,7 +106,6 @@ int activate_primary(struct module_pack *pack)
 
 	proc_entry = create_proc_entry(pack->name, 0644, NULL);
 	if (proc_entry == NULL) {
-		remove_proc_entry(pack->name, &proc_root);
 		print_abort("primary module: could not create proc entry");
 		return -1;
 	}
