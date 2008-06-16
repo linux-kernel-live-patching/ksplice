@@ -1,7 +1,7 @@
-#include "allcommon.h"
-
-MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("Jeffrey Brian Arnold <jbarnold@mit.edu>");
+#include <linux/module.h>
+#include <linux/pagemap.h>
+#include <linux/sched.h>
+#include <linux/version.h>
 
 enum ksplice_state_enum {
 	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
@@ -128,11 +128,110 @@ void set_temp_myst_relocs(struct module_pack *pack, int status_val);
 		}						\
 	} while (0)
 
-#define _STR(x) #x
-#define STR(x) _STR(x)
-
 #define _PASTE(x,y) x##y
 #define PASTE(x,y) _PASTE(x,y)
 #define KSPLICE_UNIQ(s) PASTE(s##_,KSPLICE_ID)
 
 extern struct module_pack KSPLICE_UNIQ(pack);
+
+int starts_with(const char *str, const char *prefix);
+int ends_with(const char *str, const char *suffix);
+int label_offset(const char *sym_name);
+const char *dup_wolabel(const char *sym_name);
+
+int init_module(void);
+void cleanup_module(void);
+int init_ksplice_module(struct module_pack *pack);
+void cleanup_ksplice_module(struct module_pack *pack);
+
+/* primary */
+int activate_primary(struct module_pack *pack);
+int resolve_patch_symbols(struct module_pack *pack);
+int procfile_read(char *buffer, char **buffer_location, off_t offset,
+		  int buffer_length, int *eof, void *data);
+int procfile_write(struct file *file, const char *buffer,
+		   unsigned long count, void *data);
+int __apply_patches(void *packptr);
+int __reverse_patches(void *packptr);
+int check_each_task(struct module_pack *pack);
+int check_task(struct module_pack *pack, struct task_struct *t);
+int check_stack(struct module_pack *pack, struct thread_info *tinfo,
+		long *stack);
+int check_address_for_conflict(struct module_pack *pack, long addr);
+int valid_stack_ptr(struct thread_info *tinfo, void *p);
+
+/* helper */
+int activate_helper(struct module_pack *pack);
+int search_for_match(struct module_pack *pack, struct ksplice_size *s,
+		     int *stage);
+int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
+	     long pre_addr, int create_nameval);
+int handle_myst_reloc(long pre_addr, int *pre_z, long run_addr,
+		      int *run_z, struct reloc_addrmap *map, int rerun);
+
+void *ksplice_kcalloc(int size);
+void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s);
+
+static inline int virtual_address_mapped(long addr)
+{
+	pgd_t *pgd;
+#if defined(pud_page)
+	pud_t *pud;
+#endif
+	pmd_t *pmd;
+	pte_t *ptep;
+
+	if (addr > init_mm.start_code && addr < init_mm.end_code)
+		return 1;
+
+	pgd = pgd_offset_k(addr);
+	if (pgd_none(*pgd))
+		return 0;
+
+#if defined(pud_page)
+	pud = pud_offset(pgd, addr);
+	pmd = pmd_offset(pud, addr);
+#else
+	pmd = pmd_offset(pgd, addr);
+#endif
+
+	if (pmd_none(*pmd))
+		return 0;
+	ptep = pte_offset_map(pmd, addr);
+	if (!pte_present(*ptep)) {
+		pte_unmap(ptep);
+		return 0;
+	}
+	pte_unmap(ptep);
+
+	return 1;
+}
+
+static inline int brute_search(struct module_pack *pack, struct ksplice_size *s,
+			       void *start, long len)
+{
+	long addr;
+	char run, pre;
+
+	for (addr = (long)start; addr < (long)start + len; addr++) {
+		if (addr % 100000 == 0)
+			yield();
+
+		if (!virtual_address_mapped(addr))
+			return 1;
+
+		run = *(unsigned char *)(addr);
+		pre = *(unsigned char *)(s->thismod_addr);
+
+		if (run != pre)
+			return 1;
+
+		if (addr == s->thismod_addr)
+			return 1;
+
+		if (try_addr(pack, s, addr, s->thismod_addr, 1))
+			return 0;
+	}
+
+	return 1;
+}

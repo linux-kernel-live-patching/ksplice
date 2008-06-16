@@ -1,3 +1,25 @@
+static const char jumplen[256] = {[0x0f] = 5,	/* je */
+	[0x70] = 1,		/* jo */
+	[0x71] = 1,		/* jno */
+	[0x72] = 1,		/* jb */
+	[0x73] = 1,		/* jnb */
+	[0x74] = 1,		/* jc */
+	[0x75] = 1,		/* jne */
+	[0x76] = 1,		/* jbe */
+	[0x77] = 1,		/* ja */
+	[0x78] = 1,		/* js */
+	[0x79] = 1,		/* jns */
+	[0x7a] = 1,		/* jp */
+	[0x7b] = 1,		/* jnp */
+	[0x7c] = 1,		/* jl */
+	[0x7d] = 1,		/* jge */
+	[0x7e] = 1,		/* jle */
+	[0x7f] = 1,		/* jg */
+	[0xe9] = 4,		/* jmp */
+	[0xe8] = 4,		/* call */
+	[0xeb] = 1,		/* jmp */
+};
+
 /* Various efficient no-op patterns for aligning code labels.
    Note: Don't try to assemble the instructions in the comments.
    0L and 0w are not legal. */
@@ -111,3 +133,99 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 					/* nopl 0L(%[re]ax,%[re]ax,1)   */
 };
 /* *INDENT-ON* */
+
+static int match_nop(long addr, int *o);
+
+static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
+		       int size, int rerun)
+{
+	int run_o = 0, pre_o = 0, lenient = 0, prev_c3 = 0, recent_5b = 0;
+	unsigned char run, pre;
+	struct reloc_addrmap *map;
+
+	if (size == 0)
+		return 1;
+
+	while (run_o < size && pre_o < size) {
+		if (lenient > 0)
+			lenient--;
+		if (prev_c3 > 0)
+			prev_c3--;
+		if (recent_5b > 0)
+			recent_5b--;
+
+		if (!virtual_address_mapped(run_addr + run_o))
+			return 1;
+
+		if ((map = find_addrmap(pack, pre_addr + pre_o)) != NULL) {
+			if (handle_myst_reloc
+			    (pre_addr, &pre_o, run_addr, &run_o, map,
+			     rerun) == 1)
+				return 1;
+			continue;
+		}
+
+		if (match_nop(run_addr, &run_o) || match_nop(pre_addr, &pre_o))
+			continue;
+
+		run = *(unsigned char *)(run_addr + run_o);
+		pre = *(unsigned char *)(pre_addr + pre_o);
+
+		if (rerun)
+			printk("%02x/%02x ", run, pre);
+
+		if (run == pre) {
+			if (pre == 0xc3)
+				prev_c3 = 1 + 1;
+			if (pre == 0x5b)
+				recent_5b = 10 + 1;
+			if (jumplen[pre])
+				lenient = max(jumplen[pre] + 1, lenient);
+			pre_o++, run_o++;
+			continue;
+		}
+
+		if (prev_c3 && recent_5b)
+			return 0;
+		if (jumplen[run] && jumplen[pre]) {
+			run_o += 1 + jumplen[run];
+			pre_o += 1 + jumplen[pre];
+			continue;
+		}
+		if (lenient) {
+			pre_o++, run_o++;
+			continue;
+		}
+		if (rerun) {
+			printk("[p_o=%08x] ! %02x/%02x %02x/%02x",
+			       pre_o,
+			       *(unsigned char *)(run_addr + run_o + 1),
+			       *(unsigned char *)(pre_addr + pre_o + 1),
+			       *(unsigned char *)(run_addr + run_o + 2),
+			       *(unsigned char *)(pre_addr + pre_o + 2));
+		}
+		return 1;
+	}
+	return 0;
+}
+
+static int match_nop(long addr, int *o)
+{
+	int i, j;
+	struct insn *nop;
+	for (i = NUM_NOPS - 1; i >= 0; i--) {
+		nop = &nops[i];
+		for (j = 0; j < nop->len; j++) {
+			if (!virtual_address_mapped(addr + *o + j))
+				break;
+			if (*(unsigned char *)(addr + *o + j) != nop->data[j])
+				break;
+		}
+		if (j == nop->len) {
+			*o += j;
+			return 1;
+		}
+
+	}
+	return 0;
+}

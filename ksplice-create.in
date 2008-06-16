@@ -96,6 +96,20 @@ load_system_map();
 
 my $map_printk = (find_sym_system_map("printk"))[0];
 
+my @rmsyms = qw(
+	bust_spinlocks
+	task_curr
+	__kernel_text_address
+	tasklist_lock
+	stop_machine_run
+	init_mm
+	kallsyms_addresses
+	kallsyms_num_syms
+	kallsyms_names
+	kallsyms_token_table
+	kallsyms_token_index
+);
+
 print "Starting kernel builds (this process might take a long time)...\n";
 if(!$verbose) {
 	print "For output during this process, run ksplice-create with the option -v\n";
@@ -222,10 +236,9 @@ for my $module (@modules) {
 	my $ksplice_m = "ksplice-$kid_m";
 	runval("make", "modules", "KSPLICE_ID=$kid_m", "map_printk=$map_printk", "KERNELSRC=$linuxtree");
 
-	my @kallsyms_list = qw(kallsyms_addresses kallsyms_num_syms kallsyms_names kallsyms_token_table kallsyms_token_index);
-	my $relocs = runsuc("objmanip", "$ksplice_m.ko", "rmsyms", qw(bust_spinlocks task_curr __kernel_text_address tasklist_lock stop_machine_run), @kallsyms_list);
+	my $relocs = runsuc("objmanip", "$ksplice_m.ko", "rmsyms", @rmsyms);
 	parse_and_save(\&parse_relocs, $relocs, "$ksplice_m.ko", "ksplice_init_relocs", "");
-	$relocs = runsuc("objmanip", "$ksplice_m-helper.ko", "rmsyms", qw(init_mm), @kallsyms_list);
+	$relocs = runsuc("objmanip", "$ksplice_m-helper.ko", "rmsyms", @rmsyms);
 	parse_and_save(\&parse_relocs, $relocs, "$ksplice_m-helper.ko", "ksplice_init_relocs", "");
 }
 
