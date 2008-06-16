@@ -54,6 +54,7 @@ struct module_pack {
 	struct list_head *reloc_addrmaps;
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
+	int (*activate_primary)(struct module_pack *pack);
 };
 
 struct reloc_nameval {
@@ -134,7 +135,4 @@ void set_temp_myst_relocs(struct module_pack *pack, int status_val);
 #define PASTE(x,y) _PASTE(x,y)
 #define KSPLICE_UNIQ(s) PASTE(s##_,KSPLICE_ID)
 
-#define activate_primary KSPLICE_UNIQ(activate_primary)
-
 extern struct module_pack KSPLICE_UNIQ(pack);
-int activate_primary(struct module_pack *pack);

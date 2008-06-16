@@ -44,7 +44,7 @@ int init_module(void)
 
 	printk("ksplice_h: Preparing and checking %s\n", pack->name);
 
-	if (activate_helper(pack) != 0 || activate_primary(pack) != 0)
+	if (activate_helper(pack) != 0 || pack->activate_primary(pack) != 0)
 		ret = -1;
 
 	clear_list(pack->reloc_namevals, struct reloc_nameval, list);

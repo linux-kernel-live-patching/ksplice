@@ -60,6 +60,7 @@ struct module_pack KSPLICE_UNIQ(pack) = {
 	.reloc_addrmaps = &reloc_addrmaps,
 	.reloc_namevals = &reloc_namevals,
 	.safety_records = &safety_records,
+	.activate_primary = &activate_primary,
 };
 EXPORT_SYMBOL_GPL(KSPLICE_UNIQ(pack));
 
@@ -124,8 +125,6 @@ int activate_primary(struct module_pack *pack)
 	printk("ksplice: Update %s applied successfully\n", pack->name);
 	return 0;
 }
-
-EXPORT_SYMBOL(activate_primary);
 
 int resolve_patch_symbols(struct module_pack *pack)
 {
