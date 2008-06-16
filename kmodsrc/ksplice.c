@@ -41,10 +41,20 @@
 #define KSPLICE_ESP(x) ((x)->thread.rsp)
 #endif /* __ASM_X86_PROCESSOR_H */
 
-extern int safe, debug;
+#ifdef CONFIG_KALLSYMS
+#define CONFIG_KALLSYMS_VAL 1
+extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
+extern u8 kallsyms_names[];
+#else /* CONFIG_KALLSYMS */
+#define CONFIG_KALLSYMS_VAL 0
+#endif /* CONFIG_KALLSYMS */
 
 /* defined by ksplice-create */
 extern struct ksplice_reloc ksplice_init_relocs;
+
+int safe = 0;
+int debug;
+module_param(debug, int, 0600);
 
 void cleanup_ksplice_module(struct module_pack *pack)
 {
@@ -572,18 +582,6 @@ void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 		}
 	}
 }
-
-#ifdef CONFIG_KALLSYMS
-#define CONFIG_KALLSYMS_VAL 1
-extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
-extern u8 kallsyms_names[];
-#else /* CONFIG_KALLSYMS */
-#define CONFIG_KALLSYMS_VAL 0
-#endif /* CONFIG_KALLSYMS */
-
-int safe = 0;
-int debug;
-module_param(debug, int, 0600);
 
 int process_ksplice_relocs(struct module_pack *pack,
 			   struct ksplice_reloc *relocs)
