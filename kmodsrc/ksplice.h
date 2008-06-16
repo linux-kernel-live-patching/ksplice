@@ -50,7 +50,6 @@ struct module_pack {
 	struct list_head *reloc_addrmaps;
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
-	int (*activate_primary)(struct module_pack *pack);
 };
 
 struct reloc_nameval {

@@ -44,7 +44,6 @@ struct module_pack pack = {
 	.reloc_addrmaps = &reloc_addrmaps,
 	.reloc_namevals = &reloc_namevals,
 	.safety_records = &safety_records,
-	.activate_primary = &activate_primary,
 };
 
 int init_module(void)
