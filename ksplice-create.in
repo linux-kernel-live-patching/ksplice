@@ -238,8 +238,6 @@ for my $module (@modules) {
 
 	my $relocs = runsuc("objmanip", "$ksplice_m.ko", "rmsyms", @rmsyms);
 	parse_and_save(\&parse_relocs, $relocs, "$ksplice_m.ko", "ksplice_init_relocs", "");
-	$relocs = runsuc("objmanip", "$ksplice_m-helper.ko", "rmsyms", @rmsyms);
-	parse_and_save(\&parse_relocs, $relocs, "$ksplice_m-helper.ko", "ksplice_init_relocs", "");
 }
 
 runcd($tmpdir);

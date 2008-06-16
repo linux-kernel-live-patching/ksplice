@@ -24,16 +24,15 @@ MODULE_LICENSE("GPL v2");
 
 extern struct ksplice_reloc ksplice_relocs;
 extern struct ksplice_size ksplice_sizes;
-extern struct module_pack KSPLICE_UNIQ(pack);
+
+/* Defined in primary.c */
+extern int KSPLICE_UNIQ(helper_init_module) (struct ksplice_reloc *,
+					     struct ksplice_size *);
 
 int init_module(void)
 {
-	struct module_pack *pack = &KSPLICE_UNIQ(pack);
-
-	pack->helper_relocs = &ksplice_relocs;
-	pack->helper_sizes = &ksplice_sizes;
-
-	return init_ksplice_module(pack);
+	return KSPLICE_UNIQ(helper_init_module) (&ksplice_relocs,
+						 &ksplice_sizes);
 }
 
 void cleanup_module(void)

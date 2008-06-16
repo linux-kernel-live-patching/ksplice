@@ -13,7 +13,7 @@ EXTRA_CFLAGS += "-DMAP_PRINTK=((long)0x$(map_printk))"
 KSPLICE = ksplice-$(KSPLICE_ID)
 
 obj-m = $(KSPLICE)-helper.o $(KSPLICE).o
-$(KSPLICE)-helper-objs = helper.o ksplice.o collection.o.helper
+$(KSPLICE)-helper-objs = helper.o collection.o.helper
 $(KSPLICE)-objs = primary.o ksplice.o collection.o.primary
 
 else

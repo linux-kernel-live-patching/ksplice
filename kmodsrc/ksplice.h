@@ -128,12 +128,6 @@ void set_temp_myst_relocs(struct module_pack *pack, int status_val);
 		}						\
 	} while (0)
 
-#define _PASTE(x,y) x##y
-#define PASTE(x,y) _PASTE(x,y)
-#define KSPLICE_UNIQ(s) PASTE(s##_,KSPLICE_ID)
-
-extern struct module_pack KSPLICE_UNIQ(pack);
-
 int starts_with(const char *str, const char *prefix);
 int ends_with(const char *str, const char *suffix);
 int label_offset(const char *sym_name);

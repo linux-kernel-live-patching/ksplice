@@ -50,7 +50,7 @@ foreach my $helper (glob('*-helper.ko')) {
 	if(runval_raw("insmod $primary debug=$debug") != 0) {
 		die "$primary";
 	}
-	if(runval_raw("insmod $helper debug=$debug") != 0) {
+	if(runval_raw("insmod $helper") != 0) {
 		runval_raw("rmmod $primary");
 		my $dmesg = runstr("dmesg | grep ksplice");
 		while($dmesg =~ /ksplice_h: Preparing and checking/) {
