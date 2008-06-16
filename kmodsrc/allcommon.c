@@ -16,6 +16,17 @@
 
 #include "allcommon.h"
 
+int starts_with(const char *str, const char *prefix)
+{
+	return !strncmp(str, prefix, strlen(prefix));
+}
+
+int ends_with(const char *str, const char *suffix)
+{
+	return (strlen(str) > strlen(suffix)
+		&& !strcmp(&str[strlen(str) - strlen(suffix)], suffix));
+}
+
 int label_offset(const char *sym_name)
 {
 	int i;
