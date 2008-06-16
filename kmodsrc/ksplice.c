@@ -119,10 +119,12 @@ int activate_primary(struct module_pack *pack)
 	proc_entry->gid = 0;
 	proc_entry->size = 0;
 
-	for (i = 0; pack->state != KSPLICE_APPLIED && i < 5; i++) {
+	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
 		stop_machine_run(__apply_patches, pack, NR_CPUS);
 		bust_spinlocks(0);
+		if (pack->state == KSPLICE_APPLIED)
+			break;
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
@@ -174,10 +176,12 @@ int procfile_write(struct file *file, const char *buffer, unsigned long count,
 	struct module_pack *pack = data;
 	printk("ksplice: Preparing to reverse %s\n", pack->name);
 
-	for (i = 0; pack->state == KSPLICE_APPLIED && i < 5; i++) {
+	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
 		stop_machine_run(__reverse_patches, pack, NR_CPUS);
 		bust_spinlocks(0);
+		if (pack->state != KSPLICE_APPLIED)
+			break;
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
