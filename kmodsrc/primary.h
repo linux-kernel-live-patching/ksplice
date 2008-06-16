@@ -1,6 +1,6 @@
 int init_module(void);
 void cleanup_module(void);
-int ksplice_do_primary(void);
+int activate_primary(void);
 int resolve_patch_symbols(void);
 int procfile_read(char *buffer, char **buffer_location, off_t offset,
 		  int buffer_length, int *eof, void *data);

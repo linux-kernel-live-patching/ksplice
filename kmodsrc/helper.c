@@ -33,10 +33,10 @@ int init_module(void)
 {
 	printk("ksplice_h: Preparing and checking %s\n", ksplice_name);
 
-	if (ksplice_do_helper() != 0)
+	if (activate_helper() != 0)
 		return -1;
 
-	if (ksplice_do_primary() != 0)
+	if (activate_primary() != 0)
 		return -1;
 
 	return 0;
@@ -50,7 +50,7 @@ void cleanup_module(void)
 		clear_list(&safety_records, struct safety_record, list);
 }
 
-int ksplice_do_helper(void)
+int activate_helper(void)
 {
 	struct ksplice_size *s;
 	int i, record_count = 0, ret;

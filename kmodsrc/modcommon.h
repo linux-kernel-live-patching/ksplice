@@ -120,10 +120,10 @@ void set_temp_myst_relocs(int status_val);
 #define reloc_namevals KSPLICE_UNIQ(reloc_namevals)
 #define safety_records KSPLICE_UNIQ(safety_records)
 #define ksplice_state KSPLICE_UNIQ(ksplice_state)
-#define ksplice_do_primary KSPLICE_UNIQ(ksplice_do_primary)
+#define activate_primary KSPLICE_UNIQ(activate_primary)
 
 extern struct list_head reloc_addrmaps;
 extern struct list_head reloc_namevals;
 extern struct list_head safety_records;
 extern enum ksplice_state_enum ksplice_state;
-int ksplice_do_primary(void);
+int activate_primary(void);

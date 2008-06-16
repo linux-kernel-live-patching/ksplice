@@ -3,7 +3,7 @@
 
 int init_module(void);
 void cleanup_module(void);
-int ksplice_do_helper(void);
+int activate_helper(void);
 void *ksplice_kcalloc(int size);
 int search_for_match(struct ksplice_size *s, int *stage);
 int try_addr(struct ksplice_size *s, long run_addr, long pre_addr,

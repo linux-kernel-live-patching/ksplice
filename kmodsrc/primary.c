@@ -66,7 +66,7 @@ void cleanup_module(void)
 	remove_proc_entry(ksplice_name, &proc_root);
 }
 
-int ksplice_do_primary(void)
+int activate_primary(void)
 {
 	int i;
 	struct proc_dir_entry *proc_entry;
@@ -109,7 +109,7 @@ int ksplice_do_primary(void)
 	return 0;
 }
 
-EXPORT_SYMBOL(ksplice_do_primary);
+EXPORT_SYMBOL(activate_primary);
 
 int resolve_patch_symbols(void)
 {
