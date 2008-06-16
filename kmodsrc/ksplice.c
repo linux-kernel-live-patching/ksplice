@@ -734,7 +734,7 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 void compute_address(struct module_pack *pack, char *sym_name,
 		     struct list_head *vals)
 {
-	int i, have_added_val = 0;
+	int i;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
 
 	if (!safe)
@@ -743,19 +743,16 @@ void compute_address(struct module_pack *pack, char *sym_name,
 	if (!pack->helper) {
 		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
 		if (nv != NULL && nv->status != NOVAL) {
-			if (!have_added_val)
-				release_vals(vals);
-			have_added_val = 1;
+			release_vals(vals);
 			add_candidate_val(vals, nv->val);
 
 			if (debug >= 1) {
 				printk("ksplice: using detected sym %s=%08lx\n",
 				       sym_name, nv->val);
 			}
+			return;
 		}
 	}
-	if (have_added_val)
-		return;
 
 	if (starts_with(sym_name, ".rodata"))
 		return;
