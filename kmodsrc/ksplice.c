@@ -579,7 +579,7 @@ int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 		expected = run_reloc - map->addend;
 		if ((int)run_reloc == 0x77777777)
 			return 1;
-		if (map->flags & PCREL)
+		if (map->pcrel)
 			expected += run_reloc_addr;
 		if (map->nameval->status == NOVAL) {
 			map->nameval->val = expected;
@@ -677,7 +677,7 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 		map->addr = blank_addr;
 		map->nameval = find_nameval(pack, r->sym_name, 1);
 		map->addend = r->addend;
-		map->flags = r->flags;
+		map->pcrel = r->pcrel;
 		map->size = r->size;
 		list_add(&map->list, pack->reloc_addrmaps);
 		return 0;
@@ -692,7 +692,7 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 		printk("(S=%08lx A=%08lx ", sym_addr, r->addend);
 	}
 
-	if ((r->flags & PCREL) && (pack->helper && safe)) {
+	if ((r->pcrel) && (pack->helper && safe)) {
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		map->addr = blank_addr;
 		map->nameval = find_nameval(pack, "ksplice_zero", 1);
@@ -700,12 +700,12 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 		map->nameval->status = VAL;
 		map->addend = sym_addr + r->addend;
 		map->size = r->size;
-		map->flags = r->flags;
+		map->pcrel = r->pcrel;
 		list_add(&map->list, pack->reloc_addrmaps);
 
 	} else {
 		long val;
-		if (r->flags & PCREL) {
+		if (r->pcrel) {
 			val = sym_addr + r->addend - (unsigned long)blank_addr;
 		} else {
 			val = sym_addr + r->addend;

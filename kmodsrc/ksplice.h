@@ -16,7 +16,7 @@ struct ksplice_reloc {
 	long *sym_addrs;
 	long num_sect_addrs;
 	long *sect_addrs;
-	long flags;
+	int pcrel;
 	long addend;
 	long size;
 };
@@ -63,7 +63,7 @@ struct reloc_addrmap {
 	struct list_head list;
 	long addr;
 	long addend;
-	int flags;
+	int pcrel;
 	struct reloc_nameval *nameval;
 	int size;
 };
@@ -108,10 +108,6 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr);
 int handle_myst_reloc(long pre_addr, int *pre_z, long run_addr,
 		      int *run_z, struct reloc_addrmap *map, int rerun);
-
-/* ksplice_reloc flags bits */
-#define PCREL (1 << 0)
-#define SAFE (1 << 1)
 
 struct safety_record {
 	struct list_head list;
