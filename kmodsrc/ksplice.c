@@ -401,7 +401,7 @@ int activate_helper(struct module_pack *pack)
 	int i, record_count = 0, ret;
 	char *finished;
 	int numfinished, oldfinished = 0;
-	int restart_count = 0, stage = 1;
+	int restart_count = 0;
 
 	pack->helper = 1;
 
@@ -421,7 +421,7 @@ start:
 		if (finished[i])
 			continue;
 
-		ret = search_for_match(pack, s, &stage);
+		ret = search_for_match(pack, s);
 		if (ret < 0) {
 			kfree(finished);
 			return ret;
@@ -441,10 +441,6 @@ start:
 	}
 
 	if (oldfinished == numfinished) {
-		if (stage < 3) {
-			stage++;
-			goto start;
-		}
 		print_abort("run-pre: could not match some sections");
 		kfree(finished);
 		return -1;
@@ -473,8 +469,7 @@ void *ksplice_kcalloc(int size)
 }
 #endif
 
-int search_for_match(struct module_pack *pack, struct ksplice_size *s,
-		     int *stage)
+int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 {
 	int i;
 #ifdef KSPLICE_STANDALONE
@@ -489,10 +484,6 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s,
 	}
 
 	compute_address(pack, s->name, &vals);
-	if (*stage <= 1 && !singular(&vals)) {
-		release_vals(&vals);
-		return 1;
-	}
 
 	if (debug >= 3) {
 		printk("ksplice_h: run-pre: starting sect search for %s\n",
@@ -512,9 +503,6 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s,
 	release_vals(&vals);
 
 #ifdef KSPLICE_STANDALONE
-	if (*stage <= 2)
-		return 1;
-
 	saved_debug = debug;
 	debug = 0;
 	brute_search_all_mods(pack, s);

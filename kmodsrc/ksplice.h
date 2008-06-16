@@ -196,8 +196,7 @@ int valid_stack_ptr(struct thread_info *tinfo, void *p);
 
 /* helper */
 int activate_helper(struct module_pack *pack);
-int search_for_match(struct module_pack *pack, struct ksplice_size *s,
-		     int *stage);
+int search_for_match(struct module_pack *pack, struct ksplice_size *s);
 int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 	     long pre_addr, int create_nameval);
 
