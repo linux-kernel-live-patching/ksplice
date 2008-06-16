@@ -25,7 +25,7 @@
 
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
-#endif
+#endif /* task_thread_info */
 
 /* Probably wrong. */
 #ifdef __ASM_X86_PROCESSOR_H
@@ -37,7 +37,7 @@
 #elif BITS_PER_LONG == 64
 #define KSPLICE_EIP(x) (KSTK_EIP(x))
 #define KSPLICE_ESP(x) ((x)->thread.rsp)
-#endif
+#endif /* __ASM_X86_PROCESSOR_H */
 
 /* defined by modcommon.c */
 extern int debug;

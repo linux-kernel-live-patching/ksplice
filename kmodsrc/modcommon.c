@@ -22,9 +22,9 @@
 static const int CONFIG_KALLSYMS_VAL = 1;
 extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
 extern u8 kallsyms_names[];
-#else
+#else /* CONFIG_KALLSYMS */
 static const int CONFIG_KALLSYMS_VAL = 0;
-#endif
+#endif /* CONFIG_KALLSYMS */
 
 /* defined by ksplice-create */
 extern struct ksplice_reloc ksplice_init_relocs, ksplice_relocs;
@@ -202,7 +202,7 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals)
 	unsigned long i;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 	unsigned long off;
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 	const char *name = dup_wolabel(name_wlabel);
 
@@ -217,7 +217,7 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals)
 			add_candidate_val(vals, kallsyms_addresses[i]);
 		}
 	}
-#else
+#else /* LINUX_VERSION_CODE */
 	char *knames;
 
 	for (i = 0, knames = kallsyms_names; i < kallsyms_num_syms; i++) {
@@ -231,7 +231,7 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals)
 
 		knames += strlen(knames) + 1;
 	}
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 	kfree(name);
 }
