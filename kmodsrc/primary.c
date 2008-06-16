@@ -316,7 +316,7 @@ int check_address_for_conflict(long addr)
 			return -1;
 		}
 	}
-	for (; ksplice_state == KSPLICE_APPLIED && s->name != NULL; s++) {
+	for (; s->name != NULL; s++) {
 		if (addr > s->thismod_addr
 		    && addr <= (s->thismod_addr + s->size)) {
 			return -1;
