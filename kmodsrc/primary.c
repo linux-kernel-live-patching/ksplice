@@ -179,7 +179,7 @@ int __apply_patches(void *unused)
 		}
 	}
 
-	if (ksplice_on_each_task(check_task, NULL) != 0)
+	if (check_each_task() != 0)
 		return 0;
 
 	if (!try_module_get(THIS_MODULE))
@@ -203,7 +203,7 @@ int __reverse_patches(void *unused)
 	if (ksplice_state != KSPLICE_APPLIED)
 		return 0;
 
-	if (ksplice_on_each_task(check_task, NULL) != 0)
+	if (check_each_task() != 0)
 		return 0;
 
 	clear_list(&safety_records, struct safety_record, list);
@@ -222,19 +222,17 @@ int __reverse_patches(void *unused)
 	return 0;
 }
 
-/* Modified version of proposed Linux function on_each_task */
-int
-ksplice_on_each_task(int (*func) (struct task_struct * t, void *d), void *data)
+int check_each_task(void)
 {
 	struct task_struct *g, *p;
 	int status = 0;
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		if (func(p, data) != 0) {
+		if (check_task(p) != 0) {
 			if (debug == 1) {
 				debug = 2;
-				func(p, data);
+				check_task(p);
 				debug = 1;
 			}
 			status = -1;
@@ -245,7 +243,7 @@ ksplice_on_each_task(int (*func) (struct task_struct * t, void *d), void *data)
 	return status;
 }
 
-int check_task(struct task_struct *t, void *d)
+int check_task(struct task_struct *t)
 {
 	int status;
 	long addr = KSPLICE_EIP(t);
