@@ -50,6 +50,9 @@ void cleanup_module(void)
 		clear_list(&safety_records, struct safety_record, list);
 }
 
+/* old kernels do not have kcalloc */
+#define kcalloc(n, size, flags) ksplice_kcalloc(n)
+
 int activate_helper(void)
 {
 	struct ksplice_size *s;
@@ -65,8 +68,7 @@ int activate_helper(void)
 		record_count++;
 	}
 
-	/* old kernels do not have kcalloc */
-	finished = ksplice_kcalloc(record_count);
+	finished = kcalloc(record_count, 1, GFP_KERNEL);
 
 start:
 	for (s = &ksplice_sizes, i = 0; s->name != NULL; s++, i++) {
