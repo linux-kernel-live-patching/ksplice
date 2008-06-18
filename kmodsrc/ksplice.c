@@ -58,10 +58,10 @@ extern u8 kallsyms_names[];
 /* defined by ksplice-create */
 extern struct ksplice_reloc ksplice_init_relocs;
 
-static int safe = 0;
+static int bootstrapped = 0;
 
 #else /* KSPLICE_STANDALONE */
-#define safe 1			/* TODO: remove this line */
+#define bootstrapped 1		/* TODO: remove this line */
 #define KSPLICE_EIP(x) ((x)->thread.ip)
 #define KSPLICE_ESP(x) ((x)->thread.sp)
 #endif /* KSPLICE_STANDALONE */
@@ -368,7 +368,7 @@ int init_ksplice_module(struct module_pack *pack)
 #ifdef KSPLICE_STANDALONE
 	if (process_ksplice_relocs(pack, &ksplice_init_relocs) != 0)
 		return -1;
-	safe = 1;
+	bootstrapped = 1;
 #endif
 
 	printk("ksplice_h: Preparing and checking %s\n", pack->name);
@@ -636,7 +636,7 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 #define blank_addr (r->blank_sect_addr+r->blank_offset)
 
 	LIST_HEAD(vals);
-	if (CONFIG_KALLSYMS_VAL || !safe) {
+	if (CONFIG_KALLSYMS_VAL || !bootstrapped) {
 		int adjustment = (long)printk - pack->map_printk;
 		if (adjustment & 0xfffff) {
 			print_abort("System.map does not match kernel");
@@ -663,7 +663,7 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 	compute_address(pack, r->sym_name, &vals);
 	if (!singular(&vals)) {
 		release_vals(&vals);
-		if (!(pack->helper && safe)) {
+		if (!(pack->helper && bootstrapped)) {
 			failed_to_find(r->sym_name);
 			return -1;
 		}
@@ -692,7 +692,7 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 		printk("(S=%08lx A=%08lx ", sym_addr, r->addend);
 	}
 
-	if ((r->pcrel) && (pack->helper && safe)) {
+	if ((r->pcrel) && (pack->helper && bootstrapped)) {
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		map->addr = blank_addr;
 		map->nameval = find_nameval(pack, "ksplice_zero", 1);
@@ -736,7 +736,7 @@ void compute_address(struct module_pack *pack, char *sym_name,
 	int i;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
 
-	if (!safe)
+	if (!bootstrapped)
 		return;
 
 	if (!pack->helper) {
