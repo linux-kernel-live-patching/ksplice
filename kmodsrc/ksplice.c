@@ -15,6 +15,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/errno.h>
 #include <linux/kallsyms.h>
 #include <linux/kthread.h>
 #include <linux/proc_fs.h>
@@ -93,7 +94,7 @@ EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
 int activate_primary(struct module_pack *pack)
 {
-	int i;
+	int i, ret;
 	struct proc_dir_entry *proc_entry;
 
 	pack->helper = 0;
@@ -121,16 +122,17 @@ int activate_primary(struct module_pack *pack)
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
-		stop_machine_run(__apply_patches, pack, NR_CPUS);
+		ret = stop_machine_run(__apply_patches, pack, NR_CPUS);
 		bust_spinlocks(0);
-		if (pack->state == KSPLICE_APPLIED)
+		if (ret != -EAGAIN)
 			break;
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
 	if (pack->state != KSPLICE_APPLIED) {
 		remove_proc_entry(pack->name, &proc_root);
-		print_abort("stack check: to-be-replaced code is busy");
+		if (ret == -EAGAIN)
+			print_abort("stack check: to-be-replaced code is busy");
 		return -1;
 	}
 
@@ -172,20 +174,23 @@ int procfile_read(char *buffer, char **buffer_location,
 int procfile_write(struct file *file, const char *buffer, unsigned long count,
 		   void *data)
 {
-	int i;
+	int i, ret;
 	struct module_pack *pack = data;
 	printk("ksplice: Preparing to reverse %s\n", pack->name);
 
+	if (pack->state != KSPLICE_APPLIED)
+		return count;
+
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
-		stop_machine_run(__reverse_patches, pack, NR_CPUS);
+		ret = stop_machine_run(__reverse_patches, pack, NR_CPUS);
 		bust_spinlocks(0);
-		if (pack->state != KSPLICE_APPLIED)
+		if (ret != -EAGAIN)
 			break;
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (pack->state == KSPLICE_APPLIED)
+	if (ret == -EAGAIN)
 		print_abort("stack check: to-be-reversed code is busy");
 
 	return count;
@@ -205,10 +210,10 @@ int __apply_patches(void *packptr)
 	}
 
 	if (check_each_task(pack) != 0)
-		return 0;
+		return -EAGAIN;
 
 	if (!try_module_get(THIS_MODULE))
-		return 0;
+		return -ENODEV;
 
 	pack->state = KSPLICE_APPLIED;
 
@@ -229,7 +234,7 @@ int __reverse_patches(void *packptr)
 		return 0;
 
 	if (check_each_task(pack) != 0)
-		return 0;
+		return -EAGAIN;
 
 	clear_list(pack->safety_records, struct safety_record, list);
 	pack->state = KSPLICE_REVERSED;
