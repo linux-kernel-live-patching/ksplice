@@ -14,7 +14,7 @@ int main(int argc, char **argv);
 void rm_some_relocs(bfd *ibfd, asection *isection);
 void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 		 struct supersect *ss);
-int blot_section(bfd *abfd, asection *sect, int offset);
+int blot_section(bfd *abfd, asection *sect, int offset, int size);
 const char *canonical_sym(const char *sect_wlabel);
 void rm_from_special(bfd *ibfd, struct specsect *s);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);

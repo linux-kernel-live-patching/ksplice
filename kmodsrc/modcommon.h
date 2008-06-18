@@ -14,6 +14,7 @@ struct ksplice_reloc {
 	long *sect_addrs;
 	long flags;
 	long addend;
+	long size;
 };
 
 /* ksplice_reloc flags bits */
@@ -49,6 +50,7 @@ struct reloc_addrmap {
 	long addend;
 	int flags;
 	struct reloc_nameval *nameval;
+	int size;
 };
 
 struct safety_record {

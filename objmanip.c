@@ -96,6 +96,7 @@
 
 #include "objcommon.h"
 #include "objmanip.h"
+#include <stdint.h>
 
 asymbol **isympp = NULL;
 long symcount;
@@ -236,7 +237,9 @@ void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 		want_section(sym_ptr->name, &new_symname);
 
 	int addend = orig_reloc->addend;
-	int addend2 = blot_section(ibfd, isection, orig_reloc->address);
+	reloc_howto_type *howto = orig_reloc->howto;
+	int size = bfd_get_reloc_size(howto);
+	int addend2 = blot_section(ibfd, isection, orig_reloc->address, size);
 	assert(addend == 0 || addend2 == 0);
 	if (addend == 0)
 		addend = addend2;
@@ -244,14 +247,24 @@ void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 	printf("%s%s ", new_symname, addstr_all);
 	printf("%s%s%s ", canonical_sym(new_sectname), addstr_all, addstr_sect);
 	printf("%08x ", (int)orig_reloc->address);
-	printf("%d %08x\n", orig_reloc->howto->pc_relative, addend);
+	printf("%d %08x %d\n", howto->pc_relative, addend, size);
 }
 
-int blot_section(bfd *abfd, asection *sect, int offset)
+int blot_section(bfd *abfd, asection *sect, int offset, int size)
 {
 	struct supersect *ss = fetch_supersect(abfd, sect, isympp);
-	int tmp = *((int *)(ss->contents + offset));
-	*((int *)(ss->contents + offset)) = 0x77777777;
+	long address = (long)ss->contents + offset;
+	int tmp;
+	if (size == 4) {
+		tmp = *(int *)address;
+		*((int *)address) = 0x77777777;
+	} else if (size == 8) {
+		tmp = *(long long *)address;
+		*((long long *)address) = 0x7777777777777777ll;
+	} else {
+		printf("ksplice: Unsupported size %d\n", size);
+		DIE;
+	}
 	return tmp;
 }
 

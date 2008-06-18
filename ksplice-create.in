@@ -355,7 +355,7 @@ sub save_using_asm {
 
 sub parse_relocs {
 	my ($tosaveref, $entry, $globalizer) = @_;
-	my ($sym, $sect, $addr, $pcrel, $addend) = split(/\s/, $entry);
+	my ($sym, $sect, $addr, $pcrel, $addend, $size) = split(/\s/, $entry);
 
 	my ($func) = ($sect =~ /(.*)____/);
 	$sym =~ s/([.]data[.]__func__[.])\d+/$1${func}/g;
@@ -371,7 +371,8 @@ sub parse_relocs {
 			["word", scalar(@sectvals)],
 			["array", @sectvals],
 			["word", $pcrel],
-			["word", $addend]);
+			["word", $addend],
+			["word", $size]);
 }
 
 sub parse_sizelist {

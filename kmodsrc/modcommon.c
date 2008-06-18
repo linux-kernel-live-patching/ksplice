@@ -69,7 +69,9 @@ int process_reloc(struct ksplice_reloc *r)
 		}
 	}
 
-	if (*(int *)blank_addr == 0x77777777) {
+	if ((r->size == 4 && *(int *)blank_addr == 0x77777777)
+	    || (r->size == 8 &&
+		*(long long *)blank_addr == 0x7777777777777777ll)) {
 		r->flags |= SAFE;
 	}
 	if (!(r->flags & SAFE)) {
@@ -101,6 +103,7 @@ int process_reloc(struct ksplice_reloc *r)
 		map->nameval = find_nameval(r->sym_name, 1);
 		map->addend = r->addend;
 		map->flags = r->flags;
+		map->size = r->size;
 		list_add(&map->list, &reloc_addrmaps);
 		return 0;
 	}
@@ -121,16 +124,33 @@ int process_reloc(struct ksplice_reloc *r)
 		map->nameval->status = VAL;
 		map->addend = sym_addr + r->addend;
 		map->flags = r->flags;
+		map->size = r->size;
 		list_add(&map->list, &reloc_addrmaps);
 
-	} else if ((r->flags & PCREL) && !(helper && safe)) {
-		*(int *)blank_addr =
-		    sym_addr + r->addend - (unsigned long)blank_addr;
 	} else {
-		*(int *)blank_addr = sym_addr + r->addend;
+		long val;
+		if (r->flags & PCREL) {
+			val = sym_addr + r->addend - (unsigned long)blank_addr;
+		} else {
+			val = sym_addr + r->addend;
+		}
+		if (r->size == 4) {
+			*(int *)blank_addr = val;
+		} else if (r->size == 8) {
+			*(long long *)blank_addr = val;
+		} else {
+			BUG();
+		}
 	}
-	if (debug >= 4)
-		printk("aft=%08x)\n", *(int *)blank_addr);
+	if (debug >= 4) {
+		if (r->size == 4) {
+			printk("aft=%08x)\n", *(int *)blank_addr);
+		} else if (r->size == 8) {
+			printk("aft=%016llx)\n", *(long long *)blank_addr);
+		} else {
+			BUG();
+		}
+	}
 	return 0;
 }
 
@@ -344,7 +364,7 @@ struct reloc_addrmap *find_addrmap(long addr)
 	struct reloc_addrmap *map;
 	list_for_each(pos, &reloc_addrmaps) {
 		map = list_entry(pos, struct reloc_addrmap, list);
-		if (addr >= map->addr && addr <= map->addr + 3) {
+		if (addr >= map->addr && addr < map->addr + map->size) {
 			return map;
 		}
 	}

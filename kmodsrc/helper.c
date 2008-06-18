@@ -294,22 +294,31 @@ handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 {
 	int expected;
 	int offset = (int)(pre_addr + *pre_o - map->addr);
-	int run_reloc = *(int *)(run_addr + *run_o - offset);
+	long run_reloc;
+	long run_reloc_addr;
+	run_reloc_addr = run_addr + *run_o - offset;
+	if (map->size == 4) {
+		run_reloc = *(int *)run_reloc_addr;
+	} else if (map->size == 8) {
+		run_reloc = *(long long *)run_reloc_addr;
+	} else {
+		BUG();
+	}
 
 	if (debug >= 3 && !rerun) {
 		printk("ksplice_h: run-pre: reloc at r_a=%08lx p_o=%08x: ",
 		       run_addr, *pre_o);
-		printk("%s=%08lx (A=%08lx *r=%08x)\n",
+		printk("%s=%08lx (A=%08lx *r=%08lx)\n",
 		       map->nameval->name, map->nameval->val,
 		       map->addend, run_reloc);
 	}
 
 	if (!starts_with(map->nameval->name, ".rodata.str")) {
 		expected = run_reloc - map->addend;
-		if (run_reloc == 0x77777777)
+		if ((int)run_reloc == 0x77777777)
 			return 1;
 		if (map->flags & PCREL)
-			expected += run_addr + *run_o - offset;
+			expected += run_reloc_addr;
 		if (map->nameval->status == NOVAL) {
 			map->nameval->val = expected;
 			map->nameval->status = TEMP;
@@ -322,8 +331,8 @@ handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 		}
 	}
 
-	*pre_o += 4 - offset - 1;
-	*run_o += 4 - offset - 1;
+	*pre_o += map->size - offset - 1;
+	*run_o += map->size - offset - 1;
 	return 0;
 }
 
