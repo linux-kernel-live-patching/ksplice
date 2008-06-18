@@ -335,14 +335,16 @@ handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 int match_nop(long addr, int *o)
 {
 	int i, j;
+	struct insn *nop;
 	for (i = NUM_NOPS - 1; i >= 0; i--) {
-		for (j = 0; j < i + 1; j++) {
+		nop = &nops[i];
+		for (j = 0; j < nop->len; j++) {
 			if (!virtual_address_mapped(addr + *o + j))
 				break;
-			if (*(unsigned char *)(addr + *o + j) != nops[i][j])
+			if (*(unsigned char *)(addr + *o + j) != nop->data[j])
 				break;
 		}
-		if (j == i + 1) {
+		if (j == nop->len) {
 			*o += j;
 			return 1;
 		}
