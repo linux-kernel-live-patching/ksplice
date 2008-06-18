@@ -143,15 +143,23 @@ int activate_primary(struct module_pack *pack)
 int resolve_patch_symbols(struct module_pack *pack)
 {
 	struct ksplice_patch *p;
+	int ret;
 	LIST_HEAD(vals);
 
 	for (p = pack->patches; p->oldstr; p++) {
-		p->saved = kmalloc(5, GFP_KERNEL);
+		if ((p->saved = kmalloc(5, GFP_KERNEL)) == NULL) {
+			print_abort("out of memory");
+			return -ENOMEM;
+		}
 
-		if (p->oldaddr != 0)
-			add_candidate_val(&vals, p->oldaddr);
+		if (p->oldaddr != 0) {
+			if ((ret = add_candidate_val(&vals, p->oldaddr)) < 0)
+				return ret;
+		}
 
-		compute_address(pack, p->oldstr, &vals);
+		if ((ret = compute_address(pack, p->oldstr, &vals)) < 0)
+			return ret;
+
 		if (!singular(&vals)) {
 			release_vals(&vals);
 			failed_to_find(p->oldstr);
@@ -209,7 +217,7 @@ int __apply_patches(void *packptr)
 		}
 	}
 
-	if (check_each_task(pack) != 0)
+	if (check_each_task(pack) < 0)
 		return -EAGAIN;
 
 	if (!try_module_get(THIS_MODULE))
@@ -233,7 +241,7 @@ int __reverse_patches(void *packptr)
 	if (pack->state != KSPLICE_APPLIED)
 		return 0;
 
-	if (check_each_task(pack) != 0)
+	if (check_each_task(pack) < 0)
 		return -EAGAIN;
 
 	clear_list(pack->safety_records, struct safety_record, list);
@@ -259,7 +267,7 @@ int check_each_task(struct module_pack *pack)
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		if (check_task(pack, p) != 0) {
+		if (check_task(pack, p) < 0) {
 			if (debug == 1) {
 				debug = 2;
 				check_task(pack, p);
@@ -412,6 +420,10 @@ int activate_helper(struct module_pack *pack)
 		record_count++;
 
 	finished = kcalloc(record_count, 1, GFP_KERNEL);
+	if (finished == NULL) {
+		print_abort("out of memory");
+		return -ENOMEM;
+	}
 
 start:
 	for (s = pack->helper_sizes, i = 0; s->name != NULL; s++, i++) {
@@ -424,7 +436,7 @@ start:
 		if (ret < 0) {
 			kfree(finished);
 			return ret;
-		} else if (ret == 0) {
+		} else if (ret > 0) {
 			finished[i] = 1;
 		}
 	}
@@ -460,16 +472,15 @@ start:
 void *ksplice_kcalloc(int size)
 {
 	char *mem = kmalloc(size, GFP_KERNEL);
-	int i;
-	for (i = 0; i < size; i++)
-		mem[i] = 0;
+	if (mem)
+		memset(mem, 0, size);
 	return mem;
 }
 #endif
 
 int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 {
-	int i;
+	int i, ret;
 #ifdef KSPLICE_STANDALONE
 	int saved_debug;
 #endif
@@ -477,24 +488,27 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 	LIST_HEAD(vals);
 	struct candidate_val *v;
 
-	for (i = 0; i < s->num_sym_addrs; i++)
-		add_candidate_val(&vals, s->sym_addrs[i]);
+	for (i = 0; i < s->num_sym_addrs; i++) {
+		if ((ret = add_candidate_val(&vals, s->sym_addrs[i])) < 0)
+			return ret;
+	}
 
-	compute_address(pack, s->name, &vals);
+	if ((ret = compute_address(pack, s->name, &vals)) < 0)
+		return ret;
 
-	if (debug >= 3) {
+	if (debug >= 3)
 		printk("ksplice_h: run-pre: starting sect search for %s\n",
 		       s->name);
-	}
 
 	list_for_each_entry(v, &vals, list) {
 		run_addr = v->val;
 
 		yield();
-		if (try_addr
-		    (pack, s, run_addr, s->thismod_addr, !singular(&vals))) {
+		if ((ret = try_addr(pack, s, run_addr, s->thismod_addr,
+				    !singular(&vals))) != 0) {
+			/* we've encountered a match (> 0) or an error (< 0) */
 			release_vals(&vals);
-			return 0;
+			return ret;
 		}
 	}
 	release_vals(&vals);
@@ -505,7 +519,7 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 	brute_search_all_mods(pack, s);
 	debug = saved_debug;
 #endif
-	return 1;
+	return 0;
 }
 
 int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
@@ -531,7 +545,10 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 			printk("ksplice_h: run-pre: found sect %s=%08lx\n",
 			       s->name, run_addr);
 
-		tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
+		if ((tmp = kmalloc(sizeof(*tmp), GFP_KERNEL)) == NULL) {
+			print_abort("out of memory");
+			return -ENOMEM;
+		}
 		tmp->addr = run_addr;
 		tmp->size = s->size;
 		tmp->care = 0;
@@ -540,6 +557,8 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 		if (create_nameval) {
 			struct reloc_nameval *nv =
 			    find_nameval(pack, s->name, 1);
+			if (nv == NULL)
+				return -ENOMEM;
 			nv->val = run_addr;
 			nv->status = VAL;
 		}
@@ -626,7 +645,7 @@ int process_ksplice_relocs(struct module_pack *pack,
 
 int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 {
-	int i;
+	int i, ret;
 	long sym_addr;
 	struct reloc_addrmap *map;
 
@@ -639,8 +658,12 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 			print_abort("System.map does not match kernel");
 			return -1;
 		}
-		for (i = 0; i < r->num_sym_addrs; i++)
-			add_candidate_val(&vals, r->sym_addrs[i] + adjustment);
+		for (i = 0; i < r->num_sym_addrs; i++) {
+			ret = add_candidate_val(&vals,
+						r->sym_addrs[i] + adjustment);
+			if (ret < 0)
+				return ret;
+		}
 	}
 
 	if ((r->size == 4 && *(int *)blank_addr != 0x77777777)
@@ -655,7 +678,8 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 		return 0;
 	}
 
-	compute_address(pack, r->sym_name, &vals);
+	if ((ret = compute_address(pack, r->sym_name, &vals)) < 0)
+		return ret;
 	if (!singular(&vals)) {
 		release_vals(&vals);
 		if (!(pack->helper && bootstrapped)) {
@@ -667,9 +691,14 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 			printk("ksplice: reloc: deferred %s:%08lx to run-pre\n",
 			       r->sym_name, r->blank_offset);
 
-		map = kmalloc(sizeof(*map), GFP_KERNEL);
+		if ((map = kmalloc(sizeof(*map), GFP_KERNEL)) == NULL) {
+			print_abort("out of memory");
+			return -ENOMEM;
+		}
 		map->addr = blank_addr;
 		map->nameval = find_nameval(pack, r->sym_name, 1);
+		if (map->nameval == NULL)
+			return -ENOMEM;
 		map->addend = r->addend;
 		map->pcrel = r->pcrel;
 		map->size = r->size;
@@ -687,9 +716,14 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 	}
 
 	if ((r->pcrel) && (pack->helper && bootstrapped)) {
-		map = kmalloc(sizeof(*map), GFP_KERNEL);
+		if ((map = kmalloc(sizeof(*map), GFP_KERNEL)) == NULL) {
+			print_abort("out of memory");
+			return -ENOMEM;
+		}
 		map->addr = blank_addr;
 		map->nameval = find_nameval(pack, "ksplice_zero", 1);
+		if (map->nameval == NULL)
+			return -ENOMEM;
 		map->nameval->val = 0;
 		map->nameval->status = VAL;
 		map->addend = sym_addr + r->addend;
@@ -721,48 +755,56 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 	return 0;
 }
 
-void compute_address(struct module_pack *pack, char *sym_name,
-		     struct list_head *vals)
+int compute_address(struct module_pack *pack, char *sym_name,
+		    struct list_head *vals)
 {
-	int i;
+	int i, ret;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
 
 	if (!bootstrapped)
-		return;
+		return 0;
 
 	if (!pack->helper) {
 		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
 		if (nv != NULL && nv->status != NOVAL) {
 			release_vals(vals);
-			add_candidate_val(vals, nv->val);
+			if ((ret = add_candidate_val(vals, nv->val)) < 0)
+				return ret;
 
 			if (debug >= 1)
 				printk("ksplice: using detected sym %s=%08lx\n",
 				       sym_name, nv->val);
-			return;
+			return 0;
 		}
 	}
 
 	if (starts_with(sym_name, ".rodata"))
-		return;
+		return 0;
 
 #ifdef CONFIG_KALLSYMS
-	kernel_lookup(sym_name, vals);
-	other_module_lookup(sym_name, vals, pack->name);
+	if ((ret = kernel_lookup(sym_name, vals)) < 0)
+		return ret;
+	if ((ret = other_module_lookup(sym_name, vals, pack->name)) < 0)
+		return ret;
 #endif
 
 	for (i = 0; prefix[i] != NULL; i++) {
-		if (starts_with(sym_name, prefix[i]))
-			compute_address(pack, sym_name + strlen(prefix[i]),
-					vals);
+		if (starts_with(sym_name, prefix[i])) {
+			ret = compute_address(pack, sym_name +
+					      strlen(prefix[i]), vals);
+			if (ret < 0)
+				return ret;
+		}
 	}
+	return 0;
 }
 
 #ifdef KSPLICE_STANDALONE
 #ifdef CONFIG_KALLSYMS
 /* Modified version of Linux's kallsyms_lookup_name */
-void kernel_lookup(const char *name_wlabel, struct list_head *vals)
+int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 {
+	int ret;
 	char namebuf[KSYM_NAME_LEN + 1];
 	unsigned long i;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
@@ -770,6 +812,8 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals)
 #endif /* LINUX_VERSION_CODE */
 
 	const char *name = dup_wolabel(name_wlabel);
+	if (name == NULL)
+		return -ENOMEM;
 
 /*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
  *  2.6.10 was the first release after this commit
@@ -778,8 +822,11 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals)
 	for (i = 0, off = 0; i < kallsyms_num_syms; i++) {
 		off = ksplice_kallsyms_expand_symbol(off, namebuf);
 
-		if (strcmp(namebuf, name) == 0)
-			add_candidate_val(vals, kallsyms_addresses[i]);
+		if (strcmp(namebuf, name) == 0) {
+			ret = add_candidate_val(vals, kallsyms_addresses[i]);
+			if (ret < 0)
+				return ret;
+		}
 	}
 #else /* LINUX_VERSION_CODE */
 	char *knames;
@@ -789,14 +836,18 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals)
 
 		strlcpy(namebuf + prefix, knames, KSYM_NAME_LEN - prefix);
 
-		if (strcmp(namebuf, name) == 0)
-			add_candidate_val(vals, kallsyms_addresses[i]);
+		if (strcmp(namebuf, name) == 0) {
+			ret = add_candidate_val(vals, kallsyms_addresses[i]);
+			if (ret < 0)
+				return ret;
+		}
 
 		knames += strlen(knames) + 1;
 	}
 #endif /* LINUX_VERSION_CODE */
 
 	kfree(name);
+	return 0;
 }
 
 /*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
@@ -838,28 +889,34 @@ long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 }
 #endif /* LINUX_VERSION_CODE */
 
-void other_module_lookup(const char *name_wlabel, struct list_head *vals,
-			 const char *ksplice_name)
+int other_module_lookup(const char *name_wlabel, struct list_head *vals,
+			const char *ksplice_name)
 {
+	int ret;
 	struct module *m;
 	const char *name = dup_wolabel(name_wlabel);
+	if (name == NULL)
+		return -ENOMEM;
 
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
-		    && !ends_with(m->name, "_helper"))
-			ksplice_mod_find_sym(m, name, vals);
+		    && !ends_with(m->name, "_helper")) {
+			if ((ret = ksplice_mod_find_sym(m, name, vals)) < 0)
+				return ret;
+		}
 	}
 
 	kfree(name);
+	return 0;
 }
 
 /* Modified version of Linux's mod_find_symname */
-void
+int
 ksplice_mod_find_sym(struct module *m, const char *name, struct list_head *vals)
 {
-	int i;
+	int i, ret;
 	if (strlen(m->name) <= 1)
-		return;
+		return 0;
 
 	for (i = 0; i < m->num_symtab; i++) {
 		const char *cursym_name = m->strtab + m->symtab[i].st_name;
@@ -867,11 +924,17 @@ ksplice_mod_find_sym(struct module *m, const char *name, struct list_head *vals)
 			continue;
 
 		cursym_name = dup_wolabel(cursym_name);
+		if (cursym_name == NULL)
+			return -ENOMEM;
 		if (strcmp(cursym_name, name) == 0 &&
-		    m->symtab[i].st_value != 0)
-			add_candidate_val(vals, m->symtab[i].st_value);
+		    m->symtab[i].st_value != 0) {
+			ret = add_candidate_val(vals, m->symtab[i].st_value);
+			if (ret < 0)
+				return ret;
+		}
 		kfree(cursym_name);
 	}
+	return 0;
 }
 #endif /* CONFIG_KALLSYMS */
 #else /* KSPLICE_STANDALONE */
@@ -880,56 +943,80 @@ struct accumulate_struct {
 	struct list_head *vals;
 };
 
-void accumulate_matching_names(void *data, const char *sym_name, long sym_val)
+int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 {
+	int ret;
 	struct accumulate_struct *acc = data;
 
 	if (strncmp(sym_name, acc->desired_name, strlen(acc->desired_name)) !=
 	    0)
-		return;
+		return 0;
 
 	sym_name = dup_wolabel(sym_name);
+	if (sym_name == NULL)
+		return -ENOMEM;
 	/* TODO: possibly remove "&& sym_val != 0" */
-	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0)
-		add_candidate_val(acc->vals, sym_val);
+	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0) {
+		if ((ret = add_candidate_val(acc->vals, sym_val)) < 0)
+			return ret;
+	}
 	kfree(sym_name);
+	return 0;
 }
 
-void kernel_lookup(const char *name_wlabel, struct list_head *vals)
+int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 {
+	int ret;
 	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
-	kallsyms_on_each_symbol(accumulate_matching_names, &acc);
+	if (acc.desired_name == NULL)
+		return -ENOMEM;
+	if ((ret = kallsyms_on_each_symbol(accumulate_matching_names, &acc)) <
+	    0)
+		return ret;
 	kfree(acc.desired_name);
+	return 0;
 }
 
-void other_module_lookup(const char *name_wlabel, struct list_head *vals,
-			 const char *ksplice_name)
+int other_module_lookup(const char *name_wlabel, struct list_head *vals,
+			const char *ksplice_name)
 {
+	int ret;
 	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
 	struct module *m;
 
+	if (acc.desired_name == NULL)
+		return -ENOMEM;
+
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
-		    && !ends_with(m->name, "_helper"))
-			module_on_each_symbol(m, accumulate_matching_names,
-					      &acc);
+		    && !ends_with(m->name, "_helper")) {
+			if ((ret = module_on_each_symbol(m,
+							 accumulate_matching_names,
+							 &acc)) < 0)
+				return ret;
+		}
 	}
 
 	kfree(acc.desired_name);
+	return 0;
 }
 #endif /* KSPLICE_STANDALONE */
 
-void add_candidate_val(struct list_head *vals, long val)
+int add_candidate_val(struct list_head *vals, long val)
 {
 	struct candidate_val *tmp, *new;
 
 	list_for_each_entry(tmp, vals, list) {
 		if (tmp->val == val)
-			return;
+			return 0;
 	}
-	new = kmalloc(sizeof(*new), GFP_KERNEL);
+	if ((new = kmalloc(sizeof(*new), GFP_KERNEL)) == NULL) {
+		print_abort("out of memory");
+		return -ENOMEM;
+	}
 	new->val = val;
 	list_add(&new->list, vals);
+	return 0;
 }
 
 void release_vals(struct list_head *vals)
@@ -952,7 +1039,10 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 	if (!create)
 		return NULL;
 
-	new = kmalloc(sizeof(*new), GFP_KERNEL);
+	if ((new = kmalloc(sizeof(*new), GFP_KERNEL)) == NULL) {
+		print_abort("out of memory");
+		return NULL;
+	}
 	new->name = name;
 	new->val = 0;
 	new->status = NOVAL;
@@ -1016,7 +1106,10 @@ const char *dup_wolabel(const char *sym_name)
 
 	entire_strlen = strlen(sym_name);
 	new_strlen = entire_strlen - label_strlen;
-	newstr = kmalloc(new_strlen + 1, GFP_KERNEL);
+	if ((newstr = kmalloc(new_strlen + 1, GFP_KERNEL)) == NULL) {
+		print_abort("out of memory");
+		return NULL;
+	}
 	memcpy(newstr, sym_name, new_strlen);
 	newstr[new_strlen] = 0;
 	return newstr;

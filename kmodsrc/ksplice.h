@@ -134,25 +134,25 @@ static inline void print_abort(const char *str)
 int process_ksplice_relocs(struct module_pack *pack,
 			   struct ksplice_reloc *relocs);
 int process_reloc(struct module_pack *pack, struct ksplice_reloc *r);
-void compute_address(struct module_pack *pack, char *sym_name,
-		     struct list_head *vals);
+int compute_address(struct module_pack *pack, char *sym_name,
+		    struct list_head *vals);
 
 #ifndef KSPLICE_STANDALONE
-void accumulate_matching_names(void *data, const char *sym_name, long sym_val);
+int accumulate_matching_names(void *data, const char *sym_name, long sym_val);
 #endif
 
 #ifdef CONFIG_KALLSYMS
 #if defined KSPLICE_STANDALONE && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 long ksplice_kallsyms_expand_symbol(unsigned long off, char *result);
 #endif
-void kernel_lookup(const char *name_wlabel, struct list_head *vals);
-void other_module_lookup(const char *name_wlabel, struct list_head *vals,
-			 const char *ksplice_name);
-void ksplice_mod_find_sym(struct module *m, const char *name,
-			  struct list_head *vals);
+int kernel_lookup(const char *name_wlabel, struct list_head *vals);
+int other_module_lookup(const char *name_wlabel, struct list_head *vals,
+			const char *ksplice_name);
+int ksplice_mod_find_sym(struct module *m, const char *name,
+			 struct list_head *vals);
 #endif
 
-void add_candidate_val(struct list_head *vals, long val);
+int add_candidate_val(struct list_head *vals, long val);
 void release_vals(struct list_head *vals);
 void set_temp_myst_relocs(struct module_pack *pack, int status_val);
 int starts_with(const char *str, const char *prefix);
