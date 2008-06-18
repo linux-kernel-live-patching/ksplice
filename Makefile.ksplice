@@ -15,6 +15,8 @@ quiet_cmd_ksplice-snap = SNAP    $(@:.KSPLICE=)
 cmd_ksplice-snap = $(ksplice-script) snap $@
 quiet_cmd_ksplice-diff = DIFF    $(@:.KSPLICE=)
 cmd_ksplice-diff = $(ksplice-script) diff $@
+quiet_cmd_ksplice-ignore = IGNORE  $(@:.KSPLICE=)
+cmd_ksplice-ignore = touch $@
 quiet_cmd_ksplice-cow = COW     $@
 cmd_ksplice-cow = cp -a $@ $@.KSPLICE_pre
 rule_ksplice-mod = $(Q)if [ -s $< ]; then echo $(<:.o.KSPLICE=) > $@; elif [ -e $@ ]; then rm -f $@; fi
@@ -76,6 +78,9 @@ else
 $(obj)/%.o.KSPLICE: $(obj)/%.o
 	$(call cmd,ksplice-diff)
 endif
+
+$(obj)/%.lds.KSPLICE:
+	$(call cmd,ksplice-ignore)
 
 $(sort $(subdir-obj-y:=.KSPLICE)): $(ksplice-dirs) ;
 
