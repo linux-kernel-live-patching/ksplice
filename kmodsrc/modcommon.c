@@ -255,15 +255,6 @@ long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 }
 #endif /* LINUX_VERSION_CODE */
 
-void this_module_lookup(const char *name, struct list_head *vals)
-{
-	ksplice_mod_find_sym(THIS_MODULE, name, vals);
-	if (list_empty(vals) && starts_with(name, ".text.")) {
-		ksplice_mod_find_sym(THIS_MODULE, name + strlen(".text."),
-				     vals);
-	}
-}
-
 void other_module_lookup(const char *name_wlabel, struct list_head *vals)
 {
 	struct module *m;

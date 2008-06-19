@@ -86,7 +86,6 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 long ksplice_kallsyms_expand_symbol(unsigned long off, char *result);
 #endif
-void this_module_lookup(const char *name, struct list_head *vals);
 void other_module_lookup(const char *name_wlabel, struct list_head *vals);
 void ksplice_mod_find_sym(struct module *m, const char *name,
 			  struct list_head *vals);
