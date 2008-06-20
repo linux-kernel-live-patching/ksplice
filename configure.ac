@@ -1,4 +1,4 @@
-AC_INIT(Ksplice, 0.8.6, ksplice@mit.edu)
+AC_INIT(Ksplice, 0.8.7, ksplice@mit.edu)
 
 dnl The author of Ksplice learned how to configure libbfd by looking at
 dnl elf2flt, which is available under the GNU General Public License.
