@@ -212,15 +212,14 @@ try_addr(struct ksplice_size *s, long run_addr, long pre_addr,
 
 int run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
 {
-	int run_o, pre_o, lenient = 0, prev_c3 = 0, recent_5b = 0;
+	int run_o = 0, pre_o = 0, lenient = 0, prev_c3 = 0, recent_5b = 0;
 	unsigned char run, pre;
 	struct reloc_addrmap *map;
 
 	if (size == 0)
 		return 1;
 
-	for (run_o = 0, pre_o = 0; run_o < size && pre_o < size;
-	     pre_o++, run_o++) {
+	while (run_o < size && pre_o < size) {
 		if (lenient > 0)
 			lenient--;
 		if (prev_c3 > 0)
@@ -230,31 +229,6 @@ int run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
 
 		if (!virtual_address_mapped(run_addr + run_o))
 			return 1;
-		run = *(unsigned char *)(run_addr + run_o);
-		pre = *(unsigned char *)(pre_addr + pre_o);
-
-		if (rerun)
-			printk("%02x/%02x ", run, pre);
-
-		if (run == pre) {
-			if ((map = find_addrmap(pre_addr + pre_o)) != NULL) {
-				if (handle_myst_reloc
-				    (pre_addr, &pre_o, run_addr, &run_o,
-				     map, rerun) == 1)
-					return 1;
-				continue;
-			}
-			if (pre == 0xc3)
-				prev_c3 = 1 + 1;
-			if (pre == 0x5b)
-				recent_5b = 10 + 1;
-			if (jumplen[pre])
-				lenient = max(jumplen[pre] + 1, lenient);
-			if (match_nop(run_addr, &run_o, &pre_o) ||
-			    match_nop(pre_addr, &pre_o, &run_o))
-				continue;
-			continue;
-		}
 
 		if ((map = find_addrmap(pre_addr + pre_o)) != NULL) {
 			if (handle_myst_reloc
@@ -263,18 +237,38 @@ int run_pre_cmp(long run_addr, long pre_addr, int size, int rerun)
 				return 1;
 			continue;
 		}
-		if (prev_c3 && recent_5b)
-			return 0;
-		if (match_nop(run_addr, &run_o, &pre_o) ||
-		    match_nop(pre_addr, &pre_o, &run_o))
+
+		if (match_nop(run_addr, &run_o) || match_nop(pre_addr, &pre_o))
 			continue;
-		if (jumplen[run] && jumplen[pre]) {
-			run_o += jumplen[run];
-			pre_o += jumplen[pre];
+
+		run = *(unsigned char *)(run_addr + run_o);
+		pre = *(unsigned char *)(pre_addr + pre_o);
+
+		if (rerun)
+			printk("%02x/%02x ", run, pre);
+
+		if (run == pre) {
+			if (pre == 0xc3)
+				prev_c3 = 1 + 1;
+			if (pre == 0x5b)
+				recent_5b = 10 + 1;
+			if (jumplen[pre])
+				lenient = max(jumplen[pre] + 1, lenient);
+			pre_o++, run_o++;
 			continue;
 		}
-		if (lenient)
+
+		if (prev_c3 && recent_5b)
+			return 0;
+		if (jumplen[run] && jumplen[pre]) {
+			run_o += 1 + jumplen[run];
+			pre_o += 1 + jumplen[pre];
 			continue;
+		}
+		if (lenient) {
+			pre_o++, run_o++;
+			continue;
+		}
 		if (rerun) {
 			printk("[p_o=%08x] ! %02x/%02x %02x/%02x",
 			       pre_o,
@@ -331,14 +325,14 @@ handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 		}
 	}
 
-	*pre_o += map->size - offset - 1;
-	*run_o += map->size - offset - 1;
+	*pre_o += map->size - offset;
+	*run_o += map->size - offset;
 	return 0;
 }
 
 /* TODO: The recommended way to pad 64bit code is to use NOPs preceded by
    maximally four 0x66 prefixes.  */
-int match_nop(long addr, int *o, int *other_o)
+int match_nop(long addr, int *o)
 {
 	int i, j;
 	for (i = NUM_NOPS - 1; i >= 0; i--) {
@@ -349,8 +343,7 @@ int match_nop(long addr, int *o, int *other_o)
 				break;
 		}
 		if (j == i + 1) {
-			*o += i;
-			(*other_o)--;
+			*o += j;
 			return 1;
 		}
 

@@ -11,7 +11,7 @@ int try_addr(struct ksplice_size *s, long run_addr, long pre_addr,
 int run_pre_cmp(long run_addr, long pre_addr, int size, int rerun);
 int handle_myst_reloc(long pre_addr, int *pre_z, long run_addr,
 		      int *run_z, struct reloc_addrmap *map, int rerun);
-int match_nop(long addr, int *main_o, int *other_o);
+int match_nop(long addr, int *main_o);
 void brute_search_all_mods(struct ksplice_size *s);
 
 static inline int virtual_address_mapped(long addr)
