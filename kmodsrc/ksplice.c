@@ -371,9 +371,6 @@ int valid_stack_ptr(struct thread_info *tinfo, void *p)
 	    && p <= (void *)tinfo + THREAD_SIZE - sizeof(long);
 }
 
-#undef max
-#define max(a, b) ((a) > (b) ? (a) : (b))
-
 int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
