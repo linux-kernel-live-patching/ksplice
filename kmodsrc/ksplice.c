@@ -292,9 +292,8 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 		printk(KERN_DEBUG "ksplice: stack check: pid %d (%s) eip %08lx",
 		       t->pid, t->comm, KSPLICE_EIP(t));
 		if (conflict)
-			printk(" [<-- CONFLICT]: ");
-		else
-			printk(": ");
+			printk(" [<-- CONFLICT]");
+		printk(": ");
 	}
 	if (t == current) {
 		status =
@@ -305,14 +304,15 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 		    check_stack(pack, task_thread_info(t),
 				(long *)KSPLICE_ESP(t));
 	} else if (strcmp(t->comm, "kstopmachine") == 0) {
-		if (debug >= 2)
-			printk("\n");
-		return 0;
+		status = 0;
 	} else {
 		if (debug >= 2)
-			printk("unexpected running task!\n");
-		return -1;
+			printk("unexpected running task!");
+		status = -1;
 	}
+
+	if (debug >= 2)
+		printk("\n");
 
 	if (conflict)
 		status = -1;
@@ -339,8 +339,6 @@ int check_stack(struct module_pack *pack, struct thread_info *tinfo,
 			}
 		}
 	}
-	if (debug >= 2)
-		printk("\n");
 
 	return status;
 }
