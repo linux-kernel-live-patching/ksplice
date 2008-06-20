@@ -330,8 +330,6 @@ handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 	return 0;
 }
 
-/* TODO: The recommended way to pad 64bit code is to use NOPs preceded by
-   maximally four 0x66 prefixes.  */
 int match_nop(long addr, int *o)
 {
 	int i, j;

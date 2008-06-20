@@ -15,7 +15,7 @@ struct insn {
 	}
 static struct insn nops[] = {
 /* GNU assembler no-op patterns from
-   binutils-2.17/gas/config/tc-i386.c */
+   binutils-2.17/gas/config/tc-i386.c line 500 */
 I(0x90),					/* nop                  */
 I(0x89, 0xf6),					/* movl %esi,%esi       */
 I(0x8d, 0x76, 0x00),				/* leal 0(%esi),%esi    */
@@ -41,8 +41,19 @@ I(0x8d, 0xb4, 0x26, 0x00, 0x00, 0x00, 0x00,	/* leal 0L(%esi,1),%esi */
 I(0xeb, 0x0d, 0x90, 0x90, 0x90, 0x90, 0x90,	/* jmp .+15; lotsa nops */
   0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90),
 
-/* binutils-2.18/gas/config/tc-i386.c */
+/* binutils-2.17/gas/config/tc-i386.c line 570 */
 I(0x66, 0x90),					/* xchg %ax,%ax         */
+I(0x66,						/* data16               */
+  0x66, 0x90),					/* xchg %ax,%ax         */
+I(0x66,						/* data16               */
+  0x66,						/* data16               */
+  0x66, 0x90),					/* xchg %ax,%ax         */
+I(0x66,						/* data16               */
+  0x66,						/* data16               */
+  0x66,						/* data16               */
+  0x66, 0x90),					/* xchg %ax,%ax         */
+
+/* binutils-2.18/gas/config/tc-i386.c line 572 */
 I(0x0f, 0x1f, 0x00),				/* nopl (%[re]ax)       */
 I(0x0f, 0x1f, 0x40, 0x00),			/* nopl 0(%[re]ax)      */
 I(0x0f, 0x1f, 0x44, 0x00, 0x00),	/* nopl 0(%[re]ax,%[re]ax,1)    */
