@@ -183,9 +183,8 @@ int main(int argc, char **argv)
 			rm_some_relocs(ibfd, p);
 	}
 
-	for (i = 0; mode("keep") && special_sections[i].sectname != NULL; i++) {
+	for (i = 0; mode("keep") && special_sections[i].sectname != NULL; i++)
 		rm_from_special(ibfd, &special_sections[i]);
-	}
 
 	copy_object(ibfd, obfd);
 	assert(bfd_close(obfd));
@@ -215,11 +214,10 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 		if (mode("keep-primary") && want_section(sym_ptr->name, NULL))
 			rm_reloc = 0;
 
-		if (rm_reloc) {
+		if (rm_reloc)
 			print_reloc(ibfd, isection, orig_relocs[i], ss);
-		} else {
+		else
 			ss->relocs[ss->num_relocs++] = orig_relocs[i];
-		}
 	}
 }
 
@@ -285,9 +283,8 @@ const char *canonical_sym(const char *sect_wlabel)
 
 		if (strlen(isympp[i]->name) != 0 &&
 		    !starts_with(isympp[i]->name, ".text") &&
-		    strcmp(cur_sectname, sect) == 0 && isympp[i]->value == 0) {
+		    strcmp(cur_sectname, sect) == 0 && isympp[i]->value == 0)
 			return isympp[i]->name;
-		}
 	}
 	printf("ksplice: Failed to canonicalize %s\n", sect);
 	DIE;
@@ -306,13 +303,12 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 	memcpy(orig_relocs, ss->relocs, ss->num_relocs * sizeof(*orig_relocs));
 
 	assert(align(ss->contents_size, 4) % s->entry_size == 0);
-	if (s->odd_relocs) {
+	if (s->odd_relocs)
 		assert(align(ss->contents_size, 4) / s->entry_size ==
 		       ss->num_relocs / 2);
-	} else {
+	else
 		assert(align(ss->contents_size, 4) / s->entry_size ==
 		       ss->num_relocs);
-	}
 
 	int orig_num_relocs = ss->num_relocs;
 	ss->num_relocs = 0;
@@ -490,10 +486,9 @@ void copy_section(bfd *ibfd, asection *isection, void *obfdarg)
 		      ss->num_relocs == 0 ? NULL : ss->relocs, ss->num_relocs);
 
 	if (bfd_get_section_flags(ibfd, isection) & SEC_HAS_CONTENTS
-	    && bfd_get_section_flags(obfd, osection) & SEC_HAS_CONTENTS) {
+	    && bfd_get_section_flags(obfd, osection) & SEC_HAS_CONTENTS)
 		assert(bfd_set_section_contents
 		       (obfd, osection, ss->contents, 0, ss->contents_size));
-	}
 }
 
 /* Modified function from GNU Binutils objcopy.c
@@ -654,9 +649,8 @@ int want_section(const char *name, char **newname)
 		goto success;
 	if (mode("keep-helper") && starts_with(name, ".text"))
 		goto success;
-	if (match_varargs(name)) {
+	if (match_varargs(name))
 		goto success;
-	}
 
 	int i;
 	for (i = 0; static_want[i] != NULL; i++) {
@@ -680,9 +674,8 @@ struct specsect *is_special(const char *name)
 {
 	int i;
 	for (i = 0; special_sections[i].sectname != NULL; i++) {
-		if (strcmp(special_sections[i].sectname, name) == 0) {
+		if (strcmp(special_sections[i].sectname, name) == 0)
 			return &special_sections[i];
-		}
 	}
 	return NULL;
 }

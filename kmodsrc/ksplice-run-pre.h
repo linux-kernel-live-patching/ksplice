@@ -196,14 +196,13 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 			pre_o++, run_o++;
 			continue;
 		}
-		if (rerun) {
+		if (rerun)
 			printk("[p_o=%08x] ! %02x/%02x %02x/%02x",
 			       pre_o,
 			       *(unsigned char *)(run_addr + run_o + 1),
 			       *(unsigned char *)(pre_addr + pre_o + 1),
 			       *(unsigned char *)(run_addr + run_o + 2),
 			       *(unsigned char *)(pre_addr + pre_o + 2));
-		}
 		return 1;
 	}
 	return 0;

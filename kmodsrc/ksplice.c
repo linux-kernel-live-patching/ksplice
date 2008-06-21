@@ -199,9 +199,8 @@ int __apply_patches(void *packptr)
 
 	list_for_each_entry(rec, pack->safety_records, list) {
 		for (p = pack->patches; p->oldstr; p++) {
-			if (p->oldaddr == rec->addr) {
+			if (p->oldaddr == rec->addr)
 				rec->care = 1;
-			}
 		}
 	}
 
@@ -337,15 +336,13 @@ int check_address_for_conflict(struct module_pack *pack, long addr)
 
 	list_for_each_entry(rec, pack->safety_records, list) {
 		if (rec->care == 1 && addr > rec->addr
-		    && addr <= (rec->addr + rec->size)) {
+		    && addr <= (rec->addr + rec->size))
 			return -1;
-		}
 	}
 	for (; s->name != NULL; s++) {
 		if (addr > s->thismod_addr
-		    && addr <= (s->thismod_addr + s->size)) {
+		    && addr <= (s->thismod_addr + s->size))
 			return -1;
-		}
 	}
 
 	return 0;
@@ -406,9 +403,8 @@ int activate_helper(struct module_pack *pack)
 	if (process_ksplice_relocs(pack, pack->helper_relocs) != 0)
 		return -1;
 
-	for (s = pack->helper_sizes; s->name != NULL; s++) {
+	for (s = pack->helper_sizes; s->name != NULL; s++)
 		record_count++;
-	}
 
 	finished = kcalloc(record_count, 1, GFP_KERNEL);
 
@@ -460,9 +456,8 @@ void *ksplice_kcalloc(int size)
 {
 	char *mem = kmalloc(size, GFP_KERNEL);
 	int i;
-	for (i = 0; i < size; i++) {
+	for (i = 0; i < size; i++)
 		mem[i] = 0;
-	}
 	return mem;
 }
 #endif
@@ -477,9 +472,8 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 	LIST_HEAD(vals);
 	struct candidate_val *v;
 
-	for (i = 0; i < s->num_sym_addrs; i++) {
+	for (i = 0; i < s->num_sym_addrs; i++)
 		add_candidate_val(&vals, s->sym_addrs[i]);
-	}
 
 	compute_address(pack, s->name, &vals);
 
@@ -528,10 +522,9 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 	} else {
 		set_temp_myst_relocs(pack, VAL);
 
-		if (debug >= 3) {
+		if (debug >= 3)
 			printk("ksplice_h: run-pre: found sect %s=%08lx\n",
 			       s->name, run_addr);
-		}
 
 		tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
 		tmp->addr = run_addr;
@@ -559,13 +552,12 @@ int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 	long run_reloc = 0;
 	long run_reloc_addr;
 	run_reloc_addr = run_addr + *run_o - offset;
-	if (map->size == 4) {
+	if (map->size == 4)
 		run_reloc = *(int *)run_reloc_addr;
-	} else if (map->size == 8) {
+	else if (map->size == 8)
 		run_reloc = *(long long *)run_reloc_addr;
-	} else {
+	else
 		BUG();
-	}
 
 	if (debug >= 3 && !rerun) {
 		printk("ksplice_h: run-pre: reloc at r_a=%08lx p_o=%08x: ",
@@ -642,20 +634,18 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 			print_abort("System.map does not match kernel");
 			return -1;
 		}
-		for (i = 0; i < r->num_sym_addrs; i++) {
+		for (i = 0; i < r->num_sym_addrs; i++)
 			add_candidate_val(&vals, r->sym_addrs[i] + adjustment);
-		}
 	}
 
 	if ((r->size == 4 && *(int *)blank_addr != 0x77777777)
 	    || (r->size == 8 &&
 		*(long long *)blank_addr != 0x7777777777777777ll)) {
-		if (debug >= 4) {
+		if (debug >= 4)
 			printk
 			    ("ksplice%s: reloc: skipped %s:%08lx (altinstr)\n",
 			     (pack->helper ? "_h" : ""), r->sym_name,
 			     r->blank_offset);
-		}
 		release_vals(&vals);
 		return 0;
 	}
@@ -668,10 +658,9 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 			return -1;
 		}
 
-		if (debug >= 4) {
+		if (debug >= 4)
 			printk("ksplice: reloc: deferred %s:%08lx to run-pre\n",
 			       r->sym_name, r->blank_offset);
-		}
 
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		map->addr = blank_addr;
@@ -705,27 +694,24 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 
 	} else {
 		long val;
-		if (r->pcrel) {
+		if (r->pcrel)
 			val = sym_addr + r->addend - (unsigned long)blank_addr;
-		} else {
+		else
 			val = sym_addr + r->addend;
-		}
-		if (r->size == 4) {
+		if (r->size == 4)
 			*(int *)blank_addr = val;
-		} else if (r->size == 8) {
+		else if (r->size == 8)
 			*(long long *)blank_addr = val;
-		} else {
+		else
 			BUG();
-		}
 	}
 	if (debug >= 4) {
-		if (r->size == 4) {
+		if (r->size == 4)
 			printk("aft=%08x)\n", *(int *)blank_addr);
-		} else if (r->size == 8) {
+		else if (r->size == 8)
 			printk("aft=%016llx)\n", *(long long *)blank_addr);
-		} else {
+		else
 			BUG();
-		}
 	}
 	return 0;
 }
@@ -745,10 +731,9 @@ void compute_address(struct module_pack *pack, char *sym_name,
 			release_vals(vals);
 			add_candidate_val(vals, nv->val);
 
-			if (debug >= 1) {
+			if (debug >= 1)
 				printk("ksplice: using detected sym %s=%08lx\n",
 				       sym_name, nv->val);
-			}
 			return;
 		}
 	}
@@ -762,10 +747,9 @@ void compute_address(struct module_pack *pack, char *sym_name,
 #endif
 
 	for (i = 0; prefix[i] != NULL; i++) {
-		if (starts_with(sym_name, prefix[i])) {
+		if (starts_with(sym_name, prefix[i]))
 			compute_address(pack, sym_name + strlen(prefix[i]),
 					vals);
-		}
 	}
 }
 
@@ -789,9 +773,8 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals)
 	for (i = 0, off = 0; i < kallsyms_num_syms; i++) {
 		off = ksplice_kallsyms_expand_symbol(off, namebuf);
 
-		if (strcmp(namebuf, name) == 0) {
+		if (strcmp(namebuf, name) == 0)
 			add_candidate_val(vals, kallsyms_addresses[i]);
-		}
 	}
 #else /* LINUX_VERSION_CODE */
 	char *knames;
@@ -801,9 +784,8 @@ void kernel_lookup(const char *name_wlabel, struct list_head *vals)
 
 		strlcpy(namebuf + prefix, knames, KSYM_NAME_LEN - prefix);
 
-		if (strcmp(namebuf, name) == 0) {
+		if (strcmp(namebuf, name) == 0)
 			add_candidate_val(vals, kallsyms_addresses[i]);
-		}
 
 		knames += strlen(knames) + 1;
 	}
@@ -859,9 +841,8 @@ void other_module_lookup(const char *name_wlabel, struct list_head *vals,
 
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
-		    && !ends_with(m->name, "_helper")) {
+		    && !ends_with(m->name, "_helper"))
 			ksplice_mod_find_sym(m, name, vals);
-		}
 	}
 
 	kfree(name);
@@ -882,10 +863,8 @@ ksplice_mod_find_sym(struct module *m, const char *name, struct list_head *vals)
 
 		cursym_name = dup_wolabel(cursym_name);
 		if (strcmp(cursym_name, name) == 0 &&
-		    m->symtab[i].st_value != 0) {
-
+		    m->symtab[i].st_value != 0)
 			add_candidate_val(vals, m->symtab[i].st_value);
-		}
 		kfree(cursym_name);
 	}
 }
@@ -906,9 +885,8 @@ void accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 
 	sym_name = dup_wolabel(sym_name);
 	/* TODO: possibly remove "&& sym_val != 0" */
-	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0) {
+	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0)
 		add_candidate_val(acc->vals, sym_val);
-	}
 	kfree(sym_name);
 }
 
@@ -927,10 +905,9 @@ void other_module_lookup(const char *name_wlabel, struct list_head *vals,
 
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
-		    && !ends_with(m->name, "_helper")) {
+		    && !ends_with(m->name, "_helper"))
 			module_on_each_symbol(m, accumulate_matching_names,
 					      &acc);
-		}
 	}
 
 	kfree(acc.desired_name);
@@ -962,12 +939,10 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 	char *newname;
 	list_for_each_entry(nv, pack->reloc_namevals, list) {
 		newname = nv->name;
-		if (starts_with(newname, ".text.")) {
+		if (starts_with(newname, ".text."))
 			newname += 6;
-		}
-		if (strcmp(newname, name) == 0) {
+		if (strcmp(newname, name) == 0)
 			return nv;
-		}
 	}
 	if (!create)
 		return NULL;
@@ -984,9 +959,8 @@ struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr)
 {
 	struct reloc_addrmap *map;
 	list_for_each_entry(map, pack->reloc_addrmaps, list) {
-		if (addr >= map->addr && addr < map->addr + map->size) {
+		if (addr >= map->addr && addr < map->addr + map->size)
 			return map;
-		}
 	}
 	return NULL;
 }
@@ -995,9 +969,8 @@ void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 {
 	struct reloc_nameval *nv;
 	list_for_each_entry(nv, pack->reloc_namevals, list) {
-		if (nv->status == TEMP) {
+		if (nv->status == TEMP)
 			nv->status = status_val;
-		}
 	}
 }
 
@@ -1019,9 +992,8 @@ int label_offset(const char *sym_name)
 	     sym_name[i] != 0 && sym_name[i + 1] != 0 && sym_name[i + 2] != 0
 	     && sym_name[i + 3] != 0; i++) {
 		if (sym_name[i] == '_' && sym_name[i + 1] == '_'
-		    && sym_name[i + 2] == '_' && sym_name[i + 3] == '_') {
+		    && sym_name[i + 2] == '_' && sym_name[i + 3] == '_')
 			return i + 4;
-		}
 	}
 	return -1;
 }
@@ -1032,11 +1004,10 @@ const char *dup_wolabel(const char *sym_name)
 	char *newstr;
 
 	offset = label_offset(sym_name);
-	if (offset == -1) {
+	if (offset == -1)
 		label_strlen = 0;
-	} else {
+	else
 		label_strlen = strlen(&sym_name[offset]) + strlen("____");
-	}
 
 	entire_strlen = strlen(sym_name);
 	new_strlen = entire_strlen - label_strlen;

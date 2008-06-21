@@ -155,8 +155,7 @@ void print_newbfd_entry_symbols(asection *sect)
 	for (i = 0; i < new_symcount; i++) {
 		if (strlen(new_sympp[i]->name) != 0 &&
 		    !starts_with(new_sympp[i]->name, ".text") &&
-		    strcmp(new_sympp[i]->section->name, sect->name) == 0) {
+		    strcmp(new_sympp[i]->section->name, sect->name) == 0)
 			printf("%s ", new_sympp[i]->name);
-		}
 	}
 }

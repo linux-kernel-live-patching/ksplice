@@ -36,9 +36,8 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp)
 
 	struct supersect *ss;
 	for (ss = supersects; ss != NULL; ss = ss->next) {
-		if (strcmp(sect->name, ss->name) == 0 && ss->parent == abfd) {
+		if (strcmp(sect->name, ss->name) == 0 && ss->parent == abfd)
 			return ss;
-		}
 	}
 
 	struct supersect *new = malloc(sizeof(*new));
@@ -69,9 +68,8 @@ int label_offset(const char *sym_name)
 	     sym_name[i] != 0 && sym_name[i + 1] != 0 && sym_name[i + 2] != 0
 	     && sym_name[i + 3] != 0; i++) {
 		if (sym_name[i] == '_' && sym_name[i + 1] == '_'
-		    && sym_name[i + 2] == '_' && sym_name[i + 3] == '_') {
+		    && sym_name[i + 2] == '_' && sym_name[i + 3] == '_')
 			return i + 4;
-		}
 	}
 	return -1;
 }
@@ -90,11 +88,10 @@ const char *dup_wolabel(const char *sym_name)
 	char *newstr;
 
 	offset = label_offset(sym_name);
-	if (offset == -1) {
+	if (offset == -1)
 		label_strlen = 0;
-	} else {
+	else
 		label_strlen = strlen(&sym_name[offset]) + strlen("____");
-	}
 
 	entire_strlen = strlen(sym_name);
 	new_strlen = entire_strlen - label_strlen;
