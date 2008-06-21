@@ -11,7 +11,6 @@ Binary installation instructions:
 Notable Runtime Dependencies:
  - gcc
  - perl
- - rsync
  - patch
 
 For more information about Ksplice, please see <http://web.mit.edu/ksplice>.

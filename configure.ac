@@ -73,15 +73,8 @@ fi
 
 AC_PROG_SED
 
-AC_PATH_PROG(RSYNC, rsync)
 AC_PATH_PROG(PATCH, patch)
 AC_PATH_PROG(POD2MAN, pod2man)
-if test "$RSYNC" = ""; then
-  echo
-  echo "Ksplice could not locate rsync on your system."
-  echo
-  exit 1
-fi
 if test "$PATCH" = ""; then
   echo
   echo "Ksplice could not locate patch on your system."

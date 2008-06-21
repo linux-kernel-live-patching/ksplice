@@ -12,7 +12,6 @@ Installation instructions:
 Notable Runtime Dependencies:
  - gcc
  - perl
- - rsync
  - patch
 
 Notable Build Dependencies:

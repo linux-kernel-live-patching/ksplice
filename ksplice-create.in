@@ -207,7 +207,7 @@ for my $module (@modules) {
 		       "ksplice_relocs", "_global");
 
 	runcd($tmpdir);
-	runval("rsync", "-a", "--delete", "--", "$datadir/kmodsrc/", "kmodsrc-$module/");
+	runval("cp", "-a", "--", "$datadir/kmodsrc", "kmodsrc-$module");
 	runval("mv", "collect/$module.o.KSPLICE_primary", "kmodsrc-$module/collection.o.primary");
 	runval("mv", "collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
 	runcd("kmodsrc-$module");
