@@ -159,7 +159,8 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 		if (!virtual_address_mapped(run_addr + run_o))
 			return 1;
 
-		if ((map = find_addrmap(pack, pre_addr + pre_o)) != NULL) {
+		map = find_addrmap(pack, pre_addr + pre_o);
+		if (map != NULL) {
 			if (handle_myst_reloc
 			    (pre_addr, &pre_o, run_addr, &run_o, map,
 			     rerun) == 1)
