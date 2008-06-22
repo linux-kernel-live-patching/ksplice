@@ -22,7 +22,12 @@
 #include <linux/sched.h>
 #include <linux/stop_machine.h>
 #include <linux/time.h>
+#ifdef KSPLICE_STANDALONE
+/* linux/uaccess.h doesn't exist in kernels before 2.6.18 */
 #include <asm/uaccess.h>
+#else
+#include <linux/uaccess.h>
+#endif
 #include "ksplice.h"
 #ifdef KSPLICE_STANDALONE
 #include <linux/version.h>
