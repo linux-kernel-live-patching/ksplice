@@ -131,6 +131,9 @@ static inline void print_abort(const char *str)
 	printk(KERN_ERR "ksplice: Aborted. (%s)\n", str);
 }
 
+#define ksplice_debug(level, fmt, ...) \
+	do { if (debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
+
 int process_ksplice_relocs(struct module_pack *pack,
 			   struct ksplice_reloc *relocs);
 int process_reloc(struct module_pack *pack, struct ksplice_reloc *r);
