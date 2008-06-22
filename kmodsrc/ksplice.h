@@ -217,6 +217,12 @@ int check_stack(struct module_pack *pack, struct thread_info *tinfo,
 		long *stack);
 int check_address_for_conflict(struct module_pack *pack, long addr);
 int valid_stack_ptr(struct thread_info *tinfo, void *p);
+int add_dependency_on_address(struct module_pack *pack, long addr);
+int add_patch_dependencies(struct module_pack *pack);
+#ifdef KSPLICE_STANDALONE
+struct module *module_text_address(unsigned long addr);
+int use_module(struct module *a, struct module *b);
+#endif
 
 /* helper */
 int activate_helper(struct module_pack *pack);

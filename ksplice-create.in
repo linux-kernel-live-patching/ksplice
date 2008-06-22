@@ -532,14 +532,6 @@ to-be-applied source code patch is specified using B<--diffext>.
 
 =head1 BUGS
 
-In this Ksplice version, Ksplice kernel modules do not enforce dependencies.
-For example, if you patch a Linux kernel module using Ksplice, you are
-responsible for ensuring that you do not remove that module from the kernel
-until after you have reversed the Ksplice update.  (If you try to reverse a
-Ksplice update after you have already removed the relevant module from the
-kernel, this version of Ksplice will write to memory addresses that are no
-longer occupied by that module).
-
 Please report bugs to <PACKAGE_BUGREPORT>.
 
 =head1 SEE ALSO

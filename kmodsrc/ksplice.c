@@ -100,6 +100,11 @@ int activate_primary(struct module_pack *pack)
 	if (resolve_patch_symbols(pack) != 0)
 		return -1;
 
+#ifdef CONFIG_MODULE_UNLOAD
+	if (add_patch_dependencies(pack) != 0)
+		return -1;
+#endif
+
 	proc_entry = create_proc_entry(pack->name, 0644, NULL);
 	if (proc_entry == NULL) {
 		print_abort("primary module: could not create proc entry");
@@ -202,6 +207,9 @@ int procfile_write(struct file *file, const char *buffer, unsigned long count,
 	else if (ret == 0)
 		printk(KERN_INFO "ksplice: Update %s reversed successfully\n",
 		       pack->name);
+	else if (ret == -EBUSY)
+		printk(KERN_ERR "ksplice: Update module %s is in use by "
+		       "another module\n", pack->name);
 
 	return count;
 }
@@ -242,6 +250,11 @@ int __reverse_patches(void *packptr)
 
 	if (pack->state != KSPLICE_APPLIED)
 		return 0;
+
+#ifdef CONFIG_MODULE_UNLOAD
+	if (module_refcount(pack->primary) != 2)
+		return -EBUSY;
+#endif
 
 	if (check_each_task(pack) < 0)
 		return -EAGAIN;
@@ -677,6 +690,14 @@ skip_using_system_map:
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
 
+#ifdef CONFIG_MODULE_UNLOAD
+	if (!pre) {
+		ret = add_dependency_on_address(pack, sym_addr);
+		if (ret < 0)
+			return ret;
+	}
+#endif
+
 #ifdef KSPLICE_STANDALONE
 	if (r->pcrel && run_pre_reloc) {
 #else
@@ -723,6 +744,107 @@ skip_using_system_map:
 		BUG();
 	return 0;
 }
+
+#ifdef CONFIG_MODULE_UNLOAD
+int add_dependency_on_address(struct module_pack *pack, long addr)
+{
+	struct module *m;
+	int ret = 0;
+	mutex_lock(&module_mutex);
+	m = module_text_address(addr);
+	if (m == NULL || starts_with(m->name, pack->name) ||
+	    ends_with(m->name, "_helper"))
+		ret = 0;
+	else if (use_module(pack->primary, m) != 1)
+		ret = -EBUSY;
+	mutex_unlock(&module_mutex);
+	return ret;
+}
+
+int add_patch_dependencies(struct module_pack *pack)
+{
+	int ret;
+	struct ksplice_patch *p;
+	for (p = pack->patches; p->oldstr; p++) {
+		ret = add_dependency_on_address(pack, p->oldaddr);
+		if (ret < 0)
+			return ret;
+	}
+	return 0;
+}
+
+#ifdef KSPLICE_STANDALONE
+/* Essentially, code from module.c; we use directly use_module and module_text_address */
+struct module *module_text_address(unsigned long addr)
+{
+	struct module *m;
+	list_for_each_entry(m, &modules, list) {
+		if ((addr >= (unsigned long)m->module_core &&
+		     addr < (unsigned long)m->module_core + m->core_size) ||
+		    (addr >= (unsigned long)m->module_init &&
+		     addr < (unsigned long)m->module_init + m->init_size))
+			return m;
+	}
+	return NULL;
+}
+
+struct module_use {
+	struct list_head list;
+	struct module *module_which_uses;
+};
+
+/* I'm not yet certain whether we need the strong form of this. */
+static inline int strong_try_module_get(struct module *mod)
+{
+	if (mod && mod->state != MODULE_STATE_LIVE)
+		return -EBUSY;
+	if (try_module_get(mod))
+		return 0;
+	return -ENOENT;
+}
+
+/* Does a already use b? */
+static int already_uses(struct module *a, struct module *b)
+{
+	struct module_use *use;
+	list_for_each_entry(use, &b->modules_which_use_me, list) {
+		if (use->module_which_uses == a)
+			return 1;
+	}
+	return 0;
+}
+
+/* Make it so module a uses b.  Must be holding module_mutex */
+int use_module(struct module *a, struct module *b)
+{
+	struct module_use *use;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
+/* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
+	int no_warn;
+#endif
+	if (b == NULL || already_uses(a, b))
+		return 1;
+
+	if (strong_try_module_get(b) < 0)
+		return 0;
+
+	ksplice_debug(4, "Allocating new usage for %s.\n", a->name);
+	use = kmalloc(sizeof(*use), GFP_ATOMIC);
+	if (!use) {
+		printk("%s: out of memory adding dependencies\n", a->name);
+		module_put(b);
+		return 0;
+	}
+	use->module_which_uses = a;
+	list_add(&use->list, &b->modules_which_use_me);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
+	/* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
+	no_warn = sysfs_create_link(b->holders_dir, &a->mkobj.kobj, a->name);
+#endif
+	return 1;
+}
+#endif /* KSPLICE_STANDALONE */
+#endif /* CONFIG_MODULE_UNLOAD */
 
 int compute_address(struct module_pack *pack, char *sym_name,
 		    struct list_head *vals, int pre)
