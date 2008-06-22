@@ -33,6 +33,9 @@
 
 #ifdef KSPLICE_STANDALONE
 
+/* Old kernels do not have kcalloc */
+#define kcalloc(n, size, flags) ksplice_kcalloc(n)
+
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
 #endif /* task_thread_info */
@@ -49,11 +52,8 @@
 #endif /* __ASM_X86_PROCESSOR_H */
 
 #ifdef CONFIG_KALLSYMS
-#define CONFIG_KALLSYMS_VAL 1
 extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
 extern u8 kallsyms_names[];
-#else /* CONFIG_KALLSYMS */
-#define CONFIG_KALLSYMS_VAL 0
 #endif /* CONFIG_KALLSYMS */
 
 /* defined by ksplice-create */
@@ -70,27 +70,12 @@ static int bootstrapped = 0;
 static int debug;
 module_param(debug, int, 0600);
 
-#ifndef KSPLICE_STANDALONE
 /* THIS_MODULE everywhere is wrong! */
-
-int init_module(void)
-{
-	return 0;
-}
-
-void cleanup_module(void)
-{
-}
-#endif
 
 void cleanup_ksplice_module(struct module_pack *pack)
 {
 	remove_proc_entry(pack->name, &proc_root);
 }
-
-#ifndef KSPLICE_STANDALONE
-EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
-#endif
 
 int activate_primary(struct module_pack *pack)
 {
@@ -361,7 +346,6 @@ int valid_stack_ptr(struct thread_info *tinfo, void *p)
 int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
-
 #ifdef KSPLICE_STANDALONE
 	if (process_ksplice_relocs(pack, &ksplice_init_relocs) != 0)
 		return -1;
@@ -380,15 +364,6 @@ int init_ksplice_module(struct module_pack *pack)
 
 	return ret;
 }
-
-#ifndef KSPLICE_STANDALONE
-EXPORT_SYMBOL_GPL(init_ksplice_module);
-#endif
-
-#ifdef KSPLICE_STANDALONE
-/* old kernels do not have kcalloc */
-#define kcalloc(n, size, flags) ksplice_kcalloc(n)
-#endif
 
 int activate_helper(struct module_pack *pack)
 {
@@ -453,17 +428,6 @@ start:
 	kfree(finished);
 	return -1;
 }
-
-#ifdef KSPLICE_STANDALONE
-/* old kernels do not have kcalloc */
-void *ksplice_kcalloc(int size)
-{
-	char *mem = kmalloc(size, GFP_KERNEL);
-	if (mem)
-		memset(mem, 0, size);
-	return mem;
-}
-#endif
 
 int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 {
@@ -598,24 +562,6 @@ int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 	return 0;
 }
 
-#ifdef KSPLICE_STANDALONE
-void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
-{
-	struct module *m;
-	list_for_each_entry(m, &(THIS_MODULE->list), list) {
-		if (!starts_with(m->name, pack->name)
-		    && !ends_with(m->name, "_helper")) {
-			if (brute_search(pack, s, m->module_core, m->core_size)
-			    == 0)
-				return;
-			if (brute_search(pack, s, m->module_init, m->init_size)
-			    == 0)
-				return;
-		}
-	}
-}
-#endif
-
 int process_ksplice_relocs(struct module_pack *pack,
 			   struct ksplice_reloc *relocs)
 {
@@ -630,24 +576,28 @@ int process_ksplice_relocs(struct module_pack *pack,
 int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 {
 	int i, ret;
-	long sym_addr;
+	long adj, sym_addr;
 	struct reloc_addrmap *map;
-
-#define blank_addr (r->blank_sect_addr+r->blank_offset)
-
+	const long blank_addr = r->blank_sect_addr + r->blank_offset;
 	LIST_HEAD(vals);
-	if (CONFIG_KALLSYMS_VAL || !bootstrapped) {
-		int adj = (long)printk - pack->map_printk;
-		if (adj & 0xfffff) {
-			print_abort("System.map does not match kernel");
-			return -1;
-		}
-		for (i = 0; i < r->num_sym_addrs; i++) {
-			ret = add_candidate_val(&vals, r->sym_addrs[i] + adj);
-			if (ret < 0)
-				return ret;
-		}
+
+#ifndef CONFIG_KALLSYMS
+	if (bootstrapped)
+		goto skip_using_system_map;
+#endif
+	adj = (long)printk - pack->map_printk;
+	if (adj & 0xfffff) {
+		print_abort("System.map does not match kernel");
+		return -1;
 	}
+	for (i = 0; i < r->num_sym_addrs; i++) {
+		ret = add_candidate_val(&vals, r->sym_addrs[i] + adj);
+		if (ret < 0)
+			return ret;
+	}
+#ifndef CONFIG_KALLSYMS
+skip_using_system_map:
+#endif
 
 	if ((r->size == 4 && *(int *)blank_addr != 0x77777777)
 	    || (r->size == 8 &&
@@ -707,7 +657,7 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 	} else {
 		long val;
 		if (r->pcrel)
-			val = sym_addr + r->addend - (unsigned long)blank_addr;
+			val = sym_addr + r->addend - blank_addr;
 		else
 			val = sym_addr + r->addend;
 		if (r->size == 4)
@@ -773,6 +723,31 @@ int compute_address(struct module_pack *pack, char *sym_name,
 }
 
 #ifdef KSPLICE_STANDALONE
+void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
+{
+	struct module *m;
+	list_for_each_entry(m, &(THIS_MODULE->list), list) {
+		if (!starts_with(m->name, pack->name)
+		    && !ends_with(m->name, "_helper")) {
+			if (brute_search(pack, s, m->module_core, m->core_size)
+			    == 0)
+				return;
+			if (brute_search(pack, s, m->module_init, m->init_size)
+			    == 0)
+				return;
+		}
+	}
+}
+
+/* old kernels do not have kcalloc */
+void *ksplice_kcalloc(int size)
+{
+	char *mem = kmalloc(size, GFP_KERNEL);
+	if (mem)
+		memset(mem, 0, size);
+	return mem;
+}
+
 #ifdef CONFIG_KALLSYMS
 /* Modified version of Linux's kallsyms_lookup_name */
 int kernel_lookup(const char *name_wlabel, struct list_head *vals)
@@ -911,10 +886,22 @@ ksplice_mod_find_sym(struct module *m, const char *name, struct list_head *vals)
 }
 #endif /* CONFIG_KALLSYMS */
 #else /* KSPLICE_STANDALONE */
+EXPORT_SYMBOL_GPL(init_ksplice_module);
+EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
+
 struct accumulate_struct {
 	const char *desired_name;
 	struct list_head *vals;
 };
+
+int init_module(void)
+{
+	return 0;
+}
+
+void cleanup_module(void)
+{
+}
 
 int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 {
