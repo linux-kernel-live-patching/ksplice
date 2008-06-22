@@ -123,8 +123,8 @@ struct candidate_val {
 
 #define singular(list) (!list_empty(list) && (list)->next->next == (list))
 #define failed_to_find(sym_name) \
-		printk(KERN_ERR "ksplice: Failed to find symbol %s at %s:%d\n", \
-		sym_name, __FILE__, __LINE__)
+	printk(KERN_ERR "ksplice: Failed to find symbol %s at %s:%d\n", \
+	       sym_name, __FILE__, __LINE__)
 
 static inline void print_abort(const char *str)
 {
