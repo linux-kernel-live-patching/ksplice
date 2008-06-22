@@ -71,8 +71,12 @@ struct reloc_addrmap {
 static inline int virtual_address_mapped(long addr)
 {
 	pgd_t *pgd;
-#if defined(pud_page)
+#ifndef KSPLICE_STANDALONE
 	pud_t *pud;
+#else
+#ifdef pud_page
+	pud_t *pud;
+#endif
 #endif
 	pmd_t *pmd;
 	pte_t *ptep;
@@ -84,11 +88,16 @@ static inline int virtual_address_mapped(long addr)
 	if (pgd_none(*pgd))
 		return 0;
 
-#if defined(pud_page)
+#ifndef KSPLICE_STANDALONE
+	pud = pud_offset(pgd, addr);
+	pmd = pmd_offset(pud, addr);
+#else
+#ifdef pud_page
 	pud = pud_offset(pgd, addr);
 	pmd = pmd_offset(pud, addr);
 #else
 	pmd = pmd_offset(pgd, addr);
+#endif
 #endif
 
 	if (pmd_none(*pmd))
@@ -145,8 +154,10 @@ int accumulate_matching_names(void *data, const char *sym_name, long sym_val);
 #endif
 
 #ifdef CONFIG_KALLSYMS
-#if defined KSPLICE_STANDALONE && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+#ifdef KSPLICE_STANDALONE
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 long ksplice_kallsyms_expand_symbol(unsigned long off, char *result);
+#endif
 #endif
 int kernel_lookup(const char *name_wlabel, struct list_head *vals);
 int other_module_lookup(const char *name_wlabel, struct list_head *vals,
