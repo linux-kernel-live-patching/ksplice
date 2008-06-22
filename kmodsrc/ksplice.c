@@ -133,17 +133,20 @@ int resolve_patch_symbols(struct module_pack *pack)
 	LIST_HEAD(vals);
 
 	for (p = pack->patches; p->oldstr; p++) {
-		if ((p->saved = kmalloc(5, GFP_KERNEL)) == NULL) {
+		p->saved = kmalloc(5, GFP_KERNEL);
+		if (p->saved == NULL) {
 			print_abort("out of memory");
 			return -ENOMEM;
 		}
 
 		if (p->oldaddr != 0) {
-			if ((ret = add_candidate_val(&vals, p->oldaddr)) < 0)
+			ret = add_candidate_val(&vals, p->oldaddr);
+			if (ret < 0)
 				return ret;
 		}
 
-		if ((ret = compute_address(pack, p->oldstr, &vals)) < 0)
+		ret = compute_address(pack, p->oldstr, &vals);
+		if (ret < 0)
 			return ret;
 
 		if (!singular(&vals)) {
@@ -440,11 +443,13 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 	struct candidate_val *v;
 
 	for (i = 0; i < s->num_sym_addrs; i++) {
-		if ((ret = add_candidate_val(&vals, s->sym_addrs[i])) < 0)
+		ret = add_candidate_val(&vals, s->sym_addrs[i]);
+		if (ret < 0)
 			return ret;
 	}
 
-	if ((ret = compute_address(pack, s->name, &vals)) < 0)
+	ret = compute_address(pack, s->name, &vals);
+	if (ret < 0)
 		return ret;
 
 	ksplice_debug(3, KERN_DEBUG "ksplice_h: run-pre: starting sect search "
@@ -454,8 +459,9 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 		run_addr = v->val;
 
 		yield();
-		if ((ret = try_addr(pack, s, run_addr, s->thismod_addr,
-				    !singular(&vals))) != 0) {
+		ret = try_addr(pack, s, run_addr, s->thismod_addr,
+			       !singular(&vals));
+		if (ret != 0) {
 			/* we've encountered a match (> 0) or an error (< 0) */
 			release_vals(&vals);
 			return ret;
@@ -494,7 +500,8 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 		ksplice_debug(3, KERN_DEBUG "ksplice_h: run-pre: found sect "
 			      "%s=%08lx\n", s->name, run_addr);
 
-		if ((tmp = kmalloc(sizeof(*tmp), GFP_KERNEL)) == NULL) {
+		tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
+		if (tmp == NULL) {
 			print_abort("out of memory");
 			return -ENOMEM;
 		}
@@ -609,7 +616,8 @@ skip_using_system_map:
 		return 0;
 	}
 
-	if ((ret = compute_address(pack, r->sym_name, &vals)) < 0)
+	ret = compute_address(pack, r->sym_name, &vals);
+	if (ret < 0)
 		return ret;
 	if (!singular(&vals)) {
 		release_vals(&vals);
@@ -621,7 +629,8 @@ skip_using_system_map:
 		ksplice_debug(4, KERN_DEBUG "ksplice: reloc: deferred %s:%08lx "
 			      "to run-pre\n", r->sym_name, r->blank_offset);
 
-		if ((map = kmalloc(sizeof(*map), GFP_KERNEL)) == NULL) {
+		map = kmalloc(sizeof(*map), GFP_KERNEL);
+		if (map == NULL) {
 			print_abort("out of memory");
 			return -ENOMEM;
 		}
@@ -639,7 +648,8 @@ skip_using_system_map:
 	release_vals(&vals);
 
 	if ((r->pcrel) && (pack->helper && bootstrapped)) {
-		if ((map = kmalloc(sizeof(*map), GFP_KERNEL)) == NULL) {
+		map = kmalloc(sizeof(*map), GFP_KERNEL);
+		if (map == NULL) {
 			print_abort("out of memory");
 			return -ENOMEM;
 		}
@@ -693,7 +703,8 @@ int compute_address(struct module_pack *pack, char *sym_name,
 		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
 		if (nv != NULL && nv->status != NOVAL) {
 			release_vals(vals);
-			if ((ret = add_candidate_val(vals, nv->val)) < 0)
+			ret = add_candidate_val(vals, nv->val);
+			if (ret < 0)
 				return ret;
 			ksplice_debug(1, KERN_DEBUG "ksplice: using detected "
 				      "sym %s=%08lx\n", sym_name, nv->val);
@@ -705,9 +716,11 @@ int compute_address(struct module_pack *pack, char *sym_name,
 		return 0;
 
 #ifdef CONFIG_KALLSYMS
-	if ((ret = kernel_lookup(sym_name, vals)) < 0)
+	ret = kernel_lookup(sym_name, vals);
+	if (ret < 0)
 		return ret;
-	if ((ret = other_module_lookup(sym_name, vals, pack->name)) < 0)
+	ret = other_module_lookup(sym_name, vals, pack->name);
+	if (ret < 0)
 		return ret;
 #endif
 
@@ -849,7 +862,8 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
-			if ((ret = ksplice_mod_find_sym(m, name, vals)) < 0)
+			ret = ksplice_mod_find_sym(m, name, vals);
+			if (ret < 0)
 				return ret;
 		}
 	}
@@ -917,7 +931,8 @@ int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 		return -ENOMEM;
 	/* TODO: possibly remove "&& sym_val != 0" */
 	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0) {
-		if ((ret = add_candidate_val(acc->vals, sym_val)) < 0)
+		ret = add_candidate_val(acc->vals, sym_val);
+		if (ret < 0)
 			return ret;
 	}
 	kfree(sym_name);
@@ -930,8 +945,8 @@ int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
 	if (acc.desired_name == NULL)
 		return -ENOMEM;
-	if ((ret = kallsyms_on_each_symbol(accumulate_matching_names, &acc)) <
-	    0)
+	ret = kallsyms_on_each_symbol(accumulate_matching_names, &acc);
+	if (ret < 0)
 		return ret;
 	kfree(acc.desired_name);
 	return 0;
@@ -950,9 +965,10 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 	list_for_each_entry(m, &(THIS_MODULE->list), list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
-			if ((ret = module_on_each_symbol(m,
-							 accumulate_matching_names,
-							 &acc)) < 0)
+			ret = module_on_each_symbol(m,
+						    accumulate_matching_names,
+						    &acc);
+			if (ret < 0)
 				return ret;
 		}
 	}
@@ -970,7 +986,8 @@ int add_candidate_val(struct list_head *vals, long val)
 		if (tmp->val == val)
 			return 0;
 	}
-	if ((new = kmalloc(sizeof(*new), GFP_KERNEL)) == NULL) {
+	new = kmalloc(sizeof(*new), GFP_KERNEL);
+	if (new == NULL) {
 		print_abort("out of memory");
 		return -ENOMEM;
 	}
@@ -999,7 +1016,8 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 	if (!create)
 		return NULL;
 
-	if ((new = kmalloc(sizeof(*new), GFP_KERNEL)) == NULL) {
+	new = kmalloc(sizeof(*new), GFP_KERNEL);
+	if (new == NULL) {
 		print_abort("out of memory");
 		return NULL;
 	}
@@ -1066,7 +1084,8 @@ const char *dup_wolabel(const char *sym_name)
 
 	entire_strlen = strlen(sym_name);
 	new_strlen = entire_strlen - label_strlen;
-	if ((newstr = kmalloc(new_strlen + 1, GFP_KERNEL)) == NULL) {
+	newstr = kmalloc(new_strlen + 1, GFP_KERNEL);
+	if (newstr == NULL) {
 		print_abort("out of memory");
 		return NULL;
 	}
