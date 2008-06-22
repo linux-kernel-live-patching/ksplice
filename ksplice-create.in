@@ -94,6 +94,12 @@ my $ksplice = "ksplice-$kid";
 my %syms;
 load_system_map();
 
+# Some versions of Fedora have System.map files whose symbol addresses disagree
+# with the running kernel by a constant address offset.  Here, Ksplice notes the
+# System.map address for printk so that it can later compare this address against
+# the kernel's address for printk.  This comparison helps Ksplice work around
+# this Fedora problem, and this comparison also helps Ksplice detect whether
+# the user has provided an incorrect System.map file.
 my $map_printk = (find_sym_system_map("printk"))[0];
 
 my @rmsyms = qw(
