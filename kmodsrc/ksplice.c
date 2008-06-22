@@ -1072,8 +1072,8 @@ int starts_with(const char *str, const char *prefix)
 
 int ends_with(const char *str, const char *suffix)
 {
-	return (strlen(str) > strlen(suffix)
-		&& !strcmp(&str[strlen(str) - strlen(suffix)], suffix));
+	return strlen(str) > strlen(suffix) &&
+	    !strcmp(&str[strlen(str) - strlen(suffix)], suffix);
 }
 
 int label_offset(const char *sym_name)
