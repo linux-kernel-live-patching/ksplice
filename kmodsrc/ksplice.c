@@ -201,6 +201,9 @@ int procfile_write(struct file *file, const char *buffer, unsigned long count,
 	}
 	if (ret == -EAGAIN)
 		print_abort("stack check: to-be-reversed code is busy");
+	else if (ret == 0)
+		printk(KERN_INFO "ksplice: Update %s reversed successfully\n",
+		       pack->name);
 
 	return count;
 }
@@ -257,8 +260,6 @@ int __reverse_patches(void *packptr)
 		*((u32 *) (p->repladdr + 1)) = p->oldaddr - (p->repladdr + 5);
 	}
 
-	printk(KERN_INFO "ksplice: Update %s reversed successfully\n",
-	       pack->name);
 	return 0;
 }
 
