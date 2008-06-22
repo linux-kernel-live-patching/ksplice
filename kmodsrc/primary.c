@@ -21,9 +21,9 @@ MODULE_LICENSE("GPL v2");
 #define _STR(x) #x
 #define STR(x) _STR(x)
 
-#define _PASTE(x,y) x##y
-#define PASTE(x,y) _PASTE(x,y)
-#define KSPLICE_UNIQ(s) PASTE(s##_,KSPLICE_ID)
+#define _PASTE(x, y) x##y
+#define PASTE(x, y) _PASTE(x, y)
+#define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_ID)
 
 extern struct ksplice_reloc ksplice_relocs;
 extern struct ksplice_size ksplice_sizes;
