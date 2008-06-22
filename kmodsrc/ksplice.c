@@ -136,7 +136,8 @@ int activate_primary(struct module_pack *pack)
 		return -1;
 	}
 
-	printk("ksplice: Update %s applied successfully\n", pack->name);
+	printk(KERN_INFO "ksplice: Update %s applied successfully\n",
+	       pack->name);
 	return 0;
 }
 
@@ -184,7 +185,7 @@ int procfile_write(struct file *file, const char *buffer, unsigned long count,
 {
 	int i, ret;
 	struct module_pack *pack = data;
-	printk("ksplice: Preparing to reverse %s\n", pack->name);
+	printk(KERN_INFO "ksplice: Preparing to reverse %s\n", pack->name);
 
 	if (pack->state != KSPLICE_APPLIED)
 		return count;
@@ -256,7 +257,8 @@ int __reverse_patches(void *packptr)
 		*((u32 *) (p->repladdr + 1)) = p->oldaddr - (p->repladdr + 5);
 	}
 
-	printk("ksplice: Update %s reversed successfully\n", pack->name);
+	printk(KERN_INFO "ksplice: Update %s reversed successfully\n",
+	       pack->name);
 	return 0;
 }
 
@@ -286,7 +288,7 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 	int status;
 	int conflict = check_address_for_conflict(pack, KSPLICE_EIP(t));
 	if (debug >= 2) {
-		printk("ksplice: stack check: pid %d (%s) eip %08lx",
+		printk(KERN_DEBUG "ksplice: stack check: pid %d (%s) eip %08lx",
 		       t->pid, t->comm, KSPLICE_EIP(t));
 		if (conflict)
 			printk(" [<-- CONFLICT]: ");
@@ -381,7 +383,7 @@ int init_ksplice_module(struct module_pack *pack)
 	bootstrapped = 1;
 #endif
 
-	printk("ksplice_h: Preparing and checking %s\n", pack->name);
+	printk(KERN_INFO "ksplice_h: Preparing and checking %s\n", pack->name);
 
 	if (activate_helper(pack) != 0 || activate_primary(pack) != 0)
 		ret = -1;
@@ -497,8 +499,8 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 		return ret;
 
 	if (debug >= 3)
-		printk("ksplice_h: run-pre: starting sect search for %s\n",
-		       s->name);
+		printk(KERN_DEBUG "ksplice_h: run-pre: starting sect search "
+		       "for %s\n", s->name);
 
 	list_for_each_entry(v, &vals, list) {
 		run_addr = v->val;
@@ -526,12 +528,13 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 	     long pre_addr, int create_nameval)
 {
 	struct safety_record *tmp;
+	struct reloc_nameval *nv;
 
 	if (run_pre_cmp(pack, run_addr, pre_addr, s->size, 0) != 0) {
 		set_temp_myst_relocs(pack, NOVAL);
 		if (debug >= 1) {
-			printk("ksplice_h: run-pre: sect %s does not match ",
-			       s->name);
+			printk(KERN_DEBUG "ksplice_h: run-pre: sect %s does "
+			       "not match ", s->name);
 			printk("(r_a=%08lx p_a=%08lx s=%ld)\n",
 			       run_addr, pre_addr, s->size);
 			printk("ksplice_h: run-pre: ");
@@ -542,8 +545,8 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 		set_temp_myst_relocs(pack, VAL);
 
 		if (debug >= 3)
-			printk("ksplice_h: run-pre: found sect %s=%08lx\n",
-			       s->name, run_addr);
+			printk(KERN_DEBUG "ksplice_h: run-pre: found sect "
+			       "%s=%08lx\n", s->name, run_addr);
 
 		if ((tmp = kmalloc(sizeof(*tmp), GFP_KERNEL)) == NULL) {
 			print_abort("out of memory");
@@ -555,8 +558,7 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 		list_add(&tmp->list, pack->safety_records);
 
 		if (create_nameval) {
-			struct reloc_nameval *nv =
-			    find_nameval(pack, s->name, 1);
+			nv = find_nameval(pack, s->name, 1);
 			if (nv == NULL)
 				return -ENOMEM;
 			nv->val = run_addr;
@@ -584,8 +586,8 @@ int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 		BUG();
 
 	if (debug >= 3 && !rerun) {
-		printk("ksplice_h: run-pre: reloc at r_a=%08lx p_o=%08x: ",
-		       run_addr, *pre_o);
+		printk(KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%08lx "
+		       "p_o=%08x: ", run_addr, *pre_o);
 		printk("%s=%08lx (A=%08lx *r=%08lx)\n",
 		       map->nameval->name, map->nameval->val,
 		       map->addend, run_reloc);
@@ -603,8 +605,8 @@ int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 		} else if (map->nameval->val != expected) {
 			if (rerun)
 				return 1;
-			printk("ksplice_h: pre-run reloc: Expected %s=%08x!\n",
-			       map->nameval->name, expected);
+			printk(KERN_DEBUG "ksplice_h: pre-run reloc: Expected "
+			       "%s=%08x!\n", map->nameval->name, expected);
 			return 1;
 		}
 	}
@@ -653,14 +655,13 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 
 	LIST_HEAD(vals);
 	if (CONFIG_KALLSYMS_VAL || !bootstrapped) {
-		int adjustment = (long)printk - pack->map_printk;
-		if (adjustment & 0xfffff) {
+		int adj = (long)printk - pack->map_printk;
+		if (adj & 0xfffff) {
 			print_abort("System.map does not match kernel");
 			return -1;
 		}
 		for (i = 0; i < r->num_sym_addrs; i++) {
-			ret = add_candidate_val(&vals,
-						r->sym_addrs[i] + adjustment);
+			ret = add_candidate_val(&vals, r->sym_addrs[i] + adj);
 			if (ret < 0)
 				return ret;
 		}
@@ -670,10 +671,9 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 	    || (r->size == 8 &&
 		*(long long *)blank_addr != 0x7777777777777777ll)) {
 		if (debug >= 4)
-			printk
-			    ("ksplice%s: reloc: skipped %s:%08lx (altinstr)\n",
-			     (pack->helper ? "_h" : ""), r->sym_name,
-			     r->blank_offset);
+			printk(KERN_DEBUG "ksplice%s: reloc: skipped %s:%08lx "
+			       "(altinstr)\n", (pack->helper ? "_h" : ""),
+			       r->sym_name, r->blank_offset);
 		release_vals(&vals);
 		return 0;
 	}
@@ -688,8 +688,8 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 		}
 
 		if (debug >= 4)
-			printk("ksplice: reloc: deferred %s:%08lx to run-pre\n",
-			       r->sym_name, r->blank_offset);
+			printk(KERN_DEBUG "ksplice: reloc: deferred %s:%08lx "
+			       "to run-pre\n", r->sym_name, r->blank_offset);
 
 		if ((map = kmalloc(sizeof(*map), GFP_KERNEL)) == NULL) {
 			print_abort("out of memory");
@@ -707,13 +707,6 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 	}
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
-
-	if (debug >= 4) {
-		printk("ksplice%s: reloc: %s:%08lx ",
-		       (pack->helper ? "_h" : ""), r->sym_name,
-		       r->blank_offset);
-		printk("(S=%08lx A=%08lx ", sym_addr, r->addend);
-	}
 
 	if ((r->pcrel) && (pack->helper && bootstrapped)) {
 		if ((map = kmalloc(sizeof(*map), GFP_KERNEL)) == NULL) {
@@ -744,7 +737,12 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 		else
 			BUG();
 	}
+
 	if (debug >= 4) {
+		printk(KERN_DEBUG "ksplice%s: reloc: %s:%08lx ",
+		       (pack->helper ? "_h" : ""),
+		       r->sym_name, r->blank_offset);
+		printk("(S=%08lx A=%08lx ", sym_addr, r->addend);
 		if (r->size == 4)
 			printk("aft=%08x)\n", *(int *)blank_addr);
 		else if (r->size == 8)
@@ -772,8 +770,8 @@ int compute_address(struct module_pack *pack, char *sym_name,
 				return ret;
 
 			if (debug >= 1)
-				printk("ksplice: using detected sym %s=%08lx\n",
-				       sym_name, nv->val);
+				printk(KERN_DEBUG "ksplice: using detected sym "
+				       "%s=%08lx\n", sym_name, nv->val);
 			return 0;
 		}
 	}
