@@ -24,15 +24,13 @@
 #include <linux/time.h>
 #ifdef KSPLICE_STANDALONE
 /* linux/uaccess.h doesn't exist in kernels before 2.6.18 */
-#include <asm/uaccess.h>
-#else
-#include <linux/uaccess.h>
-#endif
-#include "ksplice.h"
-#ifdef KSPLICE_STANDALONE
 #include <linux/version.h>
+#include <asm/uaccess.h>
+#include "ksplice.h"
 #include "ksplice-run-pre.h"
 #else
+#include <linux/uaccess.h>
+#include "ksplice.h"
 #include <asm/ksplice-run-pre.h>
 #endif
 
@@ -56,6 +54,8 @@
 #define KSPLICE_ESP(x) ((x)->thread.rsp)
 #endif /* __ASM_X86_PROCESSOR_H */
 
+static int bootstrapped = 0;
+
 #ifdef CONFIG_KALLSYMS
 extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
 extern u8 kallsyms_names[];
@@ -64,10 +64,7 @@ extern u8 kallsyms_names[];
 /* defined by ksplice-create */
 extern struct ksplice_reloc ksplice_init_relocs;
 
-static int bootstrapped = 0;
-
 #else /* KSPLICE_STANDALONE */
-#define bootstrapped 1		/* TODO: remove this line */
 #define KSPLICE_EIP(x) ((x)->thread.ip)
 #define KSPLICE_ESP(x) ((x)->thread.sp)
 #endif /* KSPLICE_STANDALONE */
@@ -592,11 +589,15 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 	struct reloc_addrmap *map;
 	const long blank_addr = r->blank_sect_addr + r->blank_offset;
 	LIST_HEAD(vals);
-
+#ifdef KSPLICE_STANDALONE
+	/* run_pre_reloc: will this reloc be used for run-pre matching? */
+	const int run_pre_reloc = pack->helper && bootstrapped;
 #ifndef CONFIG_KALLSYMS
+
 	if (bootstrapped)
 		goto skip_using_system_map;
-#endif
+#endif /* CONFIG_KALLSYMS */
+#endif /* KSPLICE_STANDALONE */
 
 	/* Some Fedora kernel releases have System.map files whose symbol
 	 * addresses disagree with the running kernel by a constant address
@@ -639,7 +640,11 @@ skip_using_system_map:
 		return ret;
 	if (!singular(&vals)) {
 		release_vals(&vals);
-		if (!(pack->helper && bootstrapped)) {
+#ifdef KSPLICE_STANDALONE
+		if (!run_pre_reloc) {
+#else
+		if (!pack->helper) {
+#endif
 			failed_to_find(r->sym_name);
 			return -1;
 		}
@@ -665,7 +670,11 @@ skip_using_system_map:
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
 
-	if ((r->pcrel) && (pack->helper && bootstrapped)) {
+#ifdef KSPLICE_STANDALONE
+	if (r->pcrel && run_pre_reloc) {
+#else
+	if (r->pcrel && pack->helper) {
+#endif
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL) {
 			print_abort("out of memory");
@@ -713,9 +722,10 @@ int compute_address(struct module_pack *pack, char *sym_name,
 {
 	int i, ret;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
-
+#ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return 0;
+#endif
 
 	if (!pack->helper) {
 		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
