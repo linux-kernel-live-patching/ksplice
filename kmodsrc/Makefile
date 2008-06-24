@@ -1,16 +1,19 @@
 ifneq ($(KERNELRELEASE),)
 
-EXTRA_CFLAGS += -DKSPLICE_STANDALONE
+CFLAGS_ksplice.o += -DKSPLICE_STANDALONE
+CFLAGS_primary.o += -DKSPLICE_STANDALONE
+CFLAGS_helper.o += -DKSPLICE_STANDALONE
 
 ifeq ($(KSPLICE_ID),)
     $(error "You must set KSPLICE_ID.")
 endif
-EXTRA_CFLAGS += "-DKSPLICE_ID=$(KSPLICE_ID)"
+CFLAGS_primary.o += "-DKSPLICE_ID=$(KSPLICE_ID)"
+CFLAGS_helper.o += "-DKSPLICE_ID=$(KSPLICE_ID)"
 
 ifeq ($(map_printk),)
     $(error "You must set map_printk.")
 endif
-EXTRA_CFLAGS += "-DMAP_PRINTK=((long)0x$(map_printk))"
+CFLAGS_primary.o += "-DMAP_PRINTK=0x$(map_printk)L"
 
 KSPLICE = ksplice-$(KSPLICE_ID)
 
