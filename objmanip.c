@@ -107,13 +107,12 @@ char *modestr, *addstr_all = "", *addstr_sect = "", *globalizestr;
 
 struct wsect *wanted_sections = NULL;
 
-struct specsect special_sections[] =
-    { {".altinstructions", 1, ".altinstr_replacement",
-       2 * sizeof(char *) + 4 * sizeof(char)},
-{".smp_locks", 0, NULL, sizeof(char *)},
-{".parainstructions", 0, NULL, sizeof(char *) + 4 * sizeof(char)},
-{NULL}
-};
+struct specsect special_sections[] = {
+	{".altinstructions", 1, ".altinstr_replacement",
+	 2 * sizeof(char *) + 4 * sizeof(char)},
+	{".smp_locks", 0, NULL, sizeof(char *)},
+	{".parainstructions", 0, NULL, sizeof(char *) + 4 * sizeof(char)},
+}, *const end_special_sections = *(&special_sections + 1);
 
 #define mode(str) starts_with(modestr, str)
 
@@ -183,8 +182,11 @@ int main(int argc, char **argv)
 			rm_some_relocs(ibfd, p);
 	}
 
-	for (i = 0; mode("keep") && special_sections[i].sectname != NULL; i++)
-		rm_from_special(ibfd, &special_sections[i]);
+	struct specsect *ss;
+	if (mode("keep")) {
+		for (ss = special_sections; ss != end_special_sections; ss++)
+			rm_from_special(ibfd, ss);
+	}
 
 	copy_object(ibfd, obfd);
 	assert(bfd_close(obfd));
@@ -631,9 +633,12 @@ int match_varargs(const char *str)
 
 int want_section(const char *name, char **newname)
 {
-	static const char *static_want[] =
-	    { ".altinstructions", ".altinstr_replacement", ".smp_locks",
-		".parainstructions", NULL
+	static const char *static_want[] = {
+		".altinstructions",
+		".altinstr_replacement",
+		".smp_locks",
+		".parainstructions",
+		NULL
 	};
 
 	if (!mode("keep"))
@@ -672,10 +677,10 @@ success:
 
 struct specsect *is_special(const char *name)
 {
-	int i;
-	for (i = 0; special_sections[i].sectname != NULL; i++) {
-		if (strcmp(special_sections[i].sectname, name) == 0)
-			return &special_sections[i];
+	struct specsect *ss;
+	for (ss = special_sections; ss != end_special_sections; ss++) {
+		if (strcmp(ss->sectname, name) == 0)
+			return ss;
 	}
 	return NULL;
 }
