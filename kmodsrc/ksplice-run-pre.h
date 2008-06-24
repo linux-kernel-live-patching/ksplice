@@ -141,7 +141,7 @@ static int match_nop(long addr, int *o);
 static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 		       int size, int rerun)
 {
-	int run_o = 0, pre_o = 0, lenient = 0, prev_c3 = 0, recent_5b = 0;
+	int run_o = 0, pre_o = 0, lenient = 0;
 	unsigned char run, pre;
 	struct reloc_addrmap *map;
 
@@ -151,10 +151,6 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 	while (run_o < size && pre_o < size) {
 		if (lenient > 0)
 			lenient--;
-		if (prev_c3 > 0)
-			prev_c3--;
-		if (recent_5b > 0)
-			recent_5b--;
 
 		if (!virtual_address_mapped(run_addr + run_o))
 			return 1;
@@ -178,18 +174,12 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 			printk("%02x/%02x ", run, pre);
 
 		if (run == pre) {
-			if (pre == 0xc3)
-				prev_c3 = 1 + 1;
-			if (pre == 0x5b)
-				recent_5b = 10 + 1;
 			if (jumplen[pre])
 				lenient = max(jumplen[pre] + 1, lenient);
 			pre_o++, run_o++;
 			continue;
 		}
 
-		if (prev_c3 && recent_5b)
-			return 0;
 		if (jumplen[run] && jumplen[pre]) {
 			run_o += 1 + jumplen[run];
 			pre_o += 1 + jumplen[pre];
