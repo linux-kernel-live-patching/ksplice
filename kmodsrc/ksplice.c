@@ -324,16 +324,19 @@ int check_address_for_conflict(struct module_pack *pack, long addr)
 	struct ksplice_size *s = pack->primary_sizes;
 	struct safety_record *rec;
 
+	/* It is safe for addr to point to the beginning of a patched
+	   function, because that location will be overwritten with a
+	   trampoline. */
 	list_for_each_entry(rec, pack->safety_records, list) {
 		if (rec->care == 1 && addr > rec->addr
-		    && addr <= (rec->addr + rec->size)) {
+		    && addr < rec->addr + rec->size) {
 			ksplice_debug(2, "[<-- CONFLICT] ");
 			return -EAGAIN;
 		}
 	}
 	for (; s->name != NULL; s++) {
-		if (addr > s->thismod_addr
-		    && addr <= (s->thismod_addr + s->size)) {
+		if (addr >= s->thismod_addr
+		    && addr < s->thismod_addr + s->size) {
 			ksplice_debug(2, "[<-- CONFLICT] ");
 			return -EAGAIN;
 		}
@@ -1077,13 +1080,13 @@ void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 
 int starts_with(const char *str, const char *prefix)
 {
-	return !strncmp(str, prefix, strlen(prefix));
+	return strncmp(str, prefix, strlen(prefix)) == 0;
 }
 
 int ends_with(const char *str, const char *suffix)
 {
-	return strlen(str) > strlen(suffix) &&
-	    !strcmp(&str[strlen(str) - strlen(suffix)], suffix);
+	return strlen(str) >= strlen(suffix) &&
+	    strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0;
 }
 
 int label_offset(const char *sym_name)

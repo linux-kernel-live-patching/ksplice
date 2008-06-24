@@ -81,7 +81,7 @@ static inline int virtual_address_mapped(long addr)
 	pmd_t *pmd;
 	pte_t *ptep;
 
-	if (addr > init_mm.start_code && addr < init_mm.end_code)
+	if (addr >= init_mm.start_code && addr < init_mm.end_code)
 		return 1;
 
 	pgd = pgd_offset_k(addr);
