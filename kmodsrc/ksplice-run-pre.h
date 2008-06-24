@@ -1,6 +1,7 @@
 #include <linux/kernel.h>
 
-static const char jumplen[256] = {[0x0f] = 5,	/* je */
+static const char jumplen[256] = {
+	[0x0f] = 5,		/* je */
 	[0x70] = 1,		/* jo */
 	[0x71] = 1,		/* jno */
 	[0x72] = 1,		/* jb */
