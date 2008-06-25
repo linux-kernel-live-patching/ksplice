@@ -48,7 +48,9 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp)
 	supersects = new;
 
 	new->contents_size = bfd_get_section_size(sect);
-	new->contents = (void *)malloc(align(new->contents_size, 4));
+	new->alignment = 1 << bfd_get_section_alignment(abfd, sect);
+	new->contents = (void *)calloc(1, align(new->contents_size,
+						new->alignment));
 	assert(bfd_get_section_contents
 	       (abfd, sect, new->contents, 0, new->contents_size));
 

@@ -16,6 +16,7 @@ struct supersect {
 	char *name;
 	void *contents;
 	int contents_size;
+	int alignment;
 	arelent **relocs;
 	int num_relocs;
 	struct supersect *next;

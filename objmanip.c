@@ -109,9 +109,9 @@ struct wsect *wanted_sections = NULL;
 
 struct specsect special_sections[] = {
 	{".altinstructions", 1, ".altinstr_replacement",
-	 2 * sizeof(char *) + 4 * sizeof(char)},
-	{".smp_locks", 0, NULL, sizeof(char *)},
-	{".parainstructions", 0, NULL, sizeof(char *) + 4 * sizeof(char)},
+	 2 * sizeof(void *) + 4},
+	{".smp_locks", 0, NULL, sizeof(void *)},
+	{".parainstructions", 0, NULL, sizeof(void *) + 4},
 }, *const end_special_sections = *(&special_sections + 1);
 
 #define mode(str) starts_with(modestr, str)
@@ -299,18 +299,18 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 		return;
 
 	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
-	void *orig_buffer = malloc(ss->contents_size);
+	int contents_size = align(ss->contents_size, ss->alignment);
+	void *orig_buffer = calloc(1, contents_size);
 	memcpy(orig_buffer, ss->contents, ss->contents_size);
 	arelent **orig_relocs = malloc(ss->num_relocs * sizeof(*orig_relocs));
 	memcpy(orig_relocs, ss->relocs, ss->num_relocs * sizeof(*orig_relocs));
 
-	assert(align(ss->contents_size, 4) % s->entry_size == 0);
+	int entry_size = align(s->entry_size, ss->alignment);
+	assert(contents_size % entry_size == 0);
 	if (s->odd_relocs)
-		assert(align(ss->contents_size, 4) / s->entry_size ==
-		       ss->num_relocs / 2);
+		assert((contents_size / entry_size) * 2 == ss->num_relocs);
 	else
-		assert(align(ss->contents_size, 4) / s->entry_size ==
-		       ss->num_relocs);
+		assert(contents_size / entry_size == ss->num_relocs);
 
 	int orig_num_relocs = ss->num_relocs;
 	ss->num_relocs = 0;
@@ -336,20 +336,19 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 			orig_buffer_index = i / 2;
 		else
 			orig_buffer_index = i;
-		memcpy(ss->contents + (new_num_entries++) * s->entry_size,
-		       orig_buffer + orig_buffer_index * s->entry_size,
-		       s->entry_size);
-		modifier += orig_buffer_index * s->entry_size - end_last_entry;
+		memcpy(ss->contents + (new_num_entries++) * entry_size,
+		       orig_buffer + orig_buffer_index * entry_size,
+		       entry_size);
+		modifier += orig_buffer_index * entry_size - end_last_entry;
 		ss->relocs[ss->num_relocs] = orig_relocs[i];
 		ss->relocs[ss->num_relocs++]->address -= modifier;
 		if (s->odd_relocs) {
 			ss->relocs[ss->num_relocs] = orig_relocs[i + 1];
 			ss->relocs[ss->num_relocs++]->address -= modifier;
 		}
-		end_last_entry =
-		    orig_buffer_index * s->entry_size + s->entry_size;
+		end_last_entry = orig_buffer_index * entry_size + entry_size;
 	}
-	ss->contents_size = new_num_entries * s->entry_size;
+	ss->contents_size = new_num_entries * entry_size;
 }
 
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
