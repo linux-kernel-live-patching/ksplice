@@ -23,12 +23,13 @@ use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
 
-my ($patchfile, $diffext, $orig_config_dir, $postdir, $jobs);
+my ($patchfile, $diffext, $orig_config_dir, $postdir, $jobs, $kid);
 my ($help, $wantversion, $prebuild, $skip_prebuild, $apply, $patch_opt) = (0, 0, 0, 0, 0, "-p1");
 Getopt::Long::Configure("bundling");
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
 	"verbose|v!" => \$verbose,
+	"id=s" => \$kid,
 	"patch=s" => \$patchfile,
 	"diffext=s" => \$diffext,
 	"prebuild" => \$prebuild,
@@ -87,10 +88,7 @@ elsif($postdir =~ $linuxtree) {
 runval("cp", "--", "$orig_config_dir/.config", $linuxtree);
 
 my @chars = ('a'..'z', 0..9);
-my $kid = "";
-for(my $z = 0; $z < 8; $z++) {
-	$kid .= $chars[int(rand(36))];
-}
+$kid = join '', map { $chars[int(rand(36))] } 0..7 if(!defined $kid);
 my $ksplice = "ksplice-$kid";
 
 # Some versions of Fedora have System.map files whose symbol addresses disagree
@@ -342,6 +340,13 @@ B<-p1> is passed to B<patch>.  If this option is specified, then only the
 specified options will be passed to B<patch>.  This option can be repeated in
 order to pass multiple options to B<patch>.  This option is ignored when the
 to-be-applied source code patch is specified using B<--diffext>.
+
+=item B<--id=>I<ID>
+
+Specifies the unique value that will be used as the identifier of the
+Ksplice update.  This identifier will, for example, appear in the name
+of the update tarball.  By default, a random 8-character ID will be
+generated.
 
 =back
 
