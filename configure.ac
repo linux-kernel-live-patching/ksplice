@@ -71,8 +71,6 @@ if ! test -e "objdiff-static" || ! test -e "objmanip-static"; then
   fi
 fi
 
-AC_PROG_SED
-
 AC_PATH_PROG(PATCH, patch)
 AC_PATH_PROG(POD2MAN, pod2man)
 if test "$PATCH" = ""; then

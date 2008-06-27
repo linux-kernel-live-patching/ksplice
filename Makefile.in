@@ -15,7 +15,6 @@ CFLAGS = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
-SED = @SED@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
 
@@ -44,7 +43,7 @@ install-objdiff install-objmanip: install-%: %-static
 endif
 
 $(perl_primary): %: %.in Makefile
-	$(SED) 's|PACKAGE_VERSION|$(PACKAGE_VERSION)|;s|PACKAGE_BUGREPORT|$(PACKAGE_BUGREPORT)|;s|KSPLICE_DATA_DIR|$(datadir)/ksplice|;s|KSPLICE_LIBEXEC_DIR|$(libexecdir)|' $< > $@
+	sed 's|PACKAGE_VERSION|$(PACKAGE_VERSION)|;s|PACKAGE_BUGREPORT|$(PACKAGE_BUGREPORT)|;s|KSPLICE_DATA_DIR|$(datadir)/ksplice|;s|KSPLICE_LIBEXEC_DIR|$(libexecdir)|' $< > $@
 
 $(perl_man): %.8: %
 	pod2man --center="Ksplice" --release="Ksplice v$(PACKAGE_VERSION)" --section=8 $< $@
