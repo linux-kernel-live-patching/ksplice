@@ -24,8 +24,6 @@ use ksplice;
 use File::Copy;
 use Digest::MD5;
 
-my $kid = "somekid";
-
 sub empty_diff {
 	my ($out) = @_;
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
