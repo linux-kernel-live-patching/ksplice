@@ -73,41 +73,55 @@ static inline int virtual_address_mapped(long addr)
 	pgd_t *pgd;
 #ifndef KSPLICE_STANDALONE
 	pud_t *pud;
-#else
+#else /* KSPLICE_STANDALONE */
 #ifdef pud_page
 	pud_t *pud;
-#endif
-#endif
+#endif /* pud_page */
+#endif /* KSPLICE_STANDALONE */
 	pmd_t *pmd;
-	pte_t *ptep;
+	pte_t *pte;
 
 	if (addr >= init_mm.start_code && addr < init_mm.end_code)
 		return 1;
 
 	pgd = pgd_offset_k(addr);
-	if (pgd_none(*pgd))
+	if (!pgd_present(*pgd))
 		return 0;
 
 #ifndef KSPLICE_STANDALONE
 	pud = pud_offset(pgd, addr);
+	if (!pud_present(*pud))
+		return 0;
+
+	if (pud_large(*pud))
+		return 1;
+
 	pmd = pmd_offset(pud, addr);
-#else
+#else /* KSPLICE_STANDALONE */
 #ifdef pud_page
 	pud = pud_offset(pgd, addr);
-	pmd = pmd_offset(pud, addr);
-#else
-	pmd = pmd_offset(pgd, addr);
-#endif
-#endif
+	if (!pud_present(*pud))
+		return 0;
 
-	if (pmd_none(*pmd))
+#ifdef pud_large
+	if (pud_large(*pud))
+		return 1;
+#endif /* pud_large */
+
+	pmd = pmd_offset(pud, addr);
+#else /* pud_page */
+	pmd = pmd_offset(pgd, addr);
+#endif /* pud_page */
+#endif /* KSPLICE_STANDALONE */
+	if (!pmd_present(*pmd))
 		return 0;
-	ptep = pte_offset_map(pmd, addr);
-	if (!pte_present(*ptep)) {
-		pte_unmap(ptep);
+
+	if (pmd_large(*pmd))
+		return 1;
+
+	pte = pte_offset_kernel(pmd, addr);
+	if (!pte_present(*pte))
 		return 0;
-	}
-	pte_unmap(ptep);
 
 	return 1;
 }
