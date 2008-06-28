@@ -108,6 +108,7 @@ my @rmsyms = qw(
 	__kernel_text_address
 	tasklist_lock
 	stop_machine_run
+	modules
 	init_mm
 	kallsyms_addresses
 	kallsyms_num_syms

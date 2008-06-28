@@ -64,6 +64,9 @@ extern u8 kallsyms_names[];
 /* defined by ksplice-create */
 extern struct ksplice_reloc ksplice_init_relocs;
 
+/* Obtained via System.map */
+extern struct list_head modules;
+
 #else /* KSPLICE_STANDALONE */
 #define KSPLICE_EIP(x) ((x)->thread.ip)
 #define KSPLICE_ESP(x) ((x)->thread.sp)
@@ -768,7 +771,7 @@ int compute_address(struct module_pack *pack, char *sym_name,
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 {
 	struct module *m;
-	list_for_each_entry(m, &(THIS_MODULE->list), list) {
+	list_for_each_entry(m, &modules, list) {
 		if (!starts_with(m->name, pack->name)
 		    && !ends_with(m->name, "_helper")) {
 			if (brute_search(pack, s, m->module_core, m->core_size)
@@ -888,7 +891,7 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 	if (name == NULL)
 		return -ENOMEM;
 
-	list_for_each_entry(m, &(THIS_MODULE->list), list) {
+	list_for_each_entry(m, &modules, list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
 			ret = ksplice_mod_find_sym(m, name, vals);
@@ -991,7 +994,7 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 	if (acc.desired_name == NULL)
 		return -ENOMEM;
 
-	list_for_each_entry(m, &(THIS_MODULE->list), list) {
+	list_for_each_entry(m, &modules, list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
 			ret = module_on_each_symbol(m,
