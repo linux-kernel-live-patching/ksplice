@@ -75,8 +75,6 @@ extern struct list_head modules;
 static int debug;
 module_param(debug, int, 0600);
 
-/* THIS_MODULE everywhere is wrong! */
-
 void cleanup_ksplice_module(struct module_pack *pack)
 {
 	remove_proc_entry(pack->name, &proc_root);
@@ -217,7 +215,7 @@ int __apply_patches(void *packptr)
 	if (check_each_task(pack) < 0)
 		return -EAGAIN;
 
-	if (!try_module_get(THIS_MODULE))
+	if (!try_module_get(pack->primary))
 		return -ENODEV;
 
 	pack->state = KSPLICE_APPLIED;
@@ -243,7 +241,7 @@ int __reverse_patches(void *packptr)
 
 	clear_list(pack->safety_records, struct safety_record, list);
 	pack->state = KSPLICE_REVERSED;
-	module_put(THIS_MODULE);
+	module_put(pack->primary);
 
 	p = pack->patches;
 	for (; p->oldstr; p++) {

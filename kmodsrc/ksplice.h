@@ -41,6 +41,7 @@ struct module_pack {
 	const char *name;
 	int helper;
 	long map_printk;
+	struct module *primary;
 	enum ksplice_state_enum state;
 	struct ksplice_reloc *primary_relocs;
 	struct ksplice_size *primary_sizes;

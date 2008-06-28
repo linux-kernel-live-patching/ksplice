@@ -38,6 +38,7 @@ LIST_HEAD(safety_records);
 struct module_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_ID),
 	.map_printk = MAP_PRINTK,
+	.primary = THIS_MODULE,
 	.primary_relocs = &ksplice_relocs,
 	.primary_sizes = &ksplice_sizes,
 	.patches = &ksplice_patches,
