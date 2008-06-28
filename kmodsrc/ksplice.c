@@ -221,6 +221,7 @@ int __apply_patches(void *packptr)
 	struct module_pack *pack = packptr;
 	struct ksplice_patch *p;
 	struct safety_record *rec;
+	mm_segment_t old_fs;
 
 	list_for_each_entry(rec, pack->safety_records, list) {
 		for (p = pack->patches; p->oldstr; p++) {
@@ -237,11 +238,16 @@ int __apply_patches(void *packptr)
 
 	pack->state = KSPLICE_APPLIED;
 
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
 	for (p = pack->patches; p->oldstr; p++) {
 		memcpy((void *)p->saved, (void *)p->oldaddr, 5);
 		*((u8 *) p->oldaddr) = 0xE9;
 		*((u32 *) (p->oldaddr + 1)) = p->repladdr - (p->oldaddr + 5);
+		flush_icache_range((unsigned long)p->oldaddr,
+				   (unsigned long)(p->oldaddr + 5));
 	}
+	set_fs(old_fs);
 	return 0;
 }
 
@@ -249,6 +255,7 @@ int __reverse_patches(void *packptr)
 {
 	struct module_pack *pack = packptr;
 	struct ksplice_patch *p;
+	mm_segment_t old_fs;
 
 	if (pack->state != KSPLICE_APPLIED)
 		return 0;
@@ -265,12 +272,15 @@ int __reverse_patches(void *packptr)
 	pack->state = KSPLICE_REVERSED;
 	module_put(pack->primary);
 
-	p = pack->patches;
-	for (; p->oldstr; p++) {
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	for (p = pack->patches; p->oldstr; p++) {
 		memcpy((void *)p->oldaddr, (void *)p->saved, 5);
 		kfree(p->saved);
+		flush_icache_range((unsigned long)p->oldaddr,
+				   (unsigned long)(p->oldaddr + 5));
 	}
-
+	set_fs(old_fs);
 	return 0;
 }
 
