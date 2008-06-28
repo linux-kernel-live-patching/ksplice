@@ -246,8 +246,6 @@ int __reverse_patches(void *packptr)
 	for (; p->oldstr; p++) {
 		memcpy((void *)p->oldaddr, (void *)p->saved, 5);
 		kfree(p->saved);
-		*((u8 *) p->repladdr) = 0xE9;
-		*((u32 *) (p->repladdr + 1)) = p->oldaddr - (p->repladdr + 5);
 	}
 
 	return 0;
