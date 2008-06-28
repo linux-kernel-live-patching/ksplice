@@ -36,7 +36,7 @@
 #include "ksplice-run-pre.h"
 #else
 #include <linux/uaccess.h>
-#include "ksplice.h"
+#include <linux/ksplice.h>
 #include <asm/ksplice-run-pre.h>
 #endif
 
