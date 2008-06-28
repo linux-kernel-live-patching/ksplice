@@ -102,7 +102,7 @@ int activate_primary(struct module_pack *pack)
 	proc_entry->read_proc = procfile_read;
 	proc_entry->write_proc = procfile_write;
 	proc_entry->data = pack;
-	proc_entry->owner = THIS_MODULE;
+	proc_entry->owner = pack->primary;
 	proc_entry->mode = S_IFREG | S_IRUSR | S_IWUSR;
 	proc_entry->uid = 0;
 	proc_entry->gid = 0;
