@@ -922,7 +922,7 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 
 int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 {
-	int ret;
+	int ret = 0;
 	struct accumulate_struct *acc = data;
 
 	if (strncmp(sym_name, acc->desired_name, strlen(acc->desired_name)) !=
@@ -933,13 +933,10 @@ int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 	if (sym_name == NULL)
 		return -ENOMEM;
 	/* TODO: possibly remove "&& sym_val != 0" */
-	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0) {
+	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0)
 		ret = add_candidate_val(acc->vals, sym_val);
-		if (ret < 0)
-			return ret;
-	}
 	kfree(sym_name);
-	return 0;
+	return ret;
 }
 
 #ifdef KSPLICE_STANDALONE
