@@ -39,7 +39,6 @@ struct ksplice_patch {
 
 struct module_pack {
 	const char *name;
-	int helper;
 	long map_printk;
 	struct module *primary;
 	enum ksplice_state_enum state;
@@ -159,10 +158,10 @@ static inline void print_abort(const char *str)
 	do { if (debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
 
 int process_ksplice_relocs(struct module_pack *pack,
-			   struct ksplice_reloc *relocs);
-int process_reloc(struct module_pack *pack, struct ksplice_reloc *r);
+			   struct ksplice_reloc *relocs, int pre);
+int process_reloc(struct module_pack *pack, struct ksplice_reloc *r, int pre);
 int compute_address(struct module_pack *pack, char *sym_name,
-		    struct list_head *vals);
+		    struct list_head *vals, int pre);
 
 #ifndef KSPLICE_STANDALONE
 int accumulate_matching_names(void *data, const char *sym_name, long sym_val);

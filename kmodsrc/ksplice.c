@@ -94,9 +94,7 @@ int activate_primary(struct module_pack *pack)
 	int i, ret;
 	struct proc_dir_entry *proc_entry;
 
-	pack->helper = 0;
-
-	if (process_ksplice_relocs(pack, pack->primary_relocs) != 0)
+	if (process_ksplice_relocs(pack, pack->primary_relocs, 0) != 0)
 		return -1;
 
 	if (resolve_patch_symbols(pack) != 0)
@@ -157,7 +155,7 @@ int resolve_patch_symbols(struct module_pack *pack)
 				return ret;
 		}
 
-		ret = compute_address(pack, p->oldstr, &vals);
+		ret = compute_address(pack, p->oldstr, &vals, 0);
 		if (ret < 0)
 			return ret;
 
@@ -363,7 +361,7 @@ int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
 #ifdef KSPLICE_STANDALONE
-	if (process_ksplice_relocs(pack, &ksplice_init_relocs) != 0)
+	if (process_ksplice_relocs(pack, &ksplice_init_relocs, 1) != 0)
 		return -1;
 	bootstrapped = 1;
 #endif
@@ -389,9 +387,7 @@ int activate_helper(struct module_pack *pack)
 	int numfinished, oldfinished = 0;
 	int restart_count = 0;
 
-	pack->helper = 1;
-
-	if (process_ksplice_relocs(pack, pack->helper_relocs) != 0)
+	if (process_ksplice_relocs(pack, pack->helper_relocs, 1) != 0)
 		return -1;
 
 	for (s = pack->helper_sizes; s->name != NULL; s++)
@@ -461,7 +457,7 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 			return ret;
 	}
 
-	ret = compute_address(pack, s->name, &vals);
+	ret = compute_address(pack, s->name, &vals, 1);
 	if (ret < 0)
 		return ret;
 
@@ -583,17 +579,17 @@ int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 }
 
 int process_ksplice_relocs(struct module_pack *pack,
-			   struct ksplice_reloc *relocs)
+			   struct ksplice_reloc *relocs, int pre)
 {
 	struct ksplice_reloc *r;
 	for (r = relocs; r->sym_name != NULL; r++) {
-		if (process_reloc(pack, r) != 0)
+		if (process_reloc(pack, r, pre) != 0)
 			return -1;
 	}
 	return 0;
 }
 
-int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
+int process_reloc(struct module_pack *pack, struct ksplice_reloc *r, int pre)
 {
 	int i, ret;
 	long off, sym_addr;
@@ -602,7 +598,7 @@ int process_reloc(struct module_pack *pack, struct ksplice_reloc *r)
 	LIST_HEAD(vals);
 #ifdef KSPLICE_STANDALONE
 	/* run_pre_reloc: will this reloc be used for run-pre matching? */
-	const int run_pre_reloc = pack->helper && bootstrapped;
+	const int run_pre_reloc = pre && bootstrapped;
 #ifndef CONFIG_KALLSYMS
 
 	if (bootstrapped)
@@ -640,13 +636,13 @@ skip_using_system_map:
 	    || (r->size == 8 &&
 		*(long long *)blank_addr != 0x7777777777777777ll)) {
 		ksplice_debug(4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%08lx"
-			      " (altinstr)\n", (pack->helper ? "_h" : ""),
+			      " (altinstr)\n", (pre ? "_h" : ""),
 			      r->sym_name, r->blank_offset);
 		release_vals(&vals);
 		return 0;
 	}
 
-	ret = compute_address(pack, r->sym_name, &vals);
+	ret = compute_address(pack, r->sym_name, &vals, pre);
 	if (ret < 0)
 		return ret;
 	if (!singular(&vals)) {
@@ -654,7 +650,7 @@ skip_using_system_map:
 #ifdef KSPLICE_STANDALONE
 		if (!run_pre_reloc) {
 #else
-		if (!pack->helper) {
+		if (!pre) {
 #endif
 			failed_to_find(r->sym_name);
 			return -1;
@@ -684,7 +680,7 @@ skip_using_system_map:
 #ifdef KSPLICE_STANDALONE
 	if (r->pcrel && run_pre_reloc) {
 #else
-	if (r->pcrel && pack->helper) {
+	if (r->pcrel && pre) {
 #endif
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL) {
@@ -717,7 +713,7 @@ skip_using_system_map:
 	}
 
 	ksplice_debug(4, KERN_DEBUG "ksplice%s: reloc: %s:%08lx ",
-		      (pack->helper ? "_h" : ""), r->sym_name, r->blank_offset);
+		      (pre ? "_h" : ""), r->sym_name, r->blank_offset);
 	ksplice_debug(4, "(S=%08lx A=%08lx ", sym_addr, r->addend);
 	if (r->size == 4)
 		ksplice_debug(4, "aft=%08x)\n", *(int *)blank_addr);
@@ -729,7 +725,7 @@ skip_using_system_map:
 }
 
 int compute_address(struct module_pack *pack, char *sym_name,
-		    struct list_head *vals)
+		    struct list_head *vals, int pre)
 {
 	int i, ret;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
@@ -738,7 +734,7 @@ int compute_address(struct module_pack *pack, char *sym_name,
 		return 0;
 #endif
 
-	if (!pack->helper) {
+	if (!pre) {
 		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
 		if (nv != NULL && nv->status != NOVAL) {
 			release_vals(vals);
@@ -766,7 +762,7 @@ int compute_address(struct module_pack *pack, char *sym_name,
 	for (i = 0; prefix[i] != NULL; i++) {
 		if (starts_with(sym_name, prefix[i])) {
 			ret = compute_address(pack, sym_name +
-					      strlen(prefix[i]), vals);
+					      strlen(prefix[i]), vals, pre);
 			if (ret < 0)
 				return ret;
 		}
