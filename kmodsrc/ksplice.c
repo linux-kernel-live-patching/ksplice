@@ -892,6 +892,43 @@ int compute_address(struct module_pack *pack, char *sym_name,
 	return 0;
 }
 
+struct accumulate_struct {
+	const char *desired_name;
+	struct list_head *vals;
+};
+
+#ifdef CONFIG_KALLSYMS
+int other_module_lookup(const char *name_wlabel, struct list_head *vals,
+			const char *ksplice_name)
+{
+	int ret = 0;
+	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
+	struct module *m;
+
+	if (acc.desired_name == NULL)
+		return -ENOMEM;
+	mutex_lock(&module_mutex);
+	list_for_each_entry(m, &modules, list) {
+		if (!starts_with(m->name, ksplice_name)
+		    && !ends_with(m->name, "_helper")) {
+#ifdef KSPLICE_STANDALONE
+			ret = ksplice_mod_find_sym(m, acc.desired_name, vals);
+#else
+			ret = module_on_each_symbol(m,
+						    accumulate_matching_names,
+						    &acc);
+#endif
+			if (ret < 0)
+				break;
+		}
+	}
+	mutex_unlock(&module_mutex);
+
+	kfree(acc.desired_name);
+	return ret;
+}
+#endif /* CONFIG_KALLSYMS */
+
 #ifdef KSPLICE_STANDALONE
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 {
@@ -1009,29 +1046,6 @@ long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 }
 #endif /* LINUX_VERSION_CODE */
 
-int other_module_lookup(const char *name_wlabel, struct list_head *vals,
-			const char *ksplice_name)
-{
-	int ret = 0;
-	struct module *m;
-	const char *name = dup_wolabel(name_wlabel);
-	if (name == NULL)
-		return -ENOMEM;
-	mutex_lock(&module_mutex);
-	list_for_each_entry(m, &modules, list) {
-		if (!starts_with(m->name, ksplice_name)
-		    && !ends_with(m->name, "_helper")) {
-			ret = ksplice_mod_find_sym(m, name, vals);
-			if (ret < 0)
-				break;
-		}
-	}
-	mutex_unlock(&module_mutex);
-
-	kfree(name);
-	return ret;
-}
-
 /* Modified version of Linux's mod_find_symname */
 int
 ksplice_mod_find_sym(struct module *m, const char *name, struct list_head *vals)
@@ -1062,11 +1076,6 @@ ksplice_mod_find_sym(struct module *m, const char *name, struct list_head *vals)
 #else /* KSPLICE_STANDALONE */
 EXPORT_SYMBOL_GPL(init_ksplice_module);
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
-
-struct accumulate_struct {
-	const char *desired_name;
-	struct list_head *vals;
-};
 
 int init_module(void)
 {
@@ -1110,32 +1119,6 @@ int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 		return ret;
 	kfree(acc.desired_name);
 	return 0;
-}
-
-int other_module_lookup(const char *name_wlabel, struct list_head *vals,
-			const char *ksplice_name)
-{
-	int ret = 0;
-	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
-	struct module *m;
-
-	if (acc.desired_name == NULL)
-		return -ENOMEM;
-	mutex_lock(&module_mutex);
-	list_for_each_entry(m, &modules, list) {
-		if (!starts_with(m->name, ksplice_name)
-		    && !ends_with(m->name, "_helper")) {
-			ret = module_on_each_symbol(m,
-						    accumulate_matching_names,
-						    &acc);
-			if (ret < 0)
-				break;
-		}
-	}
-	mutex_unlock(&module_mutex);
-
-	kfree(acc.desired_name);
-	return ret;
 }
 #endif /* KSPLICE_STANDALONE */
 
