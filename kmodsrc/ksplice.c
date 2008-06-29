@@ -37,7 +37,9 @@
 #ifdef KSPLICE_STANDALONE
 
 /* Old kernels do not have kcalloc */
-#define kcalloc(n, size, flags) ksplice_kcalloc(n)
+#define kcalloc ksplice_kcalloc
+static inline void *ksplice_kcalloc(size_t n, size_t size,
+				    typeof(GFP_KERNEL) flags);
 
 /* Old kernels use semaphore instead of mutex
    97d1f15b7ef52c1e9c28dc48b454024bb53a5fd2 was after 2.6.16 */
@@ -959,11 +961,15 @@ void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 }
 
 /* old kernels do not have kcalloc */
-void *ksplice_kcalloc(int size)
+static inline void *ksplice_kcalloc(size_t n, size_t size,
+				    typeof(GFP_KERNEL) flags)
 {
-	char *mem = kmalloc(size, GFP_KERNEL);
+	char *mem;
+	if (n != 0 && size > ULONG_MAX / n)
+		return NULL;
+	mem = kmalloc(n * size, flags);
 	if (mem)
-		memset(mem, 0, size);
+		memset(mem, 0, n * size);
 	return mem;
 }
 
