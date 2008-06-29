@@ -14,7 +14,11 @@
  *  02110-1301, USA.
  */
 
+#ifdef KSPLICE_STANDALONE
 #include "ksplice.h"
+#else
+#include <linux/ksplice.h>
+#endif
 
 MODULE_LICENSE("GPL v2");
 
