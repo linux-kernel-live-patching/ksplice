@@ -39,6 +39,14 @@
 /* Old kernels do not have kcalloc */
 #define kcalloc(n, size, flags) ksplice_kcalloc(n)
 
+/* Old kernels use semaphore instead of mutex
+   97d1f15b7ef52c1e9c28dc48b454024bb53a5fd2 was after 2.6.16 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
+#define mutex semaphore
+#define mutex_lock down
+#define mutex_unlock up
+#endif
+
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
 #endif /* task_thread_info */
@@ -66,6 +74,7 @@ extern struct ksplice_reloc ksplice_init_relocs;
 
 /* Obtained via System.map */
 extern struct list_head modules;
+extern struct mutex module_mutex;
 
 #else /* KSPLICE_STANDALONE */
 #define KSPLICE_EIP(x) ((x)->thread.ip)
@@ -769,17 +778,19 @@ int compute_address(struct module_pack *pack, char *sym_name,
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 {
 	struct module *m;
+	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
 		if (!starts_with(m->name, pack->name)
 		    && !ends_with(m->name, "_helper")) {
 			if (brute_search(pack, s, m->module_core, m->core_size)
 			    == 0)
-				return;
+				break;
 			if (brute_search(pack, s, m->module_init, m->init_size)
 			    == 0)
-				return;
+				break;
 		}
 	}
+	mutex_unlock(&module_mutex);
 }
 
 /* old kernels do not have kcalloc */
@@ -883,23 +894,24 @@ long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 			const char *ksplice_name)
 {
-	int ret;
+	int ret = 0;
 	struct module *m;
 	const char *name = dup_wolabel(name_wlabel);
 	if (name == NULL)
 		return -ENOMEM;
-
+	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
 			ret = ksplice_mod_find_sym(m, name, vals);
 			if (ret < 0)
-				return ret;
+				break;
 		}
 	}
+	mutex_unlock(&module_mutex);
 
 	kfree(name);
-	return 0;
+	return ret;
 }
 
 /* Modified version of Linux's mod_find_symname */
@@ -985,13 +997,13 @@ int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 			const char *ksplice_name)
 {
-	int ret;
+	int ret = 0;
 	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
 	struct module *m;
 
 	if (acc.desired_name == NULL)
 		return -ENOMEM;
-
+	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
@@ -999,12 +1011,13 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 						    accumulate_matching_names,
 						    &acc);
 			if (ret < 0)
-				return ret;
+				break;
 		}
 	}
+	mutex_unlock(&module_mutex);
 
 	kfree(acc.desired_name);
-	return 0;
+	return ret;
 }
 #endif /* KSPLICE_STANDALONE */
 
