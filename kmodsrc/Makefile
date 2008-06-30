@@ -2,9 +2,11 @@ ksplice-script = /usr/local/share/ksplice/ksplice.pl
 
 ifneq ($(KERNELRELEASE),)
 
+ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += -DKSPLICE_STANDALONE
 CFLAGS_primary.o += -DKSPLICE_STANDALONE
 CFLAGS_helper.o += -DKSPLICE_STANDALONE
+endif
 
 ifeq ($(KSPLICE_ID),)
     $(error "You must set KSPLICE_ID.")
@@ -29,6 +31,9 @@ KSPLICE = ksplice-$(KSPLICE_ID)
 
 obj-m = $(KSPLICE)-helper.o $(KSPLICE).o
 $(KSPLICE)-helper-objs = helper.o collection.o.helper
+ifeq ($(KSPLICE_STANDALONE),)
+$(KSPLICE)-objs = primary.o collection.o.primary
+else
 $(KSPLICE)-objs = primary.o ksplice-rmsyms.o collection.o.primary
 extra-y = ksplice.o
 
@@ -57,6 +62,7 @@ cmd_ksplice-rmsyms = \
 	ld -r -o $@ $< $(src)/ksplice.lds
 $(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o FORCE
 	$(call if_changed,ksplice-rmsyms)
+endif # KSPLICE_STANDALONE
 
 else
 

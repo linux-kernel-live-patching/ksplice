@@ -24,6 +24,7 @@ use lib 'KSPLICE_DATA_DIR';
 use ksplice;
 
 my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
+my $standalone;
 my ($help, $wantversion, $prebuild, $skip_prebuild, $apply, $patch_opt) = (0, 0, 0, 0, 0, "-p1");
 Getopt::Long::Configure("bundling");
 GetOptions("help|?" => \$help,
@@ -33,6 +34,7 @@ GetOptions("help|?" => \$help,
 	"patch=s" => \$patchfile,
 	"diffext=s" => \$diffext,
 	"prebuild" => \$prebuild,
+	"standalone!" => \$standalone,
 	"skip-prebuild" => \$skip_prebuild,
 	"jobs|j:i" => \$jobs,
 	"config=s" => \$orig_config_dir,
@@ -76,6 +78,16 @@ if(! -e "$orig_config_dir/System.map") {
 }
 
 $ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
+
+my @standalone_flag;
+my $ksplice_in_kernel = runstr(qw(grep ^CONFIG_KSPLICE=), "$orig_config_dir/.config");
+$ksplice_in_kernel =~ s/^CONFIG_KSPLICE=([nmy])/$1/;
+chomp($ksplice_in_kernel);
+if (!defined($standalone)) {
+	$standalone = 0;
+	$standalone = 1 if ($ksplice_in_kernel ne 'y' && $ksplice_in_kernel ne 'm');
+}
+@standalone_flag = qw(KSPLICE_STANDALONE=1) if ($standalone == 1);
 
 runval("cp", "--", "$orig_config_dir/.config", $linuxtree);
 
@@ -191,7 +203,7 @@ for my $module (@modules) {
 	my $kid_m = "${kid}_$module";
 	$kid_m =~ s/-/_/g;
 	my $ksplice_m = "ksplice-$kid_m";
-	runval("make", @jlevel, "modules", "KSPLICE_ID=$kid_m", "KSPLICE_TARGET=$module", "map_printk=$map_printk", "KERNELSRC=$linuxtree");
+	runval("make", @jlevel, "modules", "KSPLICE_ID=$kid_m", "KSPLICE_TARGET=$module", "map_printk=$map_printk", "KERNELSRC=$linuxtree", @standalone_flag);
 }
 
 runcd($tmpdir);
@@ -203,6 +215,7 @@ for my $module (@modules) {
 	my $ksplice_m = "ksplice-$kid_m";
 	runval("mv", "--", "kmodsrc-$module/$ksplice_m.ko", "kmodsrc-$module/$ksplice_m-helper.ko", $ksplice);
 }
+runval("touch", "$ksplice/need_modprobe_ksplice") if ($ksplice_in_kernel eq 'm' && ! $standalone);
 runval("mkdir", "$ksplice/debug");
 runval("mv", "collect", "$ksplice/debug");
 for my $module (@modules) {

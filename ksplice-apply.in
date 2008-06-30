@@ -45,6 +45,8 @@ runcd($ksplice);
 
 my $unload = runstr("lsmod") !~ m/- $/m;
 
+runval(qw(modprobe ksplice)) == 0 || die if (-e "need_modprobe_ksplice");
+
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 
 	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
