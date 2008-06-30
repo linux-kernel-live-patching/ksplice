@@ -288,7 +288,7 @@ handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 {
 	int expected;
 	int offset = (int)(pre_addr + *pre_o - map->addr);
-	long run_reloc;
+	long run_reloc = 0;
 	long run_reloc_addr;
 	run_reloc_addr = run_addr + *run_o - offset;
 	if (map->size == 4) {
