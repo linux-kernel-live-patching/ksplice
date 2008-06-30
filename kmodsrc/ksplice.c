@@ -892,11 +892,6 @@ int compute_address(struct module_pack *pack, char *sym_name,
 	return 0;
 }
 
-struct accumulate_struct {
-	const char *desired_name;
-	struct list_head *vals;
-};
-
 #ifdef CONFIG_KALLSYMS
 int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 			const char *ksplice_name)
@@ -911,13 +906,9 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 	list_for_each_entry(m, &modules, list) {
 		if (!starts_with(m->name, ksplice_name)
 		    && !ends_with(m->name, "_helper")) {
-#ifdef KSPLICE_STANDALONE
-			ret = ksplice_mod_find_sym(m, acc.desired_name, vals);
-#else
 			ret = module_on_each_symbol(m,
 						    accumulate_matching_names,
 						    &acc);
-#endif
 			if (ret < 0)
 				break;
 		}
@@ -928,6 +919,28 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 	return ret;
 }
 #endif /* CONFIG_KALLSYMS */
+
+int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
+{
+	int ret;
+	struct accumulate_struct *acc = data;
+
+	if (strncmp(sym_name, acc->desired_name, strlen(acc->desired_name)) !=
+	    0)
+		return 0;
+
+	sym_name = dup_wolabel(sym_name);
+	if (sym_name == NULL)
+		return -ENOMEM;
+	/* TODO: possibly remove "&& sym_val != 0" */
+	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0) {
+		ret = add_candidate_val(acc->vals, sym_val);
+		if (ret < 0)
+			return ret;
+	}
+	kfree(sym_name);
+	return 0;
+}
 
 #ifdef KSPLICE_STANDALONE
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
@@ -1046,29 +1059,21 @@ long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 }
 #endif /* LINUX_VERSION_CODE */
 
-/* Modified version of Linux's mod_find_symname */
-int
-ksplice_mod_find_sym(struct module *m, const char *name, struct list_head *vals)
+int module_on_each_symbol(struct module *mod,
+			  int (*fn) (void *, const char *, long), void *data)
 {
-	int i, ret;
-	if (strlen(m->name) <= 1)
+	unsigned int i;
+	int ret;
+
+	/* TODO: possibly remove this if statement */
+	if (strlen(mod->name) <= 1)
 		return 0;
 
-	for (i = 0; i < m->num_symtab; i++) {
-		const char *cursym_name = m->strtab + m->symtab[i].st_name;
-		if (strncmp(cursym_name, name, strlen(name)) != 0)
-			continue;
-
-		cursym_name = dup_wolabel(cursym_name);
-		if (cursym_name == NULL)
-			return -ENOMEM;
-		if (strcmp(cursym_name, name) == 0 &&
-		    m->symtab[i].st_value != 0) {
-			ret = add_candidate_val(vals, m->symtab[i].st_value);
-			if (ret < 0)
-				return ret;
-		}
-		kfree(cursym_name);
+	for (i = 0; i < mod->num_symtab; i++) {
+		if ((ret =
+		     fn(data, mod->strtab + mod->symtab[i].st_name,
+			mod->symtab[i].st_value) != 0))
+			return ret;
 	}
 	return 0;
 }
@@ -1084,28 +1089,6 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-}
-
-int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
-{
-	int ret;
-	struct accumulate_struct *acc = data;
-
-	if (strncmp(sym_name, acc->desired_name, strlen(acc->desired_name)) !=
-	    0)
-		return 0;
-
-	sym_name = dup_wolabel(sym_name);
-	if (sym_name == NULL)
-		return -ENOMEM;
-	/* TODO: possibly remove "&& sym_val != 0" */
-	if (strcmp(sym_name, acc->desired_name) == 0 && sym_val != 0) {
-		ret = add_candidate_val(acc->vals, sym_val);
-		if (ret < 0)
-			return ret;
-	}
-	kfree(sym_name);
-	return 0;
 }
 
 int kernel_lookup(const char *name_wlabel, struct list_head *vals)
