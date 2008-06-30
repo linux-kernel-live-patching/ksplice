@@ -197,6 +197,8 @@ static int search_for_match(struct module_pack *pack,
 static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		    unsigned long run_addr, unsigned long pre_addr);
 
+extern struct proc_dir_entry proc_root;
+
 void cleanup_ksplice_module(struct module_pack *pack)
 {
 	remove_proc_entry(pack->name, &proc_root);

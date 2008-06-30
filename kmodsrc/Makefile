@@ -34,7 +34,7 @@ $(KSPLICE)-helper-objs = helper.o collection.o.helper
 ifeq ($(KSPLICE_STANDALONE),)
 $(KSPLICE)-objs = primary.o collection.o.primary
 else
-$(KSPLICE)-objs = primary.o ksplice-rmsyms.o collection.o.primary
+$(KSPLICE)-objs = primary.o ksplice-rmsyms.o collection.o.primary proc-root.o
 extra-y = ksplice.o
 
 RMSYMS = \
