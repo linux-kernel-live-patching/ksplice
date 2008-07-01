@@ -505,10 +505,10 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 #ifdef KSPLICE_STANDALONE
 	saved_debug = debug;
 	debug = 0;
-	brute_search_all_mods(pack, s);
+	ret = brute_search_all_mods(pack, s);
 	debug = saved_debug;
 #endif
-	return 0;
+	return ret;
 }
 
 int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
@@ -949,22 +949,23 @@ int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 }
 
 #ifdef KSPLICE_STANDALONE
-void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
+int brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 {
 	struct module *m;
+	int ret = 0;
 	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
-		if (!starts_with(m->name, pack->name)
-		    && !ends_with(m->name, "_helper")) {
-			if (brute_search(pack, s, m->module_core, m->core_size)
-			    == 0)
-				break;
-			if (brute_search(pack, s, m->module_init, m->init_size)
-			    == 0)
+		if (starts_with(m->name, pack->name) ||
+		    ends_with(m->name, "_helper"))
+			continue;
+		if (brute_search(pack, s, m->module_core, m->core_size) == 0 ||
+		    brute_search(pack, s, m->module_init, m->init_size) == 0) {
+				ret = 1;
 				break;
 		}
 	}
 	mutex_unlock(&module_mutex);
+	return ret;
 }
 
 /* old kernels do not have kcalloc */

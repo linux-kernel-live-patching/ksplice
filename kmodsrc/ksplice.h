@@ -231,7 +231,7 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 	     long pre_addr);
 
 #ifdef KSPLICE_STANDALONE
-void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s);
+int brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s);
 
 static inline int brute_search(struct module_pack *pack, struct ksplice_size *s,
 			       void *start, long len)
