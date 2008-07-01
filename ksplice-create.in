@@ -321,20 +321,17 @@ sub save_using_asm {
 	my ($tosaveref, $objfile, $suffix) = @_;
 
 	open(ASM, ">", "asm${asm_id}.s");
-	print ASM ".section .ksplice.${suffix}_str, \"a\"\n";
-	print ASM "${suffix}_str:\n";
 	print ASM ".section .ksplice.${suffix}, \"a\"\n";
 	print ASM "${suffix}:\n";
 
-	my $num = 0;
 	foreach my $entryref (@$tosaveref) {
 		my @entry = @{$entryref};
 
 		if($entry[0] eq "str") {
 			print ASM ".section .ksplice.${suffix}_str, \"a\"\n";
-			print ASM $suffix, $num, ": .string \"", $entry[1], "\"\n";
+			print ASM "0: .string \"", $entry[1], "\"\n";
 			print ASM ".section .ksplice.${suffix}, \"a\"\n";
-			print ASM ".$word ${suffix}", $num++, "\n";
+			print ASM ".$word 0b\n";
 		}
 		elsif($entry[0] eq "array" && scalar(@entry) == 1) {
 			print ASM ".section .ksplice.${suffix}, \"a\"\n";
@@ -342,12 +339,12 @@ sub save_using_asm {
 		}
 		elsif($entry[0] eq "array") {
 			print ASM ".section .ksplice.${suffix}_array, \"a\"\n";
-			print ASM $suffix, $num, ":\n";
+			print ASM "0:\n";
 			for(my $i = 1; $i < scalar(@entry); $i++) {
 				print ASM ".$word 0x", $entry[$i], "\n";
 			}
 			print ASM ".section .ksplice.${suffix}, \"a\"\n";
-			print ASM ".$word ${suffix}", $num++, "\n";
+			print ASM ".$word 0b\n";
 		}
 		elsif($entry[0] eq "word") {
 			print ASM ".section .ksplice.${suffix}, \"a\"\n";
