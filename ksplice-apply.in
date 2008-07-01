@@ -53,9 +53,20 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	die unless(-e $primary && -e $helper);
 
 	my ($kid, $target) = $primary =~ m/^ksplice-([^_]+)_(.*)\.ko/;
-	$target =~ s/-/_/;
+	$target =~ s/-/_/g;
 	if ($target ne 'vmlinux' && runstr("lsmod") !~ m/^${target}\s/m) {
 		die "Module $target to be patched not loaded";
+	}
+	my $update = "${kid}_$target";
+
+	die "/sys not mounted\n" unless (-d "/sys/module");
+	if(-d "/sys/module/ksplice_$update/ksplice") {
+		open STAGE, '<', "/sys/module/ksplice_$update/ksplice/stage";
+		if (<STAGE> eq "applied\n") {
+			print STDERR "Ksplice update $update already applied; continuing\n";
+			next;
+		}
+		die "Unapplied Ksplice module $update already loaded!";
 	}
 
 	if(runval_raw("insmod $primary debug=$debug") != 0) {
