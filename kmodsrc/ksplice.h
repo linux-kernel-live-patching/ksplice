@@ -40,11 +40,11 @@ struct module_pack {
 	long map_printk;
 	struct module *primary;
 	enum ksplice_state_enum state;
-	struct ksplice_reloc *primary_relocs;
-	struct ksplice_size *primary_sizes;
-	struct ksplice_reloc *helper_relocs;
-	struct ksplice_size *helper_sizes;
-	struct ksplice_patch *patches;
+	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
+	const struct ksplice_size *primary_sizes, *primary_sizes_end;
+	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
+	const struct ksplice_size *helper_sizes, *helper_sizes_end;
+	struct ksplice_patch *patches, *patches_end;
 	struct list_head *reloc_addrmaps;
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
@@ -156,8 +156,10 @@ static inline void print_abort(const char *str)
 	do { if (debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
 
 int process_ksplice_relocs(struct module_pack *pack,
-			   struct ksplice_reloc *relocs, int pre);
-int process_reloc(struct module_pack *pack, struct ksplice_reloc *r, int pre);
+			   const struct ksplice_reloc *relocs,
+			   const struct ksplice_reloc *relocs_end, int pre);
+int process_reloc(struct module_pack *pack, const struct ksplice_reloc *r,
+		  int pre);
 int compute_address(struct module_pack *pack, char *sym_name,
 		    struct list_head *vals, int pre);
 
@@ -226,14 +228,15 @@ int use_module(struct module *a, struct module *b);
 
 /* helper */
 int activate_helper(struct module_pack *pack);
-int search_for_match(struct module_pack *pack, struct ksplice_size *s);
-int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
-	     long pre_addr);
+int search_for_match(struct module_pack *pack, const struct ksplice_size *s);
+int try_addr(struct module_pack *pack, const struct ksplice_size *s,
+	     long run_addr, long pre_addr);
 
 #ifdef KSPLICE_STANDALONE
-int brute_search_all(struct module_pack *pack, struct ksplice_size *s);
+int brute_search_all(struct module_pack *pack, const struct ksplice_size *s);
 
-static inline int brute_search(struct module_pack *pack, struct ksplice_size *s,
+static inline int brute_search(struct module_pack *pack,
+			       const struct ksplice_size *s,
 			       void *start, long len)
 {
 	long addr;

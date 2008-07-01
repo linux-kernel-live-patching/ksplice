@@ -22,17 +22,21 @@ MODULE_LICENSE("GPL v2");
 #define PASTE(x, y) _PASTE(x, y)
 #define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_ID)
 
-extern struct ksplice_reloc ksplice_relocs;
-extern struct ksplice_size ksplice_sizes;
+extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
+extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
 
 /* Defined in primary.c */
-extern int KSPLICE_UNIQ(helper_init_module) (struct ksplice_reloc *,
-					     struct ksplice_size *);
+extern int KSPLICE_UNIQ(helper_init_module)(const struct ksplice_reloc *,
+					    const struct ksplice_reloc *,
+					    const struct ksplice_size *,
+					    const struct ksplice_size *);
 
 int init_module(void)
 {
-	return KSPLICE_UNIQ(helper_init_module) (&ksplice_relocs,
-						 &ksplice_sizes);
+	return KSPLICE_UNIQ(helper_init_module)(ksplice_relocs,
+						ksplice_relocs_end,
+						ksplice_sizes,
+						ksplice_sizes_end);
 }
 
 void cleanup_module(void)

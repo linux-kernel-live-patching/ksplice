@@ -360,8 +360,9 @@ sub save_using_asm {
 		else { die; }
 	}
 	print ASM ".section .ksplice.${suffix}, \"a\"\n";
-	print ASM ".$word 0\n";
+	print ASM "${suffix}_end:\n";
 	print ASM ".globl ${suffix}\n";
+	print ASM ".globl ${suffix}_end\n";
 	close(ASM);
 
 	runval("gcc", "-mcmodel=kernel", "-c", "asm${asm_id}.s", "-o", "asm${asm_id}.o");

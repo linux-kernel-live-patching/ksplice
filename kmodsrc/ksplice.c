@@ -87,7 +87,8 @@ extern u8 kallsyms_names[];
 #endif /* CONFIG_KALLSYMS */
 
 /* defined by ksplice-create */
-extern struct ksplice_reloc ksplice_init_relocs;
+extern const struct ksplice_reloc ksplice_init_relocs[],
+    ksplice_init_relocs_end[];
 
 /* Obtained via System.map */
 extern struct list_head modules;
@@ -111,7 +112,8 @@ int activate_primary(struct module_pack *pack)
 	int i, ret;
 	struct proc_dir_entry *proc_entry;
 
-	if (process_ksplice_relocs(pack, pack->primary_relocs, 0) != 0)
+	if (process_ksplice_relocs(pack, pack->primary_relocs,
+				   pack->primary_relocs_end, 0) != 0)
 		return -1;
 
 	if (resolve_patch_symbols(pack) != 0)
@@ -164,7 +166,7 @@ int resolve_patch_symbols(struct module_pack *pack)
 	int ret;
 	LIST_HEAD(vals);
 
-	for (p = pack->patches; p->oldstr; p++) {
+	for (p = pack->patches; p < pack->patches_end; p++) {
 		p->saved = kmalloc(5, GFP_KERNEL);
 		if (p->saved == NULL) {
 			print_abort("out of memory");
@@ -228,12 +230,12 @@ int procfile_write(struct file *file, const char *buffer, unsigned long count,
 int __apply_patches(void *packptr)
 {
 	struct module_pack *pack = packptr;
-	struct ksplice_patch *p;
+	const struct ksplice_patch *p;
 	struct safety_record *rec;
 	mm_segment_t old_fs;
 
 	list_for_each_entry(rec, pack->safety_records, list) {
-		for (p = pack->patches; p->oldstr; p++) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
 			if (p->oldaddr == rec->addr)
 				rec->care = 1;
 		}
@@ -249,7 +251,7 @@ int __apply_patches(void *packptr)
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	for (p = pack->patches; p->oldstr; p++) {
+	for (p = pack->patches; p < pack->patches_end; p++) {
 		memcpy((void *)p->saved, (void *)p->oldaddr, 5);
 		*((u8 *) p->oldaddr) = 0xE9;
 		*((u32 *) (p->oldaddr + 1)) = p->repladdr - (p->oldaddr + 5);
@@ -263,7 +265,7 @@ int __apply_patches(void *packptr)
 int __reverse_patches(void *packptr)
 {
 	struct module_pack *pack = packptr;
-	struct ksplice_patch *p;
+	const struct ksplice_patch *p;
 	mm_segment_t old_fs;
 
 	if (pack->state != KSPLICE_APPLIED)
@@ -283,7 +285,7 @@ int __reverse_patches(void *packptr)
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	for (p = pack->patches; p->oldstr; p++) {
+	for (p = pack->patches; p < pack->patches_end; p++) {
 		memcpy((void *)p->oldaddr, (void *)p->saved, 5);
 		kfree(p->saved);
 		flush_icache_range((unsigned long)p->oldaddr,
@@ -361,7 +363,7 @@ int check_stack(struct module_pack *pack, struct thread_info *tinfo,
 
 int check_address_for_conflict(struct module_pack *pack, long addr)
 {
-	struct ksplice_size *s = pack->primary_sizes;
+	const struct ksplice_size *s;
 	struct safety_record *rec;
 
 	/* It is safe for addr to point to the beginning of a patched
@@ -374,7 +376,7 @@ int check_address_for_conflict(struct module_pack *pack, long addr)
 			return -EAGAIN;
 		}
 	}
-	for (; s->name != NULL; s++) {
+	for (s = pack->primary_sizes; s < pack->primary_sizes_end; s++) {
 		if (addr >= s->thismod_addr
 		    && addr < s->thismod_addr + s->size) {
 			ksplice_debug(2, "[<-- CONFLICT] ");
@@ -395,7 +397,8 @@ int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
 #ifdef KSPLICE_STANDALONE
-	if (process_ksplice_relocs(pack, &ksplice_init_relocs, 1) != 0)
+	if (process_ksplice_relocs(pack, ksplice_init_relocs,
+				   ksplice_init_relocs_end, 1) != 0)
 		return -1;
 	bootstrapped = 1;
 #endif
@@ -415,17 +418,16 @@ int init_ksplice_module(struct module_pack *pack)
 
 int activate_helper(struct module_pack *pack)
 {
-	struct ksplice_size *s;
-	int i, record_count = 0, ret;
+	const struct ksplice_size *s;
+	int i, ret;
+	int record_count = pack->helper_sizes_end - pack->helper_sizes;
 	char *finished;
 	int numfinished, oldfinished = 0;
 	int restart_count = 0;
 
-	if (process_ksplice_relocs(pack, pack->helper_relocs, 1) != 0)
+	if (process_ksplice_relocs(pack, pack->helper_relocs,
+				   pack->helper_relocs_end, 1) != 0)
 		return -1;
-
-	for (s = pack->helper_sizes; s->name != NULL; s++)
-		record_count++;
 
 	finished = kcalloc(record_count, 1, GFP_KERNEL);
 	if (finished == NULL) {
@@ -434,7 +436,8 @@ int activate_helper(struct module_pack *pack)
 	}
 
 start:
-	for (s = pack->helper_sizes, i = 0; s->name != NULL; s++, i++) {
+	for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
+		i = s - pack->helper_sizes;
 		if (s->size == 0)
 			finished[i] = 1;
 		if (finished[i])
@@ -460,7 +463,8 @@ start:
 	}
 
 	if (oldfinished == numfinished) {
-		for (s = pack->helper_sizes, i = 0; s->name != NULL; s++, i++) {
+		for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
+			i = s - pack->helper_sizes;
 			if (finished[i] == 0)
 				ksplice_debug(2, KERN_DEBUG "ksplice: run-pre: "
 					      "could not match section %s\n",
@@ -481,7 +485,7 @@ start:
 	return -1;
 }
 
-int search_for_match(struct module_pack *pack, struct ksplice_size *s)
+int search_for_match(struct module_pack *pack, const struct ksplice_size *s)
 {
 	int i, ret;
 	long run_addr;
@@ -520,8 +524,8 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 	return ret;
 }
 
-int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
-	     long pre_addr)
+int try_addr(struct module_pack *pack, const struct ksplice_size *s,
+	     long run_addr, long pre_addr)
 {
 	struct safety_record *tmp;
 	struct reloc_nameval *nv;
@@ -610,17 +614,19 @@ int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
 }
 
 int process_ksplice_relocs(struct module_pack *pack,
-			   struct ksplice_reloc *relocs, int pre)
+			   const struct ksplice_reloc *relocs,
+			   const struct ksplice_reloc *relocs_end, int pre)
 {
-	struct ksplice_reloc *r;
-	for (r = relocs; r->sym_name != NULL; r++) {
+	const struct ksplice_reloc *r;
+	for (r = relocs; r < relocs_end; r++) {
 		if (process_reloc(pack, r, pre) != 0)
 			return -1;
 	}
 	return 0;
 }
 
-int process_reloc(struct module_pack *pack, struct ksplice_reloc *r, int pre)
+int process_reloc(struct module_pack *pack, const struct ksplice_reloc *r,
+		  int pre)
 {
 	int i, ret;
 	long off, sym_addr;
@@ -782,8 +788,8 @@ int add_dependency_on_address(struct module_pack *pack, long addr)
 int add_patch_dependencies(struct module_pack *pack)
 {
 	int ret;
-	struct ksplice_patch *p;
-	for (p = pack->patches; p->oldstr; p++) {
+	const struct ksplice_patch *p;
+	for (p = pack->patches; p < pack->patches_end; p++) {
 		ret = add_dependency_on_address(pack, p->oldaddr);
 		if (ret < 0)
 			return ret;
@@ -957,7 +963,7 @@ int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 }
 
 #ifdef KSPLICE_STANDALONE
-int brute_search_all(struct module_pack *pack, struct ksplice_size *s)
+int brute_search_all(struct module_pack *pack, const struct ksplice_size *s)
 {
 	struct module *m;
 	int ret = 0;
