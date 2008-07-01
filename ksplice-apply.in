@@ -42,6 +42,8 @@ runcd($tmpdir);
 my $ksplice = unpack_update($file);
 runcd($ksplice);
 
+my $unload = runstr("lsmod") !~ m/- $/m;
+
 foreach my $helper (glob('*-helper.ko')) {
 
 	(my $primary = $helper) =~ s/\-helper.ko$/.ko/;
@@ -51,7 +53,7 @@ foreach my $helper (glob('*-helper.ko')) {
 		die "$primary";
 	}
 	if(runval_raw("insmod $helper") != 0) {
-		runval_raw("rmmod $primary");
+		runval_raw("rmmod $primary") if $unload;
 		my $dmesg = runstr("dmesg | grep ksplice");
 		while($dmesg =~ /ksplice_h: Preparing and checking/) {
 			$dmesg = $';
@@ -93,9 +95,7 @@ END
 
 		die;
 	}
-	if(runval_raw("rmmod $helper") != 0) {
-		die;
-	}
+	die if ($unload && runval_raw("rmmod $helper") != 0)
 
 }
 
