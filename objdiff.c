@@ -30,8 +30,7 @@
 #include "objdiff.h"
 
 bfd *newbfd;
-asymbol **new_sympp, **old_sympp;
-int new_symcount, old_symcount;
+struct asymbolp_vec new_syms, old_syms;
 
 int main(int argc, char **argv)
 {
@@ -45,8 +44,8 @@ int main(int argc, char **argv)
 	assert(bfd_check_format_matches(oldbfd, bfd_object, &matching));
 	assert(bfd_check_format_matches(newbfd, bfd_object, &matching));
 
-	new_symcount = get_syms(newbfd, &new_sympp);
-	old_symcount = get_syms(oldbfd, &old_sympp);
+	get_syms(newbfd, &new_syms);
+	get_syms(oldbfd, &old_syms);
 
 	printf("%d\n", bfd_arch_bits_per_address(oldbfd));
 	foreach_nonmatching(oldbfd, newbfd, print_newbfd_section_name);
@@ -99,8 +98,8 @@ int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
 	int i;
 	struct supersect *old_ss, *new_ss;
 
-	old_ss = fetch_supersect(oldbfd, oldp, old_sympp);
-	new_ss = fetch_supersect(newbfd, newp, new_sympp);
+	old_ss = fetch_supersect(oldbfd, oldp, &old_syms);
+	new_ss = fetch_supersect(newbfd, newp, &new_syms);
 
 	if (old_ss->relocs.size != new_ss->relocs.size)
 		return -1;
@@ -113,8 +112,8 @@ int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
 		asection *ro_newp =
 		    (*new_ss->relocs.data[i]->sym_ptr_ptr)->section;
 
-		ro_old_ss = fetch_supersect(oldbfd, ro_oldp, old_sympp);
-		ro_new_ss = fetch_supersect(newbfd, ro_newp, new_sympp);
+		ro_old_ss = fetch_supersect(oldbfd, ro_oldp, &old_syms);
+		ro_new_ss = fetch_supersect(newbfd, ro_newp, &new_syms);
 
 		if (!starts_with(ro_old_ss->name, ".rodata"))
 			continue;
@@ -153,11 +152,13 @@ void print_newbfd_section_name(asection *sect)
 
 void print_newbfd_entry_symbols(asection *sect)
 {
-	int i;
-	for (i = 0; i < new_symcount; i++) {
-		if (strlen(new_sympp[i]->name) != 0 &&
-		    !starts_with(new_sympp[i]->name, ".text") &&
-		    strcmp(new_sympp[i]->section->name, sect->name) == 0)
-			printf("%s ", new_sympp[i]->name);
+	asymbol **symp;
+	for (symp = new_syms.data; symp < new_syms.data + new_syms.size;
+	     symp++) {
+		asymbol *sym = *symp;
+		if (strlen(sym->name) != 0 &&
+		    !starts_with(sym->name, ".text") &&
+		    strcmp(sym->section->name, sect->name) == 0)
+			printf("%s ", sym->name);
 	}
 }

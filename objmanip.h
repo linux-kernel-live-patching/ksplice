@@ -25,9 +25,9 @@ static void setup_section(bfd *ibfd, asection *isection, void *obfdarg);
 static void copy_section(bfd *ibfd, asection *isection, void *obfdarg);
 static void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
 					     void *symbolsarg);
-static unsigned int filter_symbols(bfd *abfd, bfd *obfd, asymbol **osyms,
-				   asymbol **isyms, long symcount);
-int exists_sym_with_name(asymbol **syms, int symcount, const char *desired);
+static void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
+			   struct asymbolp_vec *isyms);
+int exists_sym_with_name(struct asymbolp_vec *syms, const char *desired);
 int match_varargs(const char *str);
 int want_section(const char *name, char **newname);
 struct specsect *is_special(const char *name);

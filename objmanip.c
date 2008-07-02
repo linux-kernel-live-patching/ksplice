@@ -98,8 +98,7 @@
 #include "objmanip.h"
 #include <stdint.h>
 
-asymbol **isympp = NULL;
-long symcount;
+struct asymbolp_vec isyms;
 
 char **varargs;
 int varargs_count;
@@ -133,7 +132,7 @@ int main(int argc, char **argv)
 	bfd *obfd = bfd_openw(argv[1], output_target);
 	assert(obfd);
 
-	symcount = get_syms(ibfd, &isympp);
+	get_syms(ibfd, &isyms);
 
 	modestr = argv[2];
 	if (mode("keep")) {
@@ -160,15 +159,17 @@ int main(int argc, char **argv)
 		}
 	}
 
-	int i;
-	for (i = 0; mode("sizelist") && i < symcount; i++) {
-		if ((isympp[i]->flags & BSF_FUNCTION)
-		    && isympp[i]->value == 0 && !(isympp[i]->flags & BSF_WEAK)) {
+	asymbol **symp;
+	for (symp = isyms.data;
+	     mode("sizelist") && symp < isyms.data + isyms.size; symp++) {
+		asymbol *sym = *symp;
+		if ((sym->flags & BSF_FUNCTION)
+		    && sym->value == 0 && !(sym->flags & BSF_WEAK)) {
 			/* We call bfd_print_symbol in order to get access to
 			 * the size associated with the function symbol, which
 			 * is not otherwise available through the BFD API
 			 */
-			bfd_print_symbol(ibfd, stdout, isympp[i],
+			bfd_print_symbol(ibfd, stdout, sym,
 					 bfd_print_symbol_all);
 			printf("\n");
 		}
@@ -196,7 +197,7 @@ int main(int argc, char **argv)
 
 void rm_some_relocs(bfd *ibfd, asection *isection)
 {
-	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
+	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
 	struct arelentp_vec orig_relocs;
 	vec_move(&orig_relocs, &ss->relocs);
 
@@ -251,7 +252,7 @@ void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 
 int blot_section(bfd *abfd, asection *sect, int offset, int size)
 {
-	struct supersect *ss = fetch_supersect(abfd, sect, isympp);
+	struct supersect *ss = fetch_supersect(abfd, sect, &isyms);
 	void *address = ss->contents.data + offset;
 	int tmp;
 	if (size == 4) {
@@ -276,16 +277,17 @@ const char *canonical_sym(const char *sect_wlabel)
 	if (starts_with(sect, ".rodata"))
 		return sect;
 
-	int i;
-	for (i = 0; i < symcount; i++) {
-		const char *cur_sectname = isympp[i]->section->name;
+	asymbol **symp;
+	for (symp = isyms.data; symp < isyms.data + isyms.size; symp++) {
+		asymbol *sym = *symp;
+		const char *cur_sectname = sym->section->name;
 		if (!mode("sizelist"))
 			cur_sectname = dup_wolabel(cur_sectname);
 
-		if (strlen(isympp[i]->name) != 0 &&
-		    !starts_with(isympp[i]->name, ".text") &&
-		    strcmp(cur_sectname, sect) == 0 && isympp[i]->value == 0)
-			return isympp[i]->name;
+		if (strlen(sym->name) != 0 &&
+		    !starts_with(sym->name, ".text") &&
+		    strcmp(cur_sectname, sect) == 0 && sym->value == 0)
+			return sym->name;
 	}
 	printf("ksplice: Failed to canonicalize %s\n", sect);
 	DIE;
@@ -297,7 +299,7 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 	if (isection == NULL)
 		return;
 
-	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
+	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
 	struct void_vec orig_contents;
 	vec_move(&orig_contents, &ss->contents);
 	size_t pad = align(orig_contents.size, ss->alignment) -
@@ -363,7 +365,7 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 	if (!want_section(looking_at->name, NULL))
 		return;
 
-	struct supersect *ss = fetch_supersect(abfd, looking_at, isympp);
+	struct supersect *ss = fetch_supersect(abfd, looking_at, &isyms);
 	arelent **relocp;
 	for (relocp = ss->relocs.data;
 	     relocp != ss->relocs.data + ss->relocs.size; ++relocp) {
@@ -410,11 +412,12 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 	   ignore input sections which have no corresponding output
 	   section.  */
 
-	bfd_map_over_sections(ibfd, mark_symbols_used_in_relocations, isympp);
-	asymbol **osympp = (void *)malloc((2 * symcount + 1) * sizeof(*osympp));
-	symcount = filter_symbols(ibfd, obfd, osympp, isympp, symcount);
+	bfd_map_over_sections(ibfd, mark_symbols_used_in_relocations, &isyms);
+	struct asymbolp_vec osyms;
+	vec_init(&osyms);
+	filter_symbols(ibfd, obfd, &osyms, &isyms);
 
-	bfd_set_symtab(obfd, osympp, symcount);
+	bfd_set_symtab(obfd, osyms.data, osyms.size);
 
 	/* This has to happen after the symbol table has been set.  */
 	bfd_map_over_sections(ibfd, copy_section, obfd);
@@ -444,7 +447,7 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	flagword flags = bfd_get_section_flags(ibfd, isection);
 	bfd_set_section_flags(obfd, osection, flags);
 
-	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
+	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
 	assert(bfd_set_section_size(obfd, osection, ss->contents.size));
 
 	vma = bfd_section_vma(ibfd, isection);
@@ -474,7 +477,7 @@ void copy_section(bfd *ibfd, asection *isection, void *obfdarg)
 	if ((flags & SEC_GROUP) != 0)
 		return;
 
-	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
+	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
 	asection *osection = isection->output_section;
 	if (ss->contents.size == 0 || osection == 0)
 		return;
@@ -503,7 +506,7 @@ void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
 	if (isection->output_section == NULL)
 		return;
 
-	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
+	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
 
 	/* Examine each symbol used in a relocation.  If it's not one of the
 	   special bfd section symbols, then mark it with BSF_KEEP.  */
@@ -524,14 +527,12 @@ void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
  * We don't copy in place, because that confuses the relocs.
  * Return the number of symbols to print.
  */
-unsigned int filter_symbols(bfd *abfd, bfd *obfd, asymbol **osyms,
-			    asymbol **isyms, long symcount)
+void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
+		    struct asymbolp_vec *isyms)
 {
-	asymbol **from = isyms, **to = osyms;
-	long src_count = 0, dst_count = 0;
-
-	for (; src_count < symcount; src_count++) {
-		asymbol *sym = from[src_count];
+	asymbol **symp;
+	for (symp = isyms->data; symp < isyms->data + isyms->size; symp++) {
+		asymbol *sym = *symp;
 		flagword flags = sym->flags;
 
 		if (mode("keep") && want_section(sym->section->name, NULL)) {
@@ -572,7 +573,7 @@ unsigned int filter_symbols(bfd *abfd, bfd *obfd, asymbol **osyms,
 			keep = 0;
 
 		if (keep)
-			to[dst_count++] = sym;
+			*vec_grow(osyms, 1) = sym;
 
 		if (keep && mode("globalize")
 		    && ends_with(sym->name, globalizestr)) {
@@ -584,32 +585,29 @@ unsigned int filter_symbols(bfd *abfd, bfd *obfd, asymbol **osyms,
 			new->value = sym->value;
 			new->flags = BSF_GLOBAL;
 			new->section = sym->section;
-			to[dst_count++] = new;
+			*vec_grow(osyms, 1) = new;
 		}
 	}
 
 	asection *p;
 	for (p = obfd->sections; mode("keep") && p != NULL; p = p->next) {
 		if (starts_with(p->name, ".rodata") &&
-		    !exists_sym_with_name(from, symcount, p->name)) {
+		    !exists_sym_with_name(isyms, p->name)) {
 			asymbol *new = bfd_make_empty_symbol(obfd);
 			new->name = p->name;
 			new->value = 0x0;
 			new->flags = BSF_GLOBAL;
 			new->section = p;
-			to[dst_count++] = new;
+			*vec_grow(osyms, 1) = new;
 		}
 	}
-
-	to[dst_count] = NULL;
-	return dst_count;
 }
 
-int exists_sym_with_name(asymbol **syms, int symcount, const char *desired)
+int exists_sym_with_name(struct asymbolp_vec *syms, const char *desired)
 {
-	int i;
-	for (i = 0; i < symcount; i++) {
-		if (strcmp(bfd_asymbol_name(syms[i]), desired) == 0)
+	asymbol **symp;
+	for (symp = syms->data; symp < syms->data + syms->size; symp++) {
+		if (strcmp(bfd_asymbol_name(*symp), desired) == 0)
 			return 1;
 	}
 	return 0;

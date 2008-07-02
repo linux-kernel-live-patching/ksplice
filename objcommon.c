@@ -27,21 +27,21 @@ void vec_do_reserve(void **data, size_t *mem_size, size_t new_size)
 	}
 }
 
-long get_syms(bfd *abfd, asymbol ***syms_ptr)
+void get_syms(bfd *abfd, struct asymbolp_vec *syms)
 {
 	long storage_needed = bfd_get_symtab_upper_bound(abfd);
 	if (storage_needed == 0)
-		return 0;
+		return;
 	assert(storage_needed >= 0);
 
-	*syms_ptr = (asymbol **)malloc(storage_needed);
-	long num_syms = bfd_canonicalize_symtab(abfd, *syms_ptr);
-	assert(num_syms >= 0);
-
-	return num_syms;
+	vec_init(syms);
+	vec_reserve(syms, storage_needed);
+	vec_resize(syms, bfd_canonicalize_symtab(abfd, syms->data));
+	assert(syms->size >= 0);
 }
 
-struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp)
+struct supersect *fetch_supersect(bfd *abfd, asection *sect,
+				  struct asymbolp_vec *syms)
 {
 	static struct supersect *supersects = NULL;
 
@@ -67,7 +67,8 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp)
 	vec_init(&new->relocs);
 	vec_reserve(&new->relocs, bfd_get_reloc_upper_bound(abfd, sect));
 	vec_resize(&new->relocs,
-		   bfd_canonicalize_reloc(abfd, sect, new->relocs.data, sympp));
+		   bfd_canonicalize_reloc(abfd, sect, new->relocs.data,
+					  syms->data));
 	assert(new->relocs.size >= 0);
 
 	return new;

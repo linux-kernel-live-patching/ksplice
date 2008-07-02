@@ -57,6 +57,7 @@ void vec_do_reserve(void **data, size_t *mem_size, size_t newsize);
 
 DECLARE_VEC_TYPE(void, void_vec);
 DECLARE_VEC_TYPE(arelent *, arelentp_vec);
+DECLARE_VEC_TYPE(asymbol *, asymbolp_vec);
 
 #ifndef bfd_get_section_size
 #define bfd_get_section_size(x) ((x)->_cooked_size)
@@ -71,8 +72,9 @@ struct supersect {
 	struct supersect *next;
 };
 
-long get_syms(bfd *abfd, asymbol ***syms_ptr);
-struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp);
+void get_syms(bfd *abfd, struct asymbolp_vec *syms);
+struct supersect *fetch_supersect(bfd *abfd, asection *sect,
+				  struct asymbolp_vec *syms);
 
 #define starts_with(str, prefix)			\
 	(strncmp(str, prefix, strlen(prefix)) == 0)
