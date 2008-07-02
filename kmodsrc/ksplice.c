@@ -451,6 +451,12 @@ start:
 	}
 
 	if (oldfinished == numfinished) {
+		for (s = pack->helper_sizes, i = 0; s->name != NULL; s++, i++) {
+			if (finished[i] == 0)
+				ksplice_debug(2, KERN_DEBUG "ksplice: run-pre: "
+					      "could not match section %s\n",
+					      s->name);
+		}
 		print_abort("run-pre: could not match some sections");
 		kfree(finished);
 		return -1;
