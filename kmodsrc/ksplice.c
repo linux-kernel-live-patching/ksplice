@@ -506,7 +506,7 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 	release_vals(&vals);
 
 #ifdef KSPLICE_STANDALONE
-	ret = brute_search_all_mods(pack, s);
+	ret = brute_search_all(pack, s);
 #endif
 	return ret;
 }
@@ -949,15 +949,18 @@ int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
 }
 
 #ifdef KSPLICE_STANDALONE
-int brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
+int brute_search_all(struct module_pack *pack, struct ksplice_size *s)
 {
 	struct module *m;
 	int ret = 0;
 	int saved_debug;
+	char *where = NULL;
 
-	ksplice_debug(2, KERN_DEBUG "beginning brute_search for %s\n", s->name);
+	ksplice_debug(2, KERN_DEBUG "ksplice: brute_search: searching for %s\n",
+		      s->name);
 	saved_debug = debug;
 	debug = 0;
+
 	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
 		if (starts_with(m->name, pack->name) ||
@@ -965,14 +968,25 @@ int brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s)
 			continue;
 		if (brute_search(pack, s, m->module_core, m->core_size) == 0 ||
 		    brute_search(pack, s, m->module_init, m->init_size) == 0) {
-			if (saved_debug >= 2)
-				printk(KERN_DEBUG "brute_search found %s in module %s\n", s->name, 
-					   m->name);
 			ret = 1;
+			where = m->name;
 			break;
 		}
 	}
 	mutex_unlock(&module_mutex);
+
+	if (ret == 0) {
+		if (brute_search(pack, s, (void *)init_mm.start_code,
+				 init_mm.end_code - init_mm.start_code) == 0) {
+			ret = 1;
+			where = "vmlinux";
+		}
+	}
+
+	if (ret == 1 && saved_debug >= 2)
+		printk(KERN_DEBUG "ksplice: brute_search: found %s in %s\n",
+		       s->name, where);
+
 	debug = saved_debug;
 	return ret;
 }
