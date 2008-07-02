@@ -1,3 +1,5 @@
+ksplice-script = /usr/local/share/ksplice/ksplice.pl
+
 ifneq ($(KERNELRELEASE),)
 
 CFLAGS_ksplice.o += -DKSPLICE_STANDALONE
@@ -19,7 +21,31 @@ KSPLICE = ksplice-$(KSPLICE_ID)
 
 obj-m = $(KSPLICE)-helper.o $(KSPLICE).o
 $(KSPLICE)-helper-objs = helper.o collection.o.helper
-$(KSPLICE)-objs = primary.o ksplice.o collection.o.primary
+$(KSPLICE)-objs = primary.o ksplice-rmsyms.o collection.o.primary
+extra-y = ksplice.o
+
+RMSYMS = \
+	thread_return \
+	bust_spinlocks \
+	task_curr \
+	__kernel_text_address \
+	tasklist_lock \
+	stop_machine_run \
+	module_mutex \
+	modules \
+	init_mm \
+	kallsyms_addresses \
+	kallsyms_num_syms \
+	kallsyms_names \
+	kallsyms_token_table \
+	kallsyms_token_index
+
+quiet_cmd_ksplice-rmsyms = RMSYMS  $@
+cmd_ksplice-rmsyms = \
+	$(ksplice-script) rmsyms $< $(RMSYMS); \
+	ld -r -o $@ $< $(src)/ksplice.lds
+$(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o FORCE
+	$(call if_changed,ksplice-rmsyms)
 
 else
 

@@ -42,6 +42,9 @@ sub do_snap {
 	empty_diff($out);
 }
 
+my %syms;
+my $word;
+
 sub do_diff {
 	my ($out) = @_;
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
@@ -57,6 +60,8 @@ sub do_diff {
 	die if ($bits ne '32' && $bits ne '64');
 	return empty_diff($out) if ($sections eq '' && $entrysyms eq '');
 
+	$word = ($bits == 64 ? "quad" : "long");
+
 	copy($obj, "$obj.KSPLICE_primary");
 	copy($obj_old, "$obj.KSPLICE_helper");
 
@@ -66,19 +71,31 @@ sub do_diff {
 	close OBJ;
 	close OBJ_OLD;
 
+	load_system_map();
+
 	my $relocs_primary = runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
 	runsuc("objmanip", "$obj.KSPLICE_primary", "globalize", "____${tag}_post");
+	parse_and_save(\&parse_relocs, $relocs_primary, "$obj.KSPLICE_primary",
+		       "ksplice_relocs", "_global");
 
 	my $relocs_helper = runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
 	runsuc("objmanip", "$obj.KSPLICE_helper", "globalize", "____${tag}_pre");
+	parse_and_save(\&parse_relocs, $relocs_helper, "$obj.KSPLICE_helper",
+		       "ksplice_relocs", "_global");
+
+	my $sizelist_primary = runsuc("objmanip", "$obj.KSPLICE_primary", "sizelist");
+	parse_and_save(\&parse_sizelist, $sizelist_primary, "$obj.KSPLICE_primary", "ksplice_sizes");
+	my $sizelist_helper = runsuc("objmanip", "$obj.KSPLICE_helper", "sizelist");
+	parse_and_save(\&parse_sizelist, $sizelist_helper, "$obj.KSPLICE_helper", "ksplice_sizes");
 
 	my $patchlist = "";
 	foreach my $sym (split(/\s/, $entrysyms)) {
 		$patchlist .= "${sym}____${tag}_pre ${sym}____${tag}_post\n";
 	}
+	parse_and_save(\&parse_patchlist, $patchlist, "$obj.KSPLICE_primary", "ksplice_patches");
 
 	open OUT, '>', "$out.tmp";
-	print OUT "$bits\n$patchlist\n$relocs_primary\n$relocs_helper\n";
+	print OUT "$bits\n";
 	close OUT;
 	rename "$out.tmp", $out;
 }
@@ -86,7 +103,7 @@ sub do_diff {
 sub do_combine {
 	my ($out, @ins) = @_;
 	my @objs;
-	my ($outbits, $patchlist, $relocs_primary, $relocs_helper) = (undef, '', '', '');
+	my $outbits = undef;
 	foreach my $in (@ins) {
 		next if (!-s $in);
 		my ($obj) = $in =~ /^(.*)\.KSPLICE$/ or die;
@@ -97,10 +114,6 @@ sub do_combine {
 		chomp(my $bits = <IN>);
 		die if (defined $outbits && $outbits ne $bits);
 		$outbits = $bits;
-
-		$patchlist .= $_ while (($_ = <IN>) ne "\n");
-		$relocs_primary .= $_ while (($_ = <IN>) ne "\n");
-		$relocs_helper .= $_ while (($_ = <IN>) ne "\n");
 
 		close IN;
 	}
@@ -119,15 +132,33 @@ sub do_combine {
 	}
 
 	open OUT, '>', "$out.tmp";
-	print OUT "$outbits\n$patchlist\n$relocs_primary\n$relocs_helper\n";
+	print OUT "$outbits\n";
 	close OUT;
 	rename "$out.tmp", $out;
+}
+
+sub do_rmsyms {
+	my ($obj, @rmsyms) = @_;
+	load_system_map();
+	my ($bits) = split("\n", runsuc("objdiff", $obj, $obj));
+	die if ($bits ne '32' && $bits ne '64');
+	$word = ($bits == 64 ? "quad" : "long");
+	my $relocs = runsuc("objmanip", $obj, "rmsyms", @rmsyms);
+	parse_and_save(\&parse_relocs, $relocs, $obj, "ksplice_init_relocs", "");
+}
+
+sub do_system_map_lookup {
+	my ($sym) = @_;
+	load_system_map();
+	print ((find_sym_system_map($sym))[0]);
 }
 
 my %handlers = (
 	'snap' => \&do_snap,
 	'diff' => \&do_diff,
 	'combine' => \&do_combine,
+	'rmsyms' => \&do_rmsyms,
+	'system_map_lookup' => \&do_system_map_lookup,
 );
 
 my ($cmd, @args) = @ARGV;
@@ -137,3 +168,130 @@ if (exists $handlers{$cmd}) {
 } else {
 	print "Usage: ksplice.pl ", join('|', keys %handlers), " ...\n";
 };
+
+exit 0;
+
+sub load_system_map {
+	open(SYMS, "<", "$ENV{KSPLICE_CONFIG_DIR}/System.map") or die;
+	my $line;
+	while(defined($line = <SYMS>)) {
+		my ($addr, $type, $sym, $mod) = split(/\s+/, $line);
+		next if($sym =~ /init_module/ ||
+			$sym =~ /cleanup_module/ ||
+			$sym =~ /this_module/);
+
+		$syms{$sym}{$addr} = 1;
+	}
+	close(SYMS);
+}
+
+sub find_sym_system_map {
+	my ($sym) = @_;
+	$sym =~ s/[.]text[.]//g;
+	$sym =~ s/[.]bss[.]//g;
+	$sym =~ s/[.]data[.]//g;
+	$sym =~ s/____.*//g;
+	if(defined $syms{$sym}) {
+		return keys(%{$syms{$sym}});
+	}
+	return ();
+}
+
+sub parse_and_save {
+	my ($funcref, $entries, $objfile, $suffix, @other) = @_;
+	my @entries = split(/\n/, $entries);
+
+	my @tosave;
+	foreach my $entry (@entries) {
+		print $entry, "\n" if($verbose);
+		&$funcref(\@tosave, $entry, @other);
+	}
+	save_using_asm(\@tosave, $objfile, $suffix);
+}
+
+sub save_using_asm {
+	my ($tosaveref, $objfile, $suffix) = @_;
+
+	my $asm_base = "$objfile.$suffix";
+
+	open(ASM, ">", "$asm_base.s");
+	print ASM ".section .${suffix}, \"a\"\n";
+
+	foreach my $entryref (@$tosaveref) {
+		my @entry = @{$entryref};
+
+		if($entry[0] eq "str") {
+			print ASM ".section .ksplice_str, \"a\"\n";
+			print ASM "0: .string \"", $entry[1], "\"\n";
+			print ASM ".section .${suffix}, \"a\"\n";
+			print ASM ".$word 0b\n";
+		}
+		elsif($entry[0] eq "array" && scalar(@entry) == 1) {
+			print ASM ".section .${suffix}, \"a\"\n";
+			print ASM ".$word 0x0\n";
+		}
+		elsif($entry[0] eq "array") {
+			print ASM ".section .ksplice_array, \"a\"\n";
+			print ASM "0:\n";
+			for(my $i = 1; $i < scalar(@entry); $i++) {
+				print ASM ".$word 0x", $entry[$i], "\n";
+			}
+			print ASM ".section .${suffix}, \"a\"\n";
+			print ASM ".$word 0b\n";
+		}
+		elsif($entry[0] eq "word") {
+			print ASM ".section .${suffix}, \"a\"\n";
+			print ASM ".$word 0x", $entry[1], "\n";
+		}
+		elsif($entry[0] eq "ptr") {
+			print ASM ".section .${suffix}, \"a\"\n";
+			print ASM ".$word ", $entry[1], "\n";
+		}
+		else { die; }
+	}
+	close(ASM);
+
+	runval("gcc", "-mcmodel=kernel", "-c", "$asm_base.s", "-o", "$asm_base.o");
+	runval("mv", $objfile, "$objfile.pre$suffix");
+	runval("ld", "-r", "-o", "$objfile", "$objfile.pre$suffix", "$asm_base.o");
+}
+
+sub parse_relocs {
+	my ($tosaveref, $entry, $globalizer) = @_;
+	my ($sym, $sect, $addr, $pcrel, $addend, $size) = split(/\s/, $entry);
+
+	my ($func) = ($sect =~ /(.*)____/);
+	$sym =~ s/([.]data[.]__func__[.])\d+/$1${func}/g;
+
+	my @symvals = find_sym_system_map($sym);
+
+	push @$tosaveref, (["str", $sym], ["str", $sect],
+			["ptr", "${sect}${globalizer}"],
+			["word", $addr],
+			["word", scalar(@symvals)],
+			["array", @symvals],
+			["word", $pcrel],
+			["word", $addend],
+			["word", $size]);
+}
+
+sub parse_sizelist {
+	my ($tosaveref, $entry) = @_;
+	# grab the size and the symbol name from the end of the line
+	my ($size, $sym) = ($entry =~ /\s([a-z0-9]+)\s+(\S+)$/);
+
+	my @vals = find_sym_system_map($sym);
+
+	push @$tosaveref, (["str", $sym], ["word", $size],
+		["ptr", "${sym}_global"], ["word", scalar(@vals)],
+		["array", @vals]);
+}
+
+sub parse_patchlist {
+	my ($tosaveref, $entry) = @_;
+	my ($oldsym, $replsym) = split(/\s/, $entry);
+
+	push @$tosaveref, (["str", $oldsym], ["str", $replsym],
+		["word", 0], ["ptr", "${replsym}_global"],
+		["word", 0]);
+}

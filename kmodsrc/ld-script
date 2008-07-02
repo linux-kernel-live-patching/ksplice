@@ -1,3 +1,18 @@
 SECTIONS {
-    .text : { *(.text*) }
+  .text : { *(.text .text.*) }
+  .ksplice_relocs : {
+    ksplice_relocs = .;
+    KEEP(*(.ksplice_relocs))
+    ksplice_relocs_end = .;
+  }
+  .ksplice_sizes : {
+    ksplice_sizes = .;
+    KEEP(*(.ksplice_sizes))
+    ksplice_sizes_end = .;
+  }
+  .ksplice_patches : {
+    ksplice_patches = .;
+    KEEP(*(.ksplice_patches))
+    ksplice_patches_end = .;
+  }
 }

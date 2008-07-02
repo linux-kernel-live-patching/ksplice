@@ -75,6 +75,8 @@ if(! -e "$orig_config_dir/System.map") {
 	die "Failed to find System.map file in ORIG_CONFIG directory";
 }
 
+$ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
+
 if(!defined $postdir) {
 	$postdir = "$orig_config_dir/post";
 }
@@ -91,33 +93,13 @@ for(my $z = 0; $z < 8; $z++) {
 }
 my $ksplice = "ksplice-$kid";
 
-my %syms;
-load_system_map();
-
 # Some versions of Fedora have System.map files whose symbol addresses disagree
 # with the running kernel by a constant address offset.  Here, Ksplice notes the
 # System.map address for printk so that it can later compare this address against
 # the kernel's address for printk.  This comparison helps Ksplice work around
 # this Fedora problem, and this comparison also helps Ksplice detect whether
 # the user has provided an incorrect System.map file.
-my $map_printk = (find_sym_system_map("printk"))[0];
-
-my @rmsyms = qw(
-	thread_return
-	bust_spinlocks
-	task_curr
-	__kernel_text_address
-	tasklist_lock
-	stop_machine_run
-	module_mutex
-	modules
-	init_mm
-	kallsyms_addresses
-	kallsyms_num_syms
-	kallsyms_names
-	kallsyms_token_table
-	kallsyms_token_index
-);
+my $map_printk = runstr("$datadir/ksplice.pl", "system_map_lookup", "printk");
 
 print "Starting kernel builds (this process might take a long time)...\n";
 if(!$verbose) {
@@ -186,20 +168,8 @@ if(!@modules) {
 
 revert_orig();
 
-my $word;
 for my $module (@modules) {
 	runcd("$tmpdir/collect");
-	open IN, '<', "$module.o.KSPLICE";
-	chomp(my $bits = <IN>);
-	die if($bits != 32 && $bits != 64);
-	$word = ($bits == 64 ? "quad" : "long");
-
-	my ($patchlist, $relocs_primary, $relocs_helper) = ('', '', '');
-	$patchlist .= $_ while (($_ = <IN>) ne "\n");
-	$relocs_primary .= $_ while (($_ = <IN>) ne "\n");
-	$relocs_helper .= $_ while (($_ = <IN>) ne "\n");
-
-	close IN;
 
 ################################################################################
 # PHASE 3: Combine the target object files and prepare for kernel module build #
@@ -210,28 +180,16 @@ for my $module (@modules) {
 # - saves the list of target entry syms in ELF sect .ksplice.ksplice_patches   #
 ################################################################################
 
-	parse_and_save(\&parse_relocs, $relocs_primary, "$module.o.KSPLICE_primary",
-		       "ksplice_relocs", "_global");
-	parse_and_save(\&parse_relocs, $relocs_helper, "$module.o.KSPLICE_helper",
-		       "ksplice_relocs", "_global");
-
 	runcd($tmpdir);
 	runval("cp", "-a", "--", "$datadir/kmodsrc", "kmodsrc-$module");
 	runval("mv", "collect/$module.o.KSPLICE_primary", "kmodsrc-$module/collection.o.primary");
 	runval("mv", "collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
 	runcd("kmodsrc-$module");
 
-	my $sizelist_primary = runsuc("objmanip", "collection.o.primary", "sizelist");
-	parse_and_save(\&parse_sizelist, $sizelist_primary, "collection.o.primary", "ksplice_sizes");
-	my $sizelist_helper = runsuc("objmanip", "collection.o.helper", "sizelist");
-	parse_and_save(\&parse_sizelist, $sizelist_helper, "collection.o.helper", "ksplice_sizes");
-
 	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary.postld", "collection.o.primary");
 	runval("cp", "collection.o.primary.postld", "collection.o.primary");
 	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.helper.postld", "collection.o.helper");
 	runval("cp", "collection.o.helper.postld", "collection.o.helper");
-
-	parse_and_save(\&parse_patchlist, $patchlist, "collection.o.primary", "ksplice_patches");
 
 ###############################################################################
 # PHASE 4: Build the kernel modules and create the update tarball             #
@@ -244,9 +202,6 @@ for my $module (@modules) {
 	$kid_m =~ s/-/_/g;
 	my $ksplice_m = "ksplice-$kid_m";
 	runval("make", @jlevel, "modules", "KSPLICE_ID=$kid_m", "map_printk=$map_printk", "KERNELSRC=$linuxtree");
-
-	my $relocs = runsuc("objmanip", "$ksplice_m.ko", "rmsyms", @rmsyms);
-	parse_and_save(\&parse_relocs, $relocs, "$ksplice_m.ko", "ksplice_init_relocs", "");
 }
 
 runcd($tmpdir);
@@ -276,138 +231,6 @@ if($apply) {
 }
 
 exit(0);
-
-sub load_system_map {
-	open(SYMS, "<", "$orig_config_dir/System.map") or die;
-	my $line;
-	while(defined($line = <SYMS>)) {
-		my ($addr, $type, $sym, $mod) = split(/\s+/, $line);
-		next if($sym =~ /init_module/ ||
-			$sym =~ /cleanup_module/ ||
-			$sym =~ /this_module/);
-
-		$syms{$sym}{$addr} = 1;
-	}
-	close(SYMS);
-}
-
-sub find_sym_system_map {
-	my ($sym) = @_;
-	$sym =~ s/[.]text[.]//g;
-	$sym =~ s/[.]bss[.]//g;
-	$sym =~ s/[.]data[.]//g;
-	$sym =~ s/____.*//g;
-	if(defined $syms{$sym}) {
-		return keys(%{$syms{$sym}});
-	}
-	return ();
-}
-
-sub parse_and_save {
-	my ($funcref, $entries, $objfile, $suffix, @other) = @_;
-	my @entries = split(/\n/, $entries);
-
-	my @tosave;
-	foreach my $entry (@entries) {
-		print $entry, "\n" if($verbose);
-		&$funcref(\@tosave, $entry, @other);
-	}
-	save_using_asm(\@tosave, $objfile, $suffix);
-}
-
-BEGIN { # to make asm_id a static local variable
-my ${asm_id} = "0";
-sub save_using_asm {
-	my ($tosaveref, $objfile, $suffix) = @_;
-
-	open(ASM, ">", "asm${asm_id}.s");
-	print ASM ".section .${suffix}, \"a\"\n";
-	print ASM "${suffix}:\n";
-
-	foreach my $entryref (@$tosaveref) {
-		my @entry = @{$entryref};
-
-		if($entry[0] eq "str") {
-			print ASM ".section .ksplice_str, \"a\"\n";
-			print ASM "0: .string \"", $entry[1], "\"\n";
-			print ASM ".section .${suffix}, \"a\"\n";
-			print ASM ".$word 0b\n";
-		}
-		elsif($entry[0] eq "array" && scalar(@entry) == 1) {
-			print ASM ".section .${suffix}, \"a\"\n";
-			print ASM ".$word 0x0\n";
-		}
-		elsif($entry[0] eq "array") {
-			print ASM ".section .ksplice_array, \"a\"\n";
-			print ASM "0:\n";
-			for(my $i = 1; $i < scalar(@entry); $i++) {
-				print ASM ".$word 0x", $entry[$i], "\n";
-			}
-			print ASM ".section .${suffix}, \"a\"\n";
-			print ASM ".$word 0b\n";
-		}
-		elsif($entry[0] eq "word") {
-			print ASM ".section .${suffix}, \"a\"\n";
-			print ASM ".$word 0x", $entry[1], "\n";
-		}
-		elsif($entry[0] eq "ptr") {
-			print ASM ".section .${suffix}, \"a\"\n";
-			print ASM ".$word ", $entry[1], "\n";
-		}
-		else { die; }
-	}
-	print ASM ".section .${suffix}, \"a\"\n";
-	print ASM "${suffix}_end:\n";
-	print ASM ".globl ${suffix}\n";
-	print ASM ".globl ${suffix}_end\n";
-	close(ASM);
-
-	runval("gcc", "-mcmodel=kernel", "-c", "asm${asm_id}.s", "-o", "asm${asm_id}.o");
-	runval("ld", "-r", "-o", "$objfile.new", $objfile, "asm${asm_id}.o");
-	runval("mv", "$objfile.new", $objfile);
-	${asm_id}++;
-}
-} # close BEGIN
-
-sub parse_relocs {
-	my ($tosaveref, $entry, $globalizer) = @_;
-	my ($sym, $sect, $addr, $pcrel, $addend, $size) = split(/\s/, $entry);
-
-	my ($func) = ($sect =~ /(.*)____/);
-	$sym =~ s/([.]data[.]__func__[.])\d+/$1${func}/g;
-
-	my @symvals = find_sym_system_map($sym);
-
-	push @$tosaveref, (["str", $sym], ["str", $sect],
-			["ptr", "${sect}${globalizer}"],
-			["word", $addr],
-			["word", scalar(@symvals)],
-			["array", @symvals],
-			["word", $pcrel],
-			["word", $addend],
-			["word", $size]);
-}
-
-sub parse_sizelist {
-	my ($tosaveref, $entry) = @_;
-	# grab the size and the symbol name from the end of the line
-	my ($size, $sym) = ($entry =~ /\s([a-z0-9]+)\s+(\S+)$/);
-
-	my @vals = find_sym_system_map($sym);
-
-	push @$tosaveref, (["str", $sym], ["word", $size],
-		["ptr", "${sym}_global"], ["word", scalar(@vals)],
-		["array", @vals]);
-}
-
-sub parse_patchlist {
-	my ($tosaveref, $entry) = @_;
-	my ($oldsym, $replsym) = split(/\s/, $entry);
-
-	push @$tosaveref, (["str", $oldsym], ["str", $replsym],
-		["word", 0], ["ptr", "${replsym}_global"],
-		["word", 0]);
-}
 
 =head1 NAME
 
