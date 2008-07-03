@@ -39,7 +39,16 @@
 /* Old kernels do not have kcalloc */
 #define kcalloc ksplice_kcalloc
 static inline void *ksplice_kcalloc(size_t n, size_t size,
-				    typeof(GFP_KERNEL) flags);
+				    typeof(GFP_KERNEL) flags)
+{
+	char *mem;
+	if (n != 0 && size > ULONG_MAX / n)
+		return NULL;
+	mem = kmalloc(n * size, flags);
+	if (mem)
+		memset(mem, 0, n * size);
+	return mem;
+}
 
 /* Old kernels use semaphore instead of mutex
    97d1f15b7ef52c1e9c28dc48b454024bb53a5fd2 was after 2.6.16 */
@@ -989,19 +998,6 @@ int brute_search_all(struct module_pack *pack, struct ksplice_size *s)
 
 	debug = saved_debug;
 	return ret;
-}
-
-/* old kernels do not have kcalloc */
-static inline void *ksplice_kcalloc(size_t n, size_t size,
-				    typeof(GFP_KERNEL) flags)
-{
-	char *mem;
-	if (n != 0 && size > ULONG_MAX / n)
-		return NULL;
-	mem = kmalloc(n * size, flags);
-	if (mem)
-		memset(mem, 0, n * size);
-	return mem;
 }
 
 #ifdef CONFIG_KALLSYMS
