@@ -197,15 +197,14 @@ int main(int argc, char **argv)
 void rm_some_relocs(bfd *ibfd, asection *isection)
 {
 	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
-	arelent **orig_relocs = malloc(ss->num_relocs * sizeof(*orig_relocs));
-	memcpy(orig_relocs, ss->relocs, ss->num_relocs * sizeof(*orig_relocs));
-	int orig_num_relocs = ss->num_relocs;
-	ss->num_relocs = 0;
+	struct arelentp_vec orig_relocs;
+	vec_move(&orig_relocs, &ss->relocs);
 
-	int i;
-	for (i = 0; i < orig_num_relocs; i++) {
+	arelent **relocp;
+	for (relocp = orig_relocs.data;
+	     relocp < orig_relocs.data + orig_relocs.size; ++relocp) {
 		int rm_reloc = 0;
-		asymbol *sym_ptr = *orig_relocs[i]->sym_ptr_ptr;
+		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
 
 		if (mode("rmsyms") && match_varargs(sym_ptr->name))
 			rm_reloc = 1;
@@ -217,9 +216,9 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 			rm_reloc = 0;
 
 		if (rm_reloc)
-			print_reloc(ibfd, isection, orig_relocs[i], ss);
+			print_reloc(ibfd, isection, *relocp, ss);
 		else
-			ss->relocs[ss->num_relocs++] = orig_relocs[i];
+			*vec_grow(&ss->relocs, 1) = *relocp;
 	}
 }
 
@@ -253,7 +252,7 @@ void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 int blot_section(bfd *abfd, asection *sect, int offset, int size)
 {
 	struct supersect *ss = fetch_supersect(abfd, sect, isympp);
-	long address = (long)ss->contents + offset;
+	void *address = ss->contents.data + offset;
 	int tmp;
 	if (size == 4) {
 		tmp = *(int *)address;
@@ -299,32 +298,32 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 		return;
 
 	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
-	int contents_size = align(ss->contents_size, ss->alignment);
-	void *orig_buffer = calloc(1, contents_size);
-	memcpy(orig_buffer, ss->contents, ss->contents_size);
-	arelent **orig_relocs = malloc(ss->num_relocs * sizeof(*orig_relocs));
-	memcpy(orig_relocs, ss->relocs, ss->num_relocs * sizeof(*orig_relocs));
+	struct void_vec orig_contents;
+	vec_move(&orig_contents, &ss->contents);
+	size_t pad = align(orig_contents.size, ss->alignment) -
+	    orig_contents.size;
+	memset(vec_grow(&orig_contents, pad), 0, pad);
+	struct arelentp_vec orig_relocs;
+	vec_move(&orig_relocs, &ss->relocs);
 
 	int entry_size = align(s->entry_size, ss->alignment);
-	assert(contents_size % entry_size == 0);
-	if (s->odd_relocs)
-		assert((contents_size / entry_size) * 2 == ss->num_relocs);
-	else
-		assert(contents_size / entry_size == ss->num_relocs);
+	int relocs_per_entry = s->odd_relocs ? 2 : 1;
+	assert((orig_contents.size / entry_size) * relocs_per_entry ==
+	       orig_relocs.size);
 
-	int orig_num_relocs = ss->num_relocs;
-	ss->num_relocs = 0;
-	int new_num_entries = 0;
-	int i, orig_buffer_index, end_last_entry = 0, modifier = 0;
-	for (i = 0; i < orig_num_relocs; i++) {
-		asymbol *sym_ptr = *orig_relocs[i]->sym_ptr_ptr;
-		if (s->odd_relocs && i % 2 == 1) {
-			assert(strcmp(sym_ptr->name, s->odd_relocname) == 0);
-			continue;
+	void *orig_entry;
+	arelent **relocp;
+	for (orig_entry = orig_contents.data, relocp = orig_relocs.data;
+	     orig_entry < orig_contents.data + orig_contents.size;
+	     orig_entry += entry_size, relocp += relocs_per_entry) {
+		asymbol *sym = *(*relocp)->sym_ptr_ptr;
+		if (s->odd_relocs) {
+			asymbol *odd_sym = *(*(relocp + 1))->sym_ptr_ptr;
+			assert(strcmp(odd_sym->name, s->odd_relocname) == 0);
 		}
 		asection *p;
 		for (p = ibfd->sections; p != NULL; p = p->next) {
-			if (strcmp(sym_ptr->name, p->name) == 0
+			if (strcmp(sym->name, p->name) == 0
 			    && !is_special(p->name)
 			    && !want_section(p->name, NULL))
 				break;
@@ -332,23 +331,19 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 		if (p != NULL)
 			continue;
 
-		if (s->odd_relocs)
-			orig_buffer_index = i / 2;
-		else
-			orig_buffer_index = i;
-		memcpy(ss->contents + (new_num_entries++) * entry_size,
-		       orig_buffer + orig_buffer_index * entry_size,
-		       entry_size);
-		modifier += orig_buffer_index * entry_size - end_last_entry;
-		ss->relocs[ss->num_relocs] = orig_relocs[i];
-		ss->relocs[ss->num_relocs++]->address -= modifier;
+		void *new_entry = vec_grow(&ss->contents, entry_size);
+		memcpy(new_entry, orig_entry, entry_size);
+		int modifier = (new_entry - ss->contents.data) -
+		    (orig_entry - orig_contents.data);
+		arelent **new_relocp = vec_grow(&ss->relocs, 1);
+		*new_relocp = *relocp;
+		(*new_relocp)->address += modifier;
 		if (s->odd_relocs) {
-			ss->relocs[ss->num_relocs] = orig_relocs[i + 1];
-			ss->relocs[ss->num_relocs++]->address -= modifier;
+			new_relocp = vec_grow(&ss->relocs, 1);
+			*new_relocp = *(relocp + 1);
+			(*new_relocp)->address += modifier;
 		}
-		end_last_entry = orig_buffer_index * entry_size + entry_size;
 	}
-	ss->contents_size = new_num_entries * entry_size;
 }
 
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
@@ -369,10 +364,11 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 		return;
 
 	struct supersect *ss = fetch_supersect(abfd, looking_at, isympp);
-	int i;
-	for (i = 0; i < ss->num_relocs; i++) {
-		asymbol *sym_ptr = *ss->relocs[i]->sym_ptr_ptr;
-		if (sym_ptr->section == (asection *)looking_for) {
+	arelent **relocp;
+	for (relocp = ss->relocs.data;
+	     relocp != ss->relocs.data + ss->relocs.size; ++relocp) {
+		asymbol *sym = *(*relocp)->sym_ptr_ptr;
+		if (sym->section == (asection *)looking_for) {
 			struct wsect *w = malloc(sizeof(*w));
 			w->name = strdup(((asection *)looking_for)->name);
 			w->next = wanted_sections;
@@ -449,7 +445,7 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	bfd_set_section_flags(obfd, osection, flags);
 
 	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
-	assert(bfd_set_section_size(obfd, osection, ss->contents_size));
+	assert(bfd_set_section_size(obfd, osection, ss->contents.size));
 
 	vma = bfd_section_vma(ibfd, isection);
 	assert(bfd_set_section_vma(obfd, osection, vma));
@@ -480,16 +476,18 @@ void copy_section(bfd *ibfd, asection *isection, void *obfdarg)
 
 	struct supersect *ss = fetch_supersect(ibfd, isection, isympp);
 	asection *osection = isection->output_section;
-	if (ss->contents_size == 0 || osection == 0)
+	if (ss->contents.size == 0 || osection == 0)
 		return;
 
 	bfd_set_reloc(obfd, osection,
-		      ss->num_relocs == 0 ? NULL : ss->relocs, ss->num_relocs);
+		      ss->relocs.size == 0 ? NULL : ss->relocs.data,
+		      ss->relocs.size);
 
 	if (bfd_get_section_flags(ibfd, isection) & SEC_HAS_CONTENTS
 	    && bfd_get_section_flags(obfd, osection) & SEC_HAS_CONTENTS)
 		assert(bfd_set_section_contents
-		       (obfd, osection, ss->contents, 0, ss->contents_size));
+		       (obfd, osection, ss->contents.data, 0,
+			ss->contents.size));
 }
 
 /* Modified function from GNU Binutils objcopy.c
@@ -509,14 +507,14 @@ void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
 
 	/* Examine each symbol used in a relocation.  If it's not one of the
 	   special bfd section symbols, then mark it with BSF_KEEP.  */
-	int i;
-	for (i = 0; i < ss->num_relocs; i++) {
-		if (*ss->relocs[i]->sym_ptr_ptr != bfd_com_section_ptr->symbol
-		    && *ss->relocs[i]->sym_ptr_ptr !=
-		    bfd_abs_section_ptr->symbol
-		    && *ss->relocs[i]->sym_ptr_ptr !=
-		    bfd_und_section_ptr->symbol)
-			(*ss->relocs[i]->sym_ptr_ptr)->flags |= BSF_KEEP;
+	arelent **relocp;
+	for (relocp = ss->relocs.data;
+	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+		asymbol *sym = *(*relocp)->sym_ptr_ptr;
+		if (sym != bfd_com_section_ptr->symbol
+		    && sym != bfd_abs_section_ptr->symbol
+		    && sym != bfd_und_section_ptr->symbol)
+			sym->flags |= BSF_KEEP;
 	}
 }
 

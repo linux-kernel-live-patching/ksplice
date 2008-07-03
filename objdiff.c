@@ -102,14 +102,16 @@ int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
 	old_ss = fetch_supersect(oldbfd, oldp, old_sympp);
 	new_ss = fetch_supersect(newbfd, newp, new_sympp);
 
-	if (old_ss->num_relocs != new_ss->num_relocs)
+	if (old_ss->relocs.size != new_ss->relocs.size)
 		return -1;
 
-	for (i = 0; i < old_ss->num_relocs; i++) {
+	for (i = 0; i < old_ss->relocs.size; i++) {
 		struct supersect *ro_old_ss, *ro_new_ss;
 
-		asection *ro_oldp = (*old_ss->relocs[i]->sym_ptr_ptr)->section;
-		asection *ro_newp = (*new_ss->relocs[i]->sym_ptr_ptr)->section;
+		asection *ro_oldp =
+		    (*old_ss->relocs.data[i]->sym_ptr_ptr)->section;
+		asection *ro_newp =
+		    (*new_ss->relocs.data[i]->sym_ptr_ptr)->section;
 
 		ro_old_ss = fetch_supersect(oldbfd, ro_oldp, old_sympp);
 		ro_new_ss = fetch_supersect(newbfd, ro_newp, new_sympp);
@@ -120,24 +122,24 @@ int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
 		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
 			return -1;
 
-		int old_offset =
-		    *(int *)(old_ss->contents + old_ss->relocs[i]->address);
-		int new_offset =
-		    *(int *)(new_ss->contents + new_ss->relocs[i]->address);
+		int old_offset = *(int *)(old_ss->contents.data +
+					  old_ss->relocs.data[i]->address);
+		int new_offset = *(int *)(new_ss->contents.data +
+					  new_ss->relocs.data[i]->address);
 
 		if (starts_with(ro_old_ss->name, ".rodata.str")) {
 			if (strcmp
-			    (ro_old_ss->contents + old_offset,
-			     ro_new_ss->contents + new_offset) != 0)
+			    (ro_old_ss->contents.data + old_offset,
+			     ro_new_ss->contents.data + new_offset) != 0)
 				return -1;
 			continue;
 		}
 
-		if (ro_old_ss->contents_size != ro_new_ss->contents_size)
+		if (ro_old_ss->contents.size != ro_new_ss->contents.size)
 			return -1;
 
-		if (memcmp(ro_old_ss->contents,
-			   ro_new_ss->contents, ro_old_ss->contents_size) != 0)
+		if (memcmp(ro_old_ss->contents.data, ro_new_ss->contents.data,
+			   ro_old_ss->contents.size) != 0)
 			return -1;
 	}
 

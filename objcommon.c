@@ -58,18 +58,17 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect, asymbol **sympp)
 	new->next = supersects;
 	supersects = new;
 
-	new->contents_size = bfd_get_section_size(sect);
-	new->alignment = 1 << bfd_get_section_alignment(abfd, sect);
-	new->contents = (void *)calloc(1, align(new->contents_size,
-						new->alignment));
+	vec_init(&new->contents);
+	vec_resize(&new->contents, bfd_get_section_size(sect));
 	assert(bfd_get_section_contents
-	       (abfd, sect, new->contents, 0, new->contents_size));
+	       (abfd, sect, new->contents.data, 0, new->contents.size));
+	new->alignment = 1 << bfd_get_section_alignment(abfd, sect);
 
-	int relsize = bfd_get_reloc_upper_bound(abfd, sect);
-	new->relocs = (void *)malloc(relsize);
-	new->num_relocs =
-	    bfd_canonicalize_reloc(abfd, sect, new->relocs, sympp);
-	assert(new->num_relocs >= 0);
+	vec_init(&new->relocs);
+	vec_reserve(&new->relocs, bfd_get_reloc_upper_bound(abfd, sect));
+	vec_resize(&new->relocs,
+		   bfd_canonicalize_reloc(abfd, sect, new->relocs.data, sympp));
+	assert(new->relocs.size >= 0);
 
 	return new;
 }

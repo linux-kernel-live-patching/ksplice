@@ -55,6 +55,9 @@ void vec_do_reserve(void **data, size_t *mem_size, size_t newsize);
 		_vec4->data + (_vec4->size - _n);	\
 	})
 
+DECLARE_VEC_TYPE(void, void_vec);
+DECLARE_VEC_TYPE(arelent *, arelentp_vec);
+
 #ifndef bfd_get_section_size
 #define bfd_get_section_size(x) ((x)->_cooked_size)
 #endif
@@ -62,11 +65,9 @@ void vec_do_reserve(void **data, size_t *mem_size, size_t newsize);
 struct supersect {
 	bfd *parent;
 	char *name;
-	void *contents;
-	int contents_size;
+	struct void_vec contents;
 	int alignment;
-	arelent **relocs;
-	int num_relocs;
+	struct arelentp_vec relocs;
 	struct supersect *next;
 };
 
