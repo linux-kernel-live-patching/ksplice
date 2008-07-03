@@ -16,6 +16,17 @@
 
 #include "objcommon.h"
 
+void vec_do_reserve(void **data, size_t *mem_size, size_t new_size)
+{
+	if (new_size > *mem_size || new_size * 2 < *mem_size) {
+		if (new_size < *mem_size * 2)
+			new_size = *mem_size * 2;
+		*data = realloc(*data, new_size);
+		assert(new_size == 0 || *data != NULL);
+		*mem_size = new_size;
+	}
+}
+
 long get_syms(bfd *abfd, asymbol ***syms_ptr)
 {
 	long storage_needed = bfd_get_symtab_upper_bound(abfd);
