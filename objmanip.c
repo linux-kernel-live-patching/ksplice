@@ -98,6 +98,9 @@
 #include "objmanip.h"
 #include <stdint.h>
 #include <stdarg.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <limits.h>
 
 struct asymbolp_vec isyms;
 
@@ -115,6 +118,30 @@ struct specsect special_sections[] = {
 }, *const end_special_sections = *(&special_sections + 1);
 
 #define mode(str) starts_with(modestr, str)
+
+DECLARE_VEC_TYPE(long, addr_vec);
+DEFINE_HASH_TYPE(struct addr_vec, addr_vec_hash,
+		 addr_vec_hash_init, addr_vec_hash_free, addr_vec_hash_lookup,
+		 vec_init);
+struct addr_vec_hash system_map;
+
+void load_system_map()
+{
+	const char *config_dir = getenv("KSPLICE_CONFIG_DIR");
+	assert(config_dir);
+	char file[PATH_MAX];
+	snprintf(file, sizeof(file), "%s/System.map", config_dir);
+	FILE *fp = fopen(file, "r");
+	assert(fp);
+	addr_vec_hash_init(&system_map);
+	long addr;
+	char type;
+	char sym[256];
+	while (fscanf(fp, "%lx %c %256s\n", &addr, &type, sym) == 3)
+		*vec_grow(addr_vec_hash_lookup(&system_map, sym, TRUE),
+			  1) = addr;
+	fclose(fp);
+}
 
 int main(int argc, char **argv)
 {
@@ -273,6 +300,33 @@ void write_string(bfd *ibfd, struct supersect *ss, void *addr,
 
 	write_reloc(ibfd, ss, addr, &str_ss->symbol,
 		    (void *)buf - str_ss->contents.data);
+}
+
+void write_system_map_array(bfd *ibfd, struct supersect *ss, long **sym_addrs,
+			    long *num_sym_addrs, asymbol *sym)
+{
+	const char *system_map_name = dup_wolabel(sym->name);
+	const char **prefix;
+	for (prefix = (const char *[]){".text.", ".data.", ".bss.", NULL};
+	     *prefix != NULL; prefix++) {
+		if (starts_with(system_map_name, *prefix))
+			system_map_name += strlen(*prefix);
+	}
+	struct addr_vec *addrs = addr_vec_hash_lookup(&system_map,
+						      system_map_name, FALSE);
+	if (addrs != NULL) {
+		struct supersect *array_ss = make_section(ibfd, &isyms,
+							  ".ksplice_array");
+		void *buf = sect_grow(array_ss, addrs->size,
+				      typeof(*addrs->data));
+		memcpy(buf, addrs->data, addrs->size * sizeof(*addrs->data));
+		*num_sym_addrs = addrs->size;
+		write_reloc(ibfd, ss, sym_addrs, &array_ss->symbol,
+			    buf - array_ss->contents.data);
+	} else {
+		*num_sym_addrs = 0;
+		*sym_addrs = NULL;
+	}
 }
 
 void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
