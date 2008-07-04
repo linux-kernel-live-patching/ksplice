@@ -73,15 +73,11 @@ sub do_diff {
 
 	load_system_map();
 
-	my $relocs_primary = runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
+	runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
 	runsuc("objmanip", "$obj.KSPLICE_primary", "globalize", "____${tag}_post");
-	parse_and_save(\&parse_relocs, $relocs_primary, "$obj.KSPLICE_primary",
-		       "ksplice_relocs", "_global");
 
-	my $relocs_helper = runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
+	runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
 	runsuc("objmanip", "$obj.KSPLICE_helper", "globalize", "____${tag}_pre");
-	parse_and_save(\&parse_relocs, $relocs_helper, "$obj.KSPLICE_helper",
-		       "ksplice_relocs", "_global");
 
 	my $sizelist_primary = runsuc("objmanip", "$obj.KSPLICE_primary", "sizelist");
 	parse_and_save(\&parse_sizelist, $sizelist_primary, "$obj.KSPLICE_primary", "ksplice_sizes");
@@ -139,12 +135,7 @@ sub do_combine {
 
 sub do_rmsyms {
 	my ($obj, @rmsyms) = @_;
-	load_system_map();
-	my ($bits) = split("\n", runsuc("objdiff", $obj, $obj));
-	die if ($bits ne '32' && $bits ne '64');
-	$word = ($bits == 64 ? "quad" : "long");
 	my $relocs = runsuc("objmanip", $obj, "rmsyms", @rmsyms);
-	parse_and_save(\&parse_relocs, $relocs, $obj, "ksplice_init_relocs", "");
 }
 
 sub do_system_map_lookup {
@@ -254,25 +245,6 @@ sub save_using_asm {
 	runval("gcc", "-mcmodel=kernel", "-c", "$asm_base.s", "-o", "$asm_base.o");
 	runval("mv", $objfile, "$objfile.pre$suffix");
 	runval("ld", "-r", "-o", "$objfile", "$objfile.pre$suffix", "$asm_base.o");
-}
-
-sub parse_relocs {
-	my ($tosaveref, $entry, $globalizer) = @_;
-	my ($sym, $sect, $addr, $pcrel, $addend, $size) = split(/\s/, $entry);
-
-	my ($func) = ($sect =~ /(.*)____/);
-	$sym =~ s/([.]data[.]__func__[.])\d+/$1${func}/g;
-
-	my @symvals = find_sym_system_map($sym);
-
-	push @$tosaveref, (["str", $sym], ["str", $sect],
-			["ptr", "${sect}${globalizer}"],
-			["word", $addr],
-			["word", scalar(@symvals)],
-			["array", @symvals],
-			["word", $pcrel],
-			["word", $addend],
-			["word", $size]);
 }
 
 sub parse_sizelist {

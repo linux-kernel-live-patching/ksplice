@@ -177,6 +177,9 @@ int main(int argc, char **argv)
 		varargs_count = argc - 3;
 	}
 
+	if (mode("keep") || mode("rmsyms"))
+		load_system_map();
+
 	if (mode("keep")) {
 		while (1) {
 			struct wsect *tmp = wanted_sections;
@@ -245,7 +248,7 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 			rm_reloc = 0;
 
 		if (rm_reloc)
-			print_reloc(ibfd, isection, *relocp, ss);
+			write_ksplice_reloc(ibfd, isection, *relocp, ss);
 		else
 			*vec_grow(&ss->relocs, 1) = *relocp;
 	}
@@ -329,8 +332,8 @@ void write_system_map_array(bfd *ibfd, struct supersect *ss, long **sym_addrs,
 	}
 }
 
-void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
-		 struct supersect *ss)
+void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
+			 struct supersect *ss)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
 
@@ -350,10 +353,25 @@ void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 	if (addend == 0)
 		addend = addend2;
 
-	printf("%s%s ", new_symname, addstr_all);
-	printf("%s%s%s ", canonical_sym(new_sectname), addstr_all, addstr_sect);
-	printf("%08x ", (int)orig_reloc->address);
-	printf("%d %08x %d\n", howto->pc_relative, addend, size);
+	struct supersect *kreloc_ss = make_section(ibfd, &isyms,
+						   mode("rmsyms") ?
+						   ".ksplice_init_relocs" :
+						   ".ksplice_relocs");
+	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
+						 struct ksplice_reloc);
+
+	asymbol **symp = canonical_sym(new_sectname);
+	write_string(ibfd, kreloc_ss, &kreloc->sym_name, "%s%s",
+		     new_symname, addstr_all);
+	write_string(ibfd, kreloc_ss, &kreloc->blank_sect_name, "%s%s%s",
+		     (*symp)->name, addstr_all, addstr_sect);
+	write_reloc(ibfd, kreloc_ss, &kreloc->blank_sect_addr, symp, 0);
+	kreloc->blank_offset = (long)orig_reloc->address;
+	write_system_map_array(ibfd, kreloc_ss, &kreloc->sym_addrs,
+			       &kreloc->num_sym_addrs, sym_ptr);
+	kreloc->pcrel = howto->pc_relative;
+	kreloc->addend = addend;
+	kreloc->size = size;
 }
 
 int blot_section(bfd *abfd, asection *sect, int offset, int size)
@@ -374,14 +392,17 @@ int blot_section(bfd *abfd, asection *sect, int offset, int size)
 	return tmp;
 }
 
-const char *canonical_sym(const char *sect_wlabel)
+asymbol **canonical_sym(const char *sect_wlabel)
 {
 	const char *sect = sect_wlabel;
 	if (!mode("sizelist"))
 		sect = dup_wolabel(sect_wlabel);
 
+	/* FIXME */
+#if 0
 	if (starts_with(sect, ".rodata"))
 		return sect;
+#endif
 
 	asymbol **symp;
 	for (symp = isyms.data; symp < isyms.data + isyms.size; symp++) {
@@ -393,7 +414,7 @@ const char *canonical_sym(const char *sect_wlabel)
 		if (strlen(sym->name) != 0 &&
 		    !starts_with(sym->name, ".text") &&
 		    strcmp(cur_sectname, sect) == 0 && sym->value == 0)
-			return sym->name;
+			return symp;
 	}
 	printf("ksplice: Failed to canonicalize %s\n", sect);
 	DIE;

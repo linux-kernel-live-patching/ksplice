@@ -10,12 +10,24 @@ struct specsect {
 	int entry_size;
 };
 
+struct ksplice_reloc {
+	char *sym_name;
+	char *blank_sect_name;
+	long blank_sect_addr;
+	long blank_offset;
+	long num_sym_addrs;
+	long *sym_addrs;
+	int pcrel;
+	long addend;
+	long size;
+};
+
 int main(int argc, char **argv);
 void rm_some_relocs(bfd *ibfd, asection *isection);
-void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
-		 struct supersect *ss);
+void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
+			 struct supersect *ss);
 int blot_section(bfd *abfd, asection *sect, int offset, int size);
-const char *canonical_sym(const char *sect_wlabel);
+asymbol **canonical_sym(const char *sect_wlabel);
 void rm_from_special(bfd *ibfd, struct specsect *s);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
