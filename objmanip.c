@@ -97,6 +97,7 @@
 #include "objcommon.h"
 #include "objmanip.h"
 #include <stdint.h>
+#include <stdarg.h>
 
 struct asymbolp_vec isyms;
 
@@ -177,7 +178,7 @@ int main(int argc, char **argv)
 
 	asection *p;
 	for (p = ibfd->sections; p != NULL; p = p->next) {
-		if (is_special(p->name))
+		if (is_special(p->name) || starts_with(p->name, ".ksplice"))
 			continue;
 		if (want_section(p->name, NULL) || mode("rmsyms"))
 			rm_some_relocs(ibfd, p);
@@ -221,6 +222,57 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 		else
 			*vec_grow(&ss->relocs, 1) = *relocp;
 	}
+}
+
+struct supersect *make_section(bfd *abfd, struct asymbolp_vec *syms, char *name)
+{
+	asection *sect = bfd_get_section_by_name(abfd, name);
+	if (sect != NULL)
+		return fetch_supersect(abfd, sect, syms);
+	else
+		return new_supersect(name);
+}
+
+void write_reloc(bfd *abfd, struct supersect *ss, void *addr, asymbol **symp,
+		 bfd_vma offset)
+{
+	bfd_reloc_code_real_type code;
+	switch (bfd_arch_bits_per_address(abfd)) {
+	case 32:
+		code = BFD_RELOC_32;
+		break;
+	case 64:
+		code = BFD_RELOC_64;
+		break;
+	default:
+		DIE;
+	}
+
+	arelent *reloc = malloc(sizeof(*reloc));
+	reloc->sym_ptr_ptr = symp;
+	reloc->address = addr - ss->contents.data;
+	reloc->howto = bfd_reloc_type_lookup(abfd, code);
+	/* FIXME: bfd_perform_relocation?  bfd_install_relocation? */
+	reloc->addend = offset;
+	*(long *)addr = reloc->howto->partial_inplace ? offset : 0;
+	*vec_grow(&ss->relocs, 1) = reloc;
+}
+
+void write_string(bfd *ibfd, struct supersect *ss, void *addr,
+		  const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	int len = vsnprintf(NULL, 0, fmt, ap);
+	va_end(ap);
+	struct supersect *str_ss = make_section(ibfd, &isyms, ".ksplice_str");
+	char *buf = sect_grow(str_ss, len + 1, char);
+	va_start(ap, fmt);
+	vsnprintf(buf, len + 1, fmt, ap);
+	va_end(ap);
+
+	write_reloc(ibfd, ss, addr, &str_ss->symbol,
+		    (void *)buf - str_ss->contents.data);
 }
 
 void print_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
@@ -403,6 +455,10 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 
 	assert(bfd_count_sections(obfd));
 
+	struct supersect *ss;
+	for (ss = new_supersects; ss != NULL; ss = ss->next)
+		setup_new_section(obfd, ss);
+
 	/* Mark symbols used in output relocations so that they
 	   are kept, even if they are local labels or static symbols.
 
@@ -413,6 +469,8 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 	   section.  */
 
 	bfd_map_over_sections(ibfd, mark_symbols_used_in_relocations, &isyms);
+	for (ss = new_supersects; ss != NULL; ss = ss->next)
+		ss_mark_symbols_used_in_relocations(ss);
 	struct asymbolp_vec osyms;
 	vec_init(&osyms);
 	filter_symbols(ibfd, obfd, &osyms, &isyms);
@@ -421,6 +479,8 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 
 	/* This has to happen after the symbol table has been set.  */
 	bfd_map_over_sections(ibfd, copy_section, obfd);
+	for (ss = new_supersects; ss != NULL; ss = ss->next)
+		write_new_section(obfd, ss);
 
 	/* Allow the BFD backend to copy any private data it understands
 	   from the input BFD to the output BFD.  This is done last to
@@ -448,6 +508,8 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	bfd_set_section_flags(obfd, osection, flags);
 
 	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
+	osection->userdata = ss;
+	ss->symbol = osection->symbol;
 	assert(bfd_set_section_size(obfd, osection, ss->contents.size));
 
 	vma = bfd_section_vma(ibfd, isection);
@@ -459,6 +521,23 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	isection->output_section = osection;
 	isection->output_offset = 0;
 	return;
+}
+
+void setup_new_section(bfd *obfd, struct supersect *ss)
+{
+	asection *osection = bfd_make_section_anyway(obfd, ss->name);
+	assert(osection != NULL);
+	bfd_set_section_flags(obfd, osection,
+			      SEC_ALLOC | SEC_HAS_CONTENTS | SEC_RELOC);
+
+	osection->userdata = ss;
+	ss->symbol = osection->symbol;
+	assert(bfd_set_section_size(obfd, osection, ss->contents.size));
+	assert(bfd_set_section_vma(obfd, osection, 0));
+
+	osection->lma = 0;
+	assert(bfd_set_section_alignment(obfd, osection, ss->alignment));
+	osection->entsize = 0;
 }
 
 /* Modified function from GNU Binutils objcopy.c */
@@ -490,6 +569,23 @@ void copy_section(bfd *ibfd, asection *isection, void *obfdarg)
 			ss->contents.size));
 }
 
+void write_new_section(bfd *obfd, struct supersect *ss)
+{
+	asection *osection = bfd_get_section_by_name(obfd, ss->name);
+
+	if (ss->contents.size == 0 || osection == 0)
+		return;
+
+	bfd_set_reloc(obfd, osection,
+		      ss->relocs.size == 0 ? NULL : ss->relocs.data,
+		      ss->relocs.size);
+
+	if (bfd_get_section_flags(obfd, osection) & SEC_HAS_CONTENTS)
+		assert(bfd_set_section_contents
+		       (obfd, osection, ss->contents.data, 0,
+			ss->contents.size));
+}
+
 /* Modified function from GNU Binutils objcopy.c
  *
  * Mark all the symbols which will be used in output relocations with
@@ -504,7 +600,11 @@ void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
 		return;
 
 	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
+	ss_mark_symbols_used_in_relocations(ss);
+}
 
+void ss_mark_symbols_used_in_relocations(struct supersect *ss)
+{
 	/* Examine each symbol used in a relocation.  If it's not one of the
 	   special bfd section symbols, then mark it with BSF_KEEP.  */
 	arelent **relocp;

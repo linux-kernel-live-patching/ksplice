@@ -70,11 +70,18 @@ struct supersect {
 	int alignment;
 	struct arelentp_vec relocs;
 	struct supersect *next;
+	asymbol *symbol;
 };
 
 void get_syms(bfd *abfd, struct asymbolp_vec *syms);
 struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 				  struct asymbolp_vec *syms);
+extern struct supersect *new_supersects;
+struct supersect *new_supersect(char *name);
+
+#define sect_grow(ss, n, type)					\
+	((type *)sect_do_grow(ss, n, sizeof(type), __alignof__(type)))
+void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment);
 
 #define starts_with(str, prefix)			\
 	(strncmp(str, prefix, strlen(prefix)) == 0)

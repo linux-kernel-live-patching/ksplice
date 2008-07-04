@@ -22,9 +22,12 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for);
 static bfd_boolean copy_object(bfd *ibfd, bfd *obfd);
 static void setup_section(bfd *ibfd, asection *isection, void *obfdarg);
+static void setup_new_section(bfd *obfd, struct supersect *ss);
 static void copy_section(bfd *ibfd, asection *isection, void *obfdarg);
+static void write_new_section(bfd *obfd, struct supersect *ss);
 static void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
 					     void *symbolsarg);
+static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
 static void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 			   struct asymbolp_vec *isyms);
 int exists_sym_with_name(struct asymbolp_vec *syms, const char *desired);

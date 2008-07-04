@@ -74,6 +74,38 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 	return new;
 }
 
+struct supersect *new_supersects = NULL;
+
+struct supersect *new_supersect(char *name)
+{
+	struct supersect *ss;
+	for (ss = new_supersects; ss != NULL; ss = ss->next) {
+		if (strcmp(name, ss->name) == 0)
+			return ss;
+	}
+
+	struct supersect *new = malloc(sizeof(*new));
+	new->parent = NULL;
+	new->name = name;
+	new->next = new_supersects;
+	new_supersects = new;
+
+	vec_init(&new->contents);
+	new->alignment = 0;
+	vec_init(&new->relocs);
+
+	return new;
+}
+
+void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment)
+{
+	if (ss->alignment < ffs(alignment) - 1)
+		ss->alignment = ffs(alignment) - 1;
+	int pad = ss->contents.size - align(ss->contents.size, alignment);
+	memset(vec_grow(&ss->contents, pad), 0, pad);
+	return vec_grow(&ss->contents, n * size);
+}
+
 int label_offset(const char *sym_name)
 {
 	int i;
