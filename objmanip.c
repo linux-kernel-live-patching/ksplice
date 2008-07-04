@@ -302,13 +302,13 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
 	struct void_vec orig_contents;
 	vec_move(&orig_contents, &ss->contents);
-	size_t pad = align(orig_contents.size, ss->alignment) -
+	size_t pad = align(orig_contents.size, 1 << ss->alignment) -
 	    orig_contents.size;
 	memset(vec_grow(&orig_contents, pad), 0, pad);
 	struct arelentp_vec orig_relocs;
 	vec_move(&orig_relocs, &ss->relocs);
 
-	int entry_size = align(s->entry_size, ss->alignment);
+	int entry_size = align(s->entry_size, 1 << ss->alignment);
 	int relocs_per_entry = s->odd_relocs ? 2 : 1;
 	assert((orig_contents.size / entry_size) * relocs_per_entry ==
 	       orig_relocs.size);
@@ -454,10 +454,7 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	assert(bfd_set_section_vma(obfd, osection, vma));
 
 	osection->lma = isection->lma;
-	assert(bfd_set_section_alignment(obfd,
-					 osection,
-					 bfd_section_alignment(ibfd,
-							       isection)));
+	assert(bfd_set_section_alignment(obfd, osection, ss->alignment));
 	osection->entsize = isection->entsize;
 	isection->output_section = osection;
 	isection->output_offset = 0;
