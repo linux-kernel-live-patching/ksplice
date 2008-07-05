@@ -103,6 +103,7 @@ load_system_map();
 my $map_printk = (find_sym_system_map("printk"))[0];
 
 my @rmsyms = qw(
+	thread_return
 	bust_spinlocks
 	task_curr
 	__kernel_text_address

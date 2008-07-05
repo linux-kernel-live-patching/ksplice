@@ -53,16 +53,22 @@ static inline void *ksplice_kcalloc(size_t n, size_t size,
 #define task_thread_info(task) (task)->thread_info
 #endif /* task_thread_info */
 
-#ifdef __ASM_X86_PROCESSOR_H
-#define KSPLICE_EIP(x) ((x)->thread.ip)
-#define KSPLICE_ESP(x) ((x)->thread.sp)
-#elif BITS_PER_LONG == 32
-#define KSPLICE_EIP(x) ((x)->thread.eip)
-#define KSPLICE_ESP(x) ((x)->thread.esp)
-#elif BITS_PER_LONG == 64
-#define KSPLICE_EIP(x) (KSTK_EIP(x))
-#define KSPLICE_ESP(x) ((x)->thread.rsp)
+#ifdef CONFIG_X86
+#ifdef __ASM_X86_PROCESSOR_H	/* New unified x86 */
+#define KSPLICE_IP(x) ((x)->thread.ip)
+#define KSPLICE_SP(x) ((x)->thread.sp)
+#elif defined CONFIG_X86_64	/* Old x86 64-bit */
+/* The IP is on the stack, so we don't need to check it separately.
+ * Instead, we need to prevent Ksplice from patching thread_return.
+ */
+extern const char thread_return[];
+#define KSPLICE_IP(x) thread_return
+#define KSPLICE_SP(x) ((x)->thread.rsp)
+#else /* Old x86 32-bit */
+#define KSPLICE_IP(x) ((x)->thread.eip)
+#define KSPLICE_SP(x) ((x)->thread.esp)
 #endif /* __ASM_X86_PROCESSOR_H */
+#endif /* CONFIG_X86 */
 
 static int bootstrapped = 0;
 
@@ -79,8 +85,8 @@ extern struct list_head modules;
 extern struct mutex module_mutex;
 
 #else /* KSPLICE_STANDALONE */
-#define KSPLICE_EIP(x) ((x)->thread.ip)
-#define KSPLICE_ESP(x) ((x)->thread.sp)
+#define KSPLICE_IP(x) ((x)->thread.ip)
+#define KSPLICE_SP(x) ((x)->thread.sp)
 #endif /* KSPLICE_STANDALONE */
 
 static int debug;
@@ -310,8 +316,8 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 	int status, ret;
 
 	ksplice_debug(2, KERN_DEBUG "ksplice: stack check: pid %d (%s) eip "
-		      "%08lx ", t->pid, t->comm, KSPLICE_EIP(t));
-	status = check_address_for_conflict(pack, KSPLICE_EIP(t));
+		      "%08lx ", t->pid, t->comm, KSPLICE_IP(t));
+	status = check_address_for_conflict(pack, KSPLICE_IP(t));
 	ksplice_debug(2, ": ");
 
 	if (t == current) {
@@ -321,7 +327,7 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 			status = ret;
 	} else if (!task_curr(t)) {
 		ret = check_stack(pack, task_thread_info(t),
-				  (long *)KSPLICE_ESP(t));
+				  (long *)KSPLICE_SP(t));
 		if (status == 0)
 			status = ret;
 	} else if (strcmp(t->comm, "kstopmachine") != 0) {
