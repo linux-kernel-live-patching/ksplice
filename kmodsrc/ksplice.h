@@ -14,8 +14,6 @@ struct ksplice_reloc {
 	long blank_offset;
 	long num_sym_addrs;
 	long *sym_addrs;
-	long num_sect_addrs;
-	long *sect_addrs;
 	int pcrel;
 	long addend;
 	long size;

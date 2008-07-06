@@ -379,15 +379,12 @@ sub parse_relocs {
 	$sym =~ s/([.]data[.]__func__[.])\d+/$1${func}/g;
 
 	my @symvals = find_sym_system_map($sym);
-	my @sectvals = find_sym_system_map($sect);
 
 	push @$tosaveref, (["str", $sym], ["str", $sect],
 			["ptr", "${sect}${globalizer}"],
 			["word", $addr],
 			["word", scalar(@symvals)],
 			["array", @symvals],
-			["word", scalar(@sectvals)],
-			["array", @sectvals],
 			["word", $pcrel],
 			["word", $addend],
 			["word", $size]);
