@@ -13,8 +13,6 @@ struct specsect {
 struct ksplice_reloc {
 	char *sym_name;
 	long blank_addr;
-	char *blank_sect_name;
-	long blank_sect_addr;
 	long blank_offset;
 	long num_sym_addrs;
 	long *sym_addrs;
@@ -44,7 +42,6 @@ void rm_some_relocs(bfd *ibfd, asection *isection);
 void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 			 struct supersect *ss);
 int blot_section(bfd *abfd, asection *sect, int offset, int size);
-asymbol **canonical_sym(const char *sect_wlabel);
 void write_ksplice_size(bfd *ibfd, asymbol **symp);
 void write_ksplice_patch(bfd *ibfd, char *symname);
 void rm_from_special(bfd *ibfd, struct specsect *s);
