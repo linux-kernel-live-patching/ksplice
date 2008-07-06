@@ -71,10 +71,7 @@ sub do_diff {
 	close OBJ_OLD;
 
 	runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
-	runsuc("objmanip", "$obj.KSPLICE_primary", "globalize", "____${tag}_post");
-
 	runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
-	runsuc("objmanip", "$obj.KSPLICE_helper", "globalize", "____${tag}_pre");
 
 	runsuc("objmanip", "$obj.KSPLICE_primary", "sizelist");
 	runsuc("objmanip", "$obj.KSPLICE_helper", "sizelist");

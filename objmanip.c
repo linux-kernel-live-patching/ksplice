@@ -107,8 +107,7 @@ struct asymbolp_vec isyms;
 
 char **varargs;
 int varargs_count;
-char *modestr, *addstr_all = "", *addstr_sect_pre = "", *addstr_sect = "",
-    *globalizestr;
+char *modestr, *addstr_all = "", *addstr_sect_pre = "", *addstr_sect = "";
 
 struct wsect *wanted_sections = NULL;
 
@@ -170,10 +169,6 @@ int main(int argc, char **argv)
 		addstr_sect = argv[4];
 		varargs = &argv[5];
 		varargs_count = argc - 5;
-	} else if (mode("globalize")) {
-		globalizestr = argv[3];
-		varargs = &argv[4];
-		varargs_count = argc - 4;
 	} else if (mode("patchlist")) {
 		addstr_all = argv[3];
 		addstr_sect_pre = argv[4];
@@ -816,19 +811,6 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 
 		if (keep)
 			*vec_grow(osyms, 1) = sym;
-
-		if (keep && mode("globalize")
-		    && ends_with(sym->name, globalizestr)) {
-			asymbol *new = bfd_make_empty_symbol(obfd);
-			char *tmp =
-			    malloc(strlen(sym->name) + strlen("_global") + 1);
-			sprintf(tmp, "%s_global", sym->name);
-			new->name = tmp;
-			new->value = sym->value;
-			new->flags = BSF_GLOBAL;
-			new->section = sym->section;
-			*vec_grow(osyms, 1) = new;
-		}
 	}
 
 	asection *p;
@@ -860,9 +842,6 @@ int match_varargs(const char *str)
 	int i;
 	for (i = 0; i < varargs_count; i++) {
 		if (strcmp(str, varargs[i]) == 0)
-			return 1;
-		if (starts_with(str, varargs[i]) &&
-		    strcmp(str + strlen(varargs[i]), "_global") == 0)
 			return 1;
 	}
 	return 0;
