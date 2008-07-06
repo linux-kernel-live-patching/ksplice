@@ -42,7 +42,6 @@ sub do_snap {
 	empty_diff($out);
 }
 
-my %syms;
 my $word;
 
 sub do_diff {
@@ -70,8 +69,6 @@ sub do_diff {
 	my $tag = Digest::MD5->new->addfile(*OBJ)->addfile(*OBJ_OLD)->hexdigest;
 	close OBJ;
 	close OBJ_OLD;
-
-	load_system_map();
 
 	runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
 	runsuc("objmanip", "$obj.KSPLICE_primary", "globalize", "____${tag}_post");
@@ -133,9 +130,14 @@ sub do_rmsyms {
 }
 
 sub do_system_map_lookup {
-	my ($sym) = @_;
-	load_system_map();
-	print ((find_sym_system_map($sym))[0]);
+	my ($symarg) = @_;
+	open(SYMS, "<", "$ENV{KSPLICE_CONFIG_DIR}/System.map") or die;
+	my $line;
+	while(defined($line = <SYMS>)) {
+		my ($addr, $type, $sym, $mod) = split(/\s+/, $line);
+		if ($sym eq $symarg) { print $addr; last; }
+	}
+	close(SYMS);
 }
 
 my %handlers = (
@@ -155,32 +157,6 @@ if (exists $handlers{$cmd}) {
 };
 
 exit 0;
-
-sub load_system_map {
-	open(SYMS, "<", "$ENV{KSPLICE_CONFIG_DIR}/System.map") or die;
-	my $line;
-	while(defined($line = <SYMS>)) {
-		my ($addr, $type, $sym, $mod) = split(/\s+/, $line);
-		next if($sym =~ /init_module/ ||
-			$sym =~ /cleanup_module/ ||
-			$sym =~ /this_module/);
-
-		$syms{$sym}{$addr} = 1;
-	}
-	close(SYMS);
-}
-
-sub find_sym_system_map {
-	my ($sym) = @_;
-	$sym =~ s/[.]text[.]//g;
-	$sym =~ s/[.]bss[.]//g;
-	$sym =~ s/[.]data[.]//g;
-	$sym =~ s/____.*//g;
-	if(defined $syms{$sym}) {
-		return keys(%{$syms{$sym}});
-	}
-	return ();
-}
 
 sub parse_and_save {
 	my ($funcref, $entries, $objfile, $suffix, @other) = @_;
