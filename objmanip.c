@@ -107,7 +107,8 @@ struct asymbolp_vec isyms;
 
 char **varargs;
 int varargs_count;
-char *modestr, *addstr_all = "", *addstr_sect = "", *globalizestr;
+char *modestr, *addstr_all = "", *addstr_sect_pre = "", *addstr_sect = "",
+    *globalizestr;
 
 struct wsect *wanted_sections = NULL;
 
@@ -173,6 +174,12 @@ int main(int argc, char **argv)
 		globalizestr = argv[3];
 		varargs = &argv[4];
 		varargs_count = argc - 4;
+	} else if (mode("patchlist")) {
+		addstr_all = argv[3];
+		addstr_sect_pre = argv[4];
+		addstr_sect = argv[5];
+		varargs = &argv[6];
+		varargs_count = argc - 6;
 	} else {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
@@ -198,6 +205,13 @@ int main(int argc, char **argv)
 		if ((sym->flags & BSF_FUNCTION)
 		    && sym->value == 0 && !(sym->flags & BSF_WEAK))
 			write_ksplice_size(ibfd, symp);
+	}
+
+	if (mode("patchlist")) {
+		char **symname;
+		for (symname = varargs; symname < varargs + varargs_count;
+		     symname++)
+			write_ksplice_patch(ibfd, *symname);
 	}
 
 	asection *p;
@@ -449,6 +463,31 @@ void write_ksplice_size(bfd *ibfd, asymbol **symp)
 	write_reloc(ibfd, ksize_ss, &ksize->thismod_addr, symp, 0);
 	write_system_map_array(ibfd, ksize_ss, &ksize->sym_addrs,
 			       &ksize->num_sym_addrs, sym);
+}
+
+void write_ksplice_patch(bfd *ibfd, char *symname)
+{
+	struct supersect *kpatch_ss = make_section(ibfd, &isyms,
+						   ".ksplice_patches");
+	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
+						 struct ksplice_patch);
+
+	char newname[256];
+	snprintf(newname, sizeof(newname), "%s%s%s",
+		 symname, addstr_all, addstr_sect);
+	asymbol **symp;
+	for (symp = isyms.data; symp < isyms.data + isyms.size; symp++) {
+		if (strcmp((*symp)->name, newname) == 0)
+			break;
+	}
+	assert(symp < isyms.data + isyms.size);
+
+	write_string(ibfd, kpatch_ss, &kpatch->oldstr, "%s%s%s",
+		     symname, addstr_all, addstr_sect_pre);
+	write_string(ibfd, kpatch_ss, &kpatch->replstr, "%s", newname);
+	kpatch->oldaddr = 0;
+	write_reloc(ibfd, kpatch_ss, &kpatch->repladdr, symp, 0);
+	kpatch->saved = NULL;
 }
 
 void rm_from_special(bfd *ibfd, struct specsect *s)

@@ -82,11 +82,7 @@ sub do_diff {
 	runsuc("objmanip", "$obj.KSPLICE_primary", "sizelist");
 	runsuc("objmanip", "$obj.KSPLICE_helper", "sizelist");
 
-	my $patchlist = "";
-	foreach my $sym (split(/\s/, $entrysyms)) {
-		$patchlist .= "${sym}____${tag}_pre ${sym}____${tag}_post\n";
-	}
-	parse_and_save(\&parse_patchlist, $patchlist, "$obj.KSPLICE_primary", "ksplice_patches");
+	runsuc("objmanip", "$obj.KSPLICE_primary", "patchlist", "____${tag}", "_pre", "_post", split(/\s/, $entrysyms));
 
 	open OUT, '>', "$out.tmp";
 	print OUT "$bits\n";
@@ -243,13 +239,4 @@ sub save_using_asm {
 	runval("gcc", "-mcmodel=kernel", "-c", "$asm_base.s", "-o", "$asm_base.o");
 	runval("mv", $objfile, "$objfile.pre$suffix");
 	runval("ld", "-r", "-o", "$objfile", "$objfile.pre$suffix", "$asm_base.o");
-}
-
-sub parse_patchlist {
-	my ($tosaveref, $entry) = @_;
-	my ($oldsym, $replsym) = split(/\s/, $entry);
-
-	push @$tosaveref, (["str", $oldsym], ["str", $replsym],
-		["word", 0], ["ptr", "${replsym}_global"],
-		["word", 0]);
 }
