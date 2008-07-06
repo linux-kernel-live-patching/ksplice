@@ -230,7 +230,7 @@ int use_module(struct module *a, struct module *b);
 int activate_helper(struct module_pack *pack);
 int search_for_match(struct module_pack *pack, struct ksplice_size *s);
 int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
-	     long pre_addr, int create_nameval);
+	     long pre_addr);
 
 #ifdef KSPLICE_STANDALONE
 void brute_search_all_mods(struct module_pack *pack, struct ksplice_size *s);
@@ -257,7 +257,7 @@ static inline int brute_search(struct module_pack *pack, struct ksplice_size *s,
 		if (addr == s->thismod_addr)
 			return 1;
 
-		if (try_addr(pack, s, addr, s->thismod_addr, 1))
+		if (try_addr(pack, s, addr, s->thismod_addr))
 			return 0;
 	}
 

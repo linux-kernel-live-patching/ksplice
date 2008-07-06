@@ -409,12 +409,8 @@ sub parse_patchlist {
 	my ($tosaveref, $entry) = @_;
 	my ($oldsym, $replsym) = split(/\s/, $entry);
 
-	my $oldaddr = 0;
-	my @vals = find_sym_system_map($oldsym);
-	$oldaddr = $vals[0] if(scalar(@vals) == 1);
-
 	push @$tosaveref, (["str", $oldsym], ["str", $replsym],
-		["word", $oldaddr], ["ptr", "${replsym}_global"],
+		["word", 0], ["ptr", "${replsym}_global"],
 		["word", 0]);
 }
 

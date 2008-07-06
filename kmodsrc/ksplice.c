@@ -162,12 +162,6 @@ int resolve_patch_symbols(struct module_pack *pack)
 			return -ENOMEM;
 		}
 
-		if (p->oldaddr != 0) {
-			ret = add_candidate_val(&vals, p->oldaddr);
-			if (ret < 0)
-				return ret;
-		}
-
 		ret = compute_address(pack, p->oldstr, &vals, 0);
 		if (ret < 0)
 			return ret;
@@ -499,8 +493,7 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 		run_addr = v->val;
 
 		yield();
-		ret = try_addr(pack, s, run_addr, s->thismod_addr,
-			       !singular(&vals));
+		ret = try_addr(pack, s, run_addr, s->thismod_addr);
 		if (ret != 0) {
 			/* we've encountered a match (> 0) or an error (< 0) */
 			release_vals(&vals);
@@ -519,7 +512,7 @@ int search_for_match(struct module_pack *pack, struct ksplice_size *s)
 }
 
 int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
-	     long pre_addr, int create_nameval)
+	     long pre_addr)
 {
 	struct safety_record *tmp;
 	struct reloc_nameval *nv;
@@ -550,13 +543,11 @@ int try_addr(struct module_pack *pack, struct ksplice_size *s, long run_addr,
 		tmp->care = 0;
 		list_add(&tmp->list, pack->safety_records);
 
-		if (create_nameval) {
-			nv = find_nameval(pack, s->name, 1);
-			if (nv == NULL)
-				return -ENOMEM;
-			nv->val = run_addr;
-			nv->status = VAL;
-		}
+		nv = find_nameval(pack, s->name, 1);
+		if (nv == NULL)
+			return -ENOMEM;
+		nv->val = run_addr;
+		nv->status = VAL;
 
 		return 1;
 	}
