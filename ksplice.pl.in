@@ -79,10 +79,8 @@ sub do_diff {
 	runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
 	runsuc("objmanip", "$obj.KSPLICE_helper", "globalize", "____${tag}_pre");
 
-	my $sizelist_primary = runsuc("objmanip", "$obj.KSPLICE_primary", "sizelist");
-	parse_and_save(\&parse_sizelist, $sizelist_primary, "$obj.KSPLICE_primary", "ksplice_sizes");
-	my $sizelist_helper = runsuc("objmanip", "$obj.KSPLICE_helper", "sizelist");
-	parse_and_save(\&parse_sizelist, $sizelist_helper, "$obj.KSPLICE_helper", "ksplice_sizes");
+	runsuc("objmanip", "$obj.KSPLICE_primary", "sizelist");
+	runsuc("objmanip", "$obj.KSPLICE_helper", "sizelist");
 
 	my $patchlist = "";
 	foreach my $sym (split(/\s/, $entrysyms)) {
@@ -245,18 +243,6 @@ sub save_using_asm {
 	runval("gcc", "-mcmodel=kernel", "-c", "$asm_base.s", "-o", "$asm_base.o");
 	runval("mv", $objfile, "$objfile.pre$suffix");
 	runval("ld", "-r", "-o", "$objfile", "$objfile.pre$suffix", "$asm_base.o");
-}
-
-sub parse_sizelist {
-	my ($tosaveref, $entry) = @_;
-	# grab the size and the symbol name from the end of the line
-	my ($size, $sym) = ($entry =~ /\s([a-z0-9]+)\s+(\S+)$/);
-
-	my @vals = find_sym_system_map($sym);
-
-	push @$tosaveref, (["str", $sym], ["word", $size],
-		["ptr", "${sym}_global"], ["word", scalar(@vals)],
-		["array", @vals]);
 }
 
 sub parse_patchlist {

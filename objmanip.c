@@ -94,6 +94,7 @@
  * The fields of the STDOUT output are the same as with keep-primary.
  */
 
+#define _GNU_SOURCE
 #include "objcommon.h"
 #include "objmanip.h"
 #include <stdint.h>
@@ -177,7 +178,7 @@ int main(int argc, char **argv)
 		varargs_count = argc - 3;
 	}
 
-	if (mode("keep") || mode("rmsyms"))
+	if (mode("keep") || mode("sizelist") || mode("rmsyms"))
 		load_system_map();
 
 	if (mode("keep")) {
@@ -195,15 +196,8 @@ int main(int argc, char **argv)
 	     mode("sizelist") && symp < isyms.data + isyms.size; symp++) {
 		asymbol *sym = *symp;
 		if ((sym->flags & BSF_FUNCTION)
-		    && sym->value == 0 && !(sym->flags & BSF_WEAK)) {
-			/* We call bfd_print_symbol in order to get access to
-			 * the size associated with the function symbol, which
-			 * is not otherwise available through the BFD API
-			 */
-			bfd_print_symbol(ibfd, stdout, sym,
-					 bfd_print_symbol_all);
-			printf("\n");
-		}
+		    && sym->value == 0 && !(sym->flags & BSF_WEAK))
+			write_ksplice_size(ibfd, symp);
 	}
 
 	asection *p;
@@ -418,6 +412,43 @@ asymbol **canonical_sym(const char *sect_wlabel)
 	}
 	printf("ksplice: Failed to canonicalize %s\n", sect);
 	DIE;
+}
+
+void write_ksplice_size(bfd *ibfd, asymbol **symp)
+{
+	asymbol *sym = *symp;
+
+	/* We call bfd_print_symbol in order to get access to
+	 * the size associated with the function symbol, which
+	 * is not otherwise available through the BFD API
+	 */
+	char *buf = NULL;
+	size_t bufsize = 0;
+	FILE *fp = open_memstream(&buf, &bufsize);
+	bfd_print_symbol(ibfd, fp, sym, bfd_print_symbol_all);
+	fclose(fp);
+	assert(buf != NULL);
+
+	unsigned long symsize;
+	char *symname;
+	int len;
+	assert(sscanf(buf, "%*[^\t]\t%lx %as%n", &symsize, &symname, &len) >=
+	       2);
+	assert(buf[len] == '\0');
+	assert(strcmp(symname, sym->name) == 0);
+	free(symname);
+	free(buf);
+
+	struct supersect *ksize_ss = make_section(ibfd, &isyms,
+						  ".ksplice_sizes");
+	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
+					       struct ksplice_size);
+
+	write_string(ibfd, ksize_ss, &ksize->name, "%s", sym->name);
+	ksize->size = symsize;
+	write_reloc(ibfd, ksize_ss, &ksize->thismod_addr, symp, 0);
+	write_system_map_array(ibfd, ksize_ss, &ksize->sym_addrs,
+			       &ksize->num_sym_addrs, sym);
 }
 
 void rm_from_special(bfd *ibfd, struct specsect *s)
