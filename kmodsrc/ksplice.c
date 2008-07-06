@@ -631,7 +631,6 @@ int process_reloc(struct module_pack *pack, const struct ksplice_reloc *r,
 	int i, ret;
 	long off, sym_addr;
 	struct reloc_addrmap *map;
-	const long blank_addr = r->blank_sect_addr + r->blank_offset;
 	LIST_HEAD(vals);
 #ifdef KSPLICE_STANDALONE
 	/* run_pre_reloc: will this reloc be used for run-pre matching? */
@@ -669,9 +668,9 @@ int process_reloc(struct module_pack *pack, const struct ksplice_reloc *r,
 skip_using_system_map:
 #endif
 
-	if ((r->size == 4 && *(int *)blank_addr != 0x77777777)
+	if ((r->size == 4 && *(int *)r->blank_addr != 0x77777777)
 	    || (r->size == 8 &&
-		*(long long *)blank_addr != 0x7777777777777777ll)) {
+		*(long long *)r->blank_addr != 0x7777777777777777ll)) {
 		ksplice_debug(4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%08lx"
 			      " (altinstr)\n", (pre ? "_h" : ""),
 			      r->sym_name, r->blank_offset);
@@ -701,7 +700,7 @@ skip_using_system_map:
 			print_abort("out of memory");
 			return -ENOMEM;
 		}
-		map->addr = blank_addr;
+		map->addr = r->blank_addr;
 		map->nameval = find_nameval(pack, r->sym_name, 1);
 		if (map->nameval == NULL)
 			return -ENOMEM;
@@ -732,7 +731,7 @@ skip_using_system_map:
 			print_abort("out of memory");
 			return -ENOMEM;
 		}
-		map->addr = blank_addr;
+		map->addr = r->blank_addr;
 		map->nameval = find_nameval(pack, "ksplice_zero", 1);
 		if (map->nameval == NULL)
 			return -ENOMEM;
@@ -746,13 +745,13 @@ skip_using_system_map:
 	} else {
 		long val;
 		if (r->pcrel)
-			val = sym_addr + r->addend - blank_addr;
+			val = sym_addr + r->addend - r->blank_addr;
 		else
 			val = sym_addr + r->addend;
 		if (r->size == 4)
-			*(int *)blank_addr = val;
+			*(int *)r->blank_addr = val;
 		else if (r->size == 8)
-			*(long long *)blank_addr = val;
+			*(long long *)r->blank_addr = val;
 		else
 			BUG();
 	}
@@ -761,9 +760,9 @@ skip_using_system_map:
 		      (pre ? "_h" : ""), r->sym_name, r->blank_offset);
 	ksplice_debug(4, "(S=%08lx A=%08lx ", sym_addr, r->addend);
 	if (r->size == 4)
-		ksplice_debug(4, "aft=%08x)\n", *(int *)blank_addr);
+		ksplice_debug(4, "aft=%08x)\n", *(int *)r->blank_addr);
 	else if (r->size == 8)
-		ksplice_debug(4, "aft=%016llx)\n", *(long long *)blank_addr);
+		ksplice_debug(4, "aft=%016llx)\n", *(long long *)r->blank_addr);
 	else
 		BUG();
 	return 0;

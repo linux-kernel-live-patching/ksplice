@@ -12,6 +12,7 @@ struct specsect {
 
 struct ksplice_reloc {
 	char *sym_name;
+	long blank_addr;
 	char *blank_sect_name;
 	long blank_sect_addr;
 	long blank_offset;

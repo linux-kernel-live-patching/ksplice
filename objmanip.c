@@ -366,6 +366,8 @@ void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 	asymbol **symp = canonical_sym(new_sectname);
 	write_string(ibfd, kreloc_ss, &kreloc->sym_name, "%s%s",
 		     new_symname, addstr_all);
+	write_reloc(ibfd, kreloc_ss, &kreloc->blank_addr,
+		    &ss->symbol, orig_reloc->address);
 	write_string(ibfd, kreloc_ss, &kreloc->blank_sect_name, "%s%s%s",
 		     (*symp)->name, addstr_all, addstr_sect);
 	write_reloc(ibfd, kreloc_ss, &kreloc->blank_sect_addr, symp, 0);
