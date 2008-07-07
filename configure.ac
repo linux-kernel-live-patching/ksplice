@@ -42,6 +42,12 @@ if test "$ac_bfd_include_dir" != "NONE"; then
   CPPFLAGS="$CPPFLAGS -I$ac_bfd_include_dir"
 fi
 
+AC_CHECK_MEMBER(struct bfd_hash_table.entsize,
+  [CPPFLAGS="$CPPFLAGS -DBFD_HASH_TABLE_HAS_ENTSIZE"],
+  [],
+  [[#include <bfd.h>]]
+)
+
 if ! test -e "objdiff-static" || ! test -e "objmanip-static"; then
   if test "$ac_libbfd" = "NONE" || test "$ac_libiberty" = "NONE"; then
     echo

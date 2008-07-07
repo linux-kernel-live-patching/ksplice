@@ -1,4 +1,5 @@
 #include <bfd.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +7,10 @@
 #define DIE do { fprintf(stderr, "ksplice: died at %s:%d\n", __FILE__, __LINE__); abort(); } while(0)
 #define assert(x) do { if(!(x)) DIE; } while(0)
 #define align(x, n) ((((x)+(n)-1)/(n))*(n))
+
+#define container_of(ptr, type, member) ({			\
+	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+	(type *)( (char *)__mptr - offsetof(type,member) );})
 
 #define DECLARE_VEC_TYPE(elt_t, vectype)	\
 	struct vectype {			\
@@ -58,6 +63,83 @@ void vec_do_reserve(void **data, size_t *mem_size, size_t newsize);
 DECLARE_VEC_TYPE(void, void_vec);
 DECLARE_VEC_TYPE(arelent *, arelentp_vec);
 DECLARE_VEC_TYPE(asymbol *, asymbolp_vec);
+
+#define DECLARE_HASH_TYPE(elt_t, hashtype,				\
+			  hashtype_init, hashtype_free,			\
+			  hashtype_lookup)				\
+	struct hashtype {						\
+		struct bfd_hash_table root;				\
+	};								\
+									\
+	void hashtype_init(struct hashtype *table);			\
+	void hashtype_free(struct hashtype *table);			\
+	typeof(elt_t) *hashtype_lookup(struct hashtype *table,		\
+				       const char *string,		\
+				       bfd_boolean create)
+
+#ifndef BFD_HASH_TABLE_HAS_ENTSIZE
+#define bfd_hash_table_init(table, newfunc, entry)	\
+	bfd_hash_table_init(table, newfunc)
+#endif
+
+#define DEFINE_HASH_TYPE(elt_t, hashtype,				\
+			 hashtype_init, hashtype_free,			\
+			 hashtype_lookup,				\
+			 elt_construct)					\
+	DECLARE_HASH_TYPE(elt_t, hashtype, hashtype_init,		\
+			  hashtype_free, hashtype_lookup);		\
+									\
+	struct hashtype##_entry {					\
+		struct bfd_hash_entry root;				\
+		typeof(elt_t) val;					\
+	};								\
+									\
+	static struct bfd_hash_entry *hashtype##_newfunc(		\
+	    struct bfd_hash_entry *entry,				\
+	    struct bfd_hash_table *table,				\
+	    const char *string)						\
+	{								\
+		if (entry == NULL) {					\
+			entry = bfd_hash_allocate(table,		\
+			    sizeof(struct hashtype##_entry));		\
+			if (entry == NULL)				\
+				return entry;				\
+		}							\
+		entry = bfd_hash_newfunc(entry, table, string);		\
+		typeof(elt_t) *v =					\
+		    &container_of(entry, struct hashtype##_entry,	\
+				  root)->val;				\
+		elt_construct(v);					\
+		return entry;						\
+	};								\
+									\
+	void hashtype_init(struct hashtype *table)			\
+	{								\
+		bfd_hash_table_init(&table->root, hashtype##_newfunc,	\
+				    sizeof(struct hashtype##_entry));	\
+	}								\
+									\
+	void hashtype_free(struct hashtype *table)			\
+	{								\
+		bfd_hash_table_free(&table->root);			\
+	}								\
+									\
+	typeof(elt_t) *hashtype_lookup(struct hashtype *table,		\
+				       const char *string,		\
+				       bfd_boolean create)		\
+	{								\
+		struct bfd_hash_entry *e =				\
+		    bfd_hash_lookup(&table->root, string, create,	\
+				    TRUE);				\
+		if (create)						\
+			assert(e != NULL);				\
+		else if (e == NULL)					\
+			return NULL;					\
+		return &container_of(e, struct hashtype##_entry,	\
+				     root)->val;			\
+	}								\
+									\
+	struct eat_trailing_semicolon
 
 #ifndef bfd_get_section_size
 #define bfd_get_section_size(x) ((x)->_cooked_size)
