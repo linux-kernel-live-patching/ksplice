@@ -862,10 +862,8 @@ int use_module(struct module *a, struct module *b)
 	if (strong_try_module_get(b) < 0)
 		return 0;
 
-	ksplice_debug(4, "Allocating new usage for %s.\n", a->name);
 	use = kmalloc(sizeof(*use), GFP_ATOMIC);
 	if (!use) {
-		printk("%s: out of memory adding dependencies\n", a->name);
 		module_put(b);
 		return 0;
 	}
