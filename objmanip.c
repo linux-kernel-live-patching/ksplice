@@ -262,7 +262,7 @@ int blot_section(bfd *abfd, asection *sect, int offset, int size)
 		tmp = *(long long *)address;
 		*((long long *)address) = 0x7777777777777777ll;
 	} else {
-		printf("ksplice: Unsupported size %d\n", size);
+		fprintf(stderr, "ksplice: Unsupported size %d\n", size);
 		DIE;
 	}
 	return tmp;

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DIE do { printf("ksplice: died at line %d of %s\n", __LINE__, __FILE__); fflush(0); exit(1); } while(0)
+#define DIE do { fprintf(stderr, "ksplice: died at %s:%d\n", __FILE__, __LINE__); abort(); } while(0)
 #define assert(x) do { if(!(x)) DIE; } while(0)
 #define align(x, n) ((((x)+(n)-1)/(n))*(n))
 
