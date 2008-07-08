@@ -5,7 +5,7 @@ use strict;
 use warnings;
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw($datadir $libexecdir $verbose $version_str init_tmpdir runcd runstr runval runval_raw runsuc unpack_update check_in_proc);
+our @EXPORT = qw($datadir $libexecdir $verbose $version_str init_tmpdir runcd runstr runval runval_raw runsuc unpack_update);
 
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
 our $version_str = "Ksplice version PACKAGE_VERSION\n";
@@ -80,19 +80,6 @@ sub unpack_update {
 	my ($ksplice) = glob('*/');
 	chop($ksplice); # remove the trailing slash
 	return $ksplice;
-}
-
-sub check_in_proc {
-	my ($kid) = @_;
-
-	if(! -e "/proc/1") {
-		print "/proc not mounted?\n";
-		exit(1);
-	}
-	if(! -e "/proc/ksplice_$kid") {
-		print "Ksplice id $kid is not present in the kernel\n";
-		exit(1);
-	}
 }
 
 1;

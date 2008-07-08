@@ -47,10 +47,11 @@ exit(0);
 
 sub view_kid {
 	$kid =~ s/^ksplice[_-]//;
-
-	check_in_proc($kid);
-	print "Ksplice id $kid is present in the kernel\n";
-	print runstr("cat /proc/ksplice_$kid");
+	if (-e "/proc/ksplice_$kid") {
+		print "Ksplice id $kid is present in the kernel\n";
+	} else {
+		print "Ksplice id $kid is not present in the kernel\n";
+	}
 }
 
 sub view_file {
@@ -65,7 +66,11 @@ sub view_file {
 }
 
 sub view_list {
-	print runstr("lsmod | grep ksplice");
+	foreach(split(/\n/, runstr("lsmod"))) {
+		next unless my ($kid) = m/^ksplice_(\S*)\s/;
+		next unless (-e "/proc/ksplice_$kid");
+		print "$kid\n";
+	}
 }
 
 =head1 NAME

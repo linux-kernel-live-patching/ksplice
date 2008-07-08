@@ -50,9 +50,12 @@ if($debug) {
 	}
 }
 
-check_in_proc($kid);
-runval("echo 1 > /proc/ksplice_$kid");
-if(runval_raw("rmmod ksplice_$kid") != 0) {
+unless(-e "/proc/ksplice_$kid") {
+	print "Ksplice id $kid is not present in the kernel\n";
+	exit(0);
+}
+unless(runval("echo 1 > /proc/ksplice_$kid") == 0 and
+       runval_raw("rmmod ksplice_$kid") == 0) {
 	my $dmesg = runstr("dmesg | grep ksplice");
 	while($dmesg =~ /ksplice: Preparing to reverse/) {
 		$dmesg = $';
