@@ -55,7 +55,7 @@ unless(-e "/proc/ksplice_$kid") {
 	exit(0);
 }
 unless(runval("echo 1 > /proc/ksplice_$kid") == 0 and
-       runval_raw("rmmod ksplice_$kid") == 0) {
+       (runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0)) {
 	my $dmesg = runstr("dmesg | grep ksplice");
 	while($dmesg =~ /ksplice: Preparing to reverse/) {
 		$dmesg = $';
