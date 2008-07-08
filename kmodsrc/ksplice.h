@@ -28,7 +28,9 @@ struct ksplice_patch {
 };
 
 #ifdef __KERNEL__
-
+#ifdef CONFIG_DEBUG_FS
+#include <linux/debugfs.h>
+#endif
 #include <linux/module.h>
 #include <linux/pagemap.h>
 #include <linux/sched.h>
@@ -78,7 +80,22 @@ struct module_pack {
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
 	int debug;
+#ifdef CONFIG_DEBUG_FS
+	struct debugfs_blob_wrapper debug_blob;
+	int debug_buf_size;
+	struct dentry *debugfs_dentry;
+#endif
 };
+
+#ifdef KSPLICE_STANDALONE
+/* Old kernels don't have debugfs_create_blob */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17) && defined(CONFIG_DEBUG_FS)
+struct debugfs_blob_wrapper {
+	void *data;
+	unsigned long size;
+};
+#endif
+#endif
 
 struct reloc_nameval {
 	struct list_head list;
@@ -177,8 +194,23 @@ struct candidate_val {
 
 #define singular(list) (!list_empty(list) && (list)->next->next == (list))
 
+#ifdef CONFIG_DEBUG_FS
+extern int init_debug_buf(struct module_pack *pack);
+extern void clear_debug_buf(struct module_pack *pack);
+extern int ksdebug(struct module_pack *pack, int level, const char *fmt, ...);
+#else /* CONFIG_DEBUG_FS */
 #define ksdebug(pack, level, fmt, ...) \
 	do { if ((pack)->debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
+static inline int init_debug_buf(struct module_pack *pack)
+{
+	return 0;
+}
+static inline void clear_debug_buf(struct module_pack *pack)
+{
+	return;
+}
+#endif /* CONFIG_DEBUG_FS */
+
 #define failed_to_find(pack, sym_name) \
 	ksdebug(pack, 0, KERN_ERR "ksplice: Failed to find symbol %s at " \
 		"%s:%d\n", sym_name, __FILE__, __LINE__)

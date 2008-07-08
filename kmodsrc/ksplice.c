@@ -15,6 +15,9 @@
  */
 
 #include <linux/module.h>
+#ifdef CONFIG_DEBUG_FS
+#include <linux/debugfs.h>
+#endif
 #include <linux/errno.h>
 #include <linux/kallsyms.h>
 #include <linux/kthread.h>
@@ -197,6 +200,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 void cleanup_ksplice_module(struct module_pack *pack)
 {
 	remove_proc_entry(pack->name, &proc_root);
+	clear_debug_buf(pack);
 }
 
 static int activate_primary(struct module_pack *pack)
@@ -489,6 +493,9 @@ static int valid_stack_ptr(struct thread_info *tinfo, void *p)
 int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
+	if (init_debug_buf(pack) < 0)
+		return -1;
+
 #ifdef KSPLICE_STANDALONE
 	if (process_ksplice_relocs(pack, ksplice_init_relocs,
 				   ksplice_init_relocs_end, 1) != 0)
@@ -1446,6 +1453,109 @@ static const char *dup_wolabel(const char *sym_name)
 	return newstr;
 }
 #endif
+
+#ifdef CONFIG_DEBUG_FS
+#ifdef KSPLICE_STANDALONE
+/* Old kernels don't have debugfs_create_blob */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
+static ssize_t read_file_blob(struct file *file, char __user *user_buf,
+			      size_t count, loff_t *ppos)
+{
+	struct debugfs_blob_wrapper *blob = file->private_data;
+	return simple_read_from_buffer(user_buf, count, ppos, blob->data,
+				       blob->size);
+}
+
+static int blob_open(struct inode *inode, struct file *file)
+{
+	if (inode->i_private)
+		file->private_data = inode->i_private;
+	return 0;
+}
+
+static struct file_operations fops_blob = {
+	.read = read_file_blob,
+	.open = blob_open,
+};
+
+static struct dentry *debugfs_create_blob(const char *name, mode_t mode,
+					  struct dentry *parent,
+					  struct debugfs_blob_wrapper *blob)
+{
+	return debugfs_create_file(name, mode, parent, blob, &fops_blob);
+}
+#endif
+#endif
+
+void clear_debug_buf(struct module_pack *pack)
+{
+	debugfs_remove(pack->debugfs_dentry);
+	pack->debug_blob.size = 0;
+	kfree(pack->debug_blob.data);
+	pack->debug_blob.data = NULL;
+}
+
+int init_debug_buf(struct module_pack *pack)
+{
+	pack->debug_blob.size = roundup_pow_of_two(1);
+	pack->debug_blob.data = kmalloc(pack->debug_blob.size, GFP_KERNEL);
+	pack->debugfs_dentry = debugfs_create_blob(pack->name, 700, NULL,
+						   &pack->debug_blob);
+	if (pack->debugfs_dentry == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
+int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
+{
+	va_list args;
+	int size, old_size, new_size;
+
+	if (pack->debug < level)
+		return 0;
+
+	va_start(args, fmt);
+	/* size includes the trailing '\0' */
+	size = 1 + vsnprintf(pack->debug_blob.data, 0, fmt, args);
+	va_end(args);
+	old_size = roundup_pow_of_two(pack->debug_blob.size);
+	new_size = roundup_pow_of_two(size + pack->debug_blob.size);
+	if (new_size > old_size) {
+#ifndef KSPLICE_STANDALONE
+		pack->debug_blob.data = krealloc(pack->debug_blob.data,
+						 new_size, GFP_KERNEL);
+		if (pack->debug_blob.data == NULL)
+			return -ENOMEM;
+#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+		pack->debug_blob.data = krealloc(pack->debug_blob.data,
+						 new_size, GFP_KERNEL);
+		if (pack->debug_blob.data == NULL)
+			return -ENOMEM;
+#else
+		/* We cannot use our own function with the same
+		 * arguments as krealloc, because doing so requires
+		 * ksize, which was first exported in 2.6.24-rc5.
+		 */
+		char *tmp = pack->debug_blob.data;
+		pack->debug_blob.data = kmalloc(new_size, GFP_KERNEL);
+		if (pack->debug_blob.data == NULL)
+			return -ENOMEM;
+		memcpy(pack->debug_blob.data, tmp, pack->debug_blob.size);
+		if (tmp != NULL)
+			kfree(tmp);
+#endif
+#endif
+	}
+	va_start(args, fmt);
+	pack->debug_blob.size += vsnprintf(pack->debug_blob.data +
+					   pack->debug_blob.size,
+					   size, fmt, args);
+	va_end(args);
+
+	return 0;
+}
+#endif /* CONFIG_DEBUG_FS */
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Jeffrey Brian Arnold <jbarnold@mit.edu>");
