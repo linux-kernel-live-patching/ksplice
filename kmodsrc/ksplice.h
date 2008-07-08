@@ -68,6 +68,7 @@ struct module_pack {
 	struct list_head *reloc_addrmaps;
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
+	int debug;
 };
 
 struct reloc_nameval {
@@ -173,8 +174,8 @@ static inline void print_abort(const char *str)
 	printk(KERN_ERR "ksplice: Aborted. (%s)\n", str);
 }
 
-#define ksplice_debug(level, fmt, ...) \
-	do { if (debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
+#define ksdebug(pack, level, fmt, ...) \
+	do { if ((pack)->debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
 
 int process_ksplice_relocs(struct module_pack *pack,
 			   const struct ksplice_reloc *relocs,

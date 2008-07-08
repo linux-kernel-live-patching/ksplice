@@ -102,9 +102,6 @@ extern struct mutex module_mutex;
 #define KSPLICE_SP(x) ((x)->thread.sp)
 #endif /* KSPLICE_STANDALONE */
 
-static int debug;
-module_param(debug, int, 0600);
-
 void cleanup_ksplice_module(struct module_pack *pack)
 {
 	remove_proc_entry(pack->name, &proc_root);
@@ -306,10 +303,10 @@ int check_each_task(struct module_pack *pack)
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
 		if (check_task(pack, p) < 0) {
-			if (debug == 1) {
-				debug = 2;
+			if (pack->debug == 1) {
+				pack->debug = 2;
 				check_task(pack, p);
-				debug = 1;
+				pack->debug = 1;
 			}
 			status = -EAGAIN;
 		}
@@ -323,10 +320,10 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 {
 	int status, ret;
 
-	ksplice_debug(2, KERN_DEBUG "ksplice: stack check: pid %d (%s) eip "
-		      "%08lx ", t->pid, t->comm, KSPLICE_IP(t));
+	ksdebug(pack, 2, KERN_DEBUG "ksplice: stack check: pid %d (%s) eip "
+		"%08lx ", t->pid, t->comm, KSPLICE_IP(t));
 	status = check_address_for_conflict(pack, KSPLICE_IP(t));
-	ksplice_debug(2, ": ");
+	ksdebug(pack, 2, ": ");
 
 	if (t == current) {
 		ret = check_stack(pack, task_thread_info(t),
@@ -339,10 +336,10 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 		if (status == 0)
 			status = ret;
 	} else if (strcmp(t->comm, "kstopmachine") != 0) {
-		ksplice_debug(2, "unexpected running task!");
+		ksdebug(pack, 2, "unexpected running task!");
 		status = -ENODEV;
 	}
-	ksplice_debug(2, "\n");
+	ksdebug(pack, 2, "\n");
 	return status;
 }
 
@@ -356,7 +353,7 @@ int check_stack(struct module_pack *pack, struct thread_info *tinfo,
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
 		if (__kernel_text_address(addr)) {
-			ksplice_debug(2, "%08lx ", addr);
+			ksdebug(pack, 2, "%08lx ", addr);
 			if (check_address_for_conflict(pack, addr) < 0)
 				status = -EAGAIN;
 		}
@@ -375,14 +372,14 @@ int check_address_for_conflict(struct module_pack *pack, long addr)
 	list_for_each_entry(rec, pack->safety_records, list) {
 		if (rec->care == 1 && addr > rec->addr
 		    && addr < rec->addr + rec->size) {
-			ksplice_debug(2, "[<-- CONFLICT] ");
+			ksdebug(pack, 2, "[<-- CONFLICT] ");
 			return -EAGAIN;
 		}
 	}
 	for (s = pack->primary_sizes; s < pack->primary_sizes_end; s++) {
 		if (addr >= s->thismod_addr
 		    && addr < s->thismod_addr + s->size) {
-			ksplice_debug(2, "[<-- CONFLICT] ");
+			ksdebug(pack, 2, "[<-- CONFLICT] ");
 			return -EAGAIN;
 		}
 	}
@@ -477,9 +474,9 @@ start:
 		for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
 			i = s - pack->helper_sizes;
 			if (finished[i] == 0)
-				ksplice_debug(2, KERN_DEBUG "ksplice: run-pre: "
-					      "could not match section %s\n",
-					      s->name);
+				ksdebug(pack, 2, KERN_DEBUG "ksplice: run-pre: "
+					"could not match section %s\n",
+					s->name);
 		}
 		print_abort("run-pre: could not match some sections");
 		kfree(finished);
@@ -513,8 +510,8 @@ int search_for_match(struct module_pack *pack, const struct ksplice_size *s)
 	if (ret < 0)
 		return ret;
 
-	ksplice_debug(3, KERN_DEBUG "ksplice_h: run-pre: starting sect search "
-		      "for %s\n", s->name);
+	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: starting sect search "
+		"for %s\n", s->name);
 
 	list_for_each_entry(v, &vals, list) {
 		run_addr = v->val;
@@ -543,19 +540,19 @@ int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 
 	if (run_pre_cmp(pack, run_addr, pre_addr, s->size, 0) != 0) {
 		set_temp_myst_relocs(pack, NOVAL);
-		ksplice_debug(1, KERN_DEBUG "ksplice_h: run-pre: sect %s does "
-			      "not match ", s->name);
-		ksplice_debug(1, "(r_a=%08lx p_a=%08lx s=%ld)\n",
-			      run_addr, pre_addr, s->size);
-		ksplice_debug(1, "ksplice_h: run-pre: ");
-		if (debug >= 1)
+		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: sect %s does "
+			"not match ", s->name);
+		ksdebug(pack, 1, "(r_a=%08lx p_a=%08lx s=%ld)\n",
+			run_addr, pre_addr, s->size);
+		ksdebug(pack, 1, "ksplice_h: run-pre: ");
+		if (pack->debug >= 1)
 			run_pre_cmp(pack, run_addr, pre_addr, s->size, 1);
-		ksplice_debug(1, "\n");
+		ksdebug(pack, 1, "\n");
 	} else {
 		set_temp_myst_relocs(pack, VAL);
 
-		ksplice_debug(3, KERN_DEBUG "ksplice_h: run-pre: found sect "
-			      "%s=%08lx\n", s->name, run_addr);
+		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect "
+			"%s=%08lx\n", s->name, run_addr);
 
 		tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
 		if (tmp == NULL) {
@@ -594,7 +591,7 @@ int handle_myst_reloc(struct module_pack *pack, long pre_addr, int *pre_o,
 	else
 		BUG();
 
-	if (debug >= 3 && !rerun) {
+	if (pack->debug >= 3 && !rerun) {
 		printk(KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%08lx "
 		       "p_o=%08x: ", run_addr, *pre_o);
 		printk("%s=%08lx (A=%08lx *r=%08lx)\n",
@@ -683,9 +680,9 @@ skip_using_system_map:
 	if ((r->size == 4 && *(int *)r->blank_addr != 0x77777777)
 	    || (r->size == 8 &&
 		*(long long *)r->blank_addr != 0x7777777777777777ll)) {
-		ksplice_debug(4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%08lx"
-			      " (altinstr)\n", (pre ? "_h" : ""),
-			      r->sym_name, r->blank_offset);
+		ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%08lx"
+			" (altinstr)\n", (pre ? "_h" : ""), r->sym_name,
+			r->blank_offset);
 		release_vals(&vals);
 		return 0;
 	}
@@ -704,8 +701,8 @@ skip_using_system_map:
 			return -1;
 		}
 
-		ksplice_debug(4, KERN_DEBUG "ksplice: reloc: deferred %s:%08lx "
-			      "to run-pre\n", r->sym_name, r->blank_offset);
+		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: deferred %s:%08lx "
+			"to run-pre\n", r->sym_name, r->blank_offset);
 
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL) {
@@ -768,13 +765,13 @@ skip_using_system_map:
 			BUG();
 	}
 
-	ksplice_debug(4, KERN_DEBUG "ksplice%s: reloc: %s:%08lx ",
-		      (pre ? "_h" : ""), r->sym_name, r->blank_offset);
-	ksplice_debug(4, "(S=%08lx A=%08lx ", sym_addr, r->addend);
+	ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: %s:%08lx ",
+		(pre ? "_h" : ""), r->sym_name, r->blank_offset);
+	ksdebug(pack, 4, "(S=%08lx A=%08lx ", sym_addr, r->addend);
 	if (r->size == 4)
-		ksplice_debug(4, "aft=%08x)\n", *(int *)r->blank_addr);
+		ksdebug(pack, 4, "aft=%08x)\n", *(int *)r->blank_addr);
 	else if (r->size == 8)
-		ksplice_debug(4, "aft=%016llx)\n", *(long long *)r->blank_addr);
+		ksdebug(pack, 4, "aft=%016llx)\n", *(long long *)r->blank_addr);
 	else
 		BUG();
 	return 0;
@@ -896,8 +893,8 @@ int compute_address(struct module_pack *pack, char *sym_name,
 			ret = add_candidate_val(vals, nv->val);
 			if (ret < 0)
 				return ret;
-			ksplice_debug(1, KERN_DEBUG "ksplice: using detected "
-				      "sym %s=%08lx\n", sym_name, nv->val);
+			ksdebug(pack, 1, KERN_DEBUG "ksplice: using detected "
+				"sym %s=%08lx\n", sym_name, nv->val);
 			return 0;
 		}
 	}
@@ -979,10 +976,10 @@ int brute_search_all(struct module_pack *pack, const struct ksplice_size *s)
 	int saved_debug;
 	char *where = NULL;
 
-	ksplice_debug(2, KERN_DEBUG "ksplice: brute_search: searching for %s\n",
-		      s->name);
-	saved_debug = debug;
-	debug = 0;
+	ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: searching for %s\n",
+		s->name);
+	saved_debug = pack->debug;
+	pack->debug = 0;
 
 	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
@@ -1006,11 +1003,11 @@ int brute_search_all(struct module_pack *pack, const struct ksplice_size *s)
 		}
 	}
 
-	if (ret == 1 && saved_debug >= 2)
-		printk(KERN_DEBUG "ksplice: brute_search: found %s in %s\n",
-		       s->name, where);
+	pack->debug = saved_debug;
+	if (ret == 1)
+		ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: found %s "
+			"in %s\n", s->name, where);
 
-	debug = saved_debug;
 	return ret;
 }
 
