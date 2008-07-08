@@ -252,9 +252,6 @@ static inline int brute_search(struct module_pack *pack, struct ksplice_size *s,
 		if (run != pre)
 			return 1;
 
-		if (addr == s->thismod_addr)
-			return 1;
-
 		if (try_addr(pack, s, addr, s->thismod_addr))
 			return 0;
 	}
