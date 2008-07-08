@@ -159,7 +159,7 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 		map = find_addrmap(pack, pre_addr + pre_o);
 		if (map != NULL) {
 			if (handle_myst_reloc
-			    (pre_addr, &pre_o, run_addr, &run_o, map,
+			    (pack, pre_addr, &pre_o, run_addr, &run_o, map,
 			     rerun) == 1)
 				return 1;
 			continue;

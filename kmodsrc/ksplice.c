@@ -578,8 +578,9 @@ int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	return 0;
 }
 
-int handle_myst_reloc(long pre_addr, int *pre_o, long run_addr,
-		      int *run_o, struct reloc_addrmap *map, int rerun)
+int handle_myst_reloc(struct module_pack *pack, long pre_addr, int *pre_o,
+		      long run_addr, int *run_o, struct reloc_addrmap *map,
+		      int rerun)
 {
 	int expected;
 	int offset = (int)(pre_addr + *pre_o - map->addr);
