@@ -344,13 +344,10 @@ void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 	if (mode("keep-primary"))
 		want_section(sym_ptr->name, &new_symname);
 
-	int addend = orig_reloc->addend;
 	reloc_howto_type *howto = orig_reloc->howto;
-	int size = bfd_get_reloc_size(howto);
-	int addend2 = blot_section(ibfd, isection, orig_reloc->address, size);
-	assert(addend == 0 || addend2 == 0);
-	if (addend == 0)
-		addend = addend2;
+
+	bfd_vma inplace = blot_section(ibfd, isection, orig_reloc->address,
+				       howto);
 
 	struct supersect *kreloc_ss = make_section(ibfd, &isyms,
 						   mode("rmsyms") ?
@@ -367,26 +364,54 @@ void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 	write_system_map_array(ibfd, kreloc_ss, &kreloc->sym_addrs,
 			       &kreloc->num_sym_addrs, sym_ptr);
 	kreloc->pcrel = howto->pc_relative;
-	kreloc->addend = addend;
-	kreloc->size = size;
+	if (howto->partial_inplace)
+		kreloc->addend = inplace;
+	else
+		kreloc->addend = orig_reloc->addend;
+	kreloc->size = bfd_get_reloc_size(howto);
 }
 
-int blot_section(bfd *abfd, asection *sect, int offset, int size)
+#define CANARY(x, canary) ((x & ~howto->dst_mask) | (canary & howto->dst_mask))
+
+bfd_vma blot_section(bfd *abfd, asection *sect, int offset,
+		     reloc_howto_type *howto)
 {
 	struct supersect *ss = fetch_supersect(abfd, sect, &isyms);
 	void *address = ss->contents.data + offset;
-	int tmp;
-	if (size == 4) {
-		tmp = *(int *)address;
-		*((int *)address) = 0x77777777;
-	} else if (size == 8) {
-		tmp = *(long long *)address;
-		*((long long *)address) = 0x7777777777777777ll;
-	} else {
-		fprintf(stderr, "ksplice: Unsupported size %d\n", size);
+	switch (howto->size) {
+	case 0:
+		{
+			int8_t x = bfd_get_8(abfd, address);
+			bfd_vma newx = CANARY(x, 0x77);
+			bfd_put_8(abfd, newx, address);
+			return x & howto->src_mask;
+		}
+	case 1:
+		{
+			int16_t x = bfd_get_16(abfd, address);
+			bfd_vma newx = CANARY(x, 0x7777);
+			bfd_put_16(abfd, newx, address);
+			return x & howto->src_mask;
+		}
+	case 2:
+		{
+			int32_t x = bfd_get_32(abfd, address);
+			bfd_vma newx = CANARY(x, 0x77777777);
+			bfd_put_32(abfd, newx, address);
+			return x & howto->src_mask;
+		}
+	case 4:
+		{
+			int64_t x = bfd_get_64(abfd, address);
+			bfd_vma newx = CANARY(x, 0x7777777777777777ll);
+			bfd_put_64(abfd, newx, address);
+			return x & howto->src_mask;
+		}
+	default:
+		fprintf(stderr, "ksplice: Unsupported howto->size %d\n",
+			howto->size);
 		DIE;
 	}
-	return tmp;
 }
 
 void write_ksplice_size(bfd *ibfd, asymbol **symp)
