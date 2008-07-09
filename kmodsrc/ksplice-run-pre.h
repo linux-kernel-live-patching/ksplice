@@ -137,12 +137,13 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 };
 /* *INDENT-ON* */
 
-static int match_nop(long addr, int *o);
+static int match_nop(unsigned char *addr);
 
 static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 		       int size, int rerun)
 {
 	int run_o = 0, pre_o = 0, lenient = 0;
+	int matched;
 	unsigned char run, pre;
 	struct reloc_addrmap *map;
 
@@ -165,8 +166,16 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 			continue;
 		}
 
-		if (match_nop(run_addr, &run_o) || match_nop(pre_addr, &pre_o))
+		matched = match_nop((unsigned char *)(run_addr + run_o));
+		if (matched > 0) {
+			run_o += matched;
 			continue;
+		}
+		matched = match_nop((unsigned char *)(pre_addr + pre_o));
+		if (matched > 0) {
+			pre_o += matched;
+			continue;
+		}
 
 		run = *(unsigned char *)(run_addr + run_o);
 		pre = *(unsigned char *)(pre_addr + pre_o);
@@ -202,23 +211,20 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 	return 0;
 }
 
-static int match_nop(long addr, int *o)
+static int match_nop(unsigned char *addr)
 {
 	int i, j;
 	struct insn *nop;
 	for (i = NUM_NOPS - 1; i >= 0; i--) {
 		nop = &nops[i];
 		for (j = 0; j < nop->len; j++) {
-			if (!virtual_address_mapped(addr + *o + j))
+			if (!virtual_address_mapped((long)&addr[j]))
 				break;
-			if (*(unsigned char *)(addr + *o + j) != nop->data[j])
+			if (addr[j] != nop->data[j])
 				break;
 		}
-		if (j == nop->len) {
-			*o += j;
-			return 1;
-		}
-
+		if (j == nop->len)
+			return j;
 	}
 	return 0;
 }
