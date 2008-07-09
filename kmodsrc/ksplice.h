@@ -148,9 +148,8 @@ static inline int virtual_address_mapped(long addr)
 struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 				   int create);
 struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr);
-int handle_myst_reloc(struct module_pack *pack, long pre_addr, int *pre_o,
-		      long run_addr, int *run_o, struct reloc_addrmap *map,
-		      int rerun);
+int handle_myst_reloc(struct module_pack *pack, long pre_addr, long run_addr,
+		      struct reloc_addrmap *map, int rerun);
 
 struct safety_record {
 	struct list_head list;

@@ -160,10 +160,25 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 
 		map = find_addrmap(pack, pre_addr + pre_o);
 		if (map != NULL) {
-			if (handle_myst_reloc
-			    (pack, pre_addr, &pre_o, run_addr, &run_o, map,
-			     rerun) == 1)
+			if (!rerun)
+				ksdebug(pack, 3, KERN_DEBUG "ksplice_h: "
+					"run-pre: reloc at r_a=%08lx "
+					"p_o=%08x: ", run_addr, pre_o);
+			matched = handle_myst_reloc(pack, pre_addr + pre_o,
+						    run_addr + run_o, map,
+						    rerun);
+			if (matched == 0)
 				return 1;
+			if (rerun) {
+				for (o = 0; o < matched; o++)
+					printk("%02x/%02x ",
+					       *(unsigned char *)(run_addr +
+								  run_o + o),
+					       *(unsigned char *)(pre_addr +
+								  pre_o + o));
+			}
+			pre_o += matched;
+			run_o += matched;
 			continue;
 		}
 

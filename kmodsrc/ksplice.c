@@ -575,15 +575,14 @@ int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	return 0;
 }
 
-int handle_myst_reloc(struct module_pack *pack, long pre_addr, int *pre_o,
-		      long run_addr, int *run_o, struct reloc_addrmap *map,
-		      int rerun)
+int handle_myst_reloc(struct module_pack *pack, long pre_addr, long run_addr,
+		      struct reloc_addrmap *map, int rerun)
 {
 	int expected;
-	int offset = (int)(pre_addr + *pre_o - map->addr);
+	int offset = (int)(pre_addr - map->addr);
 	long run_reloc = 0;
 	long run_reloc_addr;
-	run_reloc_addr = run_addr + *run_o - offset;
+	run_reloc_addr = run_addr - offset;
 	if (map->size == 4)
 		run_reloc = *(int *)run_reloc_addr;
 	else if (map->size == 8)
@@ -591,18 +590,15 @@ int handle_myst_reloc(struct module_pack *pack, long pre_addr, int *pre_o,
 	else
 		BUG();
 
-	if (!rerun) {
-		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at "
-			"r_a=%08lx p_o=%08x: ", run_addr, *pre_o);
+	if (!rerun)
 		ksdebug(pack, 3, "%s=%08lx (A=%08lx *r=%08lx)\n",
-			map->nameval->name, map->nameval->val,
-			map->addend, run_reloc);
-	}
+			map->nameval->name, map->nameval->val, map->addend,
+			run_reloc);
 
 	if (!starts_with(map->nameval->name, ".rodata.str")) {
 		expected = run_reloc - map->addend;
 		if ((int)run_reloc == 0x77777777)
-			return 1;
+			return 0;
 		if (map->pcrel)
 			expected += run_reloc_addr;
 		if (map->nameval->status == NOVAL) {
@@ -610,17 +606,14 @@ int handle_myst_reloc(struct module_pack *pack, long pre_addr, int *pre_o,
 			map->nameval->status = TEMP;
 		} else if (map->nameval->val != expected) {
 			if (rerun)
-				return 1;
+				return 0;
 			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: pre-run reloc: "
 				"Expected %s=%08x!\n", map->nameval->name,
 				expected);
-			return 1;
+			return 0;
 		}
 	}
-
-	*pre_o += map->size - offset;
-	*run_o += map->size - offset;
-	return 0;
+	return map->size - offset;
 }
 
 int process_ksplice_relocs(struct module_pack *pack,
