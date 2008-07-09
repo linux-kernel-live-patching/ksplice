@@ -591,12 +591,12 @@ int handle_myst_reloc(struct module_pack *pack, long pre_addr, int *pre_o,
 	else
 		BUG();
 
-	if (pack->debug >= 3 && !rerun) {
-		printk(KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%08lx "
-		       "p_o=%08x: ", run_addr, *pre_o);
-		printk("%s=%08lx (A=%08lx *r=%08lx)\n",
-		       map->nameval->name, map->nameval->val,
-		       map->addend, run_reloc);
+	if (!rerun) {
+		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at "
+			"r_a=%08lx p_o=%08x: ", run_addr, *pre_o);
+		ksdebug(pack, 3, "%s=%08lx (A=%08lx *r=%08lx)\n",
+			map->nameval->name, map->nameval->val,
+			map->addend, run_reloc);
 	}
 
 	if (!starts_with(map->nameval->name, ".rodata.str")) {
@@ -611,8 +611,9 @@ int handle_myst_reloc(struct module_pack *pack, long pre_addr, int *pre_o,
 		} else if (map->nameval->val != expected) {
 			if (rerun)
 				return 1;
-			printk(KERN_DEBUG "ksplice_h: pre-run reloc: Expected "
-			       "%s=%08x!\n", map->nameval->name, expected);
+			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: pre-run reloc: "
+				"Expected %s=%08x!\n", map->nameval->name,
+				expected);
 			return 1;
 		}
 	}
