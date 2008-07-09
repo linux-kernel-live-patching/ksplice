@@ -4,19 +4,20 @@ dnl The author of Ksplice learned how to configure libbfd by looking at
 dnl elf2flt, which is available under the GNU General Public License.
 
 AC_ARG_WITH(libbfd,
-  [ --with-libbfd=<file>  path to libbfd.a ],
+  [  --with-libbfd=FILE      path to libbfd.a ],
   [ ac_libbfd=$withval ],
   [ ac_libbfd=NONE ]
 )
 
 AC_ARG_WITH(libiberty,
-  [ --with-libiberty=<file>  path to libiberty.a ],
+  [  --with-libiberty=FILE   path to libiberty.a ],
   [ ac_libiberty=$withval ],
   [ ac_libiberty=NONE ]
 )
 
 AC_ARG_WITH(bfd-include-dir,
-  [ --with-bfd-include-dir=<dir>  path to bfd.h ],
+  [  --with-bfd-include-dir=DIR
+                          path to directory containing bfd.h ],
   [ ac_bfd_include_dir=$withval ],
   [ ac_bfd_include_dir=NONE ]
 )
