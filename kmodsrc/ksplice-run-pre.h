@@ -137,10 +137,10 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 };
 /* *INDENT-ON* */
 
-int match_nop(long addr, int *o);
+static int match_nop(long addr, int *o);
 
-int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
-		int size, int rerun)
+static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
+		       int size, int rerun)
 {
 	int run_o = 0, pre_o = 0, lenient = 0;
 	unsigned char run, pre;
@@ -202,7 +202,7 @@ int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 	return 0;
 }
 
-int match_nop(long addr, int *o)
+static int match_nop(long addr, int *o)
 {
 	int i, j;
 	struct insn *nop;
