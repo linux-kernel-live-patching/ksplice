@@ -43,20 +43,14 @@ void get_syms(bfd *abfd, struct asymbolp_vec *syms)
 struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 				  struct asymbolp_vec *syms)
 {
-	static struct supersect *supersects = NULL;
-
-	struct supersect *ss;
-	for (ss = supersects; ss != NULL; ss = ss->next) {
-		if (strcmp(sect->name, ss->name) == 0 && ss->parent == abfd)
-			return ss;
-	}
+	if (sect->userdata != NULL)
+		return sect->userdata;
 
 	struct supersect *new = malloc(sizeof(*new));
+	sect->userdata = new;
 	new->parent = abfd;
 	new->name = malloc(strlen(sect->name) + 1);
 	strcpy(new->name, sect->name);
-	new->next = supersects;
-	supersects = new;
 
 	vec_init(&new->contents);
 	vec_resize(&new->contents, bfd_get_section_size(sect));
