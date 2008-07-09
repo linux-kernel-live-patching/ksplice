@@ -33,7 +33,9 @@ struct ksplice_reloc {
 	long *sym_addrs;
 	int pcrel;
 	long addend;
-	long size;
+	int size;
+	long dst_mask;
+	unsigned int rightshift;
 };
 
 struct ksplice_size {
@@ -86,10 +88,11 @@ struct reloc_nameval {
 struct reloc_addrmap {
 	struct list_head list;
 	long addr;
-	long addend;
-	int pcrel;
 	struct reloc_nameval *nameval;
+	int pcrel;
+	long addend;
 	int size;
+	long dst_mask;
 };
 
 static inline int virtual_address_mapped(long addr)
@@ -211,6 +214,7 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 int add_candidate_val(struct list_head *vals, long val);
 void release_vals(struct list_head *vals);
 void set_temp_myst_relocs(struct module_pack *pack, int status_val);
+int contains_canary(long blank_addr, int size, long dst_mask);
 int starts_with(const char *str, const char *prefix);
 int ends_with(const char *str, const char *suffix);
 int label_offset(const char *sym_name);

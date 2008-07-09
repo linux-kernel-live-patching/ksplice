@@ -369,6 +369,8 @@ void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 	else
 		kreloc->addend = orig_reloc->addend;
 	kreloc->size = bfd_get_reloc_size(howto);
+	kreloc->dst_mask = howto->dst_mask;
+	kreloc->rightshift = howto->rightshift;
 }
 
 #define CANARY(x, canary) ((x & ~howto->dst_mask) | (canary & howto->dst_mask))

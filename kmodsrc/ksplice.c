@@ -578,27 +578,44 @@ int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 int handle_myst_reloc(struct module_pack *pack, long pre_addr, long run_addr,
 		      struct reloc_addrmap *map, int rerun)
 {
-	int expected;
 	int offset = (int)(pre_addr - map->addr);
-	long run_reloc = 0;
-	long run_reloc_addr;
-	run_reloc_addr = run_addr - offset;
-	if (map->size == 4)
-		run_reloc = *(int *)run_reloc_addr;
-	else if (map->size == 8)
-		run_reloc = *(long long *)run_reloc_addr;
-	else
-		BUG();
+	long run_reloc_val, expected;
+	long run_reloc_addr = run_addr - offset;
+	switch (map->size) {
+	case 1:
+		run_reloc_val =
+		    *(int8_t *)run_reloc_addr & (int8_t)map->dst_mask;
+		break;
+	case 2:
+		run_reloc_val =
+		    *(int16_t *)run_reloc_addr & (int16_t)map->dst_mask;
+		break;
+	case 4:
+		run_reloc_val =
+		    *(int32_t *)run_reloc_addr & (int32_t)map->dst_mask;
+		break;
+	case 8:
+		run_reloc_val = *(int64_t *)run_reloc_addr & map->dst_mask;
+		break;
+	default:
+		print_abort("Invalid relocation size");
+		return -1;
+	}
 
 	if (!rerun)
 		ksdebug(pack, 3, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
 			map->nameval->name, map->nameval->val, map->addend,
-			run_reloc);
+			run_reloc_val);
 
 	if (!starts_with(map->nameval->name, ".rodata.str")) {
-		expected = run_reloc - map->addend;
-		if ((int)run_reloc == 0x77777777)
+		int ret;
+		ret = contains_canary(run_reloc_addr, map->size, map->dst_mask);
+		if (ret < 0)
+			return ret;
+		if (ret == 1)
 			return 0;
+
+		expected = run_reloc_val - map->addend;
 		if (map->pcrel)
 			expected += run_reloc_addr;
 		if (map->nameval->status == NOVAL) {
@@ -608,8 +625,8 @@ int handle_myst_reloc(struct module_pack *pack, long pre_addr, long run_addr,
 			if (rerun)
 				return 0;
 			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: pre-run reloc: "
-				"Expected %s=%08x!\n", map->nameval->name,
-				expected);
+				"Expected %s=%" ADDR "!\n",
+				map->nameval->name, expected);
 			return 0;
 		}
 	}
@@ -671,9 +688,12 @@ int process_reloc(struct module_pack *pack, const struct ksplice_reloc *r,
 skip_using_system_map:
 #endif
 
-	if ((r->size == 4 && *(int *)r->blank_addr != 0x77777777)
-	    || (r->size == 8 &&
-		*(long long *)r->blank_addr != 0x7777777777777777ll)) {
+	ret = contains_canary(r->blank_addr, r->size, r->dst_mask);
+	if (ret < 0) {
+		release_vals(&vals);
+		return ret;
+	}
+	if (ret == 0) {
 		ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%"
 			ADDR " (altinstr)\n", (pre ? "_h" : ""), r->sym_name,
 			r->blank_offset);
@@ -707,9 +727,10 @@ skip_using_system_map:
 		map->nameval = find_nameval(pack, r->sym_name, 1);
 		if (map->nameval == NULL)
 			return -ENOMEM;
-		map->addend = r->addend;
 		map->pcrel = r->pcrel;
+		map->addend = r->addend;
 		map->size = r->size;
+		map->dst_mask = r->dst_mask;
 		list_add(&map->list, pack->reloc_addrmaps);
 		return 0;
 	}
@@ -740,9 +761,10 @@ skip_using_system_map:
 			return -ENOMEM;
 		map->nameval->val = 0;
 		map->nameval->status = VAL;
+		map->pcrel = r->pcrel;
 		map->addend = sym_addr + r->addend;
 		map->size = r->size;
-		map->pcrel = r->pcrel;
+		map->dst_mask = r->dst_mask;
 		list_add(&map->list, pack->reloc_addrmaps);
 
 	} else {
@@ -751,23 +773,54 @@ skip_using_system_map:
 			val = sym_addr + r->addend - r->blank_addr;
 		else
 			val = sym_addr + r->addend;
-		if (r->size == 4)
-			*(int *)r->blank_addr = val;
-		else if (r->size == 8)
-			*(long long *)r->blank_addr = val;
-		else
-			BUG();
+
+		switch (r->size) {
+		case 1:
+			*(int8_t *)r->blank_addr =
+			    (*(int8_t *)r->blank_addr & ~(int8_t)r->dst_mask)
+			    | ((val >> r->rightshift) & (int8_t)r->dst_mask);
+			break;
+		case 2:
+			*(int16_t *)r->blank_addr =
+			    (*(int16_t *)r->blank_addr & ~(int16_t)r->dst_mask)
+			    | ((val >> r->rightshift) & (int16_t)r->dst_mask);
+			break;
+		case 4:
+			*(int32_t *)r->blank_addr =
+			    (*(int32_t *)r->blank_addr & ~(int32_t)r->dst_mask)
+			    | ((val >> r->rightshift) & (int32_t)r->dst_mask);
+			break;
+		case 8:
+			*(int64_t *)r->blank_addr =
+			    (*(int64_t *)r->blank_addr & ~r->dst_mask) |
+			    ((val >> r->rightshift) & r->dst_mask);
+			break;
+		default:
+			print_abort("Invalid relocation size");
+			return -1;
+		}
 	}
 
 	ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: %s:%" ADDR " ",
 		(pre ? "_h" : ""), r->sym_name, r->blank_offset);
 	ksdebug(pack, 4, "(S=%" ADDR " A=%" ADDR " ", sym_addr, r->addend);
-	if (r->size == 4)
-		ksdebug(pack, 4, "aft=%08x)\n", *(int *)r->blank_addr);
-	else if (r->size == 8)
-		ksdebug(pack, 4, "aft=%016llx)\n", *(long long *)r->blank_addr);
-	else
-		BUG();
+	switch (r->size) {
+	case 1:
+		ksdebug(pack, 4, "aft=%02x)\n", *(int8_t *)r->blank_addr);
+		break;
+	case 2:
+		ksdebug(pack, 4, "aft=%04x)\n", *(int16_t *)r->blank_addr);
+		break;
+	case 4:
+		ksdebug(pack, 4, "aft=%08x)\n", *(int32_t *)r->blank_addr);
+		break;
+	case 8:
+		ksdebug(pack, 4, "aft=%016llx)\n", *(int64_t *)r->blank_addr);
+		break;
+	default:
+		print_abort("Invalid relocation size");
+		return -1;
+	}
 	return 0;
 }
 
@@ -1202,6 +1255,27 @@ void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 	list_for_each_entry(nv, pack->reloc_namevals, list) {
 		if (nv->status == TEMP)
 			nv->status = status_val;
+	}
+}
+
+int contains_canary(long blank_addr, int size, long dst_mask)
+{
+	switch (size) {
+	case 1:
+		return (*(int8_t *)blank_addr & (int8_t)dst_mask) ==
+		    (0x77 & dst_mask);
+	case 2:
+		return (*(int16_t *)blank_addr & (int16_t)dst_mask) ==
+		    (0x7777 & dst_mask);
+	case 4:
+		return (*(int32_t *)blank_addr & (int32_t)dst_mask) ==
+		    (0x77777777 & dst_mask);
+	case 8:
+		return (*(int64_t *)blank_addr & dst_mask) ==
+		    (0x7777777777777777ll & dst_mask);
+	default:
+		print_abort("Invalid relocation size");
+		return -1;
 	}
 }
 

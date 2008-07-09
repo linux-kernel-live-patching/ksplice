@@ -18,7 +18,9 @@ struct ksplice_reloc {
 	long *sym_addrs;
 	int pcrel;
 	long addend;
-	long size;
+	int size;
+	unsigned long dst_mask;
+	unsigned int rightshift;
 };
 
 struct ksplice_size {
