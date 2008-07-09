@@ -201,7 +201,7 @@ for my $module (@modules) {
 	my $kid_m = "${kid}_$module";
 	$kid_m =~ s/-/_/g;
 	my $ksplice_m = "ksplice-$kid_m";
-	runval("make", @jlevel, "modules", "KSPLICE_ID=$kid_m", "map_printk=$map_printk", "KERNELSRC=$linuxtree");
+	runval("make", @jlevel, "modules", "KSPLICE_ID=$kid_m", "KSPLICE_TARGET=$module", "map_printk=$map_printk", "KERNELSRC=$linuxtree");
 }
 
 runcd($tmpdir);

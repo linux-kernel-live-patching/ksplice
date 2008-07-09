@@ -37,6 +37,11 @@ LIST_HEAD(safety_records);
 
 struct module_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_ID),
+#ifdef KSPLICE_TARGET
+	.target = STR(KSPLICE_TARGET),
+#else
+	.target = NULL,
+#endif
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
 	.primary_relocs = ksplice_relocs,

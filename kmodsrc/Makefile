@@ -12,6 +12,14 @@ endif
 CFLAGS_primary.o += "-DKSPLICE_ID=$(KSPLICE_ID)"
 CFLAGS_helper.o += "-DKSPLICE_ID=$(KSPLICE_ID)"
 
+ifeq ($(KSPLICE_TARGET),)
+    $(error "You must set KSPLICE_TARGET.")
+endif
+ifneq ($(KSPLICE_TARGET),vmlinux)
+    CFLAGS_primary.o += "-DKSPLICE_TARGET=$(KSPLICE_TARGET)"
+    CFLAGS_helper.o += "-DKSPLICE_TARGET=$(KSPLICE_TARGET)"
+endif
+
 ifeq ($(map_printk),)
     $(error "You must set map_printk.")
 endif

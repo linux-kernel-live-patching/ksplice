@@ -36,6 +36,7 @@ struct ksplice_patch {
 
 struct module_pack {
 	const char *name;
+	const char *target;
 	long map_printk;
 	struct module *primary;
 	enum ksplice_state_enum state;
