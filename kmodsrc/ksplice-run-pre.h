@@ -144,6 +144,7 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 {
 	int run_o = 0, pre_o = 0, lenient = 0;
 	int matched;
+	int o;
 	unsigned char run, pre;
 	struct reloc_addrmap *map;
 
@@ -168,11 +169,23 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 
 		matched = match_nop((unsigned char *)(run_addr + run_o));
 		if (matched > 0) {
+			if (rerun) {
+				for (o = 0; o < matched; o++)
+					printk("%02x/ ",
+					       *(unsigned char *)(run_addr +
+								  o));
+			}
 			run_o += matched;
 			continue;
 		}
 		matched = match_nop((unsigned char *)(pre_addr + pre_o));
 		if (matched > 0) {
+			if (rerun) {
+				for (o = 0; o < matched; o++)
+					printk("/%02x ",
+					       *(unsigned char *)(pre_addr
+								  + o));
+			}
 			pre_o += matched;
 			continue;
 		}
