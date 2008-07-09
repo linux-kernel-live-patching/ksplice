@@ -33,6 +33,7 @@ $(KSPLICE)-objs = primary.o ksplice-rmsyms.o collection.o.primary
 extra-y = ksplice.o
 
 RMSYMS = \
+	apply_paravirt \
 	thread_return \
 	bust_spinlocks \
 	task_curr \

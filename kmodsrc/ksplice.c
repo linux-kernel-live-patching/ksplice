@@ -25,6 +25,9 @@
 #ifdef KSPLICE_STANDALONE
 /* linux/uaccess.h doesn't exist in kernels before 2.6.18 */
 #include <linux/version.h>
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+#include <asm/alternative.h>
+#endif
 #include <asm/uaccess.h>
 #include "ksplice.h"
 #include "ksplice-run-pre.h"
@@ -401,6 +404,14 @@ int init_ksplice_module(struct module_pack *pack)
 				   ksplice_init_relocs_end, 1) != 0)
 		return -1;
 	bootstrapped = 1;
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+	if (pack->target == NULL) {
+		apply_paravirt(pack->primary_parainstructions,
+			       pack->primary_parainstructions_end);
+		apply_paravirt(pack->helper_parainstructions,
+			       pack->helper_parainstructions_end);
+	}
+#endif
 #endif
 
 	printk(KERN_INFO "ksplice_h: Preparing and checking %s\n", pack->name);

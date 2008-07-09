@@ -28,6 +28,9 @@ MODULE_LICENSE("GPL v2");
 extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
 extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
 extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
+#endif
 
 LIST_HEAD(reloc_addrmaps);
 LIST_HEAD(reloc_namevals);
@@ -49,6 +52,10 @@ struct module_pack pack = {
 	.primary_sizes_end = ksplice_sizes_end,
 	.patches = ksplice_patches,
 	.patches_end = ksplice_patches_end,
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+	.primary_parainstructions = parainstructions,
+	.primary_parainstructions_end = parainstructions_end,
+#endif
 	.reloc_addrmaps = &reloc_addrmaps,
 	.reloc_namevals = &reloc_namevals,
 	.safety_records = &safety_records,

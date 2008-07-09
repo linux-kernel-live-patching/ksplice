@@ -3,6 +3,19 @@
 #include <linux/sched.h>
 #include <linux/version.h>
 
+#ifdef KSPLICE_STANDALONE
+#if defined(CONFIG_PARAVIRT) && defined(CONFIG_X86_64) &&	\
+	LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25) &&		\
+	LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+/* Linux 2.6.25 and 2.6.26 apply paravirt replacements to the core
+ * kernel but not modules on x86-64.  If we are patching the core
+ * kernel, we need to apply the same replacements to our update
+ * modules in order for run-pre matching to succeed.
+ */
+#define KSPLICE_NEED_PARAINSTRUCTIONS 1
+#endif
+#endif
+
 enum ksplice_state_enum {
 	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
 };
@@ -45,6 +58,13 @@ struct module_pack {
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
 	const struct ksplice_size *helper_sizes, *helper_sizes_end;
 	struct ksplice_patch *patches, *patches_end;
+#ifdef KSPLICE_STANDALONE
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+	struct paravirt_patch_site
+	    *primary_parainstructions, *primary_parainstructions_end,
+	    *helper_parainstructions, *helper_parainstructions_end;
+#endif
+#endif
 	struct list_head *reloc_addrmaps;
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;

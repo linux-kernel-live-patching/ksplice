@@ -24,6 +24,9 @@ MODULE_LICENSE("GPL v2");
 
 extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
 extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
+#endif
 
 /* Defined in primary.c */
 #define pack KSPLICE_UNIQ(pack)
@@ -37,6 +40,10 @@ int init_module(void)
 	pack.helper_relocs_end = ksplice_relocs_end;
 	pack.helper_sizes = ksplice_sizes;
 	pack.helper_sizes_end = ksplice_sizes_end;
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+	pack.helper_parainstructions = parainstructions;
+	pack.helper_parainstructions_end = parainstructions_end;
+#endif
 	return helper_init_module();
 }
 
