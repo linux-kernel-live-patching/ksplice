@@ -17,6 +17,7 @@
 
 use Getopt::Long;
 use Cwd 'abs_path', 'getcwd';
+use File::Temp;
 use Pod::Usage;
 use strict;
 use warnings;
@@ -59,14 +60,32 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		die "Error loading primary module $primary";
 	}
 	if(runval_raw("insmod $helper") != 0) {
-		runval_raw("rmmod $primary") if $unload;
-		my $dmesg = runstr("dmesg | grep ksplice");
-		while($dmesg =~ /ksplice_h: Preparing and checking/) {
-			$dmesg = $';
+		my $debugfsdir = init_tmpdir();
+		my $debugfs_out = mktemp("/tmp/ksplice-debug-XXXXXX");
+		(my $modname = $primary) =~ s/\.ko$//;
+		$modname =~ s/-/_/g;
+		runval_raw(qw(mount -t debugfs debugfs), $debugfsdir);
+		my $debug;
+		if (-e "$debugfsdir/$modname") {
+			$debug = runstr(qw(cp -a), "$debugfsdir/$modname",
+					"$debugfs_out");
+			$debug = runstr("cat", "$debugfsdir/$modname");
+			runval_raw(qw(umount), $debugfsdir);
+			runval_raw(qw(rmdir), $debugfsdir);
 		}
+		else {
+			my $dmesg = runstr("dmesg | grep ksplice");
+			while($dmesg =~ /ksplice_h: Preparing and checking/) {
+				$dmesg = $';
+			}
+			$debug = $dmesg;
+		}
+		runval_raw("rmmod $primary") if $unload;
+		print "Ksplice debugging output:\n";
+		print "$debug";
 
 		my $bugreport = 'PACKAGE_BUGREPORT';
-		if($dmesg =~ /could not match some sections/) {
+		if($debug =~ /could not match some sections/) {
 			print <<END
 
 Ksplice has aborted the upgrade because Ksplice has been unable to match the
@@ -80,7 +99,7 @@ and assembler, feel free to report a bug to $bugreport.
 
 END
 		}
-		if($dmesg =~ /to-be-replaced code is busy/) {
+		if($debug =~ /to-be-replaced code is busy/) {
 			print <<END
 
 Ksplice has aborted the upgrade because it appears that the code that you are
@@ -90,7 +109,7 @@ functions is not on a thread's kernel stack.
 
 END
 		}
-		if($dmesg =~ /System[.]map does not match kernel/) {
+		if($debug =~ /System[.]map does not match kernel/) {
 			print <<END
 
 Ksplice has aborted the upgrade because it appears that the System.map file
@@ -98,7 +117,7 @@ provided to ksplice-create does not match the running kernel.
 
 END
 		}
-
+		print("Debugging output saved to $debugfs_out\n");
 		die;
 	}
 	die if ($unload && runval_raw("rmmod $helper") != 0)
