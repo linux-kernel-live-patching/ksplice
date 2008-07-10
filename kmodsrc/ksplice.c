@@ -74,7 +74,7 @@ static inline void *ksplice_kcalloc(size_t n, size_t size,
  * Instead, we need to prevent Ksplice from patching thread_return.
  */
 extern const char thread_return[];
-#define KSPLICE_IP(x) thread_return
+#define KSPLICE_IP(x) ((long)thread_return)
 #define KSPLICE_SP(x) ((x)->thread.rsp)
 #else /* Old x86 32-bit */
 #define KSPLICE_IP(x) ((x)->thread.eip)
