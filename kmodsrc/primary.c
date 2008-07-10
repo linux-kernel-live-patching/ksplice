@@ -33,8 +33,7 @@ LIST_HEAD(reloc_addrmaps);
 LIST_HEAD(reloc_namevals);
 LIST_HEAD(safety_records);
 
-#define primary_pack KSPLICE_UNIQ(primary_pack)
-
+#define pack KSPLICE_UNIQ(pack)
 struct module_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_ID),
 #ifdef KSPLICE_TARGET
@@ -54,6 +53,7 @@ struct module_pack pack = {
 	.reloc_namevals = &reloc_namevals,
 	.safety_records = &safety_records,
 };
+EXPORT_SYMBOL_GPL(pack);
 
 int init_module(void)
 {
@@ -65,15 +65,9 @@ void cleanup_module(void)
 	cleanup_ksplice_module(&pack);
 }
 
-int KSPLICE_UNIQ(helper_init_module)(const struct ksplice_reloc *relocs,
-				     const struct ksplice_reloc *relocs_end,
-				     const struct ksplice_size *sizes,
-				     const struct ksplice_size *sizes_end) {
-	pack.helper_relocs = relocs;
-	pack.helper_relocs_end = relocs_end;
-	pack.helper_sizes = sizes;
-	pack.helper_sizes_end = sizes_end;
+#define helper_init_module KSPLICE_UNIQ(helper_init_module)
+int helper_init_module(void)
+{
 	return init_ksplice_module(&pack);
 }
-
-EXPORT_SYMBOL_GPL(KSPLICE_UNIQ(helper_init_module));
+EXPORT_SYMBOL_GPL(helper_init_module);

@@ -26,17 +26,18 @@ extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
 extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
 
 /* Defined in primary.c */
-extern int KSPLICE_UNIQ(helper_init_module)(const struct ksplice_reloc *,
-					    const struct ksplice_reloc *,
-					    const struct ksplice_size *,
-					    const struct ksplice_size *);
+#define pack KSPLICE_UNIQ(pack)
+extern struct module_pack pack;
+#define helper_init_module KSPLICE_UNIQ(helper_init_module)
+extern int helper_init_module(void);
 
 int init_module(void)
 {
-	return KSPLICE_UNIQ(helper_init_module)(ksplice_relocs,
-						ksplice_relocs_end,
-						ksplice_sizes,
-						ksplice_sizes_end);
+	pack.helper_relocs = ksplice_relocs;
+	pack.helper_relocs_end = ksplice_relocs_end;
+	pack.helper_sizes = ksplice_sizes;
+	pack.helper_sizes_end = ksplice_sizes_end;
+	return helper_init_module();
 }
 
 void cleanup_module(void)
