@@ -3,6 +3,11 @@
 #include <linux/sched.h>
 #include <linux/version.h>
 
+#if BITS_PER_LONG == 32
+#define ADDR "08lx"
+#elif BITS_PER_LONG == 64
+#define ADDR "016lx"
+#endif
 #ifdef KSPLICE_STANDALONE
 #if defined(CONFIG_PARAVIRT) && defined(CONFIG_X86_64) &&	\
 	LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25) &&		\

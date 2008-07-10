@@ -162,8 +162,8 @@ static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 		if (map != NULL) {
 			if (!rerun)
 				ksdebug(pack, 3, KERN_DEBUG "ksplice_h: "
-					"run-pre: reloc at r_a=%08lx "
-					"p_o=%08x: ", run_addr, pre_o);
+					"run-pre: reloc at r_a=%" ADDR
+					" p_o=%08x: ", run_addr, pre_o);
 			matched = handle_myst_reloc(pack, pre_addr + pre_o,
 						    run_addr + run_o, map,
 						    rerun);

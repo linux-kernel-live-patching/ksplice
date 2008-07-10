@@ -321,7 +321,7 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 	int status, ret;
 
 	ksdebug(pack, 2, KERN_DEBUG "ksplice: stack check: pid %d (%s) eip "
-		"%08lx ", t->pid, t->comm, KSPLICE_IP(t));
+		"%" ADDR " ", t->pid, t->comm, KSPLICE_IP(t));
 	status = check_address_for_conflict(pack, KSPLICE_IP(t));
 	ksdebug(pack, 2, ": ");
 
@@ -353,7 +353,7 @@ int check_stack(struct module_pack *pack, struct thread_info *tinfo,
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
 		if (__kernel_text_address(addr)) {
-			ksdebug(pack, 2, "%08lx ", addr);
+			ksdebug(pack, 2, "%" ADDR " ", addr);
 			if (check_address_for_conflict(pack, addr) < 0)
 				status = -EAGAIN;
 		}
@@ -542,7 +542,7 @@ int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		set_temp_myst_relocs(pack, NOVAL);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: sect %s does "
 			"not match ", s->name);
-		ksdebug(pack, 1, "(r_a=%08lx p_a=%08lx s=%ld)\n",
+		ksdebug(pack, 1, "(r_a=%" ADDR " p_a=%" ADDR " s=%ld)\n",
 			run_addr, pre_addr, s->size);
 		ksdebug(pack, 1, "ksplice_h: run-pre: ");
 		if (pack->debug >= 1)
@@ -552,7 +552,7 @@ int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		set_temp_myst_relocs(pack, VAL);
 
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect "
-			"%s=%08lx\n", s->name, run_addr);
+			"%s=%" ADDR "\n", s->name, run_addr);
 
 		tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
 		if (tmp == NULL) {
@@ -591,7 +591,7 @@ int handle_myst_reloc(struct module_pack *pack, long pre_addr, long run_addr,
 		BUG();
 
 	if (!rerun)
-		ksdebug(pack, 3, "%s=%08lx (A=%08lx *r=%08lx)\n",
+		ksdebug(pack, 3, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
 			map->nameval->name, map->nameval->val, map->addend,
 			run_reloc);
 
@@ -674,8 +674,8 @@ skip_using_system_map:
 	if ((r->size == 4 && *(int *)r->blank_addr != 0x77777777)
 	    || (r->size == 8 &&
 		*(long long *)r->blank_addr != 0x7777777777777777ll)) {
-		ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%08lx"
-			" (altinstr)\n", (pre ? "_h" : ""), r->sym_name,
+		ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%"
+			ADDR " (altinstr)\n", (pre ? "_h" : ""), r->sym_name,
 			r->blank_offset);
 		release_vals(&vals);
 		return 0;
@@ -695,8 +695,8 @@ skip_using_system_map:
 			return -1;
 		}
 
-		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: deferred %s:%08lx "
-			"to run-pre\n", r->sym_name, r->blank_offset);
+		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: deferred %s:%" ADDR
+			" to run-pre\n", r->sym_name, r->blank_offset);
 
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL) {
@@ -759,9 +759,9 @@ skip_using_system_map:
 			BUG();
 	}
 
-	ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: %s:%08lx ",
+	ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: %s:%" ADDR " ",
 		(pre ? "_h" : ""), r->sym_name, r->blank_offset);
-	ksdebug(pack, 4, "(S=%08lx A=%08lx ", sym_addr, r->addend);
+	ksdebug(pack, 4, "(S=%" ADDR " A=%" ADDR " ", sym_addr, r->addend);
 	if (r->size == 4)
 		ksdebug(pack, 4, "aft=%08x)\n", *(int *)r->blank_addr);
 	else if (r->size == 8)
@@ -888,7 +888,7 @@ int compute_address(struct module_pack *pack, char *sym_name,
 			if (ret < 0)
 				return ret;
 			ksdebug(pack, 1, KERN_DEBUG "ksplice: using detected "
-				"sym %s=%08lx\n", sym_name, nv->val);
+				"sym %s=%" ADDR "\n", sym_name, nv->val);
 			return 0;
 		}
 	}
