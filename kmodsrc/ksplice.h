@@ -27,10 +27,10 @@ enum ksplice_state_enum {
 
 struct ksplice_reloc {
 	char *sym_name;
-	long blank_addr;
+	unsigned long blank_addr;
 	long blank_offset;
-	long num_sym_addrs;
-	long *sym_addrs;
+	unsigned long num_sym_addrs;
+	unsigned long *sym_addrs;
 	int pcrel;
 	long addend;
 	int size;
@@ -40,24 +40,24 @@ struct ksplice_reloc {
 
 struct ksplice_size {
 	char *name;
-	long size;
-	long thismod_addr;
-	long num_sym_addrs;
-	long *sym_addrs;
+	unsigned long size;
+	unsigned long thismod_addr;
+	unsigned long num_sym_addrs;
+	unsigned long *sym_addrs;
 };
 
 struct ksplice_patch {
 	char *oldstr;
 	char *replstr;
-	long oldaddr;
-	long repladdr;
+	unsigned long oldaddr;
+	unsigned long repladdr;
 	char *saved;
 };
 
 struct module_pack {
 	const char *name;
 	const char *target;
-	long map_printk;
+	unsigned long map_printk;
 	struct module *primary;
 	enum ksplice_state_enum state;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
@@ -81,13 +81,13 @@ struct module_pack {
 struct reloc_nameval {
 	struct list_head list;
 	char *name;
-	long val;
+	unsigned long val;
 	enum { NOVAL, TEMP, VAL } status;
 };
 
 struct reloc_addrmap {
 	struct list_head list;
-	long addr;
+	unsigned long addr;
 	struct reloc_nameval *nameval;
 	int pcrel;
 	long addend;
@@ -95,7 +95,7 @@ struct reloc_addrmap {
 	long dst_mask;
 };
 
-static inline int virtual_address_mapped(long addr)
+static inline int virtual_address_mapped(unsigned long addr)
 {
 	pgd_t *pgd;
 #ifndef KSPLICE_STANDALONE
@@ -155,20 +155,22 @@ static inline int virtual_address_mapped(long addr)
 
 struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 				   int create);
-struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr);
-int handle_myst_reloc(struct module_pack *pack, long pre_addr, long run_addr,
-		      struct reloc_addrmap *map, int rerun);
+struct reloc_addrmap *find_addrmap(struct module_pack *pack,
+				   unsigned long addr);
+int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
+		      unsigned long run_addr, struct reloc_addrmap *map,
+		      int rerun);
 
 struct safety_record {
 	struct list_head list;
-	long addr;
-	int size;
+	unsigned long addr;
+	unsigned int size;
 	int care;
 };
 
 struct candidate_val {
 	struct list_head list;
-	long val;
+	unsigned long val;
 };
 
 #define singular(list) (!list_empty(list) && (list)->next->next == (list))
@@ -198,12 +200,14 @@ struct accumulate_struct {
 };
 
 #ifdef CONFIG_KALLSYMS
-int accumulate_matching_names(void *data, const char *sym_name, long sym_val);
+int accumulate_matching_names(void *data, const char *sym_name,
+			      unsigned long sym_val);
 #ifdef KSPLICE_STANDALONE
 int module_on_each_symbol(struct module *mod,
-			  int (*fn) (void *, const char *, long), void *data);
+			  int (*fn) (void *, const char *, unsigned long),
+			  void *data);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-long ksplice_kallsyms_expand_symbol(unsigned long off, char *result);
+unsigned long ksplice_kallsyms_expand_symbol(unsigned long off, char *result);
 #endif
 #endif
 int kernel_lookup(const char *name_wlabel, struct list_head *vals);
@@ -211,10 +215,10 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 			const char *ksplice_name);
 #endif
 
-int add_candidate_val(struct list_head *vals, long val);
+int add_candidate_val(struct list_head *vals, unsigned long val);
 void release_vals(struct list_head *vals);
 void set_temp_myst_relocs(struct module_pack *pack, int status_val);
-int contains_canary(long blank_addr, int size, long dst_mask);
+int contains_canary(unsigned long blank_addr, int size, long dst_mask);
 int starts_with(const char *str, const char *prefix);
 int ends_with(const char *str, const char *suffix);
 int label_offset(const char *sym_name);
@@ -246,10 +250,10 @@ int __reverse_patches(void *packptr);
 int check_each_task(struct module_pack *pack);
 int check_task(struct module_pack *pack, struct task_struct *t);
 int check_stack(struct module_pack *pack, struct thread_info *tinfo,
-		long *stack);
-int check_address_for_conflict(struct module_pack *pack, long addr);
+		unsigned long *stack);
+int check_address_for_conflict(struct module_pack *pack, unsigned long addr);
 int valid_stack_ptr(struct thread_info *tinfo, void *p);
-int add_dependency_on_address(struct module_pack *pack, long addr);
+int add_dependency_on_address(struct module_pack *pack, unsigned long addr);
 int add_patch_dependencies(struct module_pack *pack);
 #ifdef KSPLICE_STANDALONE
 struct module *module_text_address(unsigned long addr);
@@ -260,19 +264,20 @@ int use_module(struct module *a, struct module *b);
 int activate_helper(struct module_pack *pack);
 int search_for_match(struct module_pack *pack, const struct ksplice_size *s);
 int try_addr(struct module_pack *pack, const struct ksplice_size *s,
-	     long run_addr, long pre_addr);
+	     unsigned long run_addr, unsigned long pre_addr);
 
 #ifdef KSPLICE_STANDALONE
 int brute_search_all(struct module_pack *pack, const struct ksplice_size *s);
 
 static inline int brute_search(struct module_pack *pack,
 			       const struct ksplice_size *s,
-			       void *start, long len)
+			       void *start, unsigned long len)
 {
-	long addr;
+	unsigned long addr;
 	char run, pre;
 
-	for (addr = (long)start; addr < (long)start + len; addr++) {
+	for (addr = (unsigned long)start; addr < (unsigned long)start + len;
+	     addr++) {
 		if (addr % 100000 == 0)
 			yield();
 

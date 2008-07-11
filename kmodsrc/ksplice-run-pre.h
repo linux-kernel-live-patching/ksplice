@@ -139,8 +139,8 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 
 static int match_nop(unsigned char *addr);
 
-static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
-		       int size, int rerun)
+static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
+		       unsigned long pre_addr, unsigned int size, int rerun)
 {
 	int lenient = 0;
 	int matched;
@@ -238,7 +238,7 @@ static int match_nop(unsigned char *addr)
 	for (i = NUM_NOPS - 1; i >= 0; i--) {
 		nop = &nops[i];
 		for (j = 0; j < nop->len; j++) {
-			if (!virtual_address_mapped((long)&addr[j]))
+			if (!virtual_address_mapped((unsigned long)&addr[j]))
 				break;
 			if (addr[j] != nop->data[j])
 				break;

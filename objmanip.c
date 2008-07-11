@@ -120,7 +120,7 @@ struct specsect special_sections[] = {
 
 #define mode(str) starts_with(modestr, str)
 
-DECLARE_VEC_TYPE(long, addr_vec);
+DECLARE_VEC_TYPE(unsigned long, addr_vec);
 DEFINE_HASH_TYPE(struct addr_vec, addr_vec_hash,
 		 addr_vec_hash_init, addr_vec_hash_free, addr_vec_hash_lookup,
 		 vec_init);
@@ -135,7 +135,7 @@ void load_system_map()
 	FILE *fp = fopen(file, "r");
 	assert(fp);
 	addr_vec_hash_init(&system_map);
-	long addr;
+	unsigned long addr;
 	char type;
 	char sym[256];
 	while (fscanf(fp, "%lx %c %256s\n", &addr, &type, sym) == 3)
@@ -287,7 +287,7 @@ void write_reloc(bfd *abfd, struct supersect *ss, void *addr, asymbol **symp,
 	reloc->howto = bfd_reloc_type_lookup(abfd, code);
 	/* FIXME: bfd_perform_relocation?  bfd_install_relocation? */
 	reloc->addend = offset;
-	*(long *)addr = reloc->howto->partial_inplace ? offset : 0;
+	*(unsigned long *)addr = reloc->howto->partial_inplace ? offset : 0;
 	*vec_grow(&ss->relocs, 1) = reloc;
 }
 
@@ -308,8 +308,9 @@ void write_string(bfd *ibfd, struct supersect *ss, void *addr,
 		    (void *)buf - str_ss->contents.data);
 }
 
-void write_system_map_array(bfd *ibfd, struct supersect *ss, long **sym_addrs,
-			    long *num_sym_addrs, asymbol *sym)
+void write_system_map_array(bfd *ibfd, struct supersect *ss,
+			    unsigned long **sym_addrs,
+			    unsigned long *num_sym_addrs, asymbol *sym)
 {
 	const char *system_map_name = dup_wolabel(sym->name);
 	const char **prefix;
@@ -360,7 +361,7 @@ void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 		     new_symname, addstr_all);
 	write_reloc(ibfd, kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address);
-	kreloc->blank_offset = (long)orig_reloc->address;
+	kreloc->blank_offset = (unsigned long)orig_reloc->address;
 	write_system_map_array(ibfd, kreloc_ss, &kreloc->sym_addrs,
 			       &kreloc->num_sym_addrs, sym_ptr);
 	kreloc->pcrel = howto->pc_relative;

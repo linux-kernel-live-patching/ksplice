@@ -74,7 +74,7 @@ static inline void *ksplice_kcalloc(size_t n, size_t size,
  * Instead, we need to prevent Ksplice from patching thread_return.
  */
 extern const char thread_return[];
-#define KSPLICE_IP(x) ((long)thread_return)
+#define KSPLICE_IP(x) ((unsigned long)thread_return)
 #define KSPLICE_SP(x) ((x)->thread.rsp)
 #else /* Old x86 32-bit */
 #define KSPLICE_IP(x) ((x)->thread.eip)
@@ -255,8 +255,7 @@ int __apply_patches(void *packptr)
 		memcpy((void *)p->saved, (void *)p->oldaddr, 5);
 		*((u8 *) p->oldaddr) = 0xE9;
 		*((u32 *) (p->oldaddr + 1)) = p->repladdr - (p->oldaddr + 5);
-		flush_icache_range((unsigned long)p->oldaddr,
-				   (unsigned long)(p->oldaddr + 5));
+		flush_icache_range(p->oldaddr, p->oldaddr + 5);
 	}
 	set_fs(old_fs);
 	return 0;
@@ -288,8 +287,7 @@ int __reverse_patches(void *packptr)
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		memcpy((void *)p->oldaddr, (void *)p->saved, 5);
 		kfree(p->saved);
-		flush_icache_range((unsigned long)p->oldaddr,
-				   (unsigned long)(p->oldaddr + 5));
+		flush_icache_range(p->oldaddr, p->oldaddr + 5);
 	}
 	set_fs(old_fs);
 	return 0;
@@ -327,12 +325,12 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 
 	if (t == current) {
 		ret = check_stack(pack, task_thread_info(t),
-				  (long *)__builtin_frame_address(0));
+				  (unsigned long *)__builtin_frame_address(0));
 		if (status == 0)
 			status = ret;
 	} else if (!task_curr(t)) {
 		ret = check_stack(pack, task_thread_info(t),
-				  (long *)KSPLICE_SP(t));
+				  (unsigned long *)KSPLICE_SP(t));
 		if (status == 0)
 			status = ret;
 	} else if (strcmp(t->comm, "kstopmachine") != 0) {
@@ -345,10 +343,10 @@ int check_task(struct module_pack *pack, struct task_struct *t)
 
 /* Modified version of Linux's print_context_stack */
 int check_stack(struct module_pack *pack, struct thread_info *tinfo,
-		long *stack)
+		unsigned long *stack)
 {
 	int status = 0;
-	long addr;
+	unsigned long addr;
 
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
@@ -361,7 +359,7 @@ int check_stack(struct module_pack *pack, struct thread_info *tinfo,
 	return status;
 }
 
-int check_address_for_conflict(struct module_pack *pack, long addr)
+int check_address_for_conflict(struct module_pack *pack, unsigned long addr)
 {
 	const struct ksplice_size *s;
 	struct safety_record *rec;
@@ -496,7 +494,7 @@ start:
 int search_for_match(struct module_pack *pack, const struct ksplice_size *s)
 {
 	int i, ret;
-	long run_addr;
+	unsigned long run_addr;
 	LIST_HEAD(vals);
 	struct candidate_val *v;
 
@@ -533,7 +531,7 @@ int search_for_match(struct module_pack *pack, const struct ksplice_size *s)
 }
 
 int try_addr(struct module_pack *pack, const struct ksplice_size *s,
-	     long run_addr, long pre_addr)
+	     unsigned long run_addr, unsigned long pre_addr)
 {
 	struct safety_record *tmp;
 	struct reloc_nameval *nv;
@@ -575,12 +573,13 @@ int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	return 0;
 }
 
-int handle_myst_reloc(struct module_pack *pack, long pre_addr, long run_addr,
-		      struct reloc_addrmap *map, int rerun)
+int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
+		      unsigned long run_addr, struct reloc_addrmap *map,
+		      int rerun)
 {
 	int offset = (int)(pre_addr - map->addr);
 	long run_reloc_val, expected;
-	long run_reloc_addr = run_addr - offset;
+	unsigned long run_reloc_addr = run_addr - offset;
 	switch (map->size) {
 	case 1:
 		run_reloc_val =
@@ -649,7 +648,8 @@ int process_reloc(struct module_pack *pack, const struct ksplice_reloc *r,
 		  int pre)
 {
 	int i, ret;
-	long off, sym_addr;
+	long off;
+	unsigned long sym_addr;
 	struct reloc_addrmap *map;
 	LIST_HEAD(vals);
 #ifdef KSPLICE_STANDALONE
@@ -674,7 +674,7 @@ int process_reloc(struct module_pack *pack, const struct ksplice_reloc *r,
 	 * If we observe an offset that is a multiple of 0x100000, then we can
 	 * adjust the System.map address values accordingly and proceed.
 	 */
-	off = (long)printk - pack->map_printk;
+	off = (unsigned long)printk - pack->map_printk;
 	if (off & 0xfffff) {
 		print_abort("System.map does not match kernel");
 		return -1;
@@ -768,7 +768,7 @@ skip_using_system_map:
 		list_add(&map->list, pack->reloc_addrmaps);
 
 	} else {
-		long val;
+		unsigned long val;
 		if (r->pcrel)
 			val = sym_addr + r->addend - r->blank_addr;
 		else
@@ -825,7 +825,7 @@ skip_using_system_map:
 }
 
 #ifdef CONFIG_MODULE_UNLOAD
-int add_dependency_on_address(struct module_pack *pack, long addr)
+int add_dependency_on_address(struct module_pack *pack, unsigned long addr)
 {
 	struct module *m;
 	int ret = 0;
@@ -997,7 +997,8 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 }
 #endif /* CONFIG_KALLSYMS */
 
-int accumulate_matching_names(void *data, const char *sym_name, long sym_val)
+int accumulate_matching_names(void *data, const char *sym_name,
+			      unsigned long sym_val)
 {
 	int ret = 0;
 	struct accumulate_struct *acc = data;
@@ -1115,7 +1116,7 @@ int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 extern u8 kallsyms_token_table[];
 extern u16 kallsyms_token_index[];
 /* Modified version of Linux's kallsyms_expand_symbol */
-long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
+unsigned long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 {
 	long len, skipped_first = 0;
 	const u8 *tptr, *data;
@@ -1148,7 +1149,8 @@ long ksplice_kallsyms_expand_symbol(unsigned long off, char *result)
 #endif /* LINUX_VERSION_CODE */
 
 int module_on_each_symbol(struct module *mod,
-			  int (*fn) (void *, const char *, long), void *data)
+			  int (*fn) (void *, const char *, unsigned long),
+			  void *data)
 {
 	unsigned int i;
 	int ret;
@@ -1189,7 +1191,7 @@ int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 }
 #endif /* KSPLICE_STANDALONE */
 
-int add_candidate_val(struct list_head *vals, long val)
+int add_candidate_val(struct list_head *vals, unsigned long val)
 {
 	struct candidate_val *tmp, *new;
 
@@ -1239,7 +1241,7 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 	return new;
 }
 
-struct reloc_addrmap *find_addrmap(struct module_pack *pack, long addr)
+struct reloc_addrmap *find_addrmap(struct module_pack *pack, unsigned long addr)
 {
 	struct reloc_addrmap *map;
 	list_for_each_entry(map, pack->reloc_addrmaps, list) {
@@ -1258,7 +1260,7 @@ void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 	}
 }
 
-int contains_canary(long blank_addr, int size, long dst_mask)
+int contains_canary(unsigned long blank_addr, int size, long dst_mask)
 {
 	switch (size) {
 	case 1:
