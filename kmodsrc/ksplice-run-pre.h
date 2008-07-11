@@ -142,98 +142,90 @@ static int match_nop(unsigned char *addr);
 static int run_pre_cmp(struct module_pack *pack, long run_addr, long pre_addr,
 		       int size, int rerun)
 {
-	int run_o = 0, pre_o = 0, lenient = 0;
+	int lenient = 0;
 	int matched;
 	int o;
-	unsigned char run, pre;
+	unsigned char *run, *pre;
 	struct reloc_addrmap *map;
 
 	if (size == 0)
 		return 1;
 
-	while (run_o < size && pre_o < size) {
+	run = (unsigned char *)run_addr;
+	pre = (unsigned char *)pre_addr;
+
+	while (run < (unsigned char *)run_addr + size &&
+	       pre < (unsigned char *)pre_addr + size) {
+
 		if (lenient > 0)
 			lenient--;
 
-		if (!virtual_address_mapped(run_addr + run_o))
+		if (!virtual_address_mapped((unsigned long)run))
 			return 1;
 
-		map = find_addrmap(pack, pre_addr + pre_o);
+		map = find_addrmap(pack, (unsigned long)pre);
 		if (map != NULL) {
 			if (!rerun)
 				ksdebug(pack, 3, KERN_DEBUG "ksplice_h: "
 					"run-pre: reloc at r_a=%" ADDR
-					" p_o=%08x: ", run_addr, pre_o);
-			matched = handle_myst_reloc(pack, pre_addr + pre_o,
-						    run_addr + run_o, map,
-						    rerun);
+					" p_o=%lx: ", run_addr,
+					(unsigned long)pre - pre_addr);
+			matched =
+			    handle_myst_reloc(pack, (unsigned long)pre,
+					      (unsigned long)run, map, rerun);
 			if (matched == 0)
 				return 1;
 			if (rerun) {
 				for (o = 0; o < matched; o++)
-					printk("%02x/%02x ",
-					       *(unsigned char *)(run_addr +
-								  run_o + o),
-					       *(unsigned char *)(pre_addr +
-								  pre_o + o));
+					printk("%02x/%02x ", run[o], pre[o]);
 			}
-			pre_o += matched;
-			run_o += matched;
+			run += matched;
+			pre += matched;
 			continue;
 		}
 
-		matched = match_nop((unsigned char *)(run_addr + run_o));
+		matched = match_nop(run);
 		if (matched > 0) {
 			if (rerun) {
 				for (o = 0; o < matched; o++)
-					printk("%02x/ ",
-					       *(unsigned char *)(run_addr +
-								  o));
+					printk("%02x/ ", run[o]);
 			}
-			run_o += matched;
+			run += matched;
 			continue;
 		}
-		matched = match_nop((unsigned char *)(pre_addr + pre_o));
+		matched = match_nop(pre);
 		if (matched > 0) {
 			if (rerun) {
 				for (o = 0; o < matched; o++)
-					printk("/%02x ",
-					       *(unsigned char *)(pre_addr
-								  + o));
+					printk("/%02x ", pre[o]);
 			}
-			pre_o += matched;
+			pre += matched;
 			continue;
 		}
-
-		run = *(unsigned char *)(run_addr + run_o);
-		pre = *(unsigned char *)(pre_addr + pre_o);
 
 		if (rerun)
-			printk("%02x/%02x ", run, pre);
+			printk("%02x/%02x ", *run, *pre);
 
-		if (run == pre) {
-			if (jumplen[pre])
-				lenient = max(jumplen[pre] + 1, lenient);
-			pre_o++, run_o++;
+		if (*run == *pre) {
+			if (jumplen[*pre])
+				lenient = max(jumplen[*pre] + 1, lenient);
+			pre++, run++;
 			continue;
 		}
 
-		if (jumplen[run] && jumplen[pre]) {
-			run_o += 1 + jumplen[run];
-			pre_o += 1 + jumplen[pre];
+		if (jumplen[*run] && jumplen[*pre]) {
+			run += 1 + jumplen[*run];
+			pre += 1 + jumplen[*pre];
 			continue;
 		}
 		if (lenient) {
-			pre_o++, run_o++;
+			pre++, run++;
 			continue;
 		}
 		if (rerun)
-			printk("[p_o=%08x] ! %02x/%02x %02x/%02x",
-			       pre_o,
-			       *(unsigned char *)(run_addr + run_o + 1),
-			       *(unsigned char *)(pre_addr + pre_o + 1),
-			       *(unsigned char *)(run_addr + run_o + 2),
-			       *(unsigned char *)(pre_addr + pre_o + 2));
+			printk("[p_o=%lx] ! %02x/%02x %02x/%02x",
+			       (unsigned long)pre - pre_addr, run[1], pre[1],
+			       run[2], pre[2]);
 		return 1;
 	}
 	return 0;
