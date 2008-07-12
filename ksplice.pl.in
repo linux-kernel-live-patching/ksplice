@@ -42,8 +42,6 @@ sub do_snap {
 	empty_diff($out);
 }
 
-my $word;
-
 sub do_diff {
 	my ($out) = @_;
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
@@ -58,8 +56,6 @@ sub do_diff {
 	my ($bits, $sections, $entrysyms) = split("\n", runsuc("objdiff", $obj_old, $obj));
 	die if ($bits ne '32' && $bits ne '64');
 	return empty_diff($out) if ($sections eq '' && $entrysyms eq '');
-
-	$word = ($bits == 64 ? "quad" : "long");
 
 	copy($obj, "$obj.KSPLICE_primary");
 	copy($obj_old, "$obj.KSPLICE_helper");
