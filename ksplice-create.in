@@ -23,7 +23,7 @@ use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
 
-my ($patchfile, $diffext, $orig_config_dir, $postdir, $jobs, $kid);
+my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
 my ($help, $wantversion, $prebuild, $skip_prebuild, $apply, $patch_opt) = (0, 0, 0, 0, 0, "-p1");
 Getopt::Long::Configure("bundling");
 GetOptions("help|?" => \$help,
@@ -37,7 +37,6 @@ GetOptions("help|?" => \$help,
 	"jobs|j:i" => \$jobs,
 	"config=s" => \$orig_config_dir,
 	"apply" => \$apply,
-	"postdir=s" => \$postdir,
 	"patch-opt=s@" => \$patch_opt) or pod2usage(1);
 
 if($wantversion) {
@@ -77,13 +76,6 @@ if(! -e "$orig_config_dir/System.map") {
 }
 
 $ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
-
-if(!defined $postdir) {
-	$postdir = "$orig_config_dir/post";
-}
-elsif($postdir =~ $linuxtree) {
-	die "Aborting: User-specified postdir cannot be KERNEL_SOURCE or a subdirectory";
-}
 
 runval("cp", "--", "$orig_config_dir/.config", $linuxtree);
 
@@ -298,8 +290,7 @@ utilities, such as B<ksplice-apply>.
 The first time that B<ksplice-create> is invoked on a I<KERNEL_SOURCE>
 directory, it must build that kernel from scratch, which is much slower than
 the rest of the update-creation process.  B<--prebuild> can be used to perform
-this initial kernel build (and set up a tentative B<post> directory tree)
-without providing a source code patch.
+this initial kernel build without providing a source code patch.
 
 In order to patch a function that has previously been patched by Ksplice, the
 user needs to ensure that the I<KERNEL_SOURCE> directory provided to Ksplice
@@ -325,13 +316,6 @@ CONCURRENCY_LEVEL.
 
 Immediately applies the generated update to the running kernel by invoking
 B<ksplice-apply>.
-
-=item B<--postdir=>I<DIRECTORY>
-
-Specifies a directory that is B<dedicated to Ksplice> to be used as the Ksplice
-I<post> directory.  Defaults to I<ORIG_CONFIG>B</post>.  If this directory
-exists, the directory's contents will be removed.  If it does not exist, it
-will be created.
 
 =item B<--patch-opt=>I<OPTIONS>
 
