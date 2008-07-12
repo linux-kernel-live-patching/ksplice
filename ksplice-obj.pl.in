@@ -54,9 +54,10 @@ sub do_diff {
 		return empty_diff($out);
 	}
 
-	my ($bits, $sections, $entrysyms, $newsyms) = split("\n", runsuc("objdiff", $obj_old, $obj));
+	my ($bits, $sections, $entrysyms, $newsyms, @export) = split("\n", runsuc("objdiff", $obj_old, $obj));
 	die if ($bits ne '32' && $bits ne '64');
-	return empty_diff($out) if ($sections eq '' && $entrysyms eq '');
+	return empty_diff($out) unless($sections || $entrysyms || $newsyms ||
+				       $export[0]);
 
 	copy($obj, "$obj.KSPLICE_primary");
 	copy($obj_old, "$obj.KSPLICE_helper");
@@ -67,6 +68,11 @@ sub do_diff {
 	close OBJ;
 	close OBJ_OLD;
 
+	foreach (@export) {
+		my @symtab = split(' ');
+		next unless(@symtab);
+		runsuc("objmanip", "$obj.KSPLICE_primary", "export$symtab[0]", @symtab);
+	}
 	runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
 	runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
 	if ($newsyms) {

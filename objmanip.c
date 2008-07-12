@@ -147,6 +147,7 @@ void load_system_map()
 
 int main(int argc, char *argv[])
 {
+	char *export_name;
 	char *debug_name;
 	assert(asprintf(&debug_name, "%s.pre%s", argv[1], argv[2]) >= 0);
 	rename(argv[1], debug_name);
@@ -176,6 +177,10 @@ int main(int argc, char *argv[])
 		addstr_sect = argv[5];
 		varargs = &argv[6];
 		varargs_count = argc - 6;
+	} else if (mode("export")) {
+		export_name = argv[3];
+		varargs = &argv[4];
+		varargs_count = argc - 4;
 	} else {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
@@ -224,10 +229,90 @@ int main(int argc, char *argv[])
 			rm_from_special(ibfd, ss);
 	}
 
+	if (mode("export")) {
+		assert(starts_with(export_name, "__ksymtab"));
+		asection *sym_sect = bfd_get_section_by_name(ibfd, export_name);
+		assert(sym_sect != NULL);
+		char *export_crc_name;
+		assert(asprintf(&export_crc_name, "__kcrctab%s", export_name +
+				strlen("__ksymtab")) >= 0);
+		asection *crc_sect = bfd_get_section_by_name(ibfd,
+							     export_crc_name);
+		rm_some_exports(ibfd, sym_sect, crc_sect);
+	}
+
 	copy_object(ibfd, obfd);
 	assert(bfd_close(obfd));
 	assert(bfd_close(ibfd));
 	return EXIT_SUCCESS;
+}
+
+void rm_some_exports(bfd *ibfd, asection *sym_sect, asection *crc_sect)
+{
+	struct void_vec orig_contents;
+	struct arelentp_vec orig_relocs;
+	struct supersect *ss = fetch_supersect(ibfd, sym_sect, &isyms);
+	vec_move(&orig_contents, &ss->contents);
+	vec_move(&orig_relocs, &ss->relocs);
+
+	struct void_vec orig_crc_contents;
+	struct arelentp_vec orig_crc_relocs;
+	struct supersect *crc_ss;
+	if (crc_sect != NULL) {
+		crc_ss = fetch_supersect(ibfd, crc_sect, &isyms);
+		vec_move(&orig_crc_contents, &crc_ss->contents);
+		vec_move(&orig_crc_relocs, &crc_ss->relocs);
+	}
+	void *orig_entry, *new_entry, *orig_crc_entry, *new_crc_entry;
+	arelent **relocp, **new_relocp, **crc_relocp, **new_crc_relocp;
+	long mod, crc_mod;
+	int entry_size = sizeof(struct kernel_symbol);
+	int crc_entry_size = sizeof(unsigned long);
+	int relocs_per_entry = 2;
+	int crc_relocs_per_entry = 1;
+	assert(orig_contents.size * relocs_per_entry ==
+	       orig_relocs.size * entry_size);
+	if (crc_sect != NULL) {
+		assert(orig_contents.size * crc_entry_size ==
+		       orig_crc_contents.size * entry_size);
+		assert(orig_crc_contents.size * crc_relocs_per_entry ==
+		       orig_crc_relocs.size * crc_entry_size);
+	}
+	for (orig_entry = orig_contents.data, relocp = orig_relocs.data,
+	     orig_crc_entry = orig_crc_contents.data,
+	     crc_relocp = orig_crc_relocs.data;
+	     orig_entry < orig_contents.data + orig_contents.size;
+	     orig_entry += entry_size, relocp += relocs_per_entry,
+	     orig_crc_entry += crc_entry_size,
+	     crc_relocp += crc_relocs_per_entry) {
+		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
+		if (match_varargs(sym_ptr->name)) {
+			new_entry = vec_grow(&ss->contents, entry_size);
+			memcpy(new_entry, orig_entry, entry_size);
+			mod = ((new_entry - ss->contents.data) -
+			       (orig_entry - orig_contents.data));
+			new_relocp = vec_grow(&ss->relocs, relocs_per_entry);
+			*new_relocp = *relocp;
+			(*new_relocp)->address += mod;
+			*(new_relocp + 1) = *(relocp + 1);
+			(*new_relocp + 1)->address += mod;
+
+			if (crc_sect != NULL) {
+				new_crc_entry = vec_grow(&crc_ss->contents,
+							 crc_entry_size);
+				memcpy(new_crc_entry, orig_crc_entry,
+				       crc_entry_size);
+				crc_mod = ((new_crc_entry -
+					    crc_ss->contents.data) -
+					   (orig_crc_entry -
+					    orig_crc_contents.data));
+				new_crc_relocp = vec_grow(&crc_ss->relocs,
+							  crc_relocs_per_entry);
+				*new_crc_relocp = *crc_relocp;
+				(*new_crc_relocp)->address += crc_mod;
+			}
+		}
+	}
 }
 
 void rm_some_relocs(bfd *ibfd, asection *isection)
@@ -798,6 +883,10 @@ int want_section(asection *sect)
 	if (starts_with(name, ".ksplice"))
 		return 1;
 	if (mode("keep-helper") && starts_with(name, ".text"))
+		return 1;
+	if (mode("keep-primary") && starts_with(name, "__ksymtab"))
+		return 1;
+	if (mode("keep-primary") && starts_with(name, "__kcrctab"))
 		return 1;
 	if (match_varargs(name))
 		return 1;

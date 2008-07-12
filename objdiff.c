@@ -33,6 +33,12 @@
 DEFINE_HASH_TYPE(asymbol *, symbol_hash, symbol_hash_init, symbol_hash_free,
 		 symbol_hash_lookup, symbol_init);
 
+struct export {
+	const char *name;
+	asection *sect;
+};
+DECLARE_VEC_TYPE(struct export, export_vec);
+
 bfd *newbfd;
 struct asymbolp_vec new_syms, old_syms;
 
@@ -57,11 +63,82 @@ int main(int argc, char *argv[])
 	foreach_nonmatching(oldbfd, newbfd, print_newbfd_entry_symbols);
 	printf("\n");
 	compare_symbols(oldbfd, newbfd, BSF_GLOBAL);
+	compare_exported_symbols(oldbfd, newbfd);
 	printf("\n");
 
 	assert(bfd_close(oldbfd));
 	assert(bfd_close(newbfd));
 	return EXIT_SUCCESS;
+}
+
+struct export_vec *get_export_syms(bfd *ibfd, struct asymbolp_vec *isyms)
+{
+	asection *sect;
+	struct export_vec *exports;
+	asection *str_sect = bfd_get_section_by_name(ibfd, "__ksymtab_strings");
+	exports = malloc(sizeof(*exports));
+	assert(exports != NULL);
+	vec_init(exports);
+	if (str_sect == NULL)
+		return NULL;
+	struct supersect *str_ss = fetch_supersect(ibfd, str_sect, isyms);
+
+	for (sect = ibfd->sections; sect != NULL; sect = sect->next) {
+		if (!starts_with(sect->name, "__ksymtab") ||
+		    ends_with(sect->name, "_strings"))
+			continue;
+		struct supersect *ss = fetch_supersect(ibfd, sect, isyms);
+		struct kernel_symbol *sym;
+		arelent **reloc;
+		assert(ss->contents.size * 2 == ss->relocs.size *
+		       sizeof(struct kernel_symbol));
+		for (sym = ss->contents.data, reloc = ss->relocs.data + 1;
+		     (void *)sym < ss->contents.data + ss->contents.size;
+		     sym++, reloc += 2) {
+			char *sym_name = str_ss->contents.data +
+			    get_reloc_offset(ss, *reloc, 1);
+			struct export *exp = vec_grow(exports, 1);
+			exp->name = strdup(sym_name);
+			exp->sect = sect;
+		}
+	}
+	return exports;
+}
+
+void compare_exported_symbols(bfd *oldbfd, bfd *newbfd)
+{
+	struct export_vec *new_exports, *old_exports;
+	new_exports = get_export_syms(newbfd, &new_syms);
+	if (new_exports == NULL)
+		return;
+	old_exports = get_export_syms(oldbfd, &old_syms);
+	struct export *old, *new;
+	int found;
+	asection *last_sect = NULL;
+	for (new = new_exports->data; new < new_exports->data +
+	     new_exports->size; new++) {
+		found = 0;
+		if (old_exports != NULL) {
+			for (old = old_exports->data; old < old_exports->data +
+			     old_exports->size; old++) {
+				if (strcmp(new->name, old->name) != 0)
+					continue;
+				if (strcmp(new->sect->name,
+					   old->sect->name) != 0)
+					/* Export type changed! */
+					DIE;
+				found = 1;
+				break;
+			}
+		}
+		/* last_sect can go away once we make objdiff | objmanip */
+		if (last_sect != new->sect) {
+			last_sect = new->sect;
+			printf("\n%s", new->sect->name);
+		}
+		if (found == 0)
+			printf(" %s", new->name);
+	}
 }
 
 void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags)

@@ -157,6 +157,11 @@ struct supersect {
 	asymbol *symbol;
 };
 
+struct kernel_symbol {
+	unsigned long value;
+	char *name;
+};
+
 void get_syms(bfd *abfd, struct asymbolp_vec *syms);
 struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 				  struct asymbolp_vec *syms);

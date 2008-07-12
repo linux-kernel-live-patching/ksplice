@@ -39,3 +39,4 @@ struct supersect *make_section(bfd *abfd, struct asymbolp_vec *syms,
 void __attribute__((format(printf, 4, 5)))
 write_string(bfd *ibfd, struct supersect *ss, const char **addr,
 	     const char *fmt, ...);
+void rm_some_exports(bfd *ibfd, asection *sym_sect, asection *crc_sect);
