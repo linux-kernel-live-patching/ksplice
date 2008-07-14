@@ -48,7 +48,7 @@ $(perl_primary): %: %.in Makefile
 $(perl_man): %.8: %
 	pod2man --center="Ksplice" --release="Ksplice v$(PACKAGE_VERSION)" --section=8 $< $@
 
-objdiff objmanip: %: %.c objcommon.c objcommon.h
+objdiff objmanip: %: %.c objcommon.c objcommon.h kmodsrc/ksplice.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(srcdir)/objcommon.c $(LIBS) -o $@
 
 install: default install-objmanip install-objdiff

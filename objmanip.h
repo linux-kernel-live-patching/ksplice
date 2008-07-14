@@ -10,35 +10,6 @@ struct specsect {
 	int entry_size;
 };
 
-struct ksplice_reloc {
-	char *sym_name;
-	unsigned long blank_addr;
-	long blank_offset;
-	unsigned long num_sym_addrs;
-	unsigned long *sym_addrs;
-	int pcrel;
-	long addend;
-	int size;
-	unsigned long dst_mask;
-	unsigned int rightshift;
-};
-
-struct ksplice_size {
-	char *name;
-	unsigned long size;
-	unsigned long thismod_addr;
-	unsigned long num_sym_addrs;
-	unsigned long *sym_addrs;
-};
-
-struct ksplice_patch {
-	char *oldstr;
-	char *replstr;
-	unsigned long oldaddr;
-	unsigned long repladdr;
-	char *saved;
-};
-
 int main(int argc, char **argv);
 void rm_some_relocs(bfd *ibfd, asection *isection);
 void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,

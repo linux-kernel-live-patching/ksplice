@@ -1,30 +1,3 @@
-#include <linux/module.h>
-#include <linux/pagemap.h>
-#include <linux/sched.h>
-#include <linux/version.h>
-
-#if BITS_PER_LONG == 32
-#define ADDR "08lx"
-#elif BITS_PER_LONG == 64
-#define ADDR "016lx"
-#endif
-#ifdef KSPLICE_STANDALONE
-#if defined(CONFIG_PARAVIRT) && defined(CONFIG_X86_64) &&	\
-	LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25) &&		\
-	LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
-/* Linux 2.6.25 and 2.6.26 apply paravirt replacements to the core
- * kernel but not modules on x86-64.  If we are patching the core
- * kernel, we need to apply the same replacements to our update
- * modules in order for run-pre matching to succeed.
- */
-#define KSPLICE_NEED_PARAINSTRUCTIONS 1
-#endif
-#endif
-
-enum ksplice_state_enum {
-	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
-};
-
 struct ksplice_reloc {
 	char *sym_name;
 	unsigned long blank_addr;
@@ -52,6 +25,35 @@ struct ksplice_patch {
 	unsigned long oldaddr;
 	unsigned long repladdr;
 	char *saved;
+};
+
+#ifdef __KERNEL__
+
+#include <linux/module.h>
+#include <linux/pagemap.h>
+#include <linux/sched.h>
+#include <linux/version.h>
+
+#if BITS_PER_LONG == 32
+#define ADDR "08lx"
+#elif BITS_PER_LONG == 64
+#define ADDR "016lx"
+#endif
+#ifdef KSPLICE_STANDALONE
+#if defined(CONFIG_PARAVIRT) && defined(CONFIG_X86_64) &&	\
+	LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25) &&		\
+	LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+/* Linux 2.6.25 and 2.6.26 apply paravirt replacements to the core
+ * kernel but not modules on x86-64.  If we are patching the core
+ * kernel, we need to apply the same replacements to our update
+ * modules in order for run-pre matching to succeed.
+ */
+#define KSPLICE_NEED_PARAINSTRUCTIONS 1
+#endif
+#endif
+
+enum ksplice_state_enum {
+	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
 };
 
 struct module_pack {
@@ -188,3 +190,5 @@ static inline void print_abort(const char *str)
 
 int init_ksplice_module(struct module_pack *pack);
 void cleanup_ksplice_module(struct module_pack *pack);
+
+#endif /* __KERNEL__ */

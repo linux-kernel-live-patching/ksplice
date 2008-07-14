@@ -97,6 +97,7 @@
 #define _GNU_SOURCE
 #include "objcommon.h"
 #include "objmanip.h"
+#include "kmodsrc/ksplice.h"
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdlib.h>
