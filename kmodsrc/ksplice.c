@@ -635,8 +635,10 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, "(r_a=%" ADDR " p_a=%" ADDR " s=%ld)\n",
 			run_addr, pre_addr, s->size);
 		ksdebug(pack, 1, "ksplice_h: run-pre: ");
-		if (pack->debug >= 1)
+		if (pack->debug >= 1) {
 			run_pre_cmp(pack, run_addr, pre_addr, s->size, 1);
+			set_temp_myst_relocs(pack, NOVAL);
+		}
 		ksdebug(pack, 1, "\n");
 	} else {
 		set_temp_myst_relocs(pack, VAL);
@@ -715,9 +717,9 @@ int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
 		} else if (map->nameval->val != expected) {
 			if (rerun)
 				return 0;
-			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: pre-run reloc: "
-				"Expected %s=%" ADDR "!\n",
-				map->nameval->name, expected);
+			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
+				"Expected %" ADDR " based on previous %s!\n",
+				expected, map->nameval->name);
 			return 0;
 		}
 	}
