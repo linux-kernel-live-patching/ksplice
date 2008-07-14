@@ -1091,14 +1091,12 @@ int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 		return -ENOMEM;
 	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
-		if (!starts_with(m->name, ksplice_name)
-		    && !ends_with(m->name, "_helper")) {
-			ret = module_on_each_symbol(m,
-						    accumulate_matching_names,
-						    &acc);
-			if (ret < 0)
-				break;
-		}
+		if (starts_with(m->name, ksplice_name) ||
+		    ends_with(m->name, "_helper"))
+			continue;
+		ret = module_on_each_symbol(m, accumulate_matching_names, &acc);
+		if (ret < 0)
+			break;
 	}
 	mutex_unlock(&module_mutex);
 
