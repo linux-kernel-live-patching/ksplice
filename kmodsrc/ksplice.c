@@ -182,7 +182,6 @@ static int add_dependency_on_address(struct module_pack *pack,
 				     unsigned long addr);
 static int add_patch_dependencies(struct module_pack *pack);
 #ifdef KSPLICE_STANDALONE
-struct module *module_text_address(unsigned long addr);
 static int use_module(struct module *a, struct module *b);
 #endif
 #endif
@@ -948,20 +947,6 @@ static int add_patch_dependencies(struct module_pack *pack)
 }
 
 #ifdef KSPLICE_STANDALONE
-/* Essentially, code from module.c; we use directly use_module and module_text_address */
-struct module *module_text_address(unsigned long addr)
-{
-	struct module *m;
-	list_for_each_entry(m, &modules, list) {
-		if ((addr >= (unsigned long)m->module_core &&
-		     addr < (unsigned long)m->module_core + m->core_size) ||
-		    (addr >= (unsigned long)m->module_init &&
-		     addr < (unsigned long)m->module_init + m->init_size))
-			return m;
-	}
-	return NULL;
-}
-
 struct module_use {
 	struct list_head list;
 	struct module *module_which_uses;
