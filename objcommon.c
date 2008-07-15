@@ -65,6 +65,7 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 		   bfd_canonicalize_reloc(abfd, sect, new->relocs.data,
 					  syms->data));
 	assert(new->relocs.size >= 0);
+	vec_init(&new->new_relocs);
 
 	return new;
 }
@@ -89,6 +90,7 @@ struct supersect *new_supersect(char *name)
 	vec_init(&new->contents);
 	new->alignment = 0;
 	vec_init(&new->relocs);
+	vec_init(&new->new_relocs);
 
 	return new;
 }

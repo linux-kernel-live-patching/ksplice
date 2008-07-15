@@ -152,6 +152,7 @@ struct supersect {
 	struct void_vec contents;
 	int alignment;
 	struct arelentp_vec relocs;
+	struct arelentp_vec new_relocs;
 	struct supersect *next;
 	asymbol *symbol;
 };

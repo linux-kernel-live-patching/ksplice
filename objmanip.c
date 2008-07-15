@@ -286,10 +286,9 @@ void write_reloc(bfd *abfd, struct supersect *ss, void *addr, asymbol **symp,
 	reloc->sym_ptr_ptr = symp;
 	reloc->address = addr - ss->contents.data;
 	reloc->howto = bfd_reloc_type_lookup(abfd, code);
-	/* FIXME: bfd_perform_relocation?  bfd_install_relocation? */
 	reloc->addend = offset;
-	*(unsigned long *)addr = reloc->howto->partial_inplace ? offset : 0;
-	*vec_grow(&ss->relocs, 1) = reloc;
+	*(unsigned long *)addr = 0;
+	*vec_grow(&ss->new_relocs, 1) = reloc;
 }
 
 void write_string(bfd *ibfd, struct supersect *ss, void *addr,
@@ -649,6 +648,8 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	osection->lma = isection->lma;
 	assert(bfd_set_section_alignment(obfd, osection, ss->alignment));
 	osection->entsize = isection->entsize;
+	osection->output_section = osection;
+	osection->output_offset = 0;
 	isection->output_section = osection;
 	isection->output_offset = 0;
 	return;
@@ -668,6 +669,8 @@ void setup_new_section(bfd *obfd, struct supersect *ss)
 	osection->lma = 0;
 	assert(bfd_set_section_alignment(obfd, osection, ss->alignment));
 	osection->entsize = 0;
+	osection->output_section = osection;
+	osection->output_offset = 0;
 }
 
 void write_section(bfd *obfd, asection *osection, void *arg)
@@ -678,6 +681,21 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 	    (ss->flags & SEC_GROUP) != 0 ||
 	    ss->contents.size == 0)
 		return;
+
+	arelent **relocp;
+	char *error_message;
+	for (relocp = ss->new_relocs.data;
+	     relocp < ss->new_relocs.data + ss->new_relocs.size; ++relocp) {
+		if (bfd_install_relocation(obfd, *relocp, ss->contents.data,
+					   0, osection, &error_message) !=
+		    bfd_reloc_ok) {
+			fprintf(stderr, "ksplice: error installing reloc: %s",
+				error_message);
+			DIE;
+		}
+	}
+	memcpy(vec_grow(&ss->relocs, ss->new_relocs.size), ss->new_relocs.data,
+	       ss->new_relocs.size * sizeof(*ss->new_relocs.data));
 
 	bfd_set_reloc(obfd, osection,
 		      ss->relocs.size == 0 ? NULL : ss->relocs.data,
