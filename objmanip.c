@@ -442,7 +442,8 @@ void write_ksplice_size(bfd *ibfd, asymbol **symp)
 	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
 					       struct ksplice_size);
 
-	write_string(ibfd, ksize_ss, &ksize->name, "%s", sym->name);
+	write_string(ibfd, ksize_ss, &ksize->name, "%s%s%s",
+		     sym->name, addstr_all, addstr_sect);
 	ksize->size = symsize;
 	write_reloc(ibfd, ksize_ss, &ksize->thismod_addr, symp, 0);
 	write_system_map_array(ibfd, ksize_ss, &ksize->sym_addrs,
@@ -456,12 +457,9 @@ void write_ksplice_patch(bfd *ibfd, char *symname)
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
 
-	char newname[256];
-	snprintf(newname, sizeof(newname), "%s%s%s",
-		 symname, addstr_all, addstr_sect);
 	asymbol **symp;
 	for (symp = isyms.data; symp < isyms.data + isyms.size; symp++) {
-		if (strcmp((*symp)->name, newname) == 0)
+		if (strcmp((*symp)->name, symname) == 0)
 			break;
 	}
 	assert(symp < isyms.data + isyms.size);
@@ -747,14 +745,6 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 	for (symp = isyms->data; symp < isyms->data + isyms->size; symp++) {
 		asymbol *sym = *symp;
 
-		if (mode("keep") && want_section(sym->section->name)) {
-			char *newname =
-			    malloc(strlen(sym->name) + strlen(addstr_all) +
-				   strlen(addstr_sect) + 1);
-			sprintf(newname, "%s%s%s", sym->name, addstr_all,
-				addstr_sect);
-			sym->name = newname;
-		}
 		int keep;
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0)
