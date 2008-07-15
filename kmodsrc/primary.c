@@ -18,7 +18,9 @@
 
 MODULE_LICENSE("GPL v2");
 
+#undef _STR
 #define _STR(x) #x
+#undef STR
 #define STR(x) _STR(x)
 
 #define _PASTE(x, y) x##y
