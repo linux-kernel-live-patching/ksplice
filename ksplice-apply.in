@@ -56,7 +56,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	}
 
 	if(runval_raw("insmod $primary debug=$debug") != 0) {
-		die "$primary";
+		die "Error loading primary module $primary";
 	}
 	if(runval_raw("insmod $helper") != 0) {
 		runval_raw("rmmod $primary") if $unload;
