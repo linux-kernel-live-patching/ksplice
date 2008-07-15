@@ -794,19 +794,6 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (keep)
 			*vec_grow(osyms, 1) = sym;
 	}
-
-	asection *p;
-	for (p = obfd->sections; mode("keep") && p != NULL; p = p->next) {
-		if (starts_with(p->name, ".rodata") &&
-		    !exists_sym_with_name(isyms, p->name)) {
-			asymbol *new = bfd_make_empty_symbol(obfd);
-			new->name = p->name;
-			new->value = 0x0;
-			new->flags = BSF_GLOBAL;
-			new->section = p;
-			*vec_grow(osyms, 1) = new;
-		}
-	}
 }
 
 int exists_sym_with_name(struct asymbolp_vec *syms, const char *desired)
