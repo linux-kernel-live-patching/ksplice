@@ -214,7 +214,7 @@ int main(int argc, char **argv)
 	for (p = ibfd->sections; p != NULL; p = p->next) {
 		if (is_special(p->name) || starts_with(p->name, ".ksplice"))
 			continue;
-		if (want_section(p->name, NULL) || mode("rmsyms"))
+		if (want_section(p->name) || mode("rmsyms"))
 			rm_some_relocs(ibfd, p);
 	}
 
@@ -248,7 +248,7 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 		if (mode("keep"))
 			rm_reloc = 1;
 
-		if (mode("keep-primary") && want_section(sym_ptr->name, NULL))
+		if (mode("keep-primary") && want_section(sym_ptr->name))
 			rm_reloc = 0;
 
 		if (rm_reloc)
@@ -340,10 +340,6 @@ void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
 
-	char *new_symname = strdup(sym_ptr->name);
-	if (mode("keep-primary"))
-		want_section(sym_ptr->name, &new_symname);
-
 	reloc_howto_type *howto = orig_reloc->howto;
 
 	bfd_vma inplace = blot_section(ibfd, isection, orig_reloc->address,
@@ -357,7 +353,7 @@ void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 						 struct ksplice_reloc);
 
 	write_string(ibfd, kreloc_ss, &kreloc->sym_name, "%s%s",
-		     new_symname, addstr_all);
+		     sym_ptr->name, addstr_all);
 	write_reloc(ibfd, kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address);
 	kreloc->blank_offset = (unsigned long)orig_reloc->address;
@@ -511,7 +507,7 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 		for (p = ibfd->sections; p != NULL; p = p->next) {
 			if (strcmp(sym->name, p->name) == 0
 			    && !is_special(p->name)
-			    && !want_section(p->name, NULL))
+			    && !want_section(p->name))
 				break;
 		}
 		if (p != NULL)
@@ -534,7 +530,7 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 {
-	if (want_section(sect->name, NULL))
+	if (want_section(sect->name))
 		return;
 	if (!starts_with(sect->name, ".text")
 	    && !starts_with(sect->name, ".rodata"))
@@ -546,7 +542,7 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for)
 {
-	if (!want_section(looking_at->name, NULL))
+	if (!want_section(looking_at->name))
 		return;
 
 	struct supersect *ss = fetch_supersect(abfd, looking_at, &isyms);
@@ -627,11 +623,10 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	bfd *obfd = obfdarg;
 	bfd_vma vma;
 
-	char *name = strdup(isection->name);
-	if (!want_section(isection->name, &name))
+	if (!want_section(isection->name))
 		return;
 
-	asection *osection = bfd_make_section_anyway(obfd, name);
+	asection *osection = bfd_make_section_anyway(obfd, isection->name);
 	assert(osection != NULL);
 
 	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
@@ -675,7 +670,7 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 {
 	struct supersect *ss = osection->userdata;
 
-	if (!want_section(ss->name, NULL) ||
+	if (!want_section(ss->name) ||
 	    (ss->flags & SEC_GROUP) != 0 ||
 	    ss->contents.size == 0)
 		return;
@@ -753,7 +748,7 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 		asymbol *sym = *symp;
 		flagword flags = sym->flags;
 
-		if (mode("keep") && want_section(sym->section->name, NULL)) {
+		if (mode("keep") && want_section(sym->section->name)) {
 			char *newname =
 			    malloc(strlen(sym->name) + strlen(addstr_all) +
 				   strlen(addstr_sect) + 1);
@@ -784,7 +779,7 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 		else
 			keep = !bfd_is_local_label(abfd, sym);
 
-		if (!want_section(sym->section->name, NULL))
+		if (!want_section(sym->section->name))
 			keep = 0;
 
 		if (mode("rmsyms") && match_varargs(sym->name))
@@ -815,7 +810,7 @@ int match_varargs(const char *str)
 	return 0;
 }
 
-int want_section(const char *name, char **newname)
+int want_section(const char *name)
 {
 	static const char *static_want[] = {
 		".altinstructions",
@@ -831,15 +826,15 @@ int want_section(const char *name, char **newname)
 	struct wsect *w = wanted_sections;
 	for (; w != NULL; w = w->next) {
 		if (strcmp(w->name, name) == 0)
-			goto success;
+			return 1;
 	}
 
 	if (starts_with(name, ".ksplice"))
-		goto success;
+		return 1;
 	if (mode("keep-helper") && starts_with(name, ".text"))
-		goto success;
+		return 1;
 	if (match_varargs(name))
-		goto success;
+		return 1;
 
 	int i;
 	for (i = 0; static_want[i] != NULL; i++) {
@@ -847,16 +842,6 @@ int want_section(const char *name, char **newname)
 			return 1;
 	}
 	return 0;
-
-success:
-
-	if (newname != NULL) {
-		*newname =
-		    malloc(strlen(name) + strlen(addstr_all) +
-			   strlen(addstr_sect) + 1);
-		sprintf(*newname, "%s%s%s", name, addstr_all, addstr_sect);
-	}
-	return 1;
 }
 
 struct specsect *is_special(const char *name)
