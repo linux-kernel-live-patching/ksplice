@@ -287,7 +287,6 @@ void write_reloc(bfd *abfd, struct supersect *ss, void *addr, asymbol **symp,
 	reloc->address = addr - ss->contents.data;
 	reloc->howto = bfd_reloc_type_lookup(abfd, code);
 	reloc->addend = offset;
-	*(unsigned long *)addr = 0;
 	*vec_grow(&ss->new_relocs, 1) = reloc;
 }
 
@@ -686,6 +685,8 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 	char *error_message;
 	for (relocp = ss->new_relocs.data;
 	     relocp < ss->new_relocs.data + ss->new_relocs.size; ++relocp) {
+		bfd_put(bfd_get_reloc_size((*relocp)->howto) * 8, obfd, 0,
+			ss->contents.data + (*relocp)->address);
 		if (bfd_install_relocation(obfd, *relocp, ss->contents.data,
 					   0, osection, &error_message) !=
 		    bfd_reloc_ok) {
