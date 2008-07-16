@@ -51,6 +51,7 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 	new->parent = abfd;
 	new->name = malloc(strlen(sect->name) + 1);
 	strcpy(new->name, sect->name);
+	new->flags = bfd_get_section_flags(abfd, sect);
 
 	vec_init(&new->contents);
 	vec_resize(&new->contents, bfd_get_section_size(sect));
@@ -83,6 +84,7 @@ struct supersect *new_supersect(char *name)
 	new->name = name;
 	new->next = new_supersects;
 	new_supersects = new;
+	new->flags = SEC_ALLOC | SEC_HAS_CONTENTS | SEC_RELOC;
 
 	vec_init(&new->contents);
 	new->alignment = 0;

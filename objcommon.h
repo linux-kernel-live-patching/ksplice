@@ -148,6 +148,7 @@ DECLARE_VEC_TYPE(asymbol *, asymbolp_vec);
 struct supersect {
 	bfd *parent;
 	char *name;
+	flagword flags;
 	struct void_vec contents;
 	int alignment;
 	struct arelentp_vec relocs;

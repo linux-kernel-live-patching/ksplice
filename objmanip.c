@@ -639,11 +639,9 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	asection *osection = bfd_make_section_anyway(obfd, name);
 	assert(osection != NULL);
 
-	flagword flags = bfd_get_section_flags(ibfd, isection);
-	bfd_set_section_flags(obfd, osection, flags);
-
 	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
 	osection->userdata = ss;
+	bfd_set_section_flags(obfd, osection, ss->flags);
 	ss->symbol = osection->symbol;
 	assert(bfd_set_section_size(obfd, osection, ss->contents.size));
 
@@ -662,8 +660,7 @@ void setup_new_section(bfd *obfd, struct supersect *ss)
 {
 	asection *osection = bfd_make_section_anyway(obfd, ss->name);
 	assert(osection != NULL);
-	bfd_set_section_flags(obfd, osection,
-			      SEC_ALLOC | SEC_HAS_CONTENTS | SEC_RELOC);
+	bfd_set_section_flags(obfd, osection, ss->flags);
 
 	osection->userdata = ss;
 	ss->symbol = osection->symbol;
@@ -697,8 +694,7 @@ void copy_section(bfd *ibfd, asection *isection, void *obfdarg)
 		      ss->relocs.size == 0 ? NULL : ss->relocs.data,
 		      ss->relocs.size);
 
-	if (bfd_get_section_flags(ibfd, isection) & SEC_HAS_CONTENTS
-	    && bfd_get_section_flags(obfd, osection) & SEC_HAS_CONTENTS)
+	if (ss->flags & SEC_HAS_CONTENTS)
 		assert(bfd_set_section_contents
 		       (obfd, osection, ss->contents.data, 0,
 			ss->contents.size));
@@ -715,7 +711,7 @@ void write_new_section(bfd *obfd, struct supersect *ss)
 		      ss->relocs.size == 0 ? NULL : ss->relocs.data,
 		      ss->relocs.size);
 
-	if (bfd_get_section_flags(obfd, osection) & SEC_HAS_CONTENTS)
+	if (ss->flags & SEC_HAS_CONTENTS)
 		assert(bfd_set_section_contents
 		       (obfd, osection, ss->contents.data, 0,
 			ss->contents.size));
