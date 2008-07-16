@@ -1024,7 +1024,12 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 	char *error_message;
 	for (relocp = ss->new_relocs.data;
 	     relocp < ss->new_relocs.data + ss->new_relocs.size; relocp++) {
-		bfd_put(bfd_get_reloc_size((*relocp)->howto) * 8, obfd, 0,
+		bfd_vma val;
+		if (bfd_get_arch(obfd) == bfd_arch_arm)
+			val = osection->use_rela_p ? 0 : (*relocp)->addend;
+		else
+			val = 0;
+		bfd_put(bfd_get_reloc_size((*relocp)->howto) * 8, obfd, val,
 			ss->contents.data + (*relocp)->address);
 		if (bfd_install_relocation(obfd, *relocp, ss->contents.data,
 					   0, osection, &error_message) !=
