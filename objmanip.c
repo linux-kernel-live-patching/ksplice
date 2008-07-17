@@ -613,9 +613,7 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 	bfd_set_symtab(obfd, osyms.data, osyms.size);
 
 	/* This has to happen after the symbol table has been set.  */
-	bfd_map_over_sections(ibfd, copy_section, obfd);
-	for (ss = new_supersects; ss != NULL; ss = ss->next)
-		write_new_section(obfd, ss);
+	bfd_map_over_sections(obfd, write_section, NULL);
 
 	/* Allow the BFD backend to copy any private data it understands
 	   from the input BFD to the output BFD.  This is done last to
@@ -672,39 +670,13 @@ void setup_new_section(bfd *obfd, struct supersect *ss)
 	osection->entsize = 0;
 }
 
-/* Modified function from GNU Binutils objcopy.c */
-void copy_section(bfd *ibfd, asection *isection, void *obfdarg)
+void write_section(bfd *obfd, asection *osection, void *arg)
 {
-	bfd *obfd = obfdarg;
+	struct supersect *ss = osection->userdata;
 
-	char *name = strdup(isection->name);
-	if (!want_section(isection->name, &name))
-		return;
-
-	flagword flags = bfd_get_section_flags(ibfd, isection);
-	if ((flags & SEC_GROUP) != 0)
-		return;
-
-	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
-	asection *osection = isection->output_section;
-	if (ss->contents.size == 0 || osection == 0)
-		return;
-
-	bfd_set_reloc(obfd, osection,
-		      ss->relocs.size == 0 ? NULL : ss->relocs.data,
-		      ss->relocs.size);
-
-	if (ss->flags & SEC_HAS_CONTENTS)
-		assert(bfd_set_section_contents
-		       (obfd, osection, ss->contents.data, 0,
-			ss->contents.size));
-}
-
-void write_new_section(bfd *obfd, struct supersect *ss)
-{
-	asection *osection = bfd_get_section_by_name(obfd, ss->name);
-
-	if (ss->contents.size == 0 || osection == 0)
+	if (!want_section(ss->name, NULL) ||
+	    (ss->flags & SEC_GROUP) != 0 ||
+	    ss->contents.size == 0)
 		return;
 
 	bfd_set_reloc(obfd, osection,

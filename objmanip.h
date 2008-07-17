@@ -25,8 +25,7 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 static bfd_boolean copy_object(bfd *ibfd, bfd *obfd);
 static void setup_section(bfd *ibfd, asection *isection, void *obfdarg);
 static void setup_new_section(bfd *obfd, struct supersect *ss);
-static void copy_section(bfd *ibfd, asection *isection, void *obfdarg);
-static void write_new_section(bfd *obfd, struct supersect *ss);
+static void write_section(bfd *obfd, asection *osection, void *arg);
 static void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
 					     void *symbolsarg);
 static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
