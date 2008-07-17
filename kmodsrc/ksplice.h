@@ -21,7 +21,6 @@ struct ksplice_size {
 
 struct ksplice_patch {
 	char *oldstr;
-	char *replstr;
 	unsigned long oldaddr;
 	unsigned long repladdr;
 	char *saved;

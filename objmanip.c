@@ -472,7 +472,6 @@ void write_ksplice_patch(bfd *ibfd, char *symname)
 
 	write_string(ibfd, kpatch_ss, &kpatch->oldstr, "%s%s%s",
 		     symname, addstr_all, addstr_sect_pre);
-	write_string(ibfd, kpatch_ss, &kpatch->replstr, "%s", newname);
 	kpatch->oldaddr = 0;
 	write_reloc(ibfd, kpatch_ss, &kpatch->repladdr, symp, 0);
 	kpatch->saved = NULL;
