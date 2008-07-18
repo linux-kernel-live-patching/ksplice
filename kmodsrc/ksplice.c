@@ -144,7 +144,8 @@ static int brute_search_all(struct module_pack *pack,
 static int add_candidate_val(struct list_head *vals, unsigned long val);
 static void release_vals(struct list_head *vals);
 static void set_temp_myst_relocs(struct module_pack *pack, int status_val);
-static int contains_canary(unsigned long blank_addr, int size, long dst_mask);
+static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
+			   int size, long dst_mask);
 static int starts_with(const char *str, const char *prefix);
 static int ends_with(const char *str, const char *suffix);
 
@@ -704,7 +705,8 @@ int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
 
 	if (!starts_with(map->nameval->name, ".rodata.str")) {
 		int ret;
-		ret = contains_canary(run_reloc_addr, map->size, map->dst_mask);
+		ret = contains_canary(pack, run_reloc_addr, map->size,
+				      map->dst_mask);
 		if (ret < 0)
 			return ret;
 		if (ret == 1)
@@ -785,7 +787,7 @@ static int process_reloc(struct module_pack *pack,
 skip_using_system_map:
 #endif
 
-	ret = contains_canary(r->blank_addr, r->size, r->dst_mask);
+	ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
 	if (ret < 0) {
 		release_vals(&vals);
 		return ret;
@@ -1372,7 +1374,8 @@ static void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 	}
 }
 
-static int contains_canary(unsigned long blank_addr, int size, long dst_mask)
+static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
+			   int size, long dst_mask)
 {
 	switch (size) {
 	case 1:
