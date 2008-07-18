@@ -246,8 +246,8 @@ static int activate_primary(struct module_pack *pack)
 		return -1;
 	}
 
-	printk(KERN_INFO "ksplice: Update %s applied successfully\n",
-	       pack->name);
+	ksdebug(pack, 0, KERN_INFO "ksplice: Update %s applied successfully\n",
+		pack->name);
 	return 0;
 }
 
@@ -292,7 +292,8 @@ static int procfile_write(struct file *file, const char *buffer,
 {
 	int i, ret;
 	struct module_pack *pack = data;
-	printk(KERN_INFO "ksplice: Preparing to reverse %s\n", pack->name);
+	ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
+		pack->name);
 
 	if (pack->state != KSPLICE_APPLIED)
 		return count;
@@ -309,11 +310,11 @@ static int procfile_write(struct file *file, const char *buffer,
 	if (ret == -EAGAIN)
 		print_abort("stack check: to-be-reversed code is busy");
 	else if (ret == 0)
-		printk(KERN_INFO "ksplice: Update %s reversed successfully\n",
-		       pack->name);
+		ksdebug(pack, 0, KERN_INFO "ksplice: Update %s reversed "
+			"successfully\n", pack->name);
 	else if (ret == -EBUSY)
-		printk(KERN_ERR "ksplice: Update module %s is in use by "
-		       "another module\n", pack->name);
+		ksdebug(pack, 0, KERN_ERR "ksplice: Update module %s is in use "
+			"by another module\n", pack->name);
 
 	return count;
 }
@@ -500,7 +501,8 @@ int init_ksplice_module(struct module_pack *pack)
 #endif
 #endif
 
-	printk(KERN_INFO "ksplice_h: Preparing and checking %s\n", pack->name);
+	ksdebug(pack, 0, KERN_INFO "ksplice_h: Preparing and checking %s\n",
+		pack->name);
 
 	if (activate_helper(pack) != 0 || activate_primary(pack) != 0)
 		ret = -1;
