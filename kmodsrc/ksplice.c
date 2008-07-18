@@ -218,7 +218,8 @@ static int activate_primary(struct module_pack *pack)
 
 	proc_entry = create_proc_entry(pack->name, 0644, NULL);
 	if (proc_entry == NULL) {
-		print_abort("primary module: could not create proc entry");
+		print_abort(pack, "primary module: could not create proc "
+			    "entry");
 		return -1;
 	}
 
@@ -243,7 +244,8 @@ static int activate_primary(struct module_pack *pack)
 	if (pack->state != KSPLICE_APPLIED) {
 		remove_proc_entry(pack->name, &proc_root);
 		if (ret == -EAGAIN)
-			print_abort("stack check: to-be-replaced code is busy");
+			print_abort(pack, "stack check: to-be-replaced code is "
+				    "busy");
 		return -1;
 	}
 
@@ -271,7 +273,7 @@ static int resolve_patch_symbols(struct module_pack *pack)
 
 		if (!singular(&vals)) {
 			release_vals(&vals);
-			failed_to_find(p->oldstr);
+			failed_to_find(pack, p->oldstr);
 			return -1;
 		}
 		p->oldaddr =
@@ -309,7 +311,7 @@ static int procfile_write(struct file *file, const char *buffer,
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
 	if (ret == -EAGAIN)
-		print_abort("stack check: to-be-reversed code is busy");
+		print_abort(pack, "stack check: to-be-reversed code is busy");
 	else if (ret == 0)
 		ksdebug(pack, 0, KERN_INFO "ksplice: Update %s reversed "
 			"successfully\n", pack->name);
@@ -570,7 +572,7 @@ start:
 					"could not match section %s\n",
 					s->name);
 		}
-		print_abort("run-pre: could not match some sections");
+		print_abort(pack, "run-pre: could not match some sections");
 		kfree(finished);
 		return -1;
 	}
@@ -580,7 +582,7 @@ start:
 		restart_count++;
 		goto start;
 	}
-	print_abort("run-pre: restart limit exceeded");
+	print_abort(pack, "run-pre: restart limit exceeded");
 	kfree(finished);
 	return -1;
 }
@@ -694,7 +696,7 @@ int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
 		run_reloc_val = *(int64_t *)run_reloc_addr & map->dst_mask;
 		break;
 	default:
-		print_abort("Invalid relocation size");
+		print_abort(pack, "Invalid relocation size");
 		return -1;
 	}
 
@@ -775,7 +777,7 @@ static int process_reloc(struct module_pack *pack,
 	 */
 	off = (unsigned long)printk - pack->map_printk;
 	if (off & 0xfffff) {
-		print_abort("System.map does not match kernel");
+		print_abort(pack, "System.map does not match kernel");
 		return -1;
 	}
 	for (i = 0; i < r->num_sym_addrs; i++) {
@@ -810,7 +812,7 @@ skip_using_system_map:
 #else
 		if (!pre) {
 #endif
-			failed_to_find(r->sym_name);
+			failed_to_find(pack, r->sym_name);
 			return -1;
 		}
 
@@ -895,7 +897,7 @@ skip_using_system_map:
 			    ((val >> r->rightshift) & r->dst_mask);
 			break;
 		default:
-			print_abort("Invalid relocation size");
+			print_abort(pack, "Invalid relocation size");
 			return -1;
 		}
 	}
@@ -917,7 +919,7 @@ skip_using_system_map:
 		ksdebug(pack, 4, "aft=%016llx)\n", *(int64_t *)r->blank_addr);
 		break;
 	default:
-		print_abort("Invalid relocation size");
+		print_abort(pack, "Invalid relocation size");
 		return -1;
 	}
 	return 0;
@@ -1391,7 +1393,7 @@ static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
 		return (*(int64_t *)blank_addr & dst_mask) ==
 		    (0x7777777777777777ll & dst_mask);
 	default:
-		print_abort("Invalid relocation size");
+		print_abort(pack, "Invalid relocation size");
 		return -1;
 	}
 }

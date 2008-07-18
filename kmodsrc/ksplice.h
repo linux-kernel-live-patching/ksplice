@@ -176,17 +176,17 @@ struct candidate_val {
 };
 
 #define singular(list) (!list_empty(list) && (list)->next->next == (list))
-#define failed_to_find(sym_name) \
-	printk(KERN_ERR "ksplice: Failed to find symbol %s at %s:%d\n", \
-	       sym_name, __FILE__, __LINE__)
-
-static inline void print_abort(const char *str)
-{
-	printk(KERN_ERR "ksplice: Aborted. (%s)\n", str);
-}
 
 #define ksdebug(pack, level, fmt, ...) \
 	do { if ((pack)->debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
+#define failed_to_find(pack, sym_name) \
+	ksdebug(pack, 0, KERN_ERR "ksplice: Failed to find symbol %s at " \
+		"%s:%d\n", sym_name, __FILE__, __LINE__)
+
+static inline void print_abort(struct module_pack *pack, const char *str)
+{
+	ksdebug(pack, 0, KERN_ERR "ksplice: Aborted. (%s)\n", str);
+}
 
 int init_ksplice_module(struct module_pack *pack);
 void cleanup_ksplice_module(struct module_pack *pack);
