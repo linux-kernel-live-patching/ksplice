@@ -636,7 +636,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			"not match ", s->name);
 		ksdebug(pack, 1, "(r_a=%" ADDR " p_a=%" ADDR " s=%ld)\n",
 			run_addr, pre_addr, s->size);
-		ksdebug(pack, 1, "ksplice_h: run-pre: ");
+		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
 		if (pack->debug >= 1) {
 			run_pre_cmp(pack, run_addr, pre_addr, s->size, 1);
 			set_temp_myst_relocs(pack, NOVAL);

@@ -138,13 +138,14 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 /* *INDENT-ON* */
 
 static int match_nop(unsigned char *addr);
+static void print_bytes(struct module_pack *pack, unsigned char *run, int runc,
+			unsigned char *pre, int prec);
 
 static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 		       unsigned long pre_addr, unsigned int size, int rerun)
 {
 	int lenient = 0;
-	int matched;
-	int o;
+	int runc, prec, matched;
 	unsigned char *run, *pre;
 	struct reloc_addrmap *map;
 
@@ -175,36 +176,25 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 					      (unsigned long)run, map, rerun);
 			if (matched == 0)
 				return 1;
-			if (rerun) {
-				for (o = 0; o < matched; o++)
-					printk("%02x/%02x ", run[o], pre[o]);
-			}
+			if (rerun)
+				print_bytes(pack, run, matched, pre, matched);
 			run += matched;
 			pre += matched;
 			continue;
 		}
 
-		matched = match_nop(run);
-		if (matched > 0) {
-			if (rerun) {
-				for (o = 0; o < matched; o++)
-					printk("%02x/ ", run[o]);
-			}
-			run += matched;
-			continue;
-		}
-		matched = match_nop(pre);
-		if (matched > 0) {
-			if (rerun) {
-				for (o = 0; o < matched; o++)
-					printk("/%02x ", pre[o]);
-			}
-			pre += matched;
+		runc = match_nop(run);
+		prec = match_nop(pre);
+		if (rerun)
+			print_bytes(pack, run, runc, pre, prec);
+		if (runc > 0 || prec > 0) {
+			run += runc;
+			pre += prec;
 			continue;
 		}
 
 		if (rerun)
-			printk("%02x/%02x ", *run, *pre);
+			print_bytes(pack, run, 1, pre, 1);
 
 		if (*run == *pre) {
 			if (jumplen[*pre])
@@ -222,10 +212,11 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 			pre++, run++;
 			continue;
 		}
-		if (rerun)
-			printk("[p_o=%lx] ! %02x/%02x %02x/%02x",
-			       (unsigned long)pre - pre_addr, run[1], pre[1],
-			       run[2], pre[2]);
+		if (rerun) {
+			ksdebug(pack, 0, "[p_o=%lx] ! ", (unsigned long)pre -
+				pre_addr);
+			print_bytes(pack, run + 1, 2, pre + 1, 2);
+		}
 		return 1;
 	}
 	return 0;
@@ -247,4 +238,17 @@ static int match_nop(unsigned char *addr)
 			return j;
 	}
 	return 0;
+}
+
+static void print_bytes(struct module_pack *pack, unsigned char *run, int runc,
+			unsigned char *pre, int prec)
+{
+	int o;
+	int matched = min(runc, prec);
+	for (o = 0; o < matched; o++)
+		ksdebug(pack, 0, "%02x/%02x ", run[o], pre[o]);
+	for (o = matched; o < runc; o++)
+		ksdebug(pack, 0, "%02x/ ", run[o]);
+	for (o = matched; o < prec; o++)
+		ksdebug(pack, 0, "/%02x ", pre[o]);
 }
