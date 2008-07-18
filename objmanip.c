@@ -165,7 +165,7 @@ int main(int argc, char **argv)
 	get_syms(ibfd, &isyms);
 
 	modestr = argv[2];
-	if (mode("keep")) {
+	if (mode("keep") || mode("sizelist")) {
 		addstr_all = argv[3];
 		addstr_sect = argv[4];
 		varargs = &argv[5];
