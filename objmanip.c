@@ -311,7 +311,7 @@ void write_system_map_array(bfd *ibfd, struct supersect *ss,
 			    unsigned long **sym_addrs,
 			    unsigned long *num_sym_addrs, asymbol *sym)
 {
-	const char *system_map_name = dup_wolabel(sym->name);
+	const char *system_map_name = sym->name;
 	const char **prefix;
 	for (prefix = (const char *[]){".text.", ".data.", ".bss.", NULL};
 	     *prefix != NULL; prefix++) {
