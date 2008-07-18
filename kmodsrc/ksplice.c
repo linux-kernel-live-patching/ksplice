@@ -260,7 +260,7 @@ static int resolve_patch_symbols(struct module_pack *pack)
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		p->saved = kmalloc(5, GFP_KERNEL);
 		if (p->saved == NULL) {
-			print_abort("out of memory");
+			printk(KERN_ERR "ksplice: out of memory\n");
 			return -ENOMEM;
 		}
 
@@ -530,7 +530,7 @@ static int activate_helper(struct module_pack *pack)
 
 	finished = kcalloc(record_count, 1, GFP_KERNEL);
 	if (finished == NULL) {
-		print_abort("out of memory");
+		printk(KERN_ERR "ksplice: out of memory\n");
 		return -ENOMEM;
 	}
 
@@ -650,7 +650,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 
 		tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
 		if (tmp == NULL) {
-			print_abort("out of memory");
+			printk(KERN_ERR "ksplice: out of memory\n");
 			return -ENOMEM;
 		}
 		tmp->addr = run_addr;
@@ -817,7 +817,7 @@ skip_using_system_map:
 
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL) {
-			print_abort("out of memory");
+			printk(KERN_ERR "ksplice: out of memory\n");
 			return -ENOMEM;
 		}
 		map->addr = r->blank_addr;
@@ -849,7 +849,7 @@ skip_using_system_map:
 #endif
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL) {
-			print_abort("out of memory");
+			printk(KERN_ERR "ksplice: out of memory\n");
 			return -ENOMEM;
 		}
 		map->addr = r->blank_addr;
@@ -1313,7 +1313,7 @@ static int add_candidate_val(struct list_head *vals, unsigned long val)
 	}
 	new = kmalloc(sizeof(*new), GFP_KERNEL);
 	if (new == NULL) {
-		print_abort("out of memory");
+		printk(KERN_ERR "ksplice: out of memory\n");
 		return -ENOMEM;
 	}
 	new->val = val;
@@ -1343,7 +1343,7 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 
 	new = kmalloc(sizeof(*new), GFP_KERNEL);
 	if (new == NULL) {
-		print_abort("out of memory");
+		printk(KERN_ERR "ksplice: out of memory\n");
 		return NULL;
 	}
 	new->name = name;
@@ -1433,7 +1433,7 @@ static const char *dup_wolabel(const char *sym_name)
 	new_strlen = entire_strlen - label_strlen;
 	newstr = kmalloc(new_strlen + 1, GFP_KERNEL);
 	if (newstr == NULL) {
-		print_abort("out of memory");
+		printk(KERN_ERR "ksplice: out of memory\n");
 		return NULL;
 	}
 	memcpy(newstr, sym_name, new_strlen);
