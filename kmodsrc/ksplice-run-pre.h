@@ -175,7 +175,7 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 			matched =
 			    handle_myst_reloc(pack, (unsigned long)pre,
 					      (unsigned long)run, map, rerun);
-			if (matched == 0)
+			if (matched < 0)
 				return 1;
 			if (rerun)
 				print_bytes(pack, run, matched, pre, matched);

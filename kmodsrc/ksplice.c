@@ -721,7 +721,7 @@ int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
 		if (ret < 0)
 			return ret;
 		if (ret == 1)
-			return 0;
+			return -1;
 
 		expected = run_reloc_val - map->addend;
 		if (map->pcrel)
@@ -731,11 +731,11 @@ int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
 			map->nameval->status = TEMP;
 		} else if (map->nameval->val != expected) {
 			if (rerun)
-				return 0;
+				return -1;
 			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"Expected %" ADDR " based on previous %s!\n",
 				expected, map->nameval->name);
-			return 0;
+			return -1;
 		}
 	}
 	return map->size - offset;
