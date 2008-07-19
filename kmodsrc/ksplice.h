@@ -114,51 +114,42 @@ struct reloc_addrmap {
 	long dst_mask;
 };
 
+#ifndef KSPLICE_STANDALONE
 static inline int virtual_address_mapped(unsigned long addr)
 {
-	pgd_t *pgd;
-#ifndef KSPLICE_STANDALONE
-	pud_t *pud;
-#else /* KSPLICE_STANDALONE */
+	unsigned int level;
+	return pte_present(*lookup_address(addr, &level));
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+/* f0646e43acb18f0e00b00085dc88bc3f403e7930 was after 2.6.24 */
+static inline int virtual_address_mapped(unsigned long addr)
+{
+	unsigned int level;
+	return pte_present(*lookup_address(addr, &level));
+}
+#else
+static inline int virtual_address_mapped(unsigned long addr)
+{
+	pgd_t *pgd = pgd_offset_k(addr);
 #ifdef pud_page
 	pud_t *pud;
 #endif /* pud_page */
-#endif /* KSPLICE_STANDALONE */
 	pmd_t *pmd;
 	pte_t *pte;
 
-	if (addr >= init_mm.start_code && addr < init_mm.end_code)
-		return 1;
-
-	pgd = pgd_offset_k(addr);
 	if (!pgd_present(*pgd))
 		return 0;
 
-#ifndef KSPLICE_STANDALONE
-	pud = pud_offset(pgd, addr);
-	if (!pud_present(*pud))
-		return 0;
-
-	if (pud_large(*pud))
-		return 1;
-
-	pmd = pmd_offset(pud, addr);
-#else /* KSPLICE_STANDALONE */
 #ifdef pud_page
 	pud = pud_offset(pgd, addr);
 	if (!pud_present(*pud))
 		return 0;
-
-#ifdef pud_large
-	if (pud_large(*pud))
-		return 1;
-#endif /* pud_large */
 
 	pmd = pmd_offset(pud, addr);
 #else /* pud_page */
 	pmd = pmd_offset(pgd, addr);
 #endif /* pud_page */
-#endif /* KSPLICE_STANDALONE */
+
 	if (!pmd_present(*pmd))
 		return 0;
 
@@ -171,6 +162,7 @@ static inline int virtual_address_mapped(unsigned long addr)
 
 	return 1;
 }
+#endif
 
 struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 				   int create);

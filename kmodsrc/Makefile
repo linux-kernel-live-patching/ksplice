@@ -48,7 +48,8 @@ RMSYMS = \
 	kallsyms_names \
 	kallsyms_token_table \
 	kallsyms_token_index \
-	module_text_address
+	module_text_address \
+	lookup_address
 
 quiet_cmd_ksplice-rmsyms = RMSYMS  $@
 cmd_ksplice-rmsyms = \
