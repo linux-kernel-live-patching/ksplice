@@ -746,7 +746,6 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 	asymbol **symp;
 	for (symp = isyms->data; symp < isyms->data + isyms->size; symp++) {
 		asymbol *sym = *symp;
-		flagword flags = sym->flags;
 
 		if (mode("keep") && want_section(sym->section->name)) {
 			char *newname =
@@ -756,25 +755,24 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 				addstr_sect);
 			sym->name = newname;
 		}
-
 		int keep;
-		if ((flags & BSF_KEEP) != 0	/* Used in relocation.  */
-		    || ((flags & BSF_SECTION_SYM) != 0
+		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
+		    || ((sym->flags & BSF_SECTION_SYM) != 0
 			&& ((*(sym->section)->symbol_ptr_ptr)->flags
 			    & BSF_KEEP) != 0))
 			keep = 1;
-		else if ((flags & (BSF_GLOBAL | BSF_WEAK)) != 0)
+		else if ((sym->flags & (BSF_GLOBAL | BSF_WEAK)) != 0)
 			keep = 1;
 		else if (bfd_decode_symclass(sym) == 'I')
 			/* Global symbols in $idata sections need to be retained.
 			   External users of the  library containing the $idata
 			   section may reference these symbols.  */
 			keep = 1;
-		else if ((flags & BSF_GLOBAL) != 0
-			 || (flags & BSF_WEAK) != 0
+		else if ((sym->flags & BSF_GLOBAL) != 0
+			 || (sym->flags & BSF_WEAK) != 0
 			 || bfd_is_com_section(sym->section))
 			keep = 1;
-		else if ((flags & BSF_DEBUGGING) != 0)
+		else if ((sym->flags & BSF_DEBUGGING) != 0)
 			keep = 1;
 		else
 			keep = !bfd_is_local_label(abfd, sym);
