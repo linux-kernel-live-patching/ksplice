@@ -1,6 +1,6 @@
 #include <linux/kernel.h>
 
-static const char jumplen[256] = {
+static const char jumps[256] = {
 	[0x0f] = 5,		/* je */
 	[0x70] = 1,		/* jo */
 	[0x71] = 1,		/* jno */
@@ -140,6 +140,7 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 static int match_nop(unsigned char *addr);
 static void print_bytes(struct module_pack *pack, unsigned char *run, int runc,
 			unsigned char *pre, int prec);
+static int jumplen(unsigned char *addr);
 
 static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 		       unsigned long pre_addr, unsigned int size, int rerun)
@@ -197,15 +198,15 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 			print_bytes(pack, run, 1, pre, 1);
 
 		if (*run == *pre) {
-			if (jumplen[*pre])
-				lenient = max(jumplen[*pre] + 1, lenient);
+			if (jumplen(pre))
+				lenient = max(jumplen(pre) + 1, lenient);
 			pre++, run++;
 			continue;
 		}
 
-		if (jumplen[*run] && jumplen[*pre]) {
-			run += 1 + jumplen[*run];
-			pre += 1 + jumplen[*pre];
+		if (jumplen(run) && jumplen(pre)) {
+			run += 1 + jumplen(run);
+			pre += 1 + jumplen(pre);
 			continue;
 		}
 		if (lenient) {
@@ -220,6 +221,16 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 		return 1;
 	}
 	return 0;
+}
+
+static int jumplen(unsigned char *addr)
+{
+	if (!jumps[addr[0]])
+		return 0;
+	if (addr[0] == 0x0f && (!virtual_address_mapped((unsigned long)&addr[1])
+				|| addr[1] < 0x80 || addr[1] >= 0x90))
+		return 0;
+	return jumps[addr[0]];
 }
 
 static int match_nop(unsigned char *addr)
