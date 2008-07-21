@@ -33,5 +33,5 @@ static void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 			   struct asymbolp_vec *isyms);
 int exists_sym_with_name(struct asymbolp_vec *syms, const char *desired);
 int match_varargs(const char *str);
-int want_section(const char *name);
+int want_section(asection *sect);
 struct specsect *is_special(const char *name);

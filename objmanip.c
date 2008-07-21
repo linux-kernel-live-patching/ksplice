@@ -214,7 +214,7 @@ int main(int argc, char **argv)
 	for (p = ibfd->sections; p != NULL; p = p->next) {
 		if (is_special(p->name) || starts_with(p->name, ".ksplice"))
 			continue;
-		if (want_section(p->name) || mode("rmsyms"))
+		if (want_section(p) || mode("rmsyms"))
 			rm_some_relocs(ibfd, p);
 	}
 
@@ -248,7 +248,7 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 		if (mode("keep"))
 			rm_reloc = 1;
 
-		if (mode("keep-primary") && want_section(sym_ptr->name))
+		if (mode("keep-primary") && want_section(sym_ptr->section))
 			rm_reloc = 0;
 
 		if (rm_reloc)
@@ -504,7 +504,7 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 		for (p = ibfd->sections; p != NULL; p = p->next) {
 			if (strcmp(sym->name, p->name) == 0
 			    && !is_special(p->name)
-			    && !want_section(p->name))
+			    && !want_section(p))
 				break;
 		}
 		if (p != NULL)
@@ -527,7 +527,7 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 {
-	if (want_section(sect->name))
+	if (want_section(sect))
 		return;
 	if (!starts_with(sect->name, ".text")
 	    && !starts_with(sect->name, ".rodata"))
@@ -539,7 +539,7 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for)
 {
-	if (!want_section(looking_at->name))
+	if (!want_section(looking_at))
 		return;
 
 	struct supersect *ss = fetch_supersect(abfd, looking_at, &isyms);
@@ -620,7 +620,7 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	bfd *obfd = obfdarg;
 	bfd_vma vma;
 
-	if (!want_section(isection->name))
+	if (!want_section(isection))
 		return;
 
 	asection *osection = bfd_make_section_anyway(obfd, isection->name);
@@ -667,8 +667,7 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 {
 	struct supersect *ss = osection->userdata;
 
-	if (!want_section(ss->name) ||
-	    (ss->flags & SEC_GROUP) != 0 ||
+	if (!want_section(osection) || (ss->flags & SEC_GROUP) != 0 ||
 	    ss->contents.size == 0)
 		return;
 
@@ -769,7 +768,7 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 		else
 			keep = !bfd_is_local_label(abfd, sym);
 
-		if (!want_section(sym->section->name))
+		if (!want_section(sym->section))
 			keep = 0;
 
 		if (mode("rmsyms") && match_varargs(sym->name))
@@ -800,7 +799,7 @@ int match_varargs(const char *str)
 	return 0;
 }
 
-int want_section(const char *name)
+int want_section(asection *sect)
 {
 	static const char *static_want[] = {
 		".altinstructions",
@@ -809,6 +808,7 @@ int want_section(const char *name)
 		".parainstructions",
 		NULL
 	};
+	const char *name = sect->name;
 
 	if (!mode("keep"))
 		return 1;
