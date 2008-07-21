@@ -54,7 +54,7 @@ sub do_diff {
 		return empty_diff($out);
 	}
 
-	my ($bits, $sections, $entrysyms) = split("\n", runsuc("objdiff", $obj_old, $obj));
+	my ($bits, $sections, $entrysyms, $newsyms) = split("\n", runsuc("objdiff", $obj_old, $obj));
 	die if ($bits ne '32' && $bits ne '64');
 	return empty_diff($out) if ($sections eq '' && $entrysyms eq '');
 
@@ -69,7 +69,9 @@ sub do_diff {
 
 	runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
 	runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
-
+	if ($newsyms) {
+		runsuc("objmanip", "$obj.KSPLICE_primary", "globalize-new", split(/\s/, $newsyms));
+	}
 	runsuc("objmanip", "$obj.KSPLICE_primary", "sizelist", "____${tag}", "_post");
 	runsuc("objmanip", "$obj.KSPLICE_helper", "sizelist", "____${tag}", "_pre");
 

@@ -29,6 +29,10 @@
 #include "objcommon.h"
 #include "objdiff.h"
 
+#define symbol_init(sym) *(sym) = (asymbol *)NULL
+DEFINE_HASH_TYPE(asymbol *, symbol_hash, symbol_hash_init, symbol_hash_free,
+		 symbol_hash_lookup, symbol_init);
+
 bfd *newbfd;
 struct asymbolp_vec new_syms, old_syms;
 
@@ -52,10 +56,40 @@ int main(int argc, char *argv[])
 	printf("\n");
 	foreach_nonmatching(oldbfd, newbfd, print_newbfd_entry_symbols);
 	printf("\n");
+	compare_symbols(oldbfd, newbfd, BSF_GLOBAL);
+	printf("\n");
 
 	assert(bfd_close(oldbfd));
 	assert(bfd_close(newbfd));
 	return EXIT_SUCCESS;
+}
+
+void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags)
+{
+	asymbol **old, **new, **tmp;
+	struct symbol_hash old_hash;
+	symbol_hash_init(&old_hash);
+	for (old = old_syms.data; old < old_syms.data + old_syms.size; old++) {
+		if (((*old)->flags & flags) == 0 ||
+		    ((*old)->flags & BSF_DEBUGGING) != 0)
+			continue;
+		tmp = symbol_hash_lookup(&old_hash, (*old)->name, TRUE);
+		if (*tmp != NULL) {
+			fprintf(stderr, "Two global symbols named %s!\n",
+				(*old)->name);
+			DIE;
+		}
+		*tmp = *old;
+	}
+	for (new = new_syms.data; new < new_syms.data + new_syms.size; new++) {
+		if (((*new)->flags & flags) == 0 ||
+		    ((*new)->flags & BSF_DEBUGGING) != 0)
+			continue;
+		tmp = symbol_hash_lookup(&old_hash, (*new)->name, FALSE);
+		if (tmp == NULL)
+			printf("%s ", (*new)->name);
+	}
+	symbol_hash_free(&old_hash);
 }
 
 void foreach_nonmatching(bfd *oldbfd, bfd *newbfd, section_fn s_fn)

@@ -718,6 +718,9 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0)
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
+		if (mode("globalize-new") && match_varargs(sym->name))
+			sym->flags = (sym->flags & ~BSF_LOCAL) | BSF_GLOBAL;
+
 		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
 		    || ((sym->flags & BSF_SECTION_SYM) != 0
 			&& ((*(sym->section)->symbol_ptr_ptr)->flags
