@@ -23,7 +23,7 @@ struct ksplice_patch {
 	char *oldstr;
 	unsigned long oldaddr;
 	unsigned long repladdr;
-	char *saved;
+	char saved[5];
 };
 
 #ifdef __KERNEL__

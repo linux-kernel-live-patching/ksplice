@@ -468,7 +468,6 @@ void write_ksplice_patch(bfd *ibfd, char *symname)
 		     symname, addstr_all, addstr_sect_pre);
 	kpatch->oldaddr = 0;
 	write_reloc(ibfd, kpatch_ss, &kpatch->repladdr, symp, 0);
-	kpatch->saved = NULL;
 }
 
 void rm_from_special(bfd *ibfd, struct specsect *s)

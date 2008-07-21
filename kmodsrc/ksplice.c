@@ -267,12 +267,6 @@ static int resolve_patch_symbols(struct module_pack *pack)
 	LIST_HEAD(vals);
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
-		p->saved = kmalloc(5, GFP_KERNEL);
-		if (p->saved == NULL) {
-			printk(KERN_ERR "ksplice: out of memory\n");
-			return -ENOMEM;
-		}
-
 		ret = compute_address(pack, p->oldstr, &vals, 0);
 		if (ret < 0)
 			return ret;
@@ -387,7 +381,6 @@ static int __reverse_patches(void *packptr)
 	set_fs(KERNEL_DS);
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		memcpy((void *)p->oldaddr, (void *)p->saved, 5);
-		kfree(p->saved);
 		flush_icache_range(p->oldaddr, p->oldaddr + 5);
 	}
 	set_fs(old_fs);
