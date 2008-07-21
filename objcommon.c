@@ -100,6 +100,7 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment)
 	if (ss->alignment < ffs(alignment) - 1)
 		ss->alignment = ffs(alignment) - 1;
 	int pad = ss->contents.size - align(ss->contents.size, alignment);
-	memset(vec_grow(&ss->contents, pad), 0, pad);
-	return vec_grow(&ss->contents, n * size);
+	void *out = vec_grow(&ss->contents, pad + n * size);
+	memset(out, 0, pad + n * size);
+	return out + pad;
 }
