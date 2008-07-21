@@ -784,6 +784,8 @@ int want_section(asection *sect)
 	if (!mode("keep"))
 		return 1;
 
+	if (mode("keep-primary") && bfd_is_abs_section(sect))
+		return 1;
 	const struct wsect *w = wanted_sections;
 	for (; w != NULL; w = w->next) {
 		if (strcmp(w->name, name) == 0)
