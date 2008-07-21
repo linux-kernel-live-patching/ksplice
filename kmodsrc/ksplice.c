@@ -1494,10 +1494,14 @@ int init_debug_buf(struct module_pack *pack)
 {
 	pack->debug_blob.size = roundup_pow_of_two(1);
 	pack->debug_blob.data = kmalloc(pack->debug_blob.size, GFP_KERNEL);
+	if (pack->debug_blob.data == NULL)
+		return -ENOMEM;
 	pack->debugfs_dentry = debugfs_create_blob(pack->name, 700, NULL,
 						   &pack->debug_blob);
-	if (pack->debugfs_dentry == NULL)
+	if (pack->debugfs_dentry == NULL) {
+		kfree(pack->debug_blob.data);
 		return -ENOMEM;
+	}
 	return 0;
 }
 
@@ -1516,30 +1520,31 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 	old_size = roundup_pow_of_two(pack->debug_blob.size);
 	new_size = roundup_pow_of_two(size + pack->debug_blob.size);
 	if (new_size > old_size) {
+		char *tmp = pack->debug_blob.data;
 #ifndef KSPLICE_STANDALONE
 		pack->debug_blob.data = krealloc(pack->debug_blob.data,
 						 new_size, GFP_KERNEL);
-		if (pack->debug_blob.data == NULL)
-			return -ENOMEM;
 #else
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 		pack->debug_blob.data = krealloc(pack->debug_blob.data,
 						 new_size, GFP_KERNEL);
-		if (pack->debug_blob.data == NULL)
-			return -ENOMEM;
 #else
 		/* We cannot use our own function with the same
 		 * arguments as krealloc, because doing so requires
 		 * ksize, which was first exported in 2.6.24-rc5.
 		 */
-		char *tmp = pack->debug_blob.data;
 		pack->debug_blob.data = kmalloc(new_size, GFP_KERNEL);
-		if (pack->debug_blob.data == NULL)
+		if (pack->debug_blob.data != NULL) {
+			memcpy(pack->debug_blob.data, tmp,
+			       pack->debug_blob.size);
+			kfree(tmp);
+		}
+#endif
+#endif
+		if (pack->debug_blob.data == NULL) {
+			kfree(tmp);
 			return -ENOMEM;
-		memcpy(pack->debug_blob.data, tmp, pack->debug_blob.size);
-		kfree(tmp);
-#endif
-#endif
+		}
 	}
 	va_start(args, fmt);
 	pack->debug_blob.size += vsnprintf(pack->debug_blob.data +
