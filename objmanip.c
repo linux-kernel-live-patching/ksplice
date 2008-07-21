@@ -724,9 +724,8 @@ void ss_mark_symbols_used_in_relocations(struct supersect *ss)
 	for (relocp = ss->relocs.data;
 	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 		asymbol *sym = *(*relocp)->sym_ptr_ptr;
-		if (sym != bfd_com_section_ptr->symbol
-		    && sym != bfd_abs_section_ptr->symbol
-		    && sym != bfd_und_section_ptr->symbol)
+		if (!(bfd_is_const_section(sym->section) &&
+		      sym == sym->section->symbol))
 			sym->flags |= BSF_KEEP;
 	}
 }
