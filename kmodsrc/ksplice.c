@@ -1095,16 +1095,8 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 	int ret = 0;
 	struct accumulate_struct *acc = data;
 
-	if (strncmp(sym_name, acc->desired_name, strlen(acc->desired_name)) !=
-	    0)
-		return 0;
-
-	sym_name = dup_wolabel(sym_name);
-	if (sym_name == NULL)
-		return -ENOMEM;
 	if (strcmp(sym_name, acc->desired_name) == 0)
 		ret = add_candidate_val(acc->vals, sym_val);
-	kfree(sym_name);
 	return ret;
 }
 #endif /* CONFIG_KALLSYMS */
