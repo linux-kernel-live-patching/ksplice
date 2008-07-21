@@ -212,7 +212,7 @@ int main(int argc, char **argv)
 
 	asection *p;
 	for (p = ibfd->sections; p != NULL; p = p->next) {
-		if (is_special(p->name) || starts_with(p->name, ".ksplice"))
+		if (is_special(p) || starts_with(p->name, ".ksplice"))
 			continue;
 		if (want_section(p) || mode("rmsyms"))
 			rm_some_relocs(ibfd, p);
@@ -503,8 +503,7 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 		asection *p;
 		for (p = ibfd->sections; p != NULL; p = p->next) {
 			if (strcmp(sym->name, p->name) == 0
-			    && !is_special(p->name)
-			    && !want_section(p))
+			    && !is_special(p) && !want_section(p))
 				break;
 		}
 		if (p != NULL)
@@ -834,11 +833,11 @@ int want_section(asection *sect)
 	return 0;
 }
 
-struct specsect *is_special(const char *name)
+struct specsect *is_special(asection *sect)
 {
 	struct specsect *ss;
 	for (ss = special_sections; ss != end_special_sections; ss++) {
-		if (strcmp(ss->sectname, name) == 0)
+		if (strcmp(ss->sectname, sect->name) == 0)
 			return ss;
 	}
 	return NULL;
