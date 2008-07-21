@@ -835,8 +835,10 @@ skip_using_system_map:
 		}
 		map->addr = r->blank_addr;
 		map->nameval = find_nameval(pack, r->sym_name, 1);
-		if (map->nameval == NULL)
+		if (map->nameval == NULL) {
+			kfree(map);
 			return -ENOMEM;
+		}
 		map->pcrel = r->pcrel;
 		map->addend = r->addend;
 		map->size = r->size;
@@ -867,8 +869,10 @@ skip_using_system_map:
 		}
 		map->addr = r->blank_addr;
 		map->nameval = find_nameval(pack, "ksplice_zero", 1);
-		if (map->nameval == NULL)
+		if (map->nameval == NULL) {
+			kfree(map);
 			return -ENOMEM;
+		}
 		map->nameval->val = 0;
 		map->nameval->status = VAL;
 		map->pcrel = r->pcrel;
