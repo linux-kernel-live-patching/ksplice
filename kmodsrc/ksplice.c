@@ -1531,8 +1531,7 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 		if (pack->debug_blob.data == NULL)
 			return -ENOMEM;
 		memcpy(pack->debug_blob.data, tmp, pack->debug_blob.size);
-		if (tmp != NULL)
-			kfree(tmp);
+		kfree(tmp);
 #endif
 #endif
 	}
