@@ -238,7 +238,7 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 
 	arelent **relocp;
 	for (relocp = orig_relocs.data;
-	     relocp < orig_relocs.data + orig_relocs.size; ++relocp) {
+	     relocp < orig_relocs.data + orig_relocs.size; relocp++) {
 		int rm_reloc = 0;
 		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
 
@@ -546,7 +546,7 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 	struct supersect *ss = fetch_supersect(abfd, looking_at, &isyms);
 	arelent **relocp;
 	for (relocp = ss->relocs.data;
-	     relocp != ss->relocs.data + ss->relocs.size; ++relocp) {
+	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 		asymbol *sym = *(*relocp)->sym_ptr_ptr;
 		if (sym->section == (asection *)looking_for) {
 			struct wsect *w = malloc(sizeof(*w));
@@ -676,7 +676,7 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 	arelent **relocp;
 	char *error_message;
 	for (relocp = ss->new_relocs.data;
-	     relocp < ss->new_relocs.data + ss->new_relocs.size; ++relocp) {
+	     relocp < ss->new_relocs.data + ss->new_relocs.size; relocp++) {
 		bfd_put(bfd_get_reloc_size((*relocp)->howto) * 8, obfd, 0,
 			ss->contents.data + (*relocp)->address);
 		if (bfd_install_relocation(obfd, *relocp, ss->contents.data,
