@@ -133,8 +133,8 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 						    char *result);
 #endif
 #endif
-static int kernel_lookup(const char *name_wlabel, struct list_head *vals);
-static int other_module_lookup(const char *name_wlabel, struct list_head *vals,
+static int kernel_lookup(const char *name, struct list_head *vals);
+static int other_module_lookup(const char *name, struct list_head *vals,
 			       const char *ksplice_name);
 #endif
 
@@ -1023,6 +1023,9 @@ static int compute_address(struct module_pack *pack, char *sym_name,
 {
 	int i, ret;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
+#ifdef CONFIG_KALLSYMS
+	const char *name;
+#endif /* CONFIG_KALLSYMS */
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return 0;
@@ -1045,10 +1048,11 @@ static int compute_address(struct module_pack *pack, char *sym_name,
 		return 0;
 
 #ifdef CONFIG_KALLSYMS
-	ret = kernel_lookup(sym_name, vals);
-	if (ret < 0)
-		return ret;
-	ret = other_module_lookup(sym_name, vals, pack->name);
+	name = dup_wolabel(sym_name);
+	ret = kernel_lookup(name, vals);
+	if (ret == 0)
+		ret = other_module_lookup(name, vals, pack->name);
+	kfree(name);
 	if (ret < 0)
 		return ret;
 #endif
@@ -1065,11 +1069,11 @@ static int compute_address(struct module_pack *pack, char *sym_name,
 }
 
 #ifdef CONFIG_KALLSYMS
-static int other_module_lookup(const char *name_wlabel, struct list_head *vals,
+static int other_module_lookup(const char *name, struct list_head *vals,
 			       const char *ksplice_name)
 {
 	int ret = 0;
-	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
+	struct accumulate_struct acc = { name, vals };
 	struct module *m;
 
 	if (acc.desired_name == NULL)
@@ -1085,7 +1089,6 @@ static int other_module_lookup(const char *name_wlabel, struct list_head *vals,
 	}
 	mutex_unlock(&module_mutex);
 
-	kfree(acc.desired_name);
 	return ret;
 }
 
@@ -1175,7 +1178,7 @@ static int brute_search_all(struct module_pack *pack,
 
 #ifdef CONFIG_KALLSYMS
 /* Modified version of Linux's kallsyms_lookup_name */
-static int kernel_lookup(const char *name_wlabel, struct list_head *vals)
+static int kernel_lookup(const char *name, struct list_head *vals)
 {
 	int ret;
 	char namebuf[KSYM_NAME_LEN + 1];
@@ -1183,10 +1186,6 @@ static int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 	unsigned long off;
 #endif /* LINUX_VERSION_CODE */
-
-	const char *name = dup_wolabel(name_wlabel);
-	if (name == NULL)
-		return -ENOMEM;
 
 /*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
  *  2.6.10 was the first release after this commit
@@ -1219,7 +1218,6 @@ static int kernel_lookup(const char *name_wlabel, struct list_head *vals)
 	}
 #endif /* LINUX_VERSION_CODE */
 
-	kfree(name);
 	return 0;
 }
 
@@ -1292,16 +1290,15 @@ void cleanup_module(void)
 {
 }
 
-static int kernel_lookup(const char *name_wlabel, struct list_head *vals)
+static int kernel_lookup(const char *name, struct list_head *vals)
 {
 	int ret;
-	struct accumulate_struct acc = { dup_wolabel(name_wlabel), vals };
+	struct accumulate_struct acc = { name, vals };
 	if (acc.desired_name == NULL)
 		return -ENOMEM;
 	ret = kallsyms_on_each_symbol(accumulate_matching_names, &acc);
 	if (ret < 0)
 		return ret;
-	kfree(acc.desired_name);
 	return 0;
 }
 #endif /* KSPLICE_STANDALONE */
