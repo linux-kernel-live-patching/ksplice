@@ -47,11 +47,19 @@ exit(0);
 
 sub view_kid {
 	$kid =~ s/^ksplice[_-]//;
-	if (-e "/proc/ksplice_$kid") {
-		print "Ksplice id $kid is present in the kernel\n";
-	} else {
+
+	if(! -d "/sys/module") {
+		print "/sys not mounted?\n";
+		exit(1);
+	}
+	if(! -d "/sys/module/ksplice_$kid/ksplice") {
 		print "Ksplice id $kid is not present in the kernel\n";
 	}
+
+	print "Ksplice id $kid is present in the kernel\n";
+	open STATE, '<', "/sys/module/ksplice_$kid/ksplice/state" or die $!;
+	print <STATE>;
+	close STATE;
 }
 
 sub view_file {
@@ -66,10 +74,12 @@ sub view_file {
 }
 
 sub view_list {
-	foreach(split(/\n/, runstr("lsmod"))) {
-		next unless my ($kid) = m/^ksplice_(\S*)\s/;
-		next unless (-e "/proc/ksplice_$kid");
-		print "$kid\n";
+	chdir("/sys/module");
+	foreach $kid (glob("ksplice_*")) {
+		$kid =~ s/^ksplice_//;
+		open STATE, '<', "/sys/module/ksplice_$kid/ksplice/state" or next;
+		print "$kid\n" if(<STATE> eq "applied\n");
+		close STATE;
 	}
 }
 

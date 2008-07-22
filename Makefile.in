@@ -65,7 +65,6 @@ install: default install-objmanip install-objdiff
 	install -m755 -D $(srcdir)/ksplice.pl $(DESTDIR)$(datadir)/ksplice/ksplice.pl
 	install -m644 -D ksplice.pm $(DESTDIR)$(datadir)/ksplice/ksplice.pm
 	install -m644 -D $(srcdir)/kmodsrc/ksplice.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.c
-	install -m644 -D $(srcdir)/kmodsrc/proc-root.S $(DESTDIR)$(datadir)/ksplice/kmodsrc/proc-root.S
 	install -m644 -D $(srcdir)/kmodsrc/ksplice.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.h
 	install -m644 -D $(srcdir)/kmodsrc/ksplice-run-pre.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice-run-pre.h
 	install -m644 -D $(srcdir)/kmodsrc/helper.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.c

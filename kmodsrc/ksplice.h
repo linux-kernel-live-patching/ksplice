@@ -57,6 +57,7 @@ enum ksplice_state_enum {
 };
 
 struct module_pack {
+	struct kobject kobj;
 	const char *name;
 	const char *target;
 	unsigned long map_printk;

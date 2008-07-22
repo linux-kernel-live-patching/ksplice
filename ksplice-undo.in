@@ -39,11 +39,17 @@ pod2usage(1) if($help || scalar(@ARGV != 1));
 my $kid = $ARGV[0];
 $kid =~ s/^ksplice[_-]//;
 
+if(! -d "/sys/module") {
+	print "/sys not mounted?\n";
+	exit(1);
+}
+if(! -d "/sys/module/ksplice_$kid/ksplice") {
+	print "Ksplice id $kid is not present in the kernel\n";
+	exit(1);
+}
+
 if($debug) {
-	if(! -d "/sys/module/ksplice_$kid") {
-		die "/sys/module/ksplice_$kid does not exist";
-	}
-	elsif(! -d "/sys/module/ksplice_$kid/parameters") {
+	if(! -d "/sys/module/ksplice_$kid/parameters") {
 		runval("echo $debug > /sys/module/ksplice_$kid/debug");
 	}
 	else {
@@ -51,12 +57,10 @@ if($debug) {
 	}
 }
 
-unless(-e "/proc/ksplice_$kid") {
-	print STDERR "Ksplice id $kid is not present in the kernel\n";
-	exit(0);
-}
-unless(runval("echo 1 > /proc/ksplice_$kid") == 0 and
-       (runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0)) {
+open STATE, '>', "/sys/module/ksplice_$kid/ksplice/state" or die $!;
+print STATE "reversed\n";
+close STATE;
+unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0) {
 	my $debugfs_out = mktemp("/tmp/ksplice-debug-XXXXXX");
 	my $debug = get_debugfs("ksplice_$kid", $debugfs_out);
 	if (!defined($debug)) {

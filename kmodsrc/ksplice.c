@@ -20,10 +20,11 @@
 #endif /* CONFIG_DEBUG_FS */
 #include <linux/errno.h>
 #include <linux/kallsyms.h>
+#include <linux/kobject.h>
 #include <linux/kthread.h>
-#include <linux/proc_fs.h>
 #include <linux/sched.h>
 #include <linux/stop_machine.h>
+#include <linux/sysfs.h>
 #include <linux/time.h>
 #include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
@@ -166,10 +167,6 @@ static int ends_with(const char *str, const char *suffix);
 /* primary */
 static int activate_primary(struct module_pack *pack);
 static int resolve_patch_symbols(struct module_pack *pack);
-static int procfile_read(char *buffer, char **buffer_location, off_t offset,
-			 int buffer_length, int *eof, void *data);
-static int procfile_write(struct file *file, const char *buffer,
-			  unsigned long count, void *data);
 static int __apply_patches(void *packptr);
 static int __reverse_patches(void *packptr);
 static int check_each_task(struct module_pack *pack);
@@ -196,18 +193,95 @@ static int search_for_match(struct module_pack *pack,
 static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		    unsigned long run_addr, unsigned long pre_addr);
 
-extern struct proc_dir_entry proc_root;
+static void reverse_patches(struct module_pack *pack);
+
+struct ksplice_attribute {
+	struct attribute attr;
+	ssize_t (*show)(struct module_pack *pack, char *buf);
+	ssize_t (*store)(struct module_pack *pack, const char *buf, size_t len);
+};
+
+static ssize_t ksplice_attr_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct ksplice_attribute *attribute =
+	    container_of(attr, struct ksplice_attribute, attr);
+	struct module_pack *pack = container_of(kobj, struct module_pack, kobj);
+	if (attribute->show == NULL)
+		return -EIO;
+	return attribute->show(pack, buf);
+}
+
+static ssize_t ksplice_attr_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buf, size_t len)
+{
+	struct ksplice_attribute *attribute =
+	    container_of(attr, struct ksplice_attribute, attr);
+	struct module_pack *pack = container_of(kobj, struct module_pack, kobj);
+	if (attribute->store == NULL)
+		return -EIO;
+	return attribute->store(pack, buf, len);
+}
+
+static struct sysfs_ops ksplice_sysfs_ops = {
+	.show = ksplice_attr_show,
+	.store = ksplice_attr_store,
+};
+
+static void ksplice_release(struct kobject *kobj)
+{
+}
+
+static ssize_t state_show(struct module_pack *pack, char *buf)
+{
+	switch (pack->state) {
+	case KSPLICE_PREPARING:
+		return snprintf(buf, PAGE_SIZE, "preparing\n");
+	case KSPLICE_APPLIED:
+		return snprintf(buf, PAGE_SIZE, "applied\n");
+	case KSPLICE_REVERSED:
+		return snprintf(buf, PAGE_SIZE, "reversed\n");
+	}
+	return 0;
+}
+
+static ssize_t state_store(struct module_pack *pack,
+			   const char *buf, size_t len)
+{
+	if (strncmp(buf, "reversed\n", len) == 0)
+		reverse_patches(pack);
+	return len;
+}
+
+static struct ksplice_attribute state_attribute =
+	__ATTR(state, 0644, state_show, state_store);
+
+static struct attribute *ksplice_attrs[] = {
+	&state_attribute.attr,
+	NULL
+};
+
+static struct kobj_type ksplice_ktype = {
+	.sysfs_ops = &ksplice_sysfs_ops,
+	.release = ksplice_release,
+	.default_attrs = ksplice_attrs,
+};
 
 void cleanup_ksplice_module(struct module_pack *pack)
 {
-	remove_proc_entry(pack->name, &proc_root);
 	clear_debug_buf(pack);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+	kobject_put(&pack->kobj);
+#else /* LINUX_VERSION_CODE < */
+/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
+	kobject_unregister(&pack->kobj);
+#endif /* LINUX_VERSION_CODE */
 }
 
 static int activate_primary(struct module_pack *pack)
 {
 	int i, ret;
-	struct proc_dir_entry *proc_entry;
 
 	if (process_ksplice_relocs(pack, pack->primary_relocs,
 				   pack->primary_relocs_end, 0) != 0)
@@ -221,22 +295,6 @@ static int activate_primary(struct module_pack *pack)
 		return -1;
 #endif /* CONFIG_MODULE_UNLOAD */
 
-	proc_entry = create_proc_entry(pack->name, 0644, NULL);
-	if (proc_entry == NULL) {
-		print_abort(pack, "primary module: could not create proc "
-			    "entry");
-		return -1;
-	}
-
-	proc_entry->read_proc = procfile_read;
-	proc_entry->write_proc = procfile_write;
-	proc_entry->data = pack;
-	proc_entry->owner = pack->primary;
-	proc_entry->mode = S_IFREG | S_IRUSR | S_IWUSR;
-	proc_entry->uid = 0;
-	proc_entry->gid = 0;
-	proc_entry->size = 0;
-
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
 		ret = stop_machine_run(__apply_patches, pack, NR_CPUS);
@@ -247,7 +305,6 @@ static int activate_primary(struct module_pack *pack)
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
 	if (pack->state != KSPLICE_APPLIED) {
-		remove_proc_entry(pack->name, &proc_root);
 		if (ret == -EAGAIN)
 			print_abort(pack, "stack check: to-be-replaced code is "
 				    "busy");
@@ -283,26 +340,18 @@ static int resolve_patch_symbols(struct module_pack *pack)
 	return 0;
 }
 
-static int procfile_read(char *buffer, char **buffer_location,
-			 off_t offset, int buffer_length, int *eof, void *data)
-{
-	return 0;
-}
-
-static int procfile_write(struct file *file, const char *buffer,
-			  unsigned long count, void *data)
+void reverse_patches(struct module_pack *pack)
 {
 	int i, ret;
-	struct module_pack *pack = data;
 
 	clear_debug_buf(pack);
 	if (init_debug_buf(pack) < 0)
-		return count;
+		return;
 	ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
 		pack->name);
 
 	if (pack->state != KSPLICE_APPLIED)
-		return count;
+		return;
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
@@ -322,7 +371,7 @@ static int procfile_write(struct file *file, const char *buffer,
 		ksdebug(pack, 0, KERN_ERR "ksplice: Update module %s is in use "
 			"by another module\n", pack->name);
 
-	return count;
+	return;
 }
 
 static int __apply_patches(void *packptr)
@@ -369,8 +418,14 @@ static int __reverse_patches(void *packptr)
 		return 0;
 
 #ifdef CONFIG_MODULE_UNLOAD
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,23)
+	if (module_refcount(pack->primary) != 1)
+		return -EBUSY;
+#else /* LINUX_VERSION_CODE < */
+/* 0ab66088c855eca68513bdd7442a426c4b374ced was after 2.6.22 */
 	if (module_refcount(pack->primary) != 2)
 		return -EBUSY;
+#endif /* LINUX_VERSION_CODE */
 #endif /* CONFIG_MODULE_UNLOAD */
 
 	if (check_each_task(pack) < 0)
@@ -509,6 +564,36 @@ int init_ksplice_module(struct module_pack *pack)
 			       pack->helper_parainstructions_end);
 	}
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
+	ret = kobject_init_and_add(&pack->kobj, &ksplice_ktype,
+				   &pack->primary->mkobj.kobj, "ksplice");
+#else /* LINUX_VERSION_CODE < */
+	ret = kobject_set_name(&pack->kobj, "ksplice");
+	if (ret)
+		return -1;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+/* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
+	pack->kobj.parent = &pack->primary->mkobj.kobj;
+#else /* LINUX_VERSION_CODE < */
+	pack->kobj.parent = &pack->primary->mkobj->kobj;
+#endif /* LINUX_VERSION_CODE */
+	pack->kobj.ktype = &ksplice_ktype;
+	ret = kobject_register(&pack->kobj);
+#endif /* LINUX_VERSION_CODE */
+
+	if (ret != 0)
+		return -ENOMEM;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
+/* 312c004d36ce6c739512bac83b452f4c20ab1f62 was after 2.6.14 */
+	kobject_uevent(&pack->kobj, KOBJ_ADD);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+/* 12025235884570ba7f02a6f427f973ac6be7ec54 was after 2.6.9 */
+	kobject_uevent(&pack->kobj, KOBJ_ADD, NULL);
+#endif /* LINUX_VERSION_CODE */
 
 	ksdebug(pack, 0, KERN_INFO "ksplice_h: Preparing and checking %s\n",
 		pack->name);
