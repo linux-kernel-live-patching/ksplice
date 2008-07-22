@@ -18,6 +18,10 @@
 use Getopt::Long;
 use Cwd 'abs_path', 'getcwd';
 use Pod::Usage;
+use File::Basename;
+use File::Copy;
+use File::Path;
+use Fatal qw(copy rename move mkdir rmtree);
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
@@ -52,7 +56,7 @@ pod2usage(1) if($actions != 1);
 my ($linuxtree) = (abs_path($ARGV[0]));
 
 my $tmpdir = init_tmpdir();
-runval("cp", "--", $patchfile, "$tmpdir/patch") if(defined $patchfile);
+copy($patchfile, "$tmpdir/patch") if(defined $patchfile);
 $patchfile = "$tmpdir/patch";
 
 $patch_opt = "-p0" if(defined $diffext);
@@ -89,7 +93,7 @@ if (!defined($standalone)) {
 }
 @standalone_flag = qw(KSPLICE_STANDALONE=1) if ($standalone == 1);
 
-runval("cp", "--", "$orig_config_dir/.config", $linuxtree);
+copy("$orig_config_dir/.config", "$linuxtree/.config");
 
 my @chars = ('a'..'z', 0..9);
 $kid = join '', map { $chars[int(rand(36))] } 0..7 if(!defined $kid);
@@ -149,18 +153,17 @@ if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
 	die "Aborting: Applying the patch appears to break the kernel build";
 }
 
-runval("mkdir", "-p", "--", "$tmpdir/collect");
+mkpath("$tmpdir/collect");
 
 my @modules = ();
 foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
 	open MOD, '<', $_;
 	chomp(my $module = <MOD>);
 	close MOD;
-	runval("cp", "$module.o.KSPLICE", "$tmpdir/collect/");
-	runval("cp", "$module.o.KSPLICE_primary", "$tmpdir/collect/");
-	runval("cp", "$module.o.KSPLICE_helper", "$tmpdir/collect/");
-	$module =~ s/^.*\///;
-	push @modules, $module;
+	copy($_, "$tmpdir/collect/" . basename($_))
+	    foreach("$module.o.KSPLICE", "$module.o.KSPLICE_primary",
+		    "$module.o.KSPLICE_helper");
+	push @modules, basename($module);
 }
 
 if(!@modules) {
@@ -184,14 +187,14 @@ for my $module (@modules) {
 
 	runcd($tmpdir);
 	runval("cp", "-a", "--", "$datadir/kmodsrc", "kmodsrc-$module");
-	runval("mv", "collect/$module.o.KSPLICE_primary", "kmodsrc-$module/collection.o.primary");
-	runval("mv", "collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
+	rename("collect/$module.o.KSPLICE_primary", "kmodsrc-$module/collection.o.primary");
+	rename("collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
 	runcd("kmodsrc-$module");
 
 	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary.postld", "collection.o.primary");
-	runval("cp", "collection.o.primary.postld", "collection.o.primary");
+	copy("collection.o.primary.postld", "collection.o.primary");
 	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.helper.postld", "collection.o.helper");
-	runval("cp", "collection.o.helper.postld", "collection.o.helper");
+	copy("collection.o.helper.postld", "collection.o.helper");
 
 ###############################################################################
 # PHASE 4: Build the kernel modules and create the update tarball             #
@@ -207,24 +210,27 @@ for my $module (@modules) {
 }
 
 runcd($tmpdir);
-runval("mkdir", $ksplice);
-runval("mv", "--", $patchfile, $ksplice);
+mkdir($ksplice);
+move($patchfile, $ksplice);
 for my $module (@modules) {
 	my $kid_m = "${kid}_$module";
 	$kid_m =~ s/-/_/g;
 	my $ksplice_m = "ksplice-$kid_m";
-	runval("mv", "--", "kmodsrc-$module/$ksplice_m.ko", "kmodsrc-$module/$ksplice_m-helper.ko", $ksplice);
+	rename("kmodsrc-$module/$ksplice_m.ko", "$ksplice/$ksplice_m.ko");
+	rename("kmodsrc-$module/$ksplice_m-helper.ko", "$ksplice/$ksplice_m-helper.ko");
 }
-runval("touch", "$ksplice/need_modprobe_ksplice") if ($ksplice_in_kernel eq 'm' && ! $standalone);
-runval("mkdir", "$ksplice/debug");
-runval("mv", "collect", "$ksplice/debug");
+if($ksplice_in_kernel eq 'm' && ! $standalone) {
+	open FILE, '>', "$ksplice/need_modprobe_ksplice" and close FILE or die;
+}
+mkdir("$ksplice/debug");
+rename("collect", "$ksplice/debug/collect");
 for my $module (@modules) {
-	runval("mv", "kmodsrc-$module", "$ksplice/debug");
+	rename("kmodsrc-$module", "$ksplice/debug/kmodsrc-$module");
 }
 runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
-runval("cp", "--", "$ksplice.tar.gz", $origdir);
+copy("$ksplice.tar.gz", "$origdir/$ksplice.tar.gz");
 runcd($origdir);
-runval("rm", "-rf", "--", "$tmpdir");
+rmtree($tmpdir);
 
 print "Ksplice update tarball written to $ksplice.tar.gz\n";
 
