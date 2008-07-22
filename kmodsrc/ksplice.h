@@ -78,7 +78,6 @@ struct module_pack {
 	int *debug;
 #ifdef CONFIG_DEBUG_FS
 	struct debugfs_blob_wrapper debug_blob;
-	int debug_buf_size;
 	struct dentry *debugfs_dentry;
 #endif /* CONFIG_DEBUG_FS */
 };
