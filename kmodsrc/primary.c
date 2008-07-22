@@ -73,7 +73,7 @@ EXPORT_SYMBOL_GPL(pack);
 
 static int init_primary(void)
 {
-	pack.debug = debug;
+	pack.debug = &debug;
 	return 0;
 }
 

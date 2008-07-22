@@ -394,10 +394,10 @@ static int check_each_task(struct module_pack *pack)
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
 		if (check_task(pack, p) < 0) {
-			if (pack->debug == 1) {
-				pack->debug = 2;
+			if (*pack->debug == 1) {
+				*pack->debug = 2;
 				check_task(pack, p);
-				pack->debug = 1;
+				*pack->debug = 1;
 			}
 			status = -EAGAIN;
 		}
@@ -643,7 +643,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, "(r_a=%" ADDR " p_a=%" ADDR " s=%ld)\n",
 			run_addr, pre_addr, s->size);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
-		if (pack->debug >= 1) {
+		if (*pack->debug >= 1) {
 			run_pre_cmp(pack, run_addr, pre_addr, s->size, 1);
 			set_temp_myst_relocs(pack, NOVAL);
 		}
@@ -1148,8 +1148,8 @@ static int brute_search_all(struct module_pack *pack,
 
 	ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: searching for %s\n",
 		s->name);
-	saved_debug = pack->debug;
-	pack->debug = 0;
+	saved_debug = *pack->debug;
+	*pack->debug = 0;
 
 	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
@@ -1173,7 +1173,7 @@ static int brute_search_all(struct module_pack *pack,
 		}
 	}
 
-	pack->debug = saved_debug;
+	*pack->debug = saved_debug;
 	if (ret == 1)
 		ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: found %s "
 			"in %s\n", s->name, where);
@@ -1510,7 +1510,7 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 	va_list args;
 	int size, old_size, new_size;
 
-	if (pack->debug < level)
+	if (*pack->debug < level)
 		return 0;
 
 	va_start(args, fmt);

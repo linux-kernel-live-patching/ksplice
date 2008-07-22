@@ -75,7 +75,7 @@ struct module_pack {
 	struct list_head *reloc_addrmaps;
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
-	int debug;
+	int *debug;
 #ifdef CONFIG_DEBUG_FS
 	struct debugfs_blob_wrapper debug_blob;
 	int debug_buf_size;
@@ -180,7 +180,7 @@ extern void clear_debug_buf(struct module_pack *pack);
 extern int ksdebug(struct module_pack *pack, int level, const char *fmt, ...);
 #else /* CONFIG_DEBUG_FS */
 #define ksdebug(pack, level, fmt, ...) \
-	do { if ((pack)->debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
+	do { if (*(pack)->debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
 static inline int init_debug_buf(struct module_pack *pack)
 {
 	return 0;
