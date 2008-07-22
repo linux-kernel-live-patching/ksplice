@@ -294,6 +294,10 @@ static int procfile_write(struct file *file, const char *buffer,
 {
 	int i, ret;
 	struct module_pack *pack = data;
+
+	clear_debug_buf(pack);
+	if (init_debug_buf(pack) < 0)
+		return count;
 	ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
 		pack->name);
 
