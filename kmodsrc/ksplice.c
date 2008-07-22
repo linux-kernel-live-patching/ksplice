@@ -1496,16 +1496,12 @@ void clear_debug_buf(struct module_pack *pack)
 
 int init_debug_buf(struct module_pack *pack)
 {
-	pack->debug_blob.size = roundup_pow_of_two(1);
-	pack->debug_blob.data = kmalloc(pack->debug_blob.size, GFP_KERNEL);
-	if (pack->debug_blob.data == NULL)
-		return -ENOMEM;
+	pack->debug_blob.size = 0;
+	pack->debug_blob.data = NULL;
 	pack->debugfs_dentry = debugfs_create_blob(pack->name, 700, NULL,
 						   &pack->debug_blob);
-	if (pack->debugfs_dentry == NULL) {
-		kfree(pack->debug_blob.data);
+	if (pack->debugfs_dentry == NULL)
 		return -ENOMEM;
-	}
 	return 0;
 }
 
@@ -1521,8 +1517,10 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 	/* size includes the trailing '\0' */
 	size = 1 + vsnprintf(pack->debug_blob.data, 0, fmt, args);
 	va_end(args);
-	old_size = roundup_pow_of_two(pack->debug_blob.size);
-	new_size = roundup_pow_of_two(size + pack->debug_blob.size);
+	old_size = pack->debug_blob.size == 0 ? 0 :
+	    roundup_pow_of_two(pack->debug_blob.size);
+	new_size = pack->debug_blob.size + size == 0 ? 0 :
+	    roundup_pow_of_two(pack->debug_blob.size + size);
 	if (new_size > old_size) {
 		char *tmp = pack->debug_blob.data;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
