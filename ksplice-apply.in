@@ -62,20 +62,11 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		die "Error loading primary module $primary";
 	}
 	if(runval_raw("insmod $helper") != 0) {
-		my $debugfsdir = init_tmpdir();
-		my $debugfs_out = mktemp("/tmp/ksplice-debug-XXXXXX");
 		(my $modname = $primary) =~ s/\.ko$//;
 		$modname =~ s/-/_/g;
-		runval_raw(qw(mount -t debugfs debugfs), $debugfsdir);
-		my $debug;
-		if (-e "$debugfsdir/$modname") {
-			$debug = runstr(qw(cp -a), "$debugfsdir/$modname",
-					"$debugfs_out");
-			$debug = runstr("cat", "$debugfsdir/$modname");
-			runval_raw(qw(umount), $debugfsdir);
-			runval_raw(qw(rmdir), $debugfsdir);
-		}
-		else {
+		my $debugfs_out = mktemp("/tmp/ksplice-debug-XXXXXX");
+		my $debug = get_debugfs($modname, $debugfs_out);
+		if (!defined($debug)) {
 			my $dmesg = runstr("dmesg | grep ksplice");
 			while($dmesg =~ /ksplice_h: Preparing and checking/) {
 				$dmesg = $';

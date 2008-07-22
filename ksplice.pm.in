@@ -5,7 +5,7 @@ use strict;
 use warnings;
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw($datadir $libexecdir $verbose $version_str init_tmpdir runcd runstr runval runval_raw runsuc unpack_update);
+our @EXPORT = qw($datadir $libexecdir $verbose $version_str init_tmpdir runcd runstr runval runval_raw runsuc unpack_update get_debugfs);
 
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
 our $version_str = "Ksplice version PACKAGE_VERSION\n";
@@ -80,6 +80,20 @@ sub unpack_update {
 	my ($ksplice) = glob('*/');
 	chop($ksplice); # remove the trailing slash
 	return $ksplice;
+}
+
+sub get_debugfs {
+	my ($modname, $debugfs_out) = @_;
+	my $debug;
+	my $debugfsdir = init_tmpdir();
+	runval_raw(qw(mount -t debugfs debugfs), $debugfsdir);
+	if (-e "$debugfsdir/$modname") {
+		system(qw(cp -a), "$debugfsdir/$modname", "$debugfs_out");
+		$debug = runstr("cat", "$debugfsdir/$modname");
+		runval_raw(qw(rmdir), $debugfsdir);
+	}
+	runval_raw(qw(umount), $debugfsdir);
+	return $debug;
 }
 
 1;

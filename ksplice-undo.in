@@ -22,6 +22,7 @@ use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
+use File::Temp;
 
 my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
@@ -56,12 +57,18 @@ unless(-e "/proc/ksplice_$kid") {
 }
 unless(runval("echo 1 > /proc/ksplice_$kid") == 0 and
        (runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0)) {
-	my $dmesg = runstr("dmesg | grep ksplice");
-	while($dmesg =~ /ksplice: Preparing to reverse/) {
-		$dmesg = $';
+	my $debugfs_out = mktemp("/tmp/ksplice-debug-XXXXXX");
+	my $debug = get_debugfs("ksplice_$kid", $debugfs_out);
+	if (!defined($debug)) {
+		my $dmesg = runstr("dmesg | grep ksplice");
+		while($dmesg =~ /ksplice: Preparing to reverse/) {
+			$dmesg = $';
+		}
+		$debug = $dmesg;
 	}
-
-	if($dmesg =~ /to-be-reversed code is busy/) {
+	print "Ksplice debugging output:\n";
+	print "$debug";
+	if($debug =~ /to-be-reversed code is busy/) {
 		print <<END
 
 Ksplice has aborted the undo operation because it appears that the code that
@@ -71,7 +78,7 @@ to-be-changed functions is not on a thread's kernel stack.
 
 END
 	}
-
+	print("Debugging output saved to $debugfs_out\n");
 	die;
 }
 
