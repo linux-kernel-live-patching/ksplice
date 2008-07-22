@@ -163,9 +163,6 @@ static int ends_with(const char *str, const char *suffix);
 		}						\
 	} while (0)
 
-int init_module(void);
-void cleanup_module(void);
-
 /* primary */
 static int activate_primary(struct module_pack *pack);
 static int resolve_patch_symbols(struct module_pack *pack);
@@ -1289,14 +1286,17 @@ static int module_on_each_symbol(struct module *mod,
 EXPORT_SYMBOL_GPL(init_ksplice_module);
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
-int init_module(void)
+static int init_ksplice(void)
 {
 	return 0;
 }
 
-void cleanup_module(void)
+static void cleanup_ksplice(void)
 {
 }
+
+module_init(init_ksplice);
+module_exit(cleanup_ksplice);
 
 static int kernel_lookup(const char *name, struct list_head *vals)
 {

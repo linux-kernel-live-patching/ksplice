@@ -71,13 +71,13 @@ struct module_pack pack = {
 };
 EXPORT_SYMBOL_GPL(pack);
 
-int init_module(void)
+static int init_primary(void)
 {
 	pack.debug = debug;
 	return 0;
 }
 
-void cleanup_module(void)
+static void cleanup_primary(void)
 {
 	cleanup_ksplice_module(&pack);
 }
@@ -88,3 +88,6 @@ int helper_init_module(void)
 	return init_ksplice_module(&pack);
 }
 EXPORT_SYMBOL_GPL(helper_init_module);
+
+module_init(init_primary);
+module_exit(cleanup_primary);

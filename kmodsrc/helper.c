@@ -38,7 +38,7 @@ extern struct module_pack pack;
 #define helper_init_module KSPLICE_UNIQ(helper_init_module)
 extern int helper_init_module(void);
 
-int init_module(void)
+static int init_helper(void)
 {
 	pack.helper_relocs = ksplice_relocs;
 	pack.helper_relocs_end = ksplice_relocs_end;
@@ -51,6 +51,9 @@ int init_module(void)
 	return helper_init_module();
 }
 
-void cleanup_module(void)
+static void cleanup_helper(void)
 {
 }
+
+module_init(init_helper);
+module_exit(cleanup_helper);
