@@ -206,10 +206,10 @@ for my $module (@modules) {
 	rename("collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
 	runcd("kmodsrc-$module");
 
-	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary.postld", "collection.o.primary");
-	copy("collection.o.primary.postld", "collection.o.primary");
-	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.helper.postld", "collection.o.helper");
-	copy("collection.o.helper.postld", "collection.o.helper");
+	rename("collection.o.primary", "collection.o.primary.preld");
+	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary", "collection.o.primary.preld");
+	rename("collection.o.helper", "collection.o.helper.preld");
+	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.helper", "collection.o.helper.preld");
 
 ###############################################################################
 # PHASE 4: Build the kernel modules and create the update tarball             #
