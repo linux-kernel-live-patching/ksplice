@@ -1513,6 +1513,12 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 	if (*pack->debug < level)
 		return 0;
 
+	if ((pack->debug_blob.data == NULL ||
+	     ((char *)pack->debug_blob.data)[pack->debug_blob.size - 1] == '\n')
+	    && strlen(fmt) >= 3 && fmt[0] == '<' && fmt[1] >= '0' &&
+	    fmt[1] <= '7' && fmt[2] == '>')
+		fmt += 3;
+
 	va_start(args, fmt);
 	/* size includes the trailing '\0' */
 	size = 1 + vsnprintf(pack->debug_blob.data, 0, fmt, args);
