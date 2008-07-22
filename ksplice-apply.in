@@ -74,7 +74,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 			$debug = $dmesg;
 		}
 		runval_raw("rmmod $primary") if $unload;
-		print "Ksplice debugging output:\n";
+		print STDERR "Error applying Ksplice update $kid:\n";
 		print "$debug";
 
 		my $bugreport = 'PACKAGE_BUGREPORT';

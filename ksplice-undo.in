@@ -52,7 +52,7 @@ if($debug) {
 }
 
 unless(-e "/proc/ksplice_$kid") {
-	print "Ksplice id $kid is not present in the kernel\n";
+	print STDERR "Ksplice id $kid is not present in the kernel\n";
 	exit(0);
 }
 unless(runval("echo 1 > /proc/ksplice_$kid") == 0 and
@@ -66,7 +66,7 @@ unless(runval("echo 1 > /proc/ksplice_$kid") == 0 and
 		}
 		$debug = $dmesg;
 	}
-	print "Ksplice debugging output:\n";
+	print STDERR "Error undoing Ksplice update $kid:\n";
 	print "$debug";
 	if($debug =~ /to-be-reversed code is busy/) {
 		print <<END
