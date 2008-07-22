@@ -29,7 +29,7 @@ struct ksplice_patch {
 #ifdef __KERNEL__
 #ifdef CONFIG_DEBUG_FS
 #include <linux/debugfs.h>
-#endif
+#endif /* CONFIG_DEBUG_FS */
 #include <linux/module.h>
 #include <linux/pagemap.h>
 #include <linux/sched.h>
@@ -39,19 +39,18 @@ struct ksplice_patch {
 #define ADDR "08lx"
 #elif BITS_PER_LONG == 64
 #define ADDR "016lx"
-#endif
-#ifdef KSPLICE_STANDALONE
+#endif /* BITS_PER_LONG */
+
 #if defined(CONFIG_PARAVIRT) && defined(CONFIG_X86_64) &&	\
-	LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25) &&		\
-	LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+    LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25) &&		\
+    LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 /* Linux 2.6.25 and 2.6.26 apply paravirt replacements to the core
  * kernel but not modules on x86-64.  If we are patching the core
  * kernel, we need to apply the same replacements to our update
  * modules in order for run-pre matching to succeed.
  */
 #define KSPLICE_NEED_PARAINSTRUCTIONS 1
-#endif
-#endif
+#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
 enum ksplice_state_enum {
 	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
@@ -68,13 +67,11 @@ struct module_pack {
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
 	const struct ksplice_size *helper_sizes, *helper_sizes_end;
 	struct ksplice_patch *patches, *patches_end;
-#ifdef KSPLICE_STANDALONE
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	struct paravirt_patch_site
 	    *primary_parainstructions, *primary_parainstructions_end,
 	    *helper_parainstructions, *helper_parainstructions_end;
-#endif
-#endif
+#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 	struct list_head *reloc_addrmaps;
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
@@ -83,18 +80,16 @@ struct module_pack {
 	struct debugfs_blob_wrapper debug_blob;
 	int debug_buf_size;
 	struct dentry *debugfs_dentry;
-#endif
+#endif /* CONFIG_DEBUG_FS */
 };
 
-#ifdef KSPLICE_STANDALONE
+#if defined(CONFIG_DEBUG_FS) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
 /* Old kernels don't have debugfs_create_blob */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17) && defined(CONFIG_DEBUG_FS)
 struct debugfs_blob_wrapper {
 	void *data;
 	unsigned long size;
 };
-#endif
-#endif
+#endif /* CONFIG_DEBUG_FS && LINUX_VERSION_CODE */
 
 struct reloc_nameval {
 	struct list_head list;
@@ -113,20 +108,14 @@ struct reloc_addrmap {
 	long dst_mask;
 };
 
-#ifndef KSPLICE_STANDALONE
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 static inline int virtual_address_mapped(unsigned long addr)
 {
 	unsigned int level;
 	return pte_present(*lookup_address(addr, &level));
 }
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+#else /* LINUX_VERSION_CODE < */
 /* f0646e43acb18f0e00b00085dc88bc3f403e7930 was after 2.6.24 */
-static inline int virtual_address_mapped(unsigned long addr)
-{
-	unsigned int level;
-	return pte_present(*lookup_address(addr, &level));
-}
-#else
 static inline int virtual_address_mapped(unsigned long addr)
 {
 	pgd_t *pgd = pgd_offset_k(addr);
@@ -161,7 +150,7 @@ static inline int virtual_address_mapped(unsigned long addr)
 
 	return 1;
 }
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 				   int create);

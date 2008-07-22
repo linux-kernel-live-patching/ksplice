@@ -17,7 +17,7 @@
 #include <linux/module.h>
 #ifdef CONFIG_DEBUG_FS
 #include <linux/debugfs.h>
-#endif
+#endif /* CONFIG_DEBUG_FS */
 #include <linux/errno.h>
 #include <linux/kallsyms.h>
 #include <linux/kthread.h>
@@ -25,27 +25,29 @@
 #include <linux/sched.h>
 #include <linux/stop_machine.h>
 #include <linux/time.h>
-#ifdef KSPLICE_STANDALONE
-/* linux/uaccess.h doesn't exist in kernels before 2.6.18 */
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+#include <linux/uaccess.h>
+#else /* LINUX_VERSION_CODE < */
+/* linux/uaccess.h doesn't exist in kernels before 2.6.18 */
+#include <asm/uaccess.h>
+#endif /* LINUX_VERSION_CODE */
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 #include <asm/alternative.h>
-#endif
-#include <asm/uaccess.h>
+#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
+#ifdef KSPLICE_STANDALONE
 #include "ksplice.h"
 #include "ksplice-run-pre.h"
-#else
-#include <linux/uaccess.h>
+#else /* !KSPLICE_STANDALONE */
 #include <linux/ksplice.h>
 #include <asm/ksplice-run-pre.h>
-#endif
+#endif /* KSPLICE_STANDALONE */
 
-#ifdef KSPLICE_STANDALONE
-
-/* Old kernels do not have kcalloc */
-#define kcalloc ksplice_kcalloc
-static inline void *ksplice_kcalloc(size_t n, size_t size,
-				    typeof(GFP_KERNEL) flags)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
+/* Old kernels do not have kcalloc
+ * e629946abd0bb8266e9c3d0fd1bff2ef8dec5443 was after 2.6.8
+ */
+static inline void *kcalloc(size_t n, size_t size, typeof(GFP_KERNEL) flags)
 {
 	char *mem;
 	if (n != 0 && size > ULONG_MAX / n)
@@ -55,24 +57,26 @@ static inline void *ksplice_kcalloc(size_t n, size_t size,
 		memset(mem, 0, n * size);
 	return mem;
 }
+#endif
 
-/* Old kernels use semaphore instead of mutex
-   97d1f15b7ef52c1e9c28dc48b454024bb53a5fd2 was after 2.6.16 */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
+/* Old kernels use semaphore instead of mutex
+ * 97d1f15b7ef52c1e9c28dc48b454024bb53a5fd2 was after 2.6.16
+ */
 #define mutex semaphore
 #define mutex_lock down
 #define mutex_unlock up
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
-#endif /* task_thread_info */
+#endif /* !task_thread_info */
 
 #ifdef CONFIG_X86
 #ifdef __ASM_X86_PROCESSOR_H	/* New unified x86 */
 #define KSPLICE_IP(x) ((x)->thread.ip)
 #define KSPLICE_SP(x) ((x)->thread.sp)
-#elif defined CONFIG_X86_64	/* Old x86 64-bit */
+#elif defined(CONFIG_X86_64)	/* Old x86 64-bit */
 /* The IP is on the stack, so we don't need to check it separately.
  * Instead, we need to prevent Ksplice from patching thread_return.
  */
@@ -84,6 +88,8 @@ extern const char thread_return[];
 #define KSPLICE_SP(x) ((x)->thread.esp)
 #endif /* __ASM_X86_PROCESSOR_H */
 #endif /* CONFIG_X86 */
+
+#ifdef KSPLICE_STANDALONE
 
 static int bootstrapped = 0;
 
@@ -100,9 +106,6 @@ extern const struct ksplice_reloc ksplice_init_relocs[],
 extern struct list_head modules;
 extern struct mutex module_mutex;
 
-#else /* KSPLICE_STANDALONE */
-#define KSPLICE_IP(x) ((x)->thread.ip)
-#define KSPLICE_SP(x) ((x)->thread.sp)
 #endif /* KSPLICE_STANDALONE */
 
 static int process_ksplice_relocs(struct module_pack *pack,
@@ -124,6 +127,9 @@ static int label_offset(const char *sym_name);
 static const char *dup_wolabel(const char *sym_name);
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val);
+static int kernel_lookup(const char *name, struct list_head *vals);
+static int other_module_lookup(const char *name, struct list_head *vals,
+			       const char *ksplice_name);
 #ifdef KSPLICE_STANDALONE
 static int module_on_each_symbol(struct module *mod,
 				 int (*fn) (void *, const char *,
@@ -131,18 +137,14 @@ static int module_on_each_symbol(struct module *mod,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 						    char *result);
-#endif
-#endif
-static int kernel_lookup(const char *name, struct list_head *vals);
-static int other_module_lookup(const char *name, struct list_head *vals,
-			       const char *ksplice_name);
-#endif
+#endif /* LINUX_VERSION_CODE */
+#endif /* KSPLICE_STANDALONE */
+#endif /* CONFIG_KALLSYMS */
 
 #ifdef KSPLICE_STANDALONE
 static int brute_search_all(struct module_pack *pack,
 			    const struct ksplice_size *s);
-
-#endif
+#endif /* KSPLICE_STANDALONE */
 
 static int add_candidate_val(struct list_head *vals, unsigned long val);
 static void release_vals(struct list_head *vals);
@@ -187,8 +189,8 @@ static int add_dependency_on_address(struct module_pack *pack,
 static int add_patch_dependencies(struct module_pack *pack);
 #ifdef KSPLICE_STANDALONE
 static int use_module(struct module *a, struct module *b);
-#endif
-#endif
+#endif /* KSPLICE_STANDALONE */
+#endif /* CONFIG_MODULE_UNLOAD */
 
 /* helper */
 static int activate_helper(struct module_pack *pack);
@@ -220,7 +222,7 @@ static int activate_primary(struct module_pack *pack)
 #ifdef CONFIG_MODULE_UNLOAD
 	if (add_patch_dependencies(pack) != 0)
 		return -1;
-#endif
+#endif /* CONFIG_MODULE_UNLOAD */
 
 	proc_entry = create_proc_entry(pack->name, 0644, NULL);
 	if (proc_entry == NULL) {
@@ -368,7 +370,7 @@ static int __reverse_patches(void *packptr)
 #ifdef CONFIG_MODULE_UNLOAD
 	if (module_refcount(pack->primary) != 2)
 		return -EBUSY;
-#endif
+#endif /* CONFIG_MODULE_UNLOAD */
 
 	if (check_each_task(pack) < 0)
 		return -EAGAIN;
@@ -496,6 +498,8 @@ int init_ksplice_module(struct module_pack *pack)
 				   ksplice_init_relocs_end, 1) != 0)
 		return -1;
 	bootstrapped = 1;
+#endif /* KSPLICE_STANDALONE */
+
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	if (pack->target == NULL) {
 		apply_paravirt(pack->primary_parainstructions,
@@ -503,8 +507,7 @@ int init_ksplice_module(struct module_pack *pack)
 		apply_paravirt(pack->helper_parainstructions,
 			       pack->helper_parainstructions_end);
 	}
-#endif
-#endif
+#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
 	ksdebug(pack, 0, KERN_INFO "ksplice_h: Preparing and checking %s\n",
 		pack->name);
@@ -625,7 +628,8 @@ static int search_for_match(struct module_pack *pack,
 
 #ifdef KSPLICE_STANDALONE
 	ret = brute_search_all(pack, s);
-#endif
+#endif /* KSPLICE_STANDALONE */
+
 	return ret;
 }
 
@@ -755,15 +759,20 @@ static int process_reloc(struct module_pack *pack,
 	unsigned long sym_addr;
 	struct reloc_addrmap *map;
 	LIST_HEAD(vals);
+
 #ifdef KSPLICE_STANDALONE
 	/* run_pre_reloc: will this reloc be used for run-pre matching? */
 	const int run_pre_reloc = pre && bootstrapped;
-#ifndef CONFIG_KALLSYMS
+#endif /* KSPLICE_STANDALONE */
 
+#ifndef CONFIG_KALLSYMS
+#ifdef KSPLICE_STANDALONE
 	if (bootstrapped)
 		goto skip_using_system_map;
-#endif /* CONFIG_KALLSYMS */
+#else /* !KSPLICE_STANDALONE */
+	goto skip_using_system_map;
 #endif /* KSPLICE_STANDALONE */
+#endif /* !CONFIG_KALLSYMS */
 
 	/* Some Fedora kernel releases have System.map files whose symbol
 	 * addresses disagree with the running kernel by a constant address
@@ -789,7 +798,7 @@ static int process_reloc(struct module_pack *pack,
 	}
 #ifndef CONFIG_KALLSYMS
 skip_using_system_map:
-#endif
+#endif /* !CONFIG_KALLSYMS */
 
 	ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
 	if (ret < 0) {
@@ -811,9 +820,9 @@ skip_using_system_map:
 		release_vals(&vals);
 #ifdef KSPLICE_STANDALONE
 		if (!run_pre_reloc) {
-#else
+#else /* !KSPLICE_STANDALONE */
 		if (!pre) {
-#endif
+#endif /* KSPLICE_STANDALONE */
 			failed_to_find(pack, r->sym_name);
 			return -1;
 		}
@@ -848,13 +857,13 @@ skip_using_system_map:
 		if (ret < 0)
 			return ret;
 	}
-#endif
+#endif /* CONFIG_MODULE_UNLOAD */
 
 #ifdef KSPLICE_STANDALONE
 	if (r->pcrel && run_pre_reloc) {
-#else
+#else /* !KSPLICE_STANDALONE */
 	if (r->pcrel && pre) {
-#endif
+#endif /* KSPLICE_STANDALONE */
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL) {
 			printk(KERN_ERR "ksplice: out of memory\n");
@@ -994,7 +1003,7 @@ static int use_module(struct module *a, struct module *b)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
 /* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
 	int no_warn;
-#endif
+#endif /* LINUX_VERSION_CODE */
 	if (b == NULL || already_uses(a, b))
 		return 1;
 
@@ -1009,9 +1018,9 @@ static int use_module(struct module *a, struct module *b)
 	use->module_which_uses = a;
 	list_add(&use->list, &b->modules_which_use_me);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
-	/* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
+/* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
 	no_warn = sysfs_create_link(b->holders_dir, &a->mkobj.kobj, a->name);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	return 1;
 }
 #endif /* KSPLICE_STANDALONE */
@@ -1028,7 +1037,7 @@ static int compute_address(struct module_pack *pack, char *sym_name,
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return 0;
-#endif
+#endif /* KSPLICE_STANDALONE */
 
 	if (!pre) {
 		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
@@ -1054,7 +1063,7 @@ static int compute_address(struct module_pack *pack, char *sym_name,
 	kfree(name);
 	if (ret < 0)
 		return ret;
-#endif
+#endif /* CONFIG_KALLSYMS */
 
 	for (i = 0; prefix[i] != NULL; i++) {
 		if (starts_with(sym_name, prefix[i])) {
@@ -1199,7 +1208,7 @@ static int kernel_lookup(const char *name, struct list_head *vals)
 				return ret;
 		}
 	}
-#else /* LINUX_VERSION_CODE */
+#else /* LINUX_VERSION_CODE < */
 	char *knames;
 
 	for (i = 0, knames = kallsyms_names; i < kallsyms_num_syms; i++) {
@@ -1276,7 +1285,7 @@ static int module_on_each_symbol(struct module *mod,
 	return 0;
 }
 #endif /* CONFIG_KALLSYMS */
-#else /* KSPLICE_STANDALONE */
+#else /* !KSPLICE_STANDALONE */
 EXPORT_SYMBOL_GPL(init_ksplice_module);
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
@@ -1440,12 +1449,11 @@ static const char *dup_wolabel(const char *sym_name)
 	newstr[new_strlen] = 0;
 	return newstr;
 }
-#endif
+#endif /* CONFIG_KALLSYMS */
 
 #ifdef CONFIG_DEBUG_FS
-#ifdef KSPLICE_STANDALONE
-/* Old kernels don't have debugfs_create_blob */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
+/* Old kernels don't have debugfs_create_blob */
 static ssize_t read_file_blob(struct file *file, char __user *user_buf,
 			      size_t count, loff_t *ppos)
 {
@@ -1472,8 +1480,7 @@ static struct dentry *debugfs_create_blob(const char *name, mode_t mode,
 {
 	return debugfs_create_file(name, mode, parent, blob, &fops_blob);
 }
-#endif
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 void clear_debug_buf(struct module_pack *pack)
 {
@@ -1514,14 +1521,10 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 	new_size = roundup_pow_of_two(size + pack->debug_blob.size);
 	if (new_size > old_size) {
 		char *tmp = pack->debug_blob.data;
-#ifndef KSPLICE_STANDALONE
-		pack->debug_blob.data = krealloc(pack->debug_blob.data,
-						 new_size, GFP_KERNEL);
-#else
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 		pack->debug_blob.data = krealloc(pack->debug_blob.data,
 						 new_size, GFP_KERNEL);
-#else
+#else /* LINUX_VERSION_CODE < */
 		/* We cannot use our own function with the same
 		 * arguments as krealloc, because doing so requires
 		 * ksize, which was first exported in 2.6.24-rc5.
@@ -1532,8 +1535,7 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 			       pack->debug_blob.size);
 			kfree(tmp);
 		}
-#endif
-#endif
+#endif /* LINUX_VERSION_CODE */
 		if (pack->debug_blob.data == NULL) {
 			kfree(tmp);
 			return -ENOMEM;
