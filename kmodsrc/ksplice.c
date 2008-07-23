@@ -585,6 +585,8 @@ int init_ksplice_module(struct module_pack *pack)
 	bootstrapped = 1;
 #endif /* KSPLICE_STANDALONE */
 
+	mutex_lock(&module_mutex);
+
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	if (pack->target == NULL) {
 		apply_paravirt(pack->primary_parainstructions,
@@ -600,9 +602,10 @@ int init_ksplice_module(struct module_pack *pack)
 				   &pack->primary->mkobj.kobj, "ksplice");
 #else /* LINUX_VERSION_CODE < */
 	ret = kobject_set_name(&pack->kobj, "ksplice");
-	if (ret)
-		return -1;
-
+	if (ret != 0) {
+		ret = -1;
+		goto out;
+	}
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
 /* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
 	pack->kobj.parent = &pack->primary->mkobj.kobj;
@@ -613,9 +616,10 @@ int init_ksplice_module(struct module_pack *pack)
 	ret = kobject_register(&pack->kobj);
 #endif /* LINUX_VERSION_CODE */
 
-	if (ret != 0)
-		return -ENOMEM;
-
+	if (ret != 0) {
+		ret = -ENOMEM;
+		goto out;
+	}
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
 /* 312c004d36ce6c739512bac83b452f4c20ab1f62 was after 2.6.14 */
 	kobject_uevent(&pack->kobj, KOBJ_ADD);
@@ -635,6 +639,8 @@ int init_ksplice_module(struct module_pack *pack)
 	if (pack->stage == PREPARING)
 		clear_list(pack->safety_records, struct safety_record, list);
 
+out:
+	mutex_unlock(&module_mutex);
 	return ret;
 }
 
@@ -1066,14 +1072,12 @@ static int add_dependency_on_address(struct module_pack *pack,
 {
 	struct module *m;
 	int ret = 0;
-	mutex_lock(&module_mutex);
 	m = module_text_address(addr);
 	if (m == NULL || starts_with(m->name, pack->name) ||
 	    ends_with(m->name, "_helper"))
 		ret = 0;
 	else if (use_module(pack->primary, m) != 1)
 		ret = -EBUSY;
-	mutex_unlock(&module_mutex);
 	return ret;
 }
 
@@ -1206,7 +1210,6 @@ static int other_module_lookup(const char *name, struct list_head *vals,
 
 	if (acc.desired_name == NULL)
 		return -ENOMEM;
-	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
 		if (starts_with(m->name, ksplice_name) ||
 		    ends_with(m->name, "_helper"))
@@ -1215,7 +1218,6 @@ static int other_module_lookup(const char *name, struct list_head *vals,
 		if (ret < 0)
 			break;
 	}
-	mutex_unlock(&module_mutex);
 
 	return ret;
 }
@@ -1274,7 +1276,6 @@ static int brute_search_all(struct module_pack *pack,
 	saved_debug = *pack->debug;
 	*pack->debug = 0;
 
-	mutex_lock(&module_mutex);
 	list_for_each_entry(m, &modules, list) {
 		if (starts_with(m->name, pack->name) ||
 		    ends_with(m->name, "_helper"))
@@ -1286,7 +1287,6 @@ static int brute_search_all(struct module_pack *pack,
 			break;
 		}
 	}
-	mutex_unlock(&module_mutex);
 
 	if (ret == 0) {
 		if (brute_search(pack, s, (void *)init_mm.start_code,
