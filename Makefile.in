@@ -20,6 +20,7 @@ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
 
 perl_primary = ksplice-create ksplice-view ksplice-apply ksplice-undo ksplice.pm ksplice.pl
 perl_man = $(patsubst %,%.8,$(perl_primary))
+objutils = objdiff objmanip
 
 have_static := $(wildcard $(srcdir)/objmanip-static)
 
@@ -28,16 +29,16 @@ default: $(perl_primary) $(perl_man) objutils
 
 ifeq ($(strip $(have_static)),)
 
-objutils: objdiff objmanip
+objutils: $(objutils)
 
-install-objdiff install-objmanip: install-%: %
+$(addprefix install-,$(objutils)): install-%: %
 	install -m755 -D $< $(DESTDIR)$(libexecdir)/ksplice-$*
 
 else
 
 objutils:
 
-install-objdiff install-objmanip: install-%: %-static
+$(addprefix install-,$(objutils)): install-%: %-static
 	install -m755 -D $< $(DESTDIR)$(libexecdir)/ksplice-$*
 
 endif
@@ -48,10 +49,10 @@ $(perl_primary): %: %.in Makefile
 $(perl_man): %.8: %
 	pod2man --center="Ksplice" --release="Ksplice v$(PACKAGE_VERSION)" --section=8 $< $@
 
-objdiff objmanip: %: %.c objcommon.c objcommon.h kmodsrc/ksplice.h
+$(objutils): %: %.c objcommon.c objcommon.h kmodsrc/ksplice.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(srcdir)/objcommon.c $(LIBS) -o $@
 
-install: default install-objmanip install-objdiff
+install: default $(addprefix install-,$(objutils))
 	install -m644 -D ksplice-create.8 $(DESTDIR)$(mandir)/man8/ksplice-create.8
 	install -m644 -D ksplice-apply.8 $(DESTDIR)$(mandir)/man8/ksplice-apply.8
 	install -m644 -D ksplice-undo.8 $(DESTDIR)$(mandir)/man8/ksplice-undo.8
@@ -76,9 +77,9 @@ install: default install-objmanip install-objdiff
 clean:
 	rm -f $(perl_primary)
 	rm -f $(perl_man)
-	rm -f objdiff objmanip allcommon-user.o
+	rm -f $(objutils)
 
 distclean: clean
 	rm -f Makefile
-	rm -f objdiff-static objmanip-static
+	rm -f $(objutils:=-static)
 	rm -f configure config.status config.log
