@@ -381,8 +381,6 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 #endif /* LINUX_VERSION_CODE */
 #endif /* KSPLICE_STANDALONE */
 #endif /* CONFIG_KALLSYMS */
-static int label_offset(const char *sym_name);
-static char *dup_wolabel(const char *sym_name);
 static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
 
 #ifdef KSPLICE_STANDALONE
@@ -2467,40 +2465,6 @@ static int ends_with(const char *str, const char *suffix)
 {
 	return strlen(str) >= strlen(suffix) &&
 	    strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0;
-}
-
-static int label_offset(const char *sym_name)
-{
-	int i;
-	for (i = 0;
-	     sym_name[i] != 0 && sym_name[i + 1] != 0 && sym_name[i + 2] != 0
-	     && sym_name[i + 3] != 0; i++) {
-		if (sym_name[i] == '_' && sym_name[i + 1] == '_'
-		    && sym_name[i + 2] == '_' && sym_name[i + 3] == '_')
-			return i + 4;
-	}
-	return -1;
-}
-
-static char *dup_wolabel(const char *sym_name)
-{
-	int offset, entire_strlen, label_strlen, new_strlen;
-	char *newstr;
-
-	offset = label_offset(sym_name);
-	if (offset == -1)
-		label_strlen = 0;
-	else
-		label_strlen = strlen(&sym_name[offset]) + strlen("____");
-
-	entire_strlen = strlen(sym_name);
-	new_strlen = entire_strlen - label_strlen;
-	newstr = kmalloc(new_strlen + 1, GFP_KERNEL);
-	if (newstr == NULL)
-		return NULL;
-	memcpy(newstr, sym_name, new_strlen);
-	newstr[new_strlen] = 0;
-	return newstr;
 }
 
 #ifdef CONFIG_DEBUG_FS
