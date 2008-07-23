@@ -356,7 +356,8 @@ static abort_t process_ksplice_relocs(struct module_pack *pack,
 				      int pre);
 static abort_t process_reloc(struct module_pack *pack,
 			     const struct ksplice_reloc *r, int pre);
-static abort_t compute_address(struct module_pack *pack, const char *sym_name,
+static abort_t compute_address(struct module_pack *pack,
+			       const struct ksplice_symbol *ksym,
 			       struct list_head *vals, int pre);
 
 struct accumulate_struct {
@@ -688,7 +689,7 @@ static abort_t resolve_patch_symbols(struct module_pack *pack)
 	LIST_HEAD(vals);
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
-		ret = compute_address(pack, p->symbol->label, &vals, 0);
+		ret = compute_address(pack, p->symbol, &vals, 0);
 		if (ret != OK)
 			return ret;
 
@@ -1432,7 +1433,7 @@ static abort_t search_for_match(struct module_pack *pack,
 			return ret;
 	}
 
-	ret = compute_address(pack, s->symbol->label, &vals, 1);
+	ret = compute_address(pack, s->symbol, &vals, 1);
 	if (ret != OK)
 		return ret;
 
@@ -1775,7 +1776,7 @@ skip_using_system_map:
 		return OK;
 	}
 
-	ret1 = compute_address(pack, r->symbol->label, &vals, pre);
+	ret1 = compute_address(pack, r->symbol, &vals, pre);
 	if (ret1 != OK)
 		return ret1;
 	if (!singular(&vals)) {
@@ -1981,31 +1982,33 @@ static int use_module(struct module *a, struct module *b)
 #endif /* CONFIG_MODULE_UNLOAD */
 #endif /* KSPLICE_STANDALONE */
 
-static abort_t compute_address(struct module_pack *pack, const char *sym_name,
+static abort_t compute_address(struct module_pack *pack,
+			       const struct ksplice_symbol *ksym,
 			       struct list_head *vals, int pre)
 {
 	int i;
 	abort_t ret;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
 	struct reloc_nameval *nv;
+	const char *sym_name;
 	char *name;
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return OK;
 #endif /* KSPLICE_STANDALONE */
 
-	nv = find_nameval(pack, sym_name);
+	nv = find_nameval(pack, ksym->label);
 	if (nv != NULL) {
 		release_vals(vals);
 		if (!pre)
 			ksdebug(pack, 1, KERN_DEBUG "ksplice: using detected "
-				"sym %s=%" ADDR "\n", sym_name, nv->val);
+				"sym %s=%" ADDR "\n", ksym->label, nv->val);
 		return add_candidate_val(vals, nv->val);
 	}
 
-	if (starts_with(sym_name, ".rodata"))
+	if (starts_with(ksym->label, ".rodata"))
 		return OK;
-
+	sym_name = ksym->label;
 	for (i = 0; prefix[i] != NULL; i++) {
 		if (starts_with(sym_name, prefix[i]))
 			sym_name += strlen(prefix[i]);
