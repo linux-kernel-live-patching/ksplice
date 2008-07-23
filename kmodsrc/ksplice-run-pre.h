@@ -141,6 +141,8 @@ static int match_nop(unsigned char *addr);
 static void print_bytes(struct module_pack *pack, unsigned char *run, int runc,
 			unsigned char *pre, int prec);
 static int jumplen(unsigned char *addr);
+static unsigned long follow_trampolines(struct module_pack *pack,
+					unsigned long addr);
 
 static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 		       unsigned long pre_addr, unsigned int size, int rerun)
@@ -152,6 +154,9 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 
 	if (size == 0)
 		return 1;
+
+	if (size >= 5)
+		run_addr = follow_trampolines(pack, run_addr);
 
 	run = (unsigned char *)run_addr;
 	pre = (unsigned char *)pre_addr;
@@ -262,4 +267,24 @@ static void print_bytes(struct module_pack *pack, unsigned char *run, int runc,
 		ksdebug(pack, 0, "%02x/ ", run[o]);
 	for (o = matched; o < prec; o++)
 		ksdebug(pack, 0, "/%02x ", pre[o]);
+}
+
+static unsigned long follow_trampolines(struct module_pack *pack,
+					unsigned long addr)
+{
+	if (virtual_address_mapped(addr) &&
+	    virtual_address_mapped(addr + 4) &&
+	    *((unsigned char *)addr) == 0xE9) {
+		/* Remember to add the length of the e9 */
+		unsigned long new_addr = addr + 5 + *(int32_t *)(addr + 1);
+		/* Confirm that it is a jump into a ksplice module */
+		struct module *m = module_text_address(new_addr);
+		if (m != NULL && m != pack->target &&
+		    strncmp(m->name, "ksplice", strlen("ksplice")) == 0) {
+			ksdebug(pack, 3, KERN_DEBUG "ksplice: Following "
+				"trampoline %lx %lx\n", addr, new_addr);
+			addr = new_addr;
+		}
+	}
+	return addr;
 }
