@@ -449,32 +449,64 @@ void write_string(struct supersect *ss, const char **addr, const char *fmt, ...)
 		    (void *)buf - str_ss->contents.data);
 }
 
+void lookup_system_map(struct addr_vec *addrs, const char *name, long offset)
+{
+	struct addr_vec *map_addrs =
+	    addr_vec_hash_lookup(&system_map, name, FALSE);
+	if (map_addrs == NULL)
+		return;
+
+	unsigned long *addr, *map_addr;
+	for (map_addr = map_addrs->data;
+	     map_addr < map_addrs->data + map_addrs->size; map_addr++) {
+		for (addr = addrs->data; addr < addrs->data + addrs->size;
+		     addr++) {
+			if (*addr == *map_addr + offset)
+				break;
+		}
+		if (addr < addrs->data + addrs->size)
+			continue;
+		*vec_grow(addrs, 1) = *map_addr + offset;
+	}
+}
+
 void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 			    const unsigned long **sym_addrs,
 			    unsigned long *num_sym_addrs, asymbol *sym)
 {
-	const char *system_map_name = sym->name;
-	const char **prefix;
-	for (prefix = (const char *[]){".text.", ".data.", ".bss.", NULL};
-	     *prefix != NULL; prefix++) {
-		if (starts_with(system_map_name, *prefix))
-			system_map_name += strlen(*prefix);
+	struct addr_vec addrs;
+	vec_init(&addrs);
+
+	if (bfd_is_abs_section(sym->section)) {
+		*vec_grow(&addrs, 1) = sym->value;
+	} else if (bfd_is_und_section(sym->section)) {
+		lookup_system_map(&addrs, sym->name, 0);
+	} else if (!bfd_is_const_section(sym->section)) {
+		asymbol **gsymp;
+		for (gsymp = sbfd->syms.data;
+		     gsymp < sbfd->syms.data + sbfd->syms.size; gsymp++) {
+			asymbol *gsym = *gsymp;
+			if ((gsym->flags & BSF_DEBUGGING) == 0 &&
+			    gsym->section == sym->section)
+				lookup_system_map(&addrs, gsym->name,
+						  sym->value - gsym->value);
+		}
 	}
-	struct addr_vec *addrs = addr_vec_hash_lookup(&system_map,
-						      system_map_name, FALSE);
-	if (addrs != NULL) {
+
+	*num_sym_addrs = addrs.size;
+	if (addrs.size != 0) {
 		struct supersect *array_ss = make_section(sbfd,
 							  ".ksplice_array");
-		void *buf = sect_grow(array_ss, addrs->size,
-				      typeof(*addrs->data));
-		memcpy(buf, addrs->data, addrs->size * sizeof(*addrs->data));
-		*num_sym_addrs = addrs->size;
+		void *buf = sect_grow(array_ss, addrs.size,
+				      typeof(*addrs.data));
+		memcpy(buf, addrs.data, addrs.size * sizeof(*addrs.data));
 		write_reloc(ss, sym_addrs, &array_ss->symbol,
 			    buf - array_ss->contents.data);
 	} else {
-		*num_sym_addrs = 0;
 		*sym_addrs = NULL;
 	}
+
+	vec_free(&addrs);
 }
 
 struct caller_search {
