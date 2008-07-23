@@ -57,7 +57,7 @@ if($debug) {
 	}
 }
 
-open STATE, '>', "/sys/module/ksplice_$kid/ksplice/state" or die $!;
+open STATE, '>', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
 print STATE "reversed\n";
 close STATE;
 unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0) {

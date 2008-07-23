@@ -232,20 +232,39 @@ static void ksplice_release(struct kobject *kobj)
 {
 }
 
-static ssize_t state_show(struct module_pack *pack, char *buf)
+static ssize_t stage_show(struct module_pack *pack, char *buf)
 {
-	switch (pack->state) {
-	case KSPLICE_PREPARING:
+	switch (pack->stage) {
+	case PREPARING:
 		return snprintf(buf, PAGE_SIZE, "preparing\n");
-	case KSPLICE_APPLIED:
+	case APPLIED:
 		return snprintf(buf, PAGE_SIZE, "applied\n");
-	case KSPLICE_REVERSED:
+	case REVERSED:
 		return snprintf(buf, PAGE_SIZE, "reversed\n");
 	}
 	return 0;
 }
 
-static ssize_t state_store(struct module_pack *pack,
+static ssize_t abort_code_show(struct module_pack *pack, char *buf)
+{
+	switch (pack->abort_code) {
+	case NONE:
+		return snprintf(buf, PAGE_SIZE, "none\n");
+	case NO_MATCH:
+		return snprintf(buf, PAGE_SIZE, "no_match\n");
+	case BAD_SYSTEM_MAP:
+		return snprintf(buf, PAGE_SIZE, "bad_system_map\n");
+	case CODE_BUSY:
+		return snprintf(buf, PAGE_SIZE, "code_busy\n");
+	case MODULE_BUSY:
+		return snprintf(buf, PAGE_SIZE, "module_busy\n");
+	case UNEXPECTED:
+		return snprintf(buf, PAGE_SIZE, "unexpected\n");
+	}
+	return 0;
+}
+
+static ssize_t stage_store(struct module_pack *pack,
 			   const char *buf, size_t len)
 {
 	if (strncmp(buf, "reversed\n", len) == 0)
@@ -253,11 +272,14 @@ static ssize_t state_store(struct module_pack *pack,
 	return len;
 }
 
-static struct ksplice_attribute state_attribute =
-	__ATTR(state, 0644, state_show, state_store);
+static struct ksplice_attribute stage_attribute =
+	__ATTR(stage, 0644, stage_show, stage_store);
+
+static struct ksplice_attribute abort_code_attribute = __ATTR_RO(abort_code);
 
 static struct attribute *ksplice_attrs[] = {
-	&state_attribute.attr,
+	&stage_attribute.attr,
+	&abort_code_attribute.attr,
 	NULL
 };
 
@@ -304,10 +326,12 @@ static int activate_primary(struct module_pack *pack)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (pack->state != KSPLICE_APPLIED) {
-		if (ret == -EAGAIN)
+	if (pack->stage != APPLIED) {
+		if (ret == -EAGAIN) {
+			pack->abort_code = CODE_BUSY;
 			print_abort(pack, "stack check: to-be-replaced code is "
 				    "busy");
+		}
 		return -1;
 	}
 
@@ -350,7 +374,7 @@ void reverse_patches(struct module_pack *pack)
 	ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
 		pack->name);
 
-	if (pack->state != KSPLICE_APPLIED)
+	if (pack->stage != APPLIED)
 		return;
 
 	for (i = 0; i < 5; i++) {
@@ -362,14 +386,17 @@ void reverse_patches(struct module_pack *pack)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (ret == -EAGAIN)
+	if (ret == -EAGAIN) {
+		pack->abort_code = CODE_BUSY;
 		print_abort(pack, "stack check: to-be-reversed code is busy");
-	else if (ret == 0)
+	} else if (ret == 0) {
 		ksdebug(pack, 0, KERN_INFO "ksplice: Update %s reversed "
 			"successfully\n", pack->name);
-	else if (ret == -EBUSY)
+	} else if (ret == -EBUSY) {
+		pack->abort_code = MODULE_BUSY;
 		ksdebug(pack, 0, KERN_ERR "ksplice: Update module %s is in use "
 			"by another module\n", pack->name);
+	}
 
 	return;
 }
@@ -394,7 +421,7 @@ static int __apply_patches(void *packptr)
 	if (!try_module_get(pack->primary))
 		return -ENODEV;
 
-	pack->state = KSPLICE_APPLIED;
+	pack->stage = APPLIED;
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -414,7 +441,7 @@ static int __reverse_patches(void *packptr)
 	const struct ksplice_patch *p;
 	mm_segment_t old_fs;
 
-	if (pack->state != KSPLICE_APPLIED)
+	if (pack->stage != APPLIED)
 		return 0;
 
 #ifdef CONFIG_MODULE_UNLOAD
@@ -432,7 +459,7 @@ static int __reverse_patches(void *packptr)
 		return -EAGAIN;
 
 	clear_list(pack->safety_records, struct safety_record, list);
-	pack->state = KSPLICE_REVERSED;
+	pack->stage = REVERSED;
 	module_put(pack->primary);
 
 	old_fs = get_fs();
@@ -546,6 +573,8 @@ static int valid_stack_ptr(struct thread_info *tinfo, void *p)
 int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
+	pack->abort_code = NONE;
+
 	if (init_debug_buf(pack) < 0)
 		return -1;
 
@@ -603,7 +632,7 @@ int init_ksplice_module(struct module_pack *pack)
 
 	clear_list(pack->reloc_namevals, struct reloc_nameval, list);
 	clear_list(pack->reloc_addrmaps, struct reloc_addrmap, list);
-	if (pack->state == KSPLICE_PREPARING)
+	if (pack->stage == PREPARING)
 		clear_list(pack->safety_records, struct safety_record, list);
 
 	return ret;
@@ -663,6 +692,7 @@ start:
 					"could not match section %s\n",
 					s->name);
 		}
+		pack->abort_code = NO_MATCH;
 		print_abort(pack, "run-pre: could not match some sections");
 		kfree(finished);
 		return -1;
@@ -673,6 +703,7 @@ start:
 		restart_count++;
 		goto start;
 	}
+	pack->abort_code = NO_MATCH;
 	print_abort(pack, "run-pre: restart limit exceeded");
 	kfree(finished);
 	return -1;
@@ -874,6 +905,7 @@ static int process_reloc(struct module_pack *pack,
 	 */
 	off = (unsigned long)printk - pack->map_printk;
 	if (off & 0xfffff) {
+		pack->abort_code = BAD_SYSTEM_MAP;
 		print_abort(pack, "System.map does not match kernel");
 		return -1;
 	}
@@ -998,6 +1030,7 @@ skip_using_system_map:
 			    ((val >> r->rightshift) & r->dst_mask);
 			break;
 		default:
+			pack->abort_code = UNEXPECTED;
 			print_abort(pack, "Invalid relocation size");
 			return -1;
 		}
@@ -1020,6 +1053,7 @@ skip_using_system_map:
 		ksdebug(pack, 4, "aft=%016llx)\n", *(int64_t *)r->blank_addr);
 		break;
 	default:
+		pack->abort_code = UNEXPECTED;
 		print_abort(pack, "Invalid relocation size");
 		return -1;
 	}
@@ -1486,6 +1520,7 @@ static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
 		return (*(int64_t *)blank_addr & dst_mask) ==
 		    (0x7777777777777777ll & dst_mask);
 	default:
+		pack->abort_code = UNEXPECTED;
 		print_abort(pack, "Invalid relocation size");
 		return -1;
 	}

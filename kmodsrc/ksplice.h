@@ -52,8 +52,12 @@ struct ksplice_patch {
 #define KSPLICE_NEED_PARAINSTRUCTIONS 1
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
-enum ksplice_state_enum {
-	KSPLICE_PREPARING, KSPLICE_APPLIED, KSPLICE_REVERSED
+enum ksplice_stage_enum {
+	PREPARING, APPLIED, REVERSED
+};
+
+enum ksplice_abort_code_enum {
+	NONE, NO_MATCH, BAD_SYSTEM_MAP, CODE_BUSY, MODULE_BUSY, UNEXPECTED
 };
 
 struct module_pack {
@@ -62,7 +66,8 @@ struct module_pack {
 	const char *target;
 	unsigned long map_printk;
 	struct module *primary;
-	enum ksplice_state_enum state;
+	enum ksplice_stage_enum stage;
+	enum ksplice_abort_code_enum abort_code;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
 	const struct ksplice_size *primary_sizes, *primary_sizes_end;
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;

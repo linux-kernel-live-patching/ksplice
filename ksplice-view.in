@@ -57,7 +57,7 @@ sub view_kid {
 	}
 
 	print "Ksplice id $kid is present in the kernel\n";
-	open STATE, '<', "/sys/module/ksplice_$kid/ksplice/state" or die $!;
+	open STATE, '<', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
 	print <STATE>;
 	close STATE;
 }
@@ -77,7 +77,7 @@ sub view_list {
 	chdir("/sys/module");
 	foreach $kid (glob("ksplice_*")) {
 		$kid =~ s/^ksplice_//;
-		open STATE, '<', "/sys/module/ksplice_$kid/ksplice/state" or next;
+		open STATE, '<', "/sys/module/ksplice_$kid/ksplice/stage" or next;
 		print "$kid\n" if(<STATE> eq "applied\n");
 		close STATE;
 	}
