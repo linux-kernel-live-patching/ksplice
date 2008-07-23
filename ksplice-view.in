@@ -17,11 +17,16 @@
 
 use Getopt::Long;
 use Cwd 'abs_path', 'getcwd';
+use File::Basename;
+use File::Copy;
+use File::Path;
+use Fatal qw(:void copy rename move chdir mkdir rmtree);
 use Pod::Usage;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
+use verbose qw(copy rename move chdir mkdir mkpath rmtree);
 
 my ($kid, $file);
 my ($help, $wantversion) = (0, 0);
@@ -56,30 +61,32 @@ sub view_kid {
 		print "Ksplice id $kid is not present in the kernel\n";
 	}
 
-	print "Ksplice id $kid is present in the kernel\n";
-	open STATE, '<', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
-	print <STATE>;
-	close STATE;
+	open STAGE, '<', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
+	my $stage = <STAGE>;
+	close STAGE;
+	chomp($stage);
+	print "Ksplice id $kid is present in the kernel and is $stage.\n";
 }
 
 sub view_file {
 	$file = abs_path($file);
 
 	my $tmpdir = init_tmpdir();
-	runcd($tmpdir);
+	chdir($tmpdir);
 	runval("cp $file .");
 	my $ksplice = unpack_update($file);
 	print runstr("cat $ksplice/patch");
-	runval("rm -rf $tmpdir");
+	chdir("/");
+	rmtree($tmpdir);
 }
 
 sub view_list {
 	chdir("/sys/module");
 	foreach $kid (glob("ksplice_*")) {
 		$kid =~ s/^ksplice_//;
-		open STATE, '<', "/sys/module/ksplice_$kid/ksplice/stage" or next;
-		print "$kid\n" if(<STATE> eq "applied\n");
-		close STATE;
+		open STAGE, '<', "/sys/module/ksplice_$kid/ksplice/stage" or next;
+		print "$kid\n" if(<STAGE> eq "applied\n");
+		close STAGE;
 	}
 }
 

@@ -17,12 +17,17 @@
 
 use Getopt::Long;
 use Cwd 'abs_path', 'getcwd';
+use File::Basename;
+use File::Copy;
+use File::Path;
+use Fatal qw(:void copy rename move chdir mkdir rmtree);
+use File::Temp;
 use Pod::Usage;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
-use File::Temp;
+use verbose qw(copy rename move chdir mkdir mkpath rmtree);
 
 my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
@@ -57,9 +62,9 @@ if($debug) {
 	}
 }
 
-open STATE, '>', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
-print STATE "reversed\n";
-close STATE;
+open STAGE, '>', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
+print STAGE "reversed\n";
+close STAGE;
 unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0) {
 	my $debugfs_out = mktemp("/tmp/ksplice-debug-XXXXXX");
 	my $debug = get_debugfs("ksplice_$kid", $debugfs_out);

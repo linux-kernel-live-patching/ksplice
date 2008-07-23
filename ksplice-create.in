@@ -17,11 +17,11 @@
 
 use Getopt::Long;
 use Cwd 'abs_path', 'getcwd';
-use Pod::Usage;
 use File::Basename;
 use File::Copy;
 use File::Path;
-use Fatal qw(copy rename move chdir mkdir rmtree);
+use Fatal qw(:void copy rename move chdir mkdir rmtree);
+use Pod::Usage;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
@@ -125,7 +125,7 @@ if(!$verbose::level) {
 # the entry points of those sections as the "target entry points".
 
 my $origdir = getcwd();
-runcd($linuxtree);
+chdir($linuxtree);
 if(defined $diffext) {
 	runval("$libexecdir/ksplice-gendiff-reversed >$patchfile . $diffext");
 }
@@ -163,22 +163,23 @@ sub copy_debug {
 	copy($cmdfile, "$tmpdir/objects/$cmdfile") if(-e $cmdfile);
 }
 
-mkpath("$tmpdir/objects");
+mkdir("$tmpdir/objects");
 for (split(/\0/, runstr(qw(find -name *.KSPLICE* ! ( -name *.KSPLICE -empty ) ! -name .*.KSPLICE.cmd -print0)))) {
 	copy_debug($_);
 	copy_debug($1) if (m/^(.*)\.KSPLICE_pre$/);
 }
 
-mkpath("$tmpdir/collect");
+mkdir("$tmpdir/collect");
 
 my @modules = ();
 foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
 	open MOD, '<', $_;
 	chomp(my $module = <MOD>);
 	close MOD;
-	copy($_, "$tmpdir/collect/" . basename($_))
-	    foreach("$module.o.KSPLICE", "$module.o.KSPLICE_primary",
-		    "$module.o.KSPLICE_helper");
+	foreach my $collect ("$module.o.KSPLICE", "$module.o.KSPLICE_primary",
+			     "$module.o.KSPLICE_helper") {
+		copy($collect, "$tmpdir/collect/" . basename($collect));
+	}
 	push @modules, basename($module);
 }
 
@@ -190,7 +191,7 @@ if(!@modules) {
 revert_orig();
 
 for my $module (@modules) {
-	runcd("$tmpdir/collect");
+	chdir("$tmpdir/collect");
 
 ################################################################################
 # PHASE 3: Combine the target object files and prepare for kernel module build #
@@ -201,11 +202,11 @@ for my $module (@modules) {
 # - saves the list of target entry syms in ELF sect .ksplice.ksplice_patches   #
 ################################################################################
 
-	runcd($tmpdir);
+	chdir($tmpdir);
 	runval("cp", "-a", "--", "$datadir/kmodsrc", "kmodsrc-$module");
 	rename("collect/$module.o.KSPLICE_primary", "kmodsrc-$module/collection.o.primary");
 	rename("collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
-	runcd("kmodsrc-$module");
+	chdir("kmodsrc-$module");
 
 	rename("collection.o.primary", "collection.o.primary.preld");
 	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary", "collection.o.primary.preld");
@@ -225,7 +226,7 @@ for my $module (@modules) {
 	runval("make", @jlevel, "modules", "KSPLICE_ID=$kid_m", "KSPLICE_TARGET=$module", "map_printk=$map_printk", "KERNELSRC=$linuxtree", @standalone_flag);
 }
 
-runcd($tmpdir);
+chdir($tmpdir);
 mkdir($ksplice);
 move($patchfile, $ksplice);
 for my $module (@modules) {
@@ -246,7 +247,7 @@ for my $module (@modules) {
 }
 runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
 copy("$ksplice.tar.gz", "$origdir/$ksplice.tar.gz");
-runcd($origdir);
+chdir($origdir);
 rmtree($tmpdir);
 
 print "Ksplice update tarball written to $ksplice.tar.gz\n";

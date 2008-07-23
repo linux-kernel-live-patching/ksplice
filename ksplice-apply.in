@@ -17,12 +17,17 @@
 
 use Getopt::Long;
 use Cwd 'abs_path', 'getcwd';
+use File::Basename;
+use File::Copy;
+use File::Path;
+use Fatal qw(:void copy rename move chdir mkdir rmtree);
 use File::Temp;
 use Pod::Usage;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
+use verbose qw(copy rename move chdir mkdir mkpath rmtree);
 
 my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
@@ -39,9 +44,9 @@ pod2usage(1) if($help || scalar(@ARGV) != 1);
 my $file = abs_path($ARGV[0]);
 
 my $tmpdir = init_tmpdir();
-runcd($tmpdir);
+chdir($tmpdir);
 my $ksplice = unpack_update($file);
-runcd($ksplice);
+chdir($ksplice);
 
 my $unload = runstr("lsmod") !~ m/- $/m;
 
@@ -128,7 +133,8 @@ END
 
 }
 
-runval("rm -rf $tmpdir");
+chdir("/");
+rmtree($tmpdir);
 print "Done!\n";
 exit(0);
 
