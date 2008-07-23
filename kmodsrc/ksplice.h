@@ -1,9 +1,13 @@
+struct ksplice_symbol {
+	const char *label;
+	unsigned long nr_candidates;
+	const unsigned long *candidates;
+};
+
 struct ksplice_reloc {
-	const char *sym_name;
 	unsigned long blank_addr;
 	long blank_offset;
-	unsigned long num_sym_addrs;
-	const unsigned long *sym_addrs;
+	const struct ksplice_symbol *symbol;
 	int pcrel;
 	long addend;
 	int size;
@@ -12,18 +16,16 @@ struct ksplice_reloc {
 };
 
 struct ksplice_size {
-	const char *name;
+	const struct ksplice_symbol *symbol;
 	unsigned long size;
 	unsigned long thismod_addr;
-	unsigned long num_sym_addrs;
-	const unsigned long *sym_addrs;
 	unsigned int flags;
 };
 #define KSPLICE_SIZE_DELETED 0x00000001
 #define KSPLICE_SIZE_RODATA 0x00000002
 
 struct ksplice_patch {
-	const char *oldstr;
+	const struct ksplice_symbol *symbol;
 	unsigned long oldaddr;
 	unsigned long repladdr;
 	char *saved;

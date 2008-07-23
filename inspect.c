@@ -41,24 +41,42 @@ char *str_ulong_vec(struct supersect *ss, const unsigned long *const *datap,
 	return buf;
 }
 
+char *str_ksplice_symbol(struct supersect *ss,
+			 const struct ksplice_symbol *ksymbol)
+{
+	char *str;
+	assert(asprintf(&str, "%s %s",
+			read_string(ss, &ksymbol->label),
+			str_ulong_vec(ss, &ksymbol->candidates,
+				      &ksymbol->nr_candidates)));
+	return str;
+}
+
+char *str_ksplice_symbolp(struct supersect *ptr_ss,
+			  const struct ksplice_symbol *const *ksymbolp)
+{
+	struct supersect *ss;
+	const struct ksplice_symbol *ksymbol =
+	    read_pointer(ptr_ss, (void *const *)ksymbolp, &ss);
+	return ksymbol == NULL ? "(null)" : str_ksplice_symbol(ss, ksymbol);
+}
+
 void show_ksplice_reloc(struct supersect *ss,
 			const struct ksplice_reloc *kreloc)
 {
 	printf("blank_addr: %s  blank_offset: %lx\n"
-	       "sym_name: %s\n"
+	       "symbol: %s\n"
 	       "addend: %lx\n"
 	       "pcrel: %x  size: %x  dst_mask: %lx  rightshift: %x\n"
-	       "sym_addrs: %s\n"
 	       "\n",
 	       str_pointer(ss, (void *const *)&kreloc->blank_addr),
 	       read_num(ss, &kreloc->blank_offset),
-	       read_string(ss, &kreloc->sym_name),
+	       str_ksplice_symbolp(ss, &kreloc->symbol),
 	       read_num(ss, &kreloc->addend),
 	       read_num(ss, &kreloc->pcrel),
 	       read_num(ss, &kreloc->size),
 	       read_num(ss, &kreloc->dst_mask),
-	       read_num(ss, &kreloc->rightshift),
-	       str_ulong_vec(ss, &kreloc->sym_addrs, &kreloc->num_sym_addrs));
+	       read_num(ss, &kreloc->rightshift));
 }
 
 void show_ksplice_relocs(struct supersect *kreloc_ss)
@@ -83,13 +101,11 @@ void show_ksplice_size_flags(const struct ksplice_size *ksize)
 
 void show_ksplice_size(struct supersect *ss, const struct ksplice_size *ksize)
 {
-	printf("name: %s\n"
-	       "thismod_addr: %s  size: %lx\n"
-	       "sym_addrs: %s\n",
-	       read_string(ss, &ksize->name),
+	printf("symbol: %s\n"
+	       "thismod_addr: %s  size: %lx\n",
+	       str_ksplice_symbolp(ss, &ksize->symbol),
 	       str_pointer(ss, (void *const *)&ksize->thismod_addr),
-	       read_num(ss, &ksize->size),
-	       str_ulong_vec(ss, &ksize->sym_addrs, &ksize->num_sym_addrs));
+	       read_num(ss, &ksize->size));
 	show_ksplice_size_flags(ksize);
 	printf("\n");
 }
@@ -107,10 +123,10 @@ void show_ksplice_sizes(struct supersect *ksize_ss)
 void show_ksplice_patch(struct supersect *ss,
 			const struct ksplice_patch *kpatch)
 {
-	printf("oldstr: %s\n"
+	printf("symbol: %s\n"
 	       "repladdr: %s\n"
 	       "\n",
-	       read_string(ss, &kpatch->oldstr),
+	       str_ksplice_symbolp(ss, &kpatch->symbol),
 	       str_pointer(ss, (void *const *)&kpatch->repladdr));
 }
 

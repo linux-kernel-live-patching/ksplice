@@ -688,13 +688,13 @@ static abort_t resolve_patch_symbols(struct module_pack *pack)
 	LIST_HEAD(vals);
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
-		ret = compute_address(pack, p->oldstr, &vals, 0);
+		ret = compute_address(pack, p->symbol->label, &vals, 0);
 		if (ret != OK)
 			return ret;
 
 		if (!singular(&vals)) {
 			release_vals(&vals);
-			failed_to_find(pack, p->oldstr);
+			failed_to_find(pack, p->symbol->label);
 			return FAILED_TO_FIND;
 		}
 		p->oldaddr =
@@ -832,7 +832,7 @@ static abort_t apply_patches(struct update_bundle *bundle)
 				rec->addr = s->thismod_addr;
 				rec->size = s->size;
 				rec->care = 1;
-				rec->name = s->name;
+				rec->name = s->symbol->label;
 				list_add(&rec->list, &pack->safety_records);
 			}
 		}
@@ -1400,7 +1400,7 @@ start:
 			if (finished[i] == 0)
 				ksdebug(pack, 2, KERN_DEBUG "ksplice: run-pre: "
 					"could not match section %s\n",
-					s->name);
+					s->symbol->label);
 		}
 		print_abort(pack, "run-pre: could not match some sections");
 		kfree(finished);
@@ -1426,18 +1426,18 @@ static abort_t search_for_match(struct module_pack *pack,
 	LIST_HEAD(vals);
 	struct candidate_val *v, *n;
 
-	for (i = 0; i < s->num_sym_addrs; i++) {
-		ret = add_candidate_val(&vals, s->sym_addrs[i]);
+	for (i = 0; i < s->symbol->nr_candidates; i++) {
+		ret = add_candidate_val(&vals, s->symbol->candidates[i]);
 		if (ret != OK)
 			return ret;
 	}
 
-	ret = compute_address(pack, s->name, &vals, 1);
+	ret = compute_address(pack, s->symbol->label, &vals, 1);
 	if (ret != OK)
 		return ret;
 
 	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: starting sect search "
-		"for %s\n", s->name);
+		"for %s\n", s->symbol->label);
 
 	list_for_each_entry_safe(v, n, &vals, list) {
 		run_addr = v->val;
@@ -1470,7 +1470,7 @@ static abort_t search_for_match(struct module_pack *pack,
 	} else if (!list_empty(&vals)) {
 		struct candidate_val *val;
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: multiple "
-			"candidates for sect %s:\n", s->name);
+			"candidates for sect %s:\n", s->symbol->label);
 		i = 0;
 		list_for_each_entry(val, &vals, list) {
 			i++;
@@ -1556,11 +1556,11 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			"address %" ADDR " in other module %s for sect %s\n",
 			run_addr,
 			run_module == NULL ? "vmlinux" : run_module->name,
-			s->name);
+			s->symbol->label);
 		return NO_MATCH;
 	}
 
-	ret = create_nameval(pack, s->name, run_addr, TEMP);
+	ret = create_nameval(pack, s->symbol->label, run_addr, TEMP);
 	if (ret != OK)
 		return ret;
 
@@ -1573,7 +1573,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: %s sect %s "
 			"does not match ",
 			(s->flags & KSPLICE_SIZE_RODATA) != 0 ? "data" : "text",
-			s->name);
+			s->symbol->label);
 		ksdebug(pack, 1, "(r_a=%" ADDR " p_a=%" ADDR " s=%ld)\n",
 			run_addr, pre_addr, s->size);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
@@ -1595,13 +1595,13 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		set_temp_myst_relocs(pack, NOVAL);
 
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: candidate "
-			"for sect %s=%" ADDR "\n", s->name, run_addr);
+			"for sect %s=%" ADDR "\n", s->symbol->label, run_addr);
 		return OK;
 	}
 
 	set_temp_myst_relocs(pack, VAL);
 	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect %s=%" ADDR
-		"\n", s->name, run_addr);
+		"\n", s->symbol->label, run_addr);
 
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
 	if (rec == NULL)
@@ -1618,7 +1618,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		rec->size = s->size;
 		rec->care = 1;
 	}
-	rec->name = s->name;
+	rec->name = s->symbol->label;
 	list_add(&rec->list, &pack->safety_records);
 	return OK;
 }
@@ -1753,8 +1753,8 @@ static abort_t process_reloc(struct module_pack *pack,
 		print_abort(pack, "System.map does not match kernel");
 		return BAD_SYSTEM_MAP;
 	}
-	for (i = 0; i < r->num_sym_addrs; i++) {
-		ret1 = add_candidate_val(&vals, r->sym_addrs[i] + off);
+	for (i = 0; i < r->symbol->nr_candidates; i++) {
+		ret1 = add_candidate_val(&vals, r->symbol->candidates[i] + off);
 		if (ret1 != OK)
 			return ret1;
 	}
@@ -1769,13 +1769,13 @@ skip_using_system_map:
 	}
 	if (ret == 0) {
 		ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%"
-			ADDR " (altinstr)\n", (pre ? "_h" : ""), r->sym_name,
-			r->blank_offset);
+			ADDR " (altinstr)\n", (pre ? "_h" : ""),
+			r->symbol->label, r->blank_offset);
 		release_vals(&vals);
 		return OK;
 	}
 
-	ret1 = compute_address(pack, r->sym_name, &vals, pre);
+	ret1 = compute_address(pack, r->symbol->label, &vals, pre);
 	if (ret1 != OK)
 		return ret1;
 	if (!singular(&vals)) {
@@ -1785,18 +1785,18 @@ skip_using_system_map:
 #else /* !KSPLICE_STANDALONE */
 		if (!pre) {
 #endif /* KSPLICE_STANDALONE */
-			failed_to_find(pack, r->sym_name);
+			failed_to_find(pack, r->symbol->label);
 			return FAILED_TO_FIND;
 		}
 
 		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: deferred %s:%" ADDR
-			" to run-pre\n", r->sym_name, r->blank_offset);
+			" to run-pre\n", r->symbol->label, r->blank_offset);
 
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL)
 			return OUT_OF_MEMORY;
 		map->addr = r->blank_addr;
-		map->name = r->sym_name;
+		map->name = r->symbol->label;
 		map->pcrel = r->pcrel;
 		map->addend = r->addend;
 		map->size = r->size;
@@ -1840,7 +1840,7 @@ skip_using_system_map:
 		else
 			val = sym_addr + r->addend;
 
-		ret1 = create_nameval(pack, r->sym_name, sym_addr, VAL);
+		ret1 = create_nameval(pack, r->symbol->label, sym_addr, VAL);
 		if (ret1 != OK)
 			return ret1;
 
@@ -1872,7 +1872,7 @@ skip_using_system_map:
 	}
 
 	ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: %s:%" ADDR " ",
-		(pre ? "_h" : ""), r->sym_name, r->blank_offset);
+		(pre ? "_h" : ""), r->symbol->label, r->blank_offset);
 	ksdebug(pack, 4, "(S=%" ADDR " A=%" ADDR " ", sym_addr, r->addend);
 	switch (r->size) {
 	case 1:
@@ -2233,7 +2233,7 @@ static abort_t brute_search_all(struct module_pack *pack,
 	int saved_debug;
 
 	ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: searching for %s\n",
-		s->name);
+		s->symbol->label);
 	saved_debug = pack->bundle->debug;
 	pack->bundle->debug = 0;
 

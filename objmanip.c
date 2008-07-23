@@ -473,6 +473,25 @@ void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 	}
 }
 
+void write_ksplice_symbol(struct supersect *ss,
+			  const struct ksplice_symbol *const *addr,
+			  asymbol *sym, const char *addstr_sect)
+{
+	struct supersect *ksymbol_ss = make_section(ss->parent,
+						    ".ksplice_symbols");
+	struct ksplice_symbol *ksymbol = sect_grow(ksymbol_ss, 1,
+						   struct ksplice_symbol);
+
+	write_string(ksymbol_ss, &ksymbol->label, "%s%s%s%s",
+		     compute_prefix(sym), sym->name, addstr_all, addstr_sect);
+
+	write_system_map_array(ss->parent, ksymbol_ss, &ksymbol->candidates,
+			       &ksymbol->nr_candidates, sym);
+
+	write_reloc(ss, addr, &ksymbol_ss->symbol,
+		    (void *)ksymbol - ksymbol_ss->contents.data);
+}
+
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
@@ -489,13 +508,10 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
 						 struct ksplice_reloc);
 
-	write_string(kreloc_ss, &kreloc->sym_name, "%s%s",
-		     sym_ptr->name, addstr_all);
 	write_reloc(kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address);
 	kreloc->blank_offset = (unsigned long)orig_reloc->address;
-	write_system_map_array(ss->parent, kreloc_ss, &kreloc->sym_addrs,
-			       &kreloc->num_sym_addrs, sym_ptr);
+	write_ksplice_symbol(kreloc_ss, &kreloc->symbol, sym_ptr, "");
 	kreloc->pcrel = howto->pc_relative;
 	kreloc->addend = addend;
 	kreloc->size = bfd_get_reloc_size(howto);
@@ -544,9 +560,8 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
 					       struct ksplice_size);
 
-	write_string(ksize_ss, &ksize->name, "%s%s%s%s", compute_prefix(sym),
-		     sym->name, addstr_all,
-		     mode("keep-primary") ? "_post" : "");
+	write_ksplice_symbol(ksize_ss, &ksize->symbol, sym,
+			     mode("keep-primary") ? "_post" : "");
 	ksize->size = symsize;
 	ksize->flags = 0;
 	if (mode("keep-helper") &&
@@ -555,8 +570,6 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	if (starts_with(sym->section->name, ".rodata"))
 		ksize->flags |= KSPLICE_SIZE_RODATA;
 	write_reloc(ksize_ss, &ksize->thismod_addr, symp, 0);
-	write_system_map_array(sbfd, ksize_ss, &ksize->sym_addrs,
-			       &ksize->num_sym_addrs, sym);
 }
 
 void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
@@ -573,8 +586,7 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	}
 	assert(symp < sbfd->syms.data + sbfd->syms.size);
 
-	write_string(kpatch_ss, &kpatch->oldstr, "%s%s%s",
-		     compute_prefix(*symp), symname, addstr_all);
+	write_ksplice_symbol(kpatch_ss, &kpatch->symbol, *symp, "");
 	kpatch->oldaddr = 0;
 	kpatch->saved = NULL;
 	kpatch->trampoline = NULL;
