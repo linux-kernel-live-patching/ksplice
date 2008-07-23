@@ -27,7 +27,7 @@ use File::Temp;
 my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
-	"verbose|v!" => \$verbose,
+	"verbose|v!" => \$verbose::level,
 	"debug=i" => \$debug) or pod2usage(1);
 
 if($wantversion) {

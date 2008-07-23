@@ -65,6 +65,7 @@ install: default $(addprefix install-,$(objutils))
 	install -m755 -D $(srcdir)/Makefile.ksplice $(DESTDIR)$(datadir)/ksplice/Makefile.ksplice
 	install -m755 -D $(srcdir)/ksplice.pl $(DESTDIR)$(datadir)/ksplice/ksplice.pl
 	install -m644 -D ksplice.pm $(DESTDIR)$(datadir)/ksplice/ksplice.pm
+	install -m644 -D verbose.pm $(DESTDIR)$(datadir)/ksplice/verbose.pm
 	install -m644 -D $(srcdir)/kmodsrc/ksplice.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.c
 	install -m644 -D $(srcdir)/kmodsrc/ksplice.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.h
 	install -m644 -D $(srcdir)/kmodsrc/ksplice-run-pre.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice-run-pre.h

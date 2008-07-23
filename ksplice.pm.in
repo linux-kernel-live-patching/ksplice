@@ -3,13 +3,13 @@ use Cwd 'abs_path';
 use File::Temp qw/:mktemp/;
 use strict;
 use warnings;
+use verbose;
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw($datadir $libexecdir $verbose $version_str init_tmpdir runcd runstr runval runval_raw runsuc unpack_update get_debugfs);
+our @EXPORT = qw($datadir $libexecdir $version_str init_tmpdir runcd runstr runval runval_raw runsuc unpack_update get_debugfs);
 
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
 our $version_str = "Ksplice version PACKAGE_VERSION\n";
-our $verbose = 0;
 
 sub init_tmpdir {
 	my $argdir = $ENV{TMPDIR};
@@ -23,7 +23,7 @@ sub init_tmpdir {
 
 sub runcd {
 	my ($dir) = @_;
-	print "chdir($dir)\n" if($verbose);
+	print "+ chdir($dir)\n" if($verbose::level);
 	if(!chdir($dir)) {
 		die "Failed during: chdir($dir)\n";
 	}
@@ -39,15 +39,15 @@ sub runval {
 sub runval_raw {
 	my (@cmd) = @_;
 	my ($out, $err);
-	print "@cmd\n" if($verbose);
-	if(!$verbose) {
+	print "+ @cmd\n" if($verbose::level);
+	if(!$verbose::level) {
 		open $out, ">&STDOUT" or die "Can't dup STDOUT: $!";
 		open $err, ">&STDERR" or die "Can't dup STDERR: $!";
 		open STDOUT, '>', "/dev/null" or die "Can't hide STDOUT: $!";
 		open STDERR, '>', "/dev/null" or die "Can't hide STDERR: $!";
 	}
 	my $val = system(@cmd);
-	if(!$verbose) {
+	if(!$verbose::level) {
 		open STDOUT, ">&", $out or die "Can't restore STDOUT: $!";
 		open STDERR, ">&", $err or die "Can't restore STDERR: $!";
 	}
@@ -56,7 +56,7 @@ sub runval_raw {
 
 sub runstr {
 	my @cmd = @_;
-	print "@cmd\n" if($verbose);
+	print "+ @cmd\n" if($verbose::level);
 	local $/;
 	open PIPE, '-|', @cmd or die "Can't run @cmd: $!";
 	my $output = <PIPE>;

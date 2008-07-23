@@ -27,7 +27,7 @@ my ($kid, $file);
 my ($help, $wantversion) = (0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
-	"verbose|v!" => \$verbose,
+	"verbose|v!" => \$verbose::level,
 	"id=s" => \$kid,
 	"file=s" => \$file) or pod2usage(1);
 
