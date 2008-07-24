@@ -261,8 +261,12 @@ static void print_bytes(struct module_pack *pack, unsigned char *run, int runc,
 {
 	int o;
 	int matched = min(runc, prec);
-	for (o = 0; o < matched; o++)
-		ksdebug(pack, 0, "%02x/%02x ", run[o], pre[o]);
+	for (o = 0; o < matched; o++) {
+		if (run[o] == pre[o])
+			ksdebug(pack, 0, "%02x ", run[o]);
+		else
+			ksdebug(pack, 0, "%02x/%02x ", run[o], pre[o]);
+	}
 	for (o = matched; o < runc; o++)
 		ksdebug(pack, 0, "%02x/ ", run[o]);
 	for (o = matched; o < prec; o++)
