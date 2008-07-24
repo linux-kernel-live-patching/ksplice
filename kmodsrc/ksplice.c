@@ -573,6 +573,7 @@ static int valid_stack_ptr(struct thread_info *tinfo, void *p)
 int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
+	struct module *m;
 	pack->abort_code = NONE;
 
 	if (init_debug_buf(pack) < 0)
@@ -586,6 +587,12 @@ int init_ksplice_module(struct module_pack *pack)
 #endif /* KSPLICE_STANDALONE */
 
 	mutex_lock(&module_mutex);
+
+	list_for_each_entry(m, &modules, list) {
+		if (pack->target_name != NULL &&
+		    strcmp(pack->target_name, m->name) == 0)
+			pack->target = m;
+	}
 
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	if (pack->target == NULL) {

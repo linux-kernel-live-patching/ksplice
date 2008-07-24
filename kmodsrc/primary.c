@@ -49,10 +49,11 @@ module_param(debug, int, 0600);
 struct module_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_ID),
 #ifdef KSPLICE_TARGET
-	.target = STR(KSPLICE_TARGET),
+	.target_name = STR(KSPLICE_TARGET),
 #else
-	.target = NULL,
+	.target_name = NULL,
 #endif
+	.target = NULL,
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
 	.primary_relocs = ksplice_relocs,

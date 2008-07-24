@@ -63,7 +63,8 @@ enum ksplice_abort_code_enum {
 struct module_pack {
 	struct kobject kobj;
 	const char *name;
-	const char *target;
+	const char *target_name;
+	struct module *target;
 	unsigned long map_printk;
 	struct module *primary;
 	enum ksplice_stage_enum stage;
