@@ -135,7 +135,6 @@ END
 
 }
 
-chdir("/");
 print "Done!\n";
 exit(0);
 

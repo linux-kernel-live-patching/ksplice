@@ -77,7 +77,6 @@ sub view_file {
 	runval("cp $file .");
 	my $ksplice = unpack_update($file);
 	print runstr("cat $ksplice/patch");
-	chdir("/");
 }
 
 sub view_list {

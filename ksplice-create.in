@@ -252,7 +252,6 @@ for my $module (@modules) {
 }
 runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
 copy("$ksplice.tar.gz", "$origdir/$ksplice.tar.gz");
-chdir($origdir);
 
 print "Ksplice update tarball written to $ksplice.tar.gz\n";
 

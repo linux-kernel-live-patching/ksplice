@@ -82,4 +82,9 @@ sub get_debugfs {
 	return $debug;
 }
 
+END {
+	$verbose::level = 0;
+	chdir("/");
+}
+
 1;
