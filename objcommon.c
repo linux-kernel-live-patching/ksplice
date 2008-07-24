@@ -109,3 +109,34 @@ bfd_vma addr_offset(struct supersect *ss, void *addr)
 {
 	return (void *)addr - ss->contents.data;
 }
+
+bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc)
+{
+	int size = bfd_get_reloc_size(reloc->howto);
+
+	bfd_vma x = bfd_get(size * 8, ss->parent,
+			    ss->contents.data + reloc->address);
+	x &= reloc->howto->src_mask;
+	x >>= reloc->howto->bitpos;
+	bfd_vma signbit = reloc->howto->dst_mask >> reloc->howto->bitpos;
+	signbit &= ~(signbit >> 1);
+	switch (reloc->howto->complain_on_overflow) {
+	case complain_overflow_signed:
+	case complain_overflow_bitfield:
+		x |= -(x & signbit);
+		break;
+	case complain_overflow_unsigned:
+		break;
+	default:
+		DIE;
+	}
+	x <<= reloc->howto->rightshift;
+
+	bfd_vma add = reloc->addend;
+	if (reloc->howto->pc_relative) {
+		if (!reloc->howto->pcrel_offset)
+			add += reloc->address;
+		add += size;
+	}
+	return x + add;
+}
