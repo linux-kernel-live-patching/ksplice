@@ -127,6 +127,8 @@ DEFINE_HASH_TYPE(struct addr_vec, addr_vec_hash,
 		 vec_init);
 struct addr_vec_hash system_map;
 
+static const int KSPLICE_SOURCE_DIFF_MAX = 4096;
+
 void load_system_map()
 {
 	const char *config_dir = getenv("KSPLICE_CONFIG_DIR");
@@ -179,6 +181,18 @@ int main(int argc, char **argv)
 	} else {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
+	}
+
+	if (mode("sourcediff")) {
+		struct supersect *ss = make_section(ibfd, &isyms,
+						    ".ksplice_source_diff");
+		FILE *fp = fopen(varargs[0], "r");
+		assert(fp != NULL);
+		char *buf = malloc(KSPLICE_SOURCE_DIFF_MAX);
+		size_t len = fread(buf, 1, KSPLICE_SOURCE_DIFF_MAX - 1, fp);
+		fclose(fp);
+		buf[len] = '\0';
+		memcpy(vec_grow(&ss->contents, len + 1), buf, len + 1);
 	}
 
 	if (mode("keep") || mode("sizelist") || mode("rmsyms"))

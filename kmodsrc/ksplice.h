@@ -74,6 +74,7 @@ struct module_pack {
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
 	const struct ksplice_size *helper_sizes, *helper_sizes_end;
 	struct ksplice_patch *patches, *patches_end;
+	const char *source_diff, *source_diff_end;
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	struct paravirt_patch_site
 	    *primary_parainstructions, *primary_parainstructions_end,

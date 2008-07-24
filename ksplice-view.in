@@ -66,7 +66,16 @@ sub view_kid {
 	my $stage = <STAGE>;
 	close STAGE;
 	chomp($stage);
-	print "Ksplice id $kid is present in the kernel and is $stage.\n";
+	print "Ksplice id $kid is present in the kernel and is $stage.\n\n";
+
+	local $/;
+	open SOURCE_DIFF, '<', "/sys/module/ksplice_$kid/ksplice/source_diff" or die $!;
+	my $source_diff = <SOURCE_DIFF>;
+	close SOURCE_DIFF;
+	return if($source_diff eq "");
+	print "Here is the first 4 KiB of the source code patch";
+	print " associated with this update:\n";
+	print $source_diff;
 }
 
 sub view_file {

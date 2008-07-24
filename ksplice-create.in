@@ -213,6 +213,8 @@ for my $module (@modules) {
 	rename("collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
 	chdir("kmodsrc-$module");
 
+	runsuc("objmanip", "collection.o.primary", "sourcediff", $patchfile);
+
 	rename("collection.o.primary", "collection.o.primary.preld");
 	runval("ld", "--script=ld-script", "-r", "-o", "collection.o.primary", "collection.o.primary.preld");
 	rename("collection.o.helper", "collection.o.helper.preld");

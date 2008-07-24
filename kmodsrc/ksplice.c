@@ -264,6 +264,14 @@ static ssize_t abort_cause_show(struct module_pack *pack, char *buf)
 	return 0;
 }
 
+static ssize_t source_diff_show(struct module_pack *pack, char *buf)
+{
+	int len = pack->source_diff_end - pack->source_diff;
+	if (len == 0 || pack->source_diff[len - 1] != '\0')
+		return 0;
+	return snprintf(buf, PAGE_SIZE, "%s", pack->source_diff);
+}
+
 static ssize_t stage_store(struct module_pack *pack,
 			   const char *buf, size_t len)
 {
@@ -273,13 +281,16 @@ static ssize_t stage_store(struct module_pack *pack,
 }
 
 static struct ksplice_attribute stage_attribute =
-	__ATTR(stage, 0644, stage_show, stage_store);
-
-static struct ksplice_attribute abort_cause_attribute = __ATTR_RO(abort_cause);
+	__ATTR(stage, 0600, stage_show, stage_store);
+static struct ksplice_attribute abort_cause_attribute =
+	__ATTR(abort_cause, 0600, abort_cause_show, NULL);
+static struct ksplice_attribute source_diff_attribute =
+	__ATTR(source_diff, 0600, source_diff_show, NULL);
 
 static struct attribute *ksplice_attrs[] = {
 	&stage_attribute.attr,
 	&abort_cause_attribute.attr,
+	&source_diff_attribute.attr,
 	NULL
 };
 
