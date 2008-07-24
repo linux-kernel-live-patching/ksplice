@@ -41,9 +41,7 @@ bfd_vma read_reloc(asection *sect, void *addr, size_t size, asymbol **symp)
 				fprintf(stderr, "warning: unexpected "
 					"non-absolute relocation at %s+%lx\n",
 					sect->name, (unsigned long)address);
-			if (!reloc->howto->partial_inplace)
-				val = reloc->addend;
-			return val;
+			return get_reloc_offset(ss, reloc);
 		}
 	}
 	if (symp != NULL)
