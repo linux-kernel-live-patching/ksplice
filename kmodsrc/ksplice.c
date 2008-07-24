@@ -1618,7 +1618,8 @@ int init_debug_buf(struct module_pack *pack)
 {
 	pack->debug_blob.size = 0;
 	pack->debug_blob.data = NULL;
-	pack->debugfs_dentry = debugfs_create_blob(pack->name, 700, NULL,
+	pack->debugfs_dentry = debugfs_create_blob(pack->name,
+						   S_IFREG | S_IRUSR, NULL,
 						   &pack->debug_blob);
 	if (pack->debugfs_dentry == NULL)
 		return -ENOMEM;
