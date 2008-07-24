@@ -42,34 +42,35 @@ if($wantversion) {
 }
 pod2usage(1) if($help || scalar(@ARGV != 1));
 
-my $kid = $ARGV[0];
-$kid =~ s/^ksplice[_-]//;
+my $mid = $ARGV[0];
+$mid =~ s/^ksplice[_-]//;
+my $module = "ksplice_$mid";
 
 if(! -d "/sys/module") {
 	print "/sys not mounted?\n";
 	exit(1);
 }
-if(! -d "/sys/module/ksplice_$kid/ksplice") {
-	print "Ksplice id $kid is not present in the kernel\n";
+if(! -d "/sys/module/$module/ksplice") {
+	print "Ksplice id $mid is not present in the kernel\n";
 	exit(1);
 }
 
 if($debug) {
-	if(! -d "/sys/module/ksplice_$kid/parameters") {
-		runval("echo $debug > /sys/module/ksplice_$kid/debug");
+	if(! -d "/sys/module/$module/parameters") {
+		runval("echo $debug > /sys/module/$module/debug");
 	}
 	else {
-		runval("echo $debug > /sys/module/ksplice_$kid/parameters/debug");
+		runval("echo $debug > /sys/module/$module/parameters/debug");
 	}
 }
 
-open STAGE, '>', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
+open STAGE, '>', "/sys/module/$module/ksplice/stage" or die $!;
 print STAGE "reversed\n";
 close STAGE;
-unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0) {
+unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0) {
 	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
 					    DIR => tmpdir());
-	my $debug = get_debugfs("ksplice_$kid", $debugfs_out);
+	my $debug = get_debugfs("$module", $debugfs_out);
 	if (!defined($debug)) {
 		my $dmesg = runstr("dmesg | grep ksplice");
 		while($dmesg =~ /ksplice: Preparing to reverse/) {
@@ -77,9 +78,9 @@ unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0) {
 		}
 		$debug = $dmesg;
 	}
-	print STDERR "Error undoing Ksplice update $kid:\n";
+	print STDERR "Error undoing Ksplice update $mid:\n";
 	print "$debug";
-	open(ABORT, '<', "/sys/module/ksplice_$kid/ksplice/abort_cause")
+	open(ABORT, '<', "/sys/module/$module/ksplice/abort_cause")
 	    or die $!;
 	chomp(my $abort_cause = <ABORT>);
 	close(ABORT);
