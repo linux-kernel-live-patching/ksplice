@@ -546,11 +546,14 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 	for (relocp = ss->relocs.data;
 	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 		asymbol *sym = *(*relocp)->sym_ptr_ptr;
-		if (sym->section == (asection *)looking_for) {
+		if (sym->section == (asection *)looking_for &&
+		    (!starts_with(sym->section->name, ".text") ||
+		     get_reloc_offset(ss, *relocp) != 0)) {
 			struct wsect *w = malloc(sizeof(*w));
 			w->name = strdup(((asection *)looking_for)->name);
 			w->next = wanted_sections;
 			wanted_sections = w;
+			break;
 		}
 	}
 }
