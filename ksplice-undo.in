@@ -20,14 +20,15 @@ use Cwd 'abs_path', 'getcwd';
 use File::Basename;
 use File::Copy;
 use File::Path;
-use File::Temp;
+use File::Spec::Functions qw(:ALL);
+use File::Temp qw(tempfile tempdir);
 use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
 use Pod::Usage;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
-use verbose qw(copy rename move chdir mkdir mkpath unlink rmtree mktemp mkdtemp);
+use verbose qw(copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
 
 my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
@@ -66,7 +67,8 @@ open STAGE, '>', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
 print STAGE "reversed\n";
 close STAGE;
 unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0) {
-	my $debugfs_out = mktemp("/tmp/ksplice-debug-XXXXXX");
+	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
+					    DIR => tmpdir());
 	my $debug = get_debugfs("ksplice_$kid", $debugfs_out);
 	if (!defined($debug)) {
 		my $dmesg = runstr("dmesg | grep ksplice");

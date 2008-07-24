@@ -3,27 +3,17 @@ use Cwd 'abs_path';
 use File::Basename;
 use File::Copy;
 use File::Path;
-use File::Temp;
+use File::Temp qw(tempfile tempdir);
 use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
 use strict;
 use warnings;
-use verbose qw(copy rename move chdir mkdir mkpath unlink rmtree mktemp mkdtemp);
+use verbose qw(copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw($datadir $libexecdir $version_str init_tmpdir runstr runval runval_raw runsuc unpack_update get_debugfs);
+our @EXPORT = qw($datadir $libexecdir $version_str runstr runval runval_raw runsuc unpack_update get_debugfs);
 
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
 our $version_str = "Ksplice version PACKAGE_VERSION\n";
-
-sub init_tmpdir {
-	my $argdir = $ENV{TMPDIR};
-	$argdir = "/tmp" if(!defined $argdir || ! -d $argdir);
-	die if(! -d $argdir);
-
-	my $tmpdir = mkdtemp("$argdir/ksplice-tmp-XXXXXX");
-	die if(!defined $tmpdir || ! -d $tmpdir);
-	return $tmpdir;
-}
 
 sub runval {
 	my (@cmd) = @_;
@@ -81,12 +71,12 @@ sub unpack_update {
 sub get_debugfs {
 	my ($modname, $debugfs_out) = @_;
 	my $debug;
-	my $debugfsdir = init_tmpdir();
+	my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX',
+				 TMPDIR => 1, CLEANUP => 1);
 	runval_raw(qw(mount -t debugfs debugfs), $debugfsdir);
 	if (-e "$debugfsdir/$modname") {
 		system(qw(cp -a), "$debugfsdir/$modname", "$debugfs_out");
 		$debug = runstr("cat", "$debugfsdir/$modname");
-		runval_raw(qw(rmdir), $debugfsdir);
 	}
 	runval_raw(qw(umount), $debugfsdir);
 	return $debug;
