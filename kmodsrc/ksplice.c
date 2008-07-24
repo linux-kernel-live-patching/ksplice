@@ -1079,7 +1079,7 @@ static int add_dependency_on_address(struct module_pack *pack,
 {
 	struct module *m;
 	int ret = 0;
-	m = module_text_address(addr);
+	m = module_text_address(follow_trampolines(pack, addr));
 	if (m == NULL || starts_with(m->name, pack->name) ||
 	    ends_with(m->name, "_helper"))
 		ret = 0;
