@@ -60,6 +60,7 @@ sub view_kid {
 	}
 	if(! -d "/sys/module/ksplice_$kid/ksplice") {
 		print "Ksplice id $kid is not present in the kernel\n";
+		return;
 	}
 
 	open STAGE, '<', "/sys/module/ksplice_$kid/ksplice/stage" or die $!;
