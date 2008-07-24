@@ -538,7 +538,7 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for)
 {
-	if (!want_section(looking_at))
+	if (!want_section(looking_at) || is_special(looking_at))
 		return;
 
 	struct supersect *ss = fetch_supersect(abfd, looking_at, &isyms);
