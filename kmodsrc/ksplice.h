@@ -56,7 +56,7 @@ enum ksplice_stage_enum {
 	PREPARING, APPLIED, REVERSED
 };
 
-enum ksplice_abort_code_enum {
+enum ksplice_abort_cause_enum {
 	NONE, NO_MATCH, BAD_SYSTEM_MAP, CODE_BUSY, MODULE_BUSY, UNEXPECTED
 };
 
@@ -68,7 +68,7 @@ struct module_pack {
 	unsigned long map_printk;
 	struct module *primary;
 	enum ksplice_stage_enum stage;
-	enum ksplice_abort_code_enum abort_code;
+	enum ksplice_abort_cause_enum abort_cause;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
 	const struct ksplice_size *primary_sizes, *primary_sizes_end;
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
