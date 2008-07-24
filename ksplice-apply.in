@@ -20,14 +20,14 @@ use Cwd 'abs_path', 'getcwd';
 use File::Basename;
 use File::Copy;
 use File::Path;
-use Fatal qw(:void copy rename move chdir mkdir rmtree);
 use File::Temp;
+use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
 use Pod::Usage;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
-use verbose qw(copy rename move chdir mkdir mkpath rmtree);
+use verbose qw(copy rename move chdir mkdir mkpath unlink rmtree mktemp mkdtemp);
 
 my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
