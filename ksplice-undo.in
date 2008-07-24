@@ -28,12 +28,12 @@ use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
-use verbose qw(copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
+use verbose qw(:2 copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
 
 my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
-	"verbose|v!" => \$verbose::level,
+	"verbose|v+" => \$verbose::level,
 	"debug=i" => \$debug) or pod2usage(1);
 
 if($wantversion) {
