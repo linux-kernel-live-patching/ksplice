@@ -79,7 +79,11 @@ unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod ksplice_$kid") == 0) {
 	}
 	print STDERR "Error undoing Ksplice update $kid:\n";
 	print "$debug";
-	if($debug =~ /to-be-reversed code is busy/) {
+	open(ABORT, '<', "/sys/module/ksplice_$kid/ksplice/abort_cause")
+	    or die $!;
+	chomp(my $abort_cause = <ABORT>);
+	close(ABORT);
+	if($abort_cause eq "code_busy") {
 		print <<END
 
 Ksplice has aborted the undo operation because it appears that the code that
@@ -88,6 +92,16 @@ specifically, Ksplice has been unable to find a moment when one or more of the
 to-be-changed functions is not on a thread's kernel stack.
 
 END
+	}
+	if($abort_cause eq "module_busy") {
+		print <<END
+
+Ksplice has aborted the undo operation because it appears that the Ksplice
+update that you are trying to unload is in use by another module.  You can
+find out what module is using the Ksplice update using the lsmod command.
+
+END
+
 	}
 	print("Debugging output saved to $debugfs_out\n");
 	die;

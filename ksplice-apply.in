@@ -91,12 +91,16 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 			}
 			$debug = $dmesg;
 		}
+		open(ABORT, '<', "/sys/module/ksplice_$update/ksplice/abort_cause")
+		    or die $!;
+		chomp(my $abort_cause = <ABORT>);
+		close(ABORT);
 		runval_raw("rmmod $primary") if $unload;
 		print STDERR "Error applying Ksplice update $kid:\n";
 		print "$debug";
 
 		my $bugreport = 'PACKAGE_BUGREPORT';
-		if($debug =~ /could not match some sections/) {
+		if($abort_cause eq "no_match") {
 			print <<END
 
 Ksplice has aborted the upgrade because Ksplice has been unable to match the
@@ -110,7 +114,7 @@ and assembler, feel free to report a bug to $bugreport.
 
 END
 		}
-		if($debug =~ /to-be-replaced code is busy/) {
+		if($abort_cause eq "code_busy") {
 			print <<END
 
 Ksplice has aborted the upgrade because it appears that the code that you are
@@ -120,7 +124,7 @@ functions is not on a thread's kernel stack.
 
 END
 		}
-		if($debug =~ /System[.]map does not match kernel/) {
+		if($abort_cause eq "bad_system_map") {
 			print <<END
 
 Ksplice has aborted the upgrade because it appears that the System.map file
