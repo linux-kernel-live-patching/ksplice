@@ -964,6 +964,16 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	struct safety_record *tmp;
 	struct reloc_nameval *nv;
 
+	struct module *run_module = module_text_address(run_addr);
+	if (run_module != pack->target) {
+		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ignoring "
+			"address %" ADDR " in other module %s for sect %s\n",
+			run_addr,
+			run_module == NULL ? "vmlinux" : run_module->name,
+			s->name);
+		return 0;
+	}
+
 	if (run_pre_cmp(pack, run_addr, pre_addr, s->size, 0) != 0) {
 		set_temp_myst_relocs(pack, NOVAL);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: sect %s does "
