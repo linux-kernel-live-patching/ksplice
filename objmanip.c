@@ -482,6 +482,28 @@ void write_ksplice_symbol(struct supersect *ss,
 	struct ksplice_symbol *ksymbol = sect_grow(ksymbol_ss, 1,
 						   struct ksplice_symbol);
 
+	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
+		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
+	} else if (bfd_is_const_section(sym->section)) {
+		ksymbol->name = NULL;
+	} else {
+		const struct asymbolp_vec *syms = &ss->parent->syms;
+		asymbol **gsymp;
+		for (gsymp = syms->data; gsymp < syms->data + syms->size;
+		     gsymp++) {
+			asymbol *gsym = *gsymp;
+			if ((gsym->flags & BSF_DEBUGGING) == 0 &&
+			    sym->section == gsym->section &&
+			    sym->value == gsym->value) {
+				write_string(ksymbol_ss, &ksymbol->name,
+					     "%s", gsym->name);
+				break;
+			}
+		}
+		if (gsymp == syms->data + syms->size)
+			ksymbol->name = NULL;
+	}
+
 	write_string(ksymbol_ss, &ksymbol->label, "%s%s%s%s",
 		     compute_prefix(sym), sym->name, addstr_all, addstr_sect);
 

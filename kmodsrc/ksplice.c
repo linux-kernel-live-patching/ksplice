@@ -1986,12 +1986,9 @@ static abort_t compute_address(struct module_pack *pack,
 			       const struct ksplice_symbol *ksym,
 			       struct list_head *vals, int pre)
 {
-	int i;
 	abort_t ret;
-	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
 	struct reloc_nameval *nv;
-	const char *sym_name;
-	char *name;
+
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return OK;
@@ -2008,20 +2005,14 @@ static abort_t compute_address(struct module_pack *pack,
 
 	if (starts_with(ksym->label, ".rodata"))
 		return OK;
-	sym_name = ksym->label;
-	for (i = 0; prefix[i] != NULL; i++) {
-		if (starts_with(sym_name, prefix[i]))
-			sym_name += strlen(prefix[i]);
-	}
-	name = dup_wolabel(sym_name);
-	ret = exported_symbol_lookup(name, vals);
+
+	ret = exported_symbol_lookup(ksym->name, vals);
 #ifdef CONFIG_KALLSYMS
 	if (ret == OK)
-		ret = kernel_lookup(name, vals);
+		ret = kernel_lookup(ksym->name, vals);
 	if (ret == OK)
-		ret = other_module_lookup(name, vals, pack->name);
+		ret = other_module_lookup(ksym->name, vals, pack->name);
 #endif /* CONFIG_KALLSYMS */
-	kfree(name);
 	if (ret != OK)
 		return ret;
 

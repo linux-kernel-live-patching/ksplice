@@ -1,4 +1,5 @@
 struct ksplice_symbol {
+	const char *name;
 	const char *label;
 	unsigned long nr_candidates;
 	const unsigned long *candidates;

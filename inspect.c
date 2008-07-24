@@ -45,8 +45,9 @@ char *str_ksplice_symbol(struct supersect *ss,
 			 const struct ksplice_symbol *ksymbol)
 {
 	char *str;
-	assert(asprintf(&str, "%s %s",
+	assert(asprintf(&str, "%s (%s %s)",
 			read_string(ss, &ksymbol->label),
+			read_string(ss, &ksymbol->name),
 			str_ulong_vec(ss, &ksymbol->candidates,
 				      &ksymbol->nr_candidates)));
 	return str;
