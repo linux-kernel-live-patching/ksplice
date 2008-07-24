@@ -484,28 +484,44 @@ void write_ksplice_symbol(struct supersect *ss,
 
 	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
 		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
+		write_string(ksymbol_ss, &ksymbol->label, "%s%s%s",
+			     compute_prefix(sym), sym->name, addstr_sect);
 	} else if (bfd_is_const_section(sym->section)) {
 		ksymbol->name = NULL;
+		write_string(ksymbol_ss, &ksymbol->label, "%s%s%s%s",
+			     compute_prefix(sym), sym->name, addstr_all,
+			     addstr_sect);
 	} else {
 		const struct asymbolp_vec *syms = &ss->parent->syms;
 		asymbol **gsymp;
 		for (gsymp = syms->data; gsymp < syms->data + syms->size;
 		     gsymp++) {
 			asymbol *gsym = *gsymp;
-			if ((gsym->flags & BSF_DEBUGGING) == 0 &&
-			    sym->section == gsym->section &&
-			    sym->value == gsym->value) {
-				write_string(ksymbol_ss, &ksymbol->name,
-					     "%s", gsym->name);
-				break;
-			}
+			if ((gsym->flags & BSF_DEBUGGING) != 0 ||
+			    sym->section != gsym->section ||
+			    sym->value != gsym->value)
+				continue;
+			write_string(ksymbol_ss, &ksymbol->name, "%s",
+				     gsym->name);
+			if ((gsym->flags & BSF_GLOBAL) != 0)
+				write_string(ksymbol_ss, &ksymbol->label,
+					     "%s%s%s", compute_prefix(gsym),
+					     gsym->name, addstr_sect);
+			else
+				write_string(ksymbol_ss, &ksymbol->label,
+					     "%s%s%s%s", compute_prefix(gsym),
+					     gsym->name, addstr_all,
+					     addstr_sect);
+			break;
 		}
-		if (gsymp == syms->data + syms->size)
+		if (gsymp == syms->data + syms->size) {
 			ksymbol->name = NULL;
+			write_string(ksymbol_ss, &ksymbol->label,
+				     "%s+%lx%s%s", sym->section->name,
+				     (unsigned long)sym->value, addstr_all,
+				     addstr_sect);
+		}
 	}
-
-	write_string(ksymbol_ss, &ksymbol->label, "%s%s%s%s",
-		     compute_prefix(sym), sym->name, addstr_all, addstr_sect);
 
 	write_system_map_array(ss->parent, ksymbol_ss, &ksymbol->candidates,
 			       &ksymbol->nr_candidates, sym);
