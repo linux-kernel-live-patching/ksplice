@@ -172,3 +172,5 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment);
 #define ends_with(str, suffix)						\
 	(strlen(str) >= strlen(suffix) &&				\
 	 strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0)
+
+bfd_vma addr_offset(struct supersect *ss, void *addr);

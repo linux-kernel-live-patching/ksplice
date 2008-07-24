@@ -24,18 +24,12 @@
 bfd *ibfd;
 struct asymbolp_vec isyms;
 
-bfd_vma addr_offset(asection *sect, void *addr)
-{
-	struct supersect *ss = fetch_supersect(ibfd, sect, &isyms);
-	return (void *)addr - ss->contents.data;
-}
-
 bfd_vma read_reloc(asection *sect, void *addr, size_t size, asymbol **symp)
 {
 	struct supersect *ss = fetch_supersect(ibfd, sect, &isyms);
 	arelent **relocp;
 	bfd_vma val = bfd_get(size * 8, ibfd, addr);
-	bfd_vma address = addr_offset(sect, addr);
+	bfd_vma address = addr_offset(ss, addr);
 	for (relocp = ss->relocs.data;
 	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 		arelent *reloc = *relocp;
@@ -73,18 +67,18 @@ void *read_pointer(asection *sect, void **addr, asection **sectp)
 {
 	asymbol *sym;
 	bfd_vma offset = read_reloc(sect, addr, sizeof(*addr), &sym);
+	struct supersect *ss = fetch_supersect(ibfd, sym->section, &isyms);
 	if (bfd_is_abs_section(sym->section) && sym->value + offset == 0)
 		return NULL;
 	if (bfd_is_const_section(sym->section)) {
 		fprintf(stderr, "warning: unexpected relocation to const "
 			"section at %s+%lx\n", sect->name,
-			(unsigned long)addr_offset(sect, addr));
+			(unsigned long)addr_offset(ss, addr));
 		return NULL;
 	}
 	if (sectp != NULL)
 		*sectp = sym->section;
-	return fetch_supersect(ibfd, sym->section, &isyms)->contents.data +
-	    sym->value + offset;
+	return ss->contents.data + sym->value + offset;
 }
 
 char *read_string(asection *sect, char **addr)

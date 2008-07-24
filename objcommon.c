@@ -104,3 +104,8 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment)
 	memset(out, 0, pad + n * size);
 	return out + pad;
 }
+
+bfd_vma addr_offset(struct supersect *ss, void *addr)
+{
+	return (void *)addr - ss->contents.data;
+}
