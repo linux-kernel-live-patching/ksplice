@@ -174,4 +174,4 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment);
 	 strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0)
 
 bfd_vma addr_offset(struct supersect *ss, void *addr);
-bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc);
+bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc);

@@ -122,9 +122,11 @@ int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
 			return -1;
 
 		bfd_vma old_offset = get_reloc_offset(old_ss,
-						      old_ss->relocs.data[i]);
+						      old_ss->relocs.data[i],
+						      1);
 		bfd_vma new_offset = get_reloc_offset(new_ss,
-						      new_ss->relocs.data[i]);
+						      new_ss->relocs.data[i],
+						      1);
 
 		if (starts_with(ro_old_ss->name, ".rodata.str")) {
 			if (strcmp

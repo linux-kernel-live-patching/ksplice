@@ -110,7 +110,7 @@ bfd_vma addr_offset(struct supersect *ss, void *addr)
 	return (void *)addr - ss->contents.data;
 }
 
-bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc)
+bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc)
 {
 	int size = bfd_get_reloc_size(reloc->howto);
 
@@ -136,7 +136,8 @@ bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc)
 	if (reloc->howto->pc_relative) {
 		if (!reloc->howto->pcrel_offset)
 			add += reloc->address;
-		add += size;
+		if (adjust_pc)
+			add += size;
 	}
 	return x + add;
 }
