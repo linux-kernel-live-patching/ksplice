@@ -14,8 +14,8 @@ int main(int argc, char **argv);
 void rm_some_relocs(bfd *ibfd, asection *isection);
 void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 			 struct supersect *ss);
-bfd_vma blot_section(bfd *abfd, asection *sect, int offset,
-		     reloc_howto_type *howto);
+void blot_section(bfd *abfd, asection *sect, int offset,
+		  reloc_howto_type *howto);
 void write_ksplice_size(bfd *ibfd, asymbol **symp);
 void write_ksplice_patch(bfd *ibfd, char *symname);
 void rm_from_special(bfd *ibfd, struct specsect *s);
