@@ -80,13 +80,14 @@ sub view_kid {
 }
 
 sub view_file {
-	$file = abs_path($file);
-
 	my $tmpdir = tempdir('ksplice-tmp-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+	copy($file, "$tmpdir/" . basename($file));
 	chdir($tmpdir);
-	runval("cp $file .");
 	my $ksplice = unpack_update($file);
-	print runstr("cat $ksplice/patch");
+	open(PATCH, '<', "$ksplice/patch") or die $!;
+	local $/;
+	print <PATCH>;
+	close(PATCH);
 }
 
 sub view_list {

@@ -75,8 +75,11 @@ sub get_debugfs {
 				 TMPDIR => 1, CLEANUP => 1);
 	runval_raw(qw(mount -t debugfs debugfs), $debugfsdir);
 	if (-e "$debugfsdir/$modname") {
-		system(qw(cp -a), "$debugfsdir/$modname", "$debugfs_out");
-		$debug = runstr("cat", "$debugfsdir/$modname");
+		copy("$debugfsdir/$modname", "$debugfs_out");
+		open(DEBUG, '<', "$debugfsdir/$modname") or die $!;
+		local $/;
+		$debug = <DEBUG>;
+		close(DEBUG);
 	}
 	runval_raw(qw(umount), $debugfsdir);
 	return $debug;
