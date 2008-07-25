@@ -99,56 +99,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		runval_raw("rmmod $primary") if $unload;
 		print STDERR "Error applying Ksplice update $kid:\n";
 		print "$debug";
-
-		my $bugreport = 'PACKAGE_BUGREPORT';
-		if($abort_cause eq "no_match") {
-			print <<END
-
-Ksplice has aborted the upgrade because Ksplice has been unable to match the
-object code produced by your current compiler and assembler against the running
-kernel's object code.  If you provided the exact kernel source to the running
-kernel, then it appears that your current compiler and/or assembler are
-behaving differently from the compiler and assembler used to build the running
-kernel.  If possible, please use the exact compiler and assembler that were
-used to build the running kernel.  If you are using exactly the same compiler
-and assembler, feel free to report a bug to $bugreport.
-
-END
-		}
-		if($abort_cause eq "code_busy") {
-			print <<END
-
-Ksplice has aborted the upgrade because it appears that the code that you are
-trying to patch is continuously in use by the system.  More specifically,
-Ksplice has been unable to find a moment when one or more of the to-be-patched
-functions is not on a thread's kernel stack.
-
-END
-		}
-		if($abort_cause eq "bad_system_map") {
-			print <<END
-
-Ksplice has aborted the upgrade because it appears that the System.map file
-provided to ksplice-create does not match the running kernel.
-
-END
-		}
-		if($abort_cause eq "failed_to_find") {
-			print <<END
-
-Ksplice has aborted the upgrade because it was unable to resolve some
-of the symbols used in the update.
-
-END
-		}
-		if($abort_cause eq "none") {
-			print <<END
-
-Ksplice has aborted the upgrade for unknown reasons.
-
-END
-
-		}
+		print_error($abort_cause);
 		print("Debugging output saved to $debugfs_out\n");
 		die;
 	}
@@ -158,6 +109,40 @@ END
 
 print "Done!\n";
 exit(0);
+
+sub print_error {
+	my ($error) = @_;
+	my %errors = (
+		"no_match" => <<'END',
+Ksplice has aborted the upgrade because Ksplice has been unable to match the
+object code produced by your current compiler and assembler against the running
+kernel's object code.  If you provided the exact kernel source to the running
+kernel, then it appears that your current compiler and/or assembler are
+behaving differently from the compiler and assembler used to build the running
+kernel.  If possible, please use the exact compiler and assembler that were
+used to build the running kernel.  If you are using exactly the same compiler
+and assembler, feel free to report a bug to PACKAGE_BUGREPORT.
+END
+		"code_busy" => <<'END',
+Ksplice has aborted the upgrade because it appears that the code that you are
+trying to patch is continuously in use by the system.  More specifically,
+Ksplice has been unable to find a moment when one or more of the to-be-patched
+functions is not on a thread's kernel stack.
+END
+		"bad_system_map" => <<'END',
+Ksplice has aborted the upgrade because it appears that the System.map file
+provided to ksplice-create does not match the running kernel.
+END
+		"failed_to_find" => <<'END',
+Ksplice has aborted the upgrade because it was unable to resolve some
+of the symbols used in the update.
+END
+		"none" => <<'END',
+Ksplice has aborted the upgrade for unknown reasons.
+END
+	);
+	print STDERR "\n$errors{$error}\n";
+}
 
 =head1 NAME
 

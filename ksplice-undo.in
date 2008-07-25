@@ -84,39 +84,33 @@ unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0) {
 	    or die $!;
 	chomp(my $abort_cause = <ABORT>);
 	close(ABORT);
-	if($abort_cause eq "code_busy") {
-		print <<END
-
-Ksplice has aborted the undo operation because it appears that the code that
-you are trying to change is continuously in use by the system.  More
-specifically, Ksplice has been unable to find a moment when one or more of the
-to-be-changed functions is not on a thread's kernel stack.
-
-END
-	}
-	if($abort_cause eq "module_busy") {
-		print <<END
-
-Ksplice has aborted the undo operation because it appears that the Ksplice
-update that you are trying to unload is in use by another module.  You can
-find out what module is using the Ksplice update using the lsmod command.
-
-END
-
-	}
-	if($abort_cause eq "none") {
-		print <<END
-
-Ksplice has aborted the undo operation for unknown reasons.
-
-END
-
-	}
+	print_error($abort_cause);
 	print("Debugging output saved to $debugfs_out\n");
 	die;
 }
 
 exit(0);
+
+sub print_error {
+	my ($error) = @_;
+	my %errors = (
+		"code_busy" => <<'END',
+Ksplice has aborted the undo operation because it appears that the code that
+you are trying to change is continuously in use by the system.  More
+specifically, Ksplice has been unable to find a moment when one or more of the
+to-be-changed functions is not on a thread's kernel stack.
+END
+		"module_busy" => <<'END',
+Ksplice has aborted the undo operation because it appears that the Ksplice
+update that you are trying to unload is in use by another module.  You can
+find out what module is using the Ksplice update using the lsmod command.
+END
+		"none" => <<'END',
+Ksplice has aborted the undo operation for unknown reasons.
+END
+);
+	print STDERR "\n$errors{$error}\n";
+}
 
 =head1 NAME
 
