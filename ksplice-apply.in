@@ -63,16 +63,17 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	if ($target ne 'vmlinux' && runstr("lsmod") !~ m/^${target}\s/m) {
 		die "Module $target to be patched not loaded";
 	}
-	my $update = "${kid}_$target";
+	my $mid = "${kid}_$target";
+	my $module = "ksplice_$mid";
 
 	die "/sys not mounted\n" unless (-d "/sys/module");
-	if(-d "/sys/module/ksplice_$update/ksplice") {
-		open STAGE, '<', "/sys/module/ksplice_$update/ksplice/stage";
+	if(-d "/sys/module/$module/ksplice") {
+		open STAGE, '<', "/sys/module/$module/ksplice/stage";
 		if (<STAGE> eq "applied\n") {
-			print STDERR "Ksplice update $update already applied; continuing\n";
+			print STDERR "Ksplice update $mid already applied; continuing\n";
 			next;
 		}
-		die "Unapplied Ksplice module $update already loaded!";
+		die "Unapplied Ksplice module $mid already loaded!";
 	}
 
 	if(runval_raw("insmod $primary debug=$debug") != 0) {
@@ -91,7 +92,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 			}
 			$debug = $dmesg;
 		}
-		open(ABORT, '<', "/sys/module/ksplice_$update/ksplice/abort_cause")
+		open(ABORT, '<', "/sys/module/$module/ksplice/abort_cause")
 		    or die $!;
 		chomp(my $abort_cause = <ABORT>);
 		close(ABORT);
