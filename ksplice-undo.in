@@ -18,12 +18,12 @@
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
-use ksplice;
+use Ksplice;
 
 my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
-	"verbose|v:+" => \$verbose::level,
+	"verbose|v:+" => \$Verbose::level,
 	"debug=i" => \$debug) or pod2usage(1);
 
 if($wantversion) {

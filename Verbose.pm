@@ -1,4 +1,4 @@
-package verbose;
+package Verbose;
 use strict;
 use warnings;
 
@@ -45,7 +45,7 @@ sub make_verbose {
 		$proto = prototype $call;
 	}
 	$proto = '@' unless defined($proto);
-	my $code = "package $pkg; sub ($proto) { verbose::debugcall($minlevel, \"$name\", \@_); $call(\@_); }";
+	my $code = "package $pkg; sub ($proto) { Verbose::debugcall($minlevel, \"$name\", \@_); $call(\@_); }";
 	*{$sym} = eval($code);
 }
 

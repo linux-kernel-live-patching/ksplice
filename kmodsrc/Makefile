@@ -1,4 +1,4 @@
-ksplice-script = /usr/local/share/ksplice/ksplice.pl
+ksplice-script = /usr/local/share/ksplice/ksplice-obj.pl
 
 ifneq ($(KERNELRELEASE),)
 

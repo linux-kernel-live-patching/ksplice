@@ -1,4 +1,4 @@
-package ksplice;
+package Ksplice;
 use Cwd qw(abs_path getcwd);
 use Getopt::Long qw(:config bundling);
 use File::Basename;
@@ -10,11 +10,11 @@ use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
 use Pod::Usage;
 use strict;
 use warnings;
-use verbose qw(:2 copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
+use Verbose qw(:2 copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
-	verbose GetOptions pod2usage
+	Verbose GetOptions pod2usage
 	$datadir $libexecdir $version_str
 	runstr runval runval_raw runsuc unpack_update get_debugfs
 	abs_path getcwd basename dirname tmpdir
@@ -34,15 +34,15 @@ sub runval {
 sub runval_raw {
 	my (@cmd) = @_;
 	my ($out, $err);
-	print "+ @cmd\n" if($verbose::level >= 1);
-	if($verbose::level < 1) {
+	print "+ @cmd\n" if($Verbose::level >= 1);
+	if($Verbose::level < 1) {
 		open $out, ">&STDOUT" or die "Can't dup STDOUT: $!";
 		open $err, ">&STDERR" or die "Can't dup STDERR: $!";
 		open STDOUT, '>', "/dev/null" or die "Can't hide STDOUT: $!";
 		open STDERR, '>', "/dev/null" or die "Can't hide STDERR: $!";
 	}
 	my $val = system(@cmd);
-	if($verbose::level < 1) {
+	if($Verbose::level < 1) {
 		open STDOUT, ">&", $out or die "Can't restore STDOUT: $!";
 		open STDERR, ">&", $err or die "Can't restore STDERR: $!";
 	}
@@ -51,7 +51,7 @@ sub runval_raw {
 
 sub runstr {
 	my @cmd = @_;
-	print "+ @cmd\n" if($verbose::level >= 1);
+	print "+ @cmd\n" if($Verbose::level >= 1);
 	local $/;
 	open PIPE, '-|', @cmd or die "Can't run @cmd: $!";
 	my $output = <PIPE>;
@@ -95,7 +95,7 @@ sub get_debugfs {
 }
 
 END {
-	$verbose::level = 0;
+	$Verbose::level = 0;
 	chdir("/");
 }
 

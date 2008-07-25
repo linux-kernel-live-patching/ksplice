@@ -18,13 +18,13 @@
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
-use ksplice;
+use Ksplice;
 
 my ($mid, $module, $file);
 my ($help, $wantversion) = (0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
-	"verbose|v:+" => \$verbose::level,
+	"verbose|v:+" => \$Verbose::level,
 	"id=s" => \$mid,
 	"file=s" => \$file) or pod2usage(1);
 

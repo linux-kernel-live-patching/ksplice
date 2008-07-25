@@ -18,14 +18,14 @@
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
-use ksplice;
+use Ksplice;
 
 my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
 my $standalone;
 my ($help, $wantversion, $prebuild, $skip_prebuild, $apply, $patch_opt) = (0, 0, 0, 0, 0, "-p1");
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
-	"verbose|v:+" => \$verbose::level,
+	"verbose|v:+" => \$Verbose::level,
 	"id=s" => \$kid,
 	"patch=s" => \$patchfile,
 	"diffext=s" => \$diffext,
@@ -73,7 +73,7 @@ if(! -e "$orig_config_dir/System.map") {
 	die "Failed to find System.map file in ORIG_CONFIG directory";
 }
 
-$ENV{KSPLICE_VERBOSE} = $verbose::level;
+$ENV{KSPLICE_VERBOSE} = $Verbose::level;
 $ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
 
 my @standalone_flag;
@@ -98,10 +98,10 @@ my $ksplice = "ksplice-$kid";
 # the kernel's address for printk.  This comparison helps Ksplice work around
 # this Fedora problem, and this comparison also helps Ksplice detect whether
 # the user has provided an incorrect System.map file.
-my $map_printk = runstr("$datadir/ksplice.pl", "system_map_lookup", "printk");
+my $map_printk = runstr("$datadir/ksplice-obj.pl", "system_map_lookup", "printk");
 
 print "Starting kernel builds (this process might take a long time)...\n";
-if($verbose::level < 1) {
+if($Verbose::level < 1) {
 	print "For output during this process, run ksplice-create with the option -v\n";
 }
 

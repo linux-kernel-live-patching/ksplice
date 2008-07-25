@@ -21,9 +21,9 @@ use Digest::MD5;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
-use ksplice;
+use Ksplice;
 
-$verbose::level = $ENV{KSPLICE_VERBOSE} if (defined $ENV{KSPLICE_VERBOSE});
+$Verbose::level = $ENV{KSPLICE_VERBOSE} if (defined $ENV{KSPLICE_VERBOSE});
 
 sub empty_diff {
 	my ($out) = @_;
@@ -147,5 +147,5 @@ if (exists $handlers{$cmd}) {
 	my $handler = $handlers{$cmd};
 	&$handler(@args);
 } else {
-	print "Usage: ksplice.pl ", join('|', keys %handlers), " ...\n";
+	print "Usage: ksplice-obj.pl ", join('|', keys %handlers), " ...\n";
 };

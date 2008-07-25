@@ -1,5 +1,5 @@
 ksplice-makefile := $(word $(words $(MAKEFILE_LIST)), $(MAKEFILE_LIST))
-ksplice-script = $(dir $(ksplice-makefile))ksplice.pl
+ksplice-script = $(dir $(ksplice-makefile))ksplice-obj.pl
 
 KSPLICE_MODE ?= diff
 $(if $(filter_out snap diff,$(KSPLICE_MODE)), \
