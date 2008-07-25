@@ -105,10 +105,17 @@ Ksplice has aborted the undo operation because it appears that the Ksplice
 update that you are trying to unload is in use by another module.  You can
 find out what module is using the Ksplice update using the lsmod command.
 END
+		"UNKNOWN" => <<'END',
+The Ksplice kernel interface has returned an error string that
+ksplice-undo does not understand.  This is probably the result of
+using a version of ksplice-apply that is older than the version of the
+Ksplice kernel module source.
+END
 		"none" => <<'END',
 Ksplice has aborted the undo operation for unknown reasons.
 END
 );
+	$error = "UNKNOWN" if (!exists $errors{$error});
 	print STDERR "\n$errors{$error}\n";
 }
 
