@@ -57,7 +57,8 @@ enum ksplice_stage_enum {
 };
 
 enum ksplice_abort_cause_enum {
-	NONE, NO_MATCH, BAD_SYSTEM_MAP, CODE_BUSY, MODULE_BUSY, UNEXPECTED
+	NONE, NO_MATCH, BAD_SYSTEM_MAP, CODE_BUSY, MODULE_BUSY, UNEXPECTED,
+	FAILED_TO_FIND
 };
 
 struct module_pack {

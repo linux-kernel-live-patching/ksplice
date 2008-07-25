@@ -258,6 +258,8 @@ static ssize_t abort_cause_show(struct module_pack *pack, char *buf)
 		return snprintf(buf, PAGE_SIZE, "code_busy\n");
 	case MODULE_BUSY:
 		return snprintf(buf, PAGE_SIZE, "module_busy\n");
+	case FAILED_TO_FIND:
+		return snprintf(buf, PAGE_SIZE, "failed_to_find\n");
 	case UNEXPECTED:
 		return snprintf(buf, PAGE_SIZE, "unexpected\n");
 	}
@@ -364,6 +366,7 @@ static int resolve_patch_symbols(struct module_pack *pack)
 
 		if (!singular(&vals)) {
 			release_vals(&vals);
+			pack->abort_cause = FAILED_TO_FIND;
 			failed_to_find(pack, p->oldstr);
 			return -1;
 		}
@@ -965,6 +968,7 @@ skip_using_system_map:
 #else /* !KSPLICE_STANDALONE */
 		if (!pre) {
 #endif /* KSPLICE_STANDALONE */
+			pack->abort_cause = FAILED_TO_FIND;
 			failed_to_find(pack, r->sym_name);
 			return -1;
 		}
