@@ -133,6 +133,14 @@ provided to ksplice-create does not match the running kernel.
 
 END
 		}
+		if($abort_cause eq "failed_to_find") {
+			print <<END
+
+Ksplice has aborted the upgrade because it was unable to resolve some
+of the symbols used in the update.
+
+END
+		}
 		if($abort_cause eq "none") {
 			print <<END
 
