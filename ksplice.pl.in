@@ -18,16 +18,10 @@
 # 02110-1301, USA.
 
 use Digest::MD5;
-use File::Basename;
-use File::Copy;
-use File::Path;
-use File::Temp qw(tempfile tempdir);
-use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
-use verbose qw(:2 copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
 
 $verbose::level = $ENV{KSPLICE_VERBOSE} if (defined $ENV{KSPLICE_VERBOSE});
 

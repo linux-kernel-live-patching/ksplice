@@ -1,16 +1,25 @@
 package ksplice;
-use Cwd 'abs_path';
+use Cwd qw(abs_path getcwd);
+use Getopt::Long qw(:config bundling);
 use File::Basename;
 use File::Copy;
 use File::Path;
+use File::Spec::Functions qw(tmpdir);
 use File::Temp qw(tempfile tempdir);
 use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
+use Pod::Usage;
 use strict;
 use warnings;
 use verbose qw(:2 copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw($datadir $libexecdir $version_str runstr runval runval_raw runsuc unpack_update get_debugfs);
+our @EXPORT = qw(
+	verbose GetOptions pod2usage
+	$datadir $libexecdir $version_str
+	runstr runval runval_raw runsuc unpack_update get_debugfs
+	abs_path getcwd basename dirname tmpdir
+	copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir
+);
 
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
 our $version_str = "Ksplice version PACKAGE_VERSION\n";

@@ -15,25 +15,16 @@
 # Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
 # 02110-1301, USA.
 
-use Getopt::Long;
-use Cwd 'abs_path', 'getcwd';
-use File::Basename;
-use File::Copy;
-use File::Path;
-use File::Temp qw(tempfile tempdir);
-use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
-use Pod::Usage;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use ksplice;
-use verbose qw(:2 copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
 
 my ($mid, $module, $file);
 my ($help, $wantversion) = (0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
-	"verbose|v+" => \$verbose::level,
+	"verbose|v:+" => \$verbose::level,
 	"id=s" => \$mid,
 	"file=s" => \$file) or pod2usage(1);
 
