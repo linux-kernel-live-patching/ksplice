@@ -179,13 +179,13 @@ mkdir("$tmpdir/collect");
 my @modules = ();
 foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
 	open MOD, '<', $_;
-	chomp(my $module = <MOD>);
+	chomp(my $target = <MOD>);
 	close MOD;
-	foreach my $collect ("$module.o.KSPLICE", "$module.o.KSPLICE_primary",
-			     "$module.o.KSPLICE_helper") {
+	foreach my $collect ("$target.o.KSPLICE", "$target.o.KSPLICE_primary",
+			     "$target.o.KSPLICE_helper") {
 		copy($collect, "$tmpdir/collect/" . basename($collect));
 	}
-	push @modules, basename($module);
+	push @modules, basename($target);
 }
 
 if(!@modules) {
@@ -195,7 +195,7 @@ if(!@modules) {
 
 revert_orig();
 
-for my $module (@modules) {
+for my $target (@modules) {
 	chdir("$tmpdir/collect");
 
 ################################################################################
@@ -208,10 +208,10 @@ for my $module (@modules) {
 ################################################################################
 
 	chdir($tmpdir);
-	runval("cp", "-a", "--", "$datadir/kmodsrc", "kmodsrc-$module");
-	rename("collect/$module.o.KSPLICE_primary", "kmodsrc-$module/collection.o.primary");
-	rename("collect/$module.o.KSPLICE_helper", "kmodsrc-$module/collection.o.helper");
-	chdir("kmodsrc-$module");
+	runval("cp", "-a", "--", "$datadir/kmodsrc", "kmodsrc-$target");
+	rename("collect/$target.o.KSPLICE_primary", "kmodsrc-$target/collection.o.primary");
+	rename("collect/$target.o.KSPLICE_helper", "kmodsrc-$target/collection.o.helper");
+	chdir("kmodsrc-$target");
 
 	runsuc("objmanip", "collection.o.primary", "sourcediff", $patchfile);
 
@@ -227,30 +227,31 @@ for my $module (@modules) {
 # - creates a tarball of the primary module and the helper module             #
 ###############################################################################
 
-	my $kid_m = "${kid}_$module";
+	my $kid_m = "${kid}_$target";
 	$kid_m =~ s/-/_/g;
 	my $ksplice_m = "ksplice-$kid_m";
-	runval("make", @jlevel, "modules", "KSPLICE_ID=$kid_m", "KSPLICE_TARGET=$module", "map_printk=$map_printk", "KERNELSRC=$linuxtree", @standalone_flag);
+	runval("make", @jlevel, "modules", "KSPLICE_ID=$kid_m", "KSPLICE_TARGET=$target", "map_printk=$map_printk", "KERNELSRC=$linuxtree", @standalone_flag);
 }
 
 chdir($tmpdir);
 mkdir($ksplice);
 move($patchfile, $ksplice);
-for my $module (@modules) {
-	my $kid_m = "${kid}_$module";
+for my $target (@modules) {
+	my $kid_m = "${kid}_$target";
 	$kid_m =~ s/-/_/g;
 	my $ksplice_m = "ksplice-$kid_m";
-	rename("kmodsrc-$module/$ksplice_m.ko", "$ksplice/$ksplice_m.ko");
-	rename("kmodsrc-$module/$ksplice_m-helper.ko", "$ksplice/$ksplice_m-helper.ko");
+	rename("kmodsrc-$target/$ksplice_m.ko", "$ksplice/$ksplice_m.ko");
+	rename("kmodsrc-$target/$ksplice_m-helper.ko", "$ksplice/$ksplice_m-helper.ko");
 }
+
 if($ksplice_in_kernel eq 'm' && ! $standalone) {
 	open FILE, '>', "$ksplice/need_modprobe_ksplice" and close FILE or die;
 }
 mkdir("$ksplice/debug");
 rename("objects", "$ksplice/debug/objects");
 rename("collect", "$ksplice/debug/collect");
-for my $module (@modules) {
-	rename("kmodsrc-$module", "$ksplice/debug/kmodsrc-$module");
+for my $target (@modules) {
+	rename("kmodsrc-$target", "$ksplice/debug/kmodsrc-$target");
 }
 runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
 copy("$ksplice.tar.gz", "$origdir/$ksplice.tar.gz");
