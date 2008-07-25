@@ -104,6 +104,14 @@ find out what module is using the Ksplice update using the lsmod command.
 END
 
 	}
+	if($abort_cause eq "none") {
+		print <<END
+
+Ksplice has aborted the undo operation for unknown reasons.
+
+END
+
+	}
 	print("Debugging output saved to $debugfs_out\n");
 	die;
 }
