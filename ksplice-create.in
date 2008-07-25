@@ -220,7 +220,7 @@ foreach my $mod (@modules) {
 
 	my $mid = "${kid}_$target";
 	my $module = "ksplice-$mid";
-	runval("make", @jlevel, "modules", "KSPLICE_ID=$mid", "KSPLICE_TARGET=$target", "map_printk=$map_printk", "KERNELSRC=$linuxtree", @standalone_flag);
+	runval("make", @jlevel, "modules", "KSPLICE_ID=$mid", "KSPLICE_TARGET=$target", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk", "KERNELSRC=$linuxtree", @standalone_flag);
 }
 
 chdir($tmpdir);

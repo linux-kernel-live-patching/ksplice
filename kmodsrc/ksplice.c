@@ -1702,5 +1702,9 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 }
 #endif /* CONFIG_DEBUG_FS */
 
-MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Jeffrey Brian Arnold <jbarnold@mit.edu>");
+MODULE_DESCRIPTION("Ksplice rebootless update system");
+#ifdef KSPLICE_VERSION
+MODULE_VERSION(KSPLICE_VERSION);
+#endif
+MODULE_LICENSE("GPL v2");

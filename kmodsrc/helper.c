@@ -20,8 +20,6 @@
 #include <linux/ksplice.h>
 #endif
 
-MODULE_LICENSE("GPL v2");
-
 #define _PASTE(x, y) x##y
 #define PASTE(x, y) _PASTE(x, y)
 #define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_ID)
@@ -57,3 +55,10 @@ static void cleanup_helper(void)
 
 module_init(init_helper);
 module_exit(cleanup_helper);
+
+MODULE_AUTHOR("Jeffrey Brian Arnold <jbarnold@mit.edu>");
+MODULE_DESCRIPTION("Ksplice rebootless update helper module");
+#ifdef KSPLICE_VERSION
+MODULE_VERSION(KSPLICE_VERSION);
+#endif
+MODULE_LICENSE("GPL v2");

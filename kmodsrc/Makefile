@@ -22,6 +22,12 @@ ifneq ($(KSPLICE_TARGET),vmlinux)
     CFLAGS_helper.o += "-DKSPLICE_TARGET=$(KSPLICE_TARGET)"
 endif
 
+ifeq ($(KSPLICE_VERSION),)
+    $(error "You must set KSPLICE_VERSION.")
+endif
+CFLAGS_primary.o += "-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\""
+CFLAGS_helper.o += "-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\""
+
 ifeq ($(map_printk),)
     $(error "You must set map_printk.")
 endif

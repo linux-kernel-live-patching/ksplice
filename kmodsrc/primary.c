@@ -20,8 +20,6 @@
 #include <linux/ksplice.h>
 #endif
 
-MODULE_LICENSE("GPL v2");
-
 #undef _STR
 #define _STR(x) #x
 #undef STR
@@ -45,6 +43,7 @@ LIST_HEAD(safety_records);
 
 static int debug;
 module_param(debug, int, 0600);
+MODULE_PARM_DESC(debug, "Debug level");
 
 #define pack KSPLICE_UNIQ(pack)
 struct module_pack pack = {
@@ -95,3 +94,10 @@ EXPORT_SYMBOL_GPL(helper_init_module);
 
 module_init(init_primary);
 module_exit(cleanup_primary);
+
+MODULE_AUTHOR("Jeffrey Brian Arnold <jbarnold@mit.edu>");
+MODULE_DESCRIPTION("Ksplice rebootless update primary module");
+#ifdef KSPLICE_VERSION
+MODULE_VERSION(KSPLICE_VERSION);
+#endif
+MODULE_LICENSE("GPL v2");
