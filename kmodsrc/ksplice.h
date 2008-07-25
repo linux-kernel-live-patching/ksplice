@@ -120,7 +120,8 @@ struct reloc_addrmap {
 static inline int virtual_address_mapped(unsigned long addr)
 {
 	unsigned int level;
-	return pte_present(*lookup_address(addr, &level));
+	pte_t *pte = lookup_address(addr, &level);
+	return pte == NULL ? 0 : pte_present(*pte);
 }
 #else /* LINUX_VERSION_CODE < */
 /* f0646e43acb18f0e00b00085dc88bc3f403e7930 was after 2.6.24 */
