@@ -30,7 +30,7 @@ if($wantversion) {
 	print $version_str;
 	exit(0);
 }
-pod2usage(1) if($help || scalar(@ARGV != 1));
+pod2usage(1) if($help || scalar(@ARGV) != 1);
 
 my $mid = $ARGV[0];
 $mid =~ s/^ksplice[_-]//;
