@@ -7,6 +7,7 @@ use File::Path;
 use File::Spec::Functions qw(tmpdir);
 use File::Temp qw(tempfile tempdir);
 use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
+use IPC::Open3;
 use Pod::Usage;
 use strict;
 use warnings;
@@ -16,7 +17,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	Verbose GetOptions pod2usage
 	$datadir $libexecdir $version_str
-	runstr runval runval_raw runsuc unpack_update get_debugfs
+	runval runval_raw runstr runstr_err runsuc unpack_update get_debugfs
 	abs_path getcwd basename dirname tmpdir
 	copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir
 );
@@ -57,6 +58,15 @@ sub runstr {
 	my $output = <PIPE>;
 	close PIPE or $! == 0 or die "Can't run @cmd: $!";
 	return $output;
+}
+
+sub runstr_err {
+	my @cmd = @_;
+	print "+ @cmd\n" if($Verbose::level >= 1);
+	my $pid = open3(\*WRITE, \*READ, \*ERROR, @cmd);
+	waitpid($pid, 0);
+	local $/;
+	return <ERROR>;
 }
 
 sub runsuc {

@@ -41,7 +41,7 @@ chdir($ksplice);
 
 my $unload = runstr("lsmod") !~ m/- $/m;
 
-runval(qw(modprobe ksplice)) == 0 || die if (-e "need_modprobe_ksplice");
+runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 

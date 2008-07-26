@@ -234,9 +234,6 @@ foreach my $mod (@modules) {
 	rename("kmodsrc-$target/$module-helper.ko", "$ksplice/$module-helper.ko");
 }
 
-if($ksplice_in_kernel eq 'm' && ! $standalone) {
-	open FILE, '>', "$ksplice/need_modprobe_ksplice" and close FILE or die;
-}
 mkdir("$ksplice/debug");
 rename("objects", "$ksplice/debug/objects");
 rename("collect", "$ksplice/debug/collect");
