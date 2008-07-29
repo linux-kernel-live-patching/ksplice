@@ -71,7 +71,14 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	if(runval_raw("insmod $primary debug=$debug") != 0) {
 		die "Error loading primary module $primary";
 	}
-	if(runval_raw("insmod $helper") != 0) {
+	die "Error loading helper module $helper" if (runval_raw("insmod $helper") != 0);
+	open STAGE, '>', "/sys/module/$module/ksplice/stage" or die $!;
+	print STAGE "applied\n";
+	close STAGE;
+	open STAGE, '<', "/sys/module/$module/ksplice/stage" or die $!;
+	chomp (my $stage = <STAGE>);
+	close STAGE;
+	if($stage ne 'applied') {
 		(my $modname = $primary) =~ s/\.ko$//;
 		$modname =~ s/-/_/g;
 		my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',

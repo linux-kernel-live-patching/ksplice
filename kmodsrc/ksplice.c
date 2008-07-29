@@ -196,6 +196,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		    unsigned long run_addr, unsigned long pre_addr);
 
 static void reverse_patches(struct module_pack *pack);
+static int apply_patches(struct module_pack *pack);
 static int register_ksplice_module(struct module_pack *pack);
 static void unregister_ksplice_module(struct module_pack *pack);
 static struct update_bundle *init_ksplice_bundle(const char *kid);
@@ -285,7 +286,9 @@ static ssize_t source_diff_show(struct module_pack *pack, char *buf)
 static ssize_t stage_store(struct module_pack *pack,
 			   const char *buf, size_t len)
 {
-	if (strncmp(buf, "reversed\n", len) == 0)
+	if (strncmp(buf, "applied\n", len) == 0 && pack->stage == PREPARING)
+		apply_patches(pack);
+	else if (strncmp(buf, "reversed\n", len) == 0)
 		reverse_patches(pack);
 	return len;
 }
@@ -656,36 +659,10 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
-	struct module *m;
-	pack->abort_cause = NONE;
-
 #ifdef KSPLICE_STANDALONE
 	if (bootstrapped == 0)
 		return -1;
 #endif /* KSPLICE_STANDALONE */
-	if (register_ksplice_module(pack) < 0)
-		return -1;
-
-	if (init_debug_buf(pack) < 0)
-		return -1;
-
-	mutex_lock(&module_mutex);
-
-	list_for_each_entry(m, &modules, list) {
-		if (pack->target_name != NULL &&
-		    strcmp(pack->target_name, m->name) == 0)
-			pack->target = m;
-	}
-
-#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-	if (pack->target == NULL) {
-		apply_paravirt(pack->primary_parainstructions,
-			       pack->primary_parainstructions_end);
-		apply_paravirt(pack->helper_parainstructions,
-			       pack->helper_parainstructions_end);
-	}
-#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 /* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
 	ret = kobject_init_and_add(&pack->kobj, &ksplice_ktype,
@@ -718,6 +695,38 @@ int init_ksplice_module(struct module_pack *pack)
 	kobject_uevent(&pack->kobj, KOBJ_ADD, NULL);
 #endif /* LINUX_VERSION_CODE */
 
+	return register_ksplice_module(pack);
+out:
+	return ret;
+}
+EXPORT_SYMBOL(init_ksplice_module);
+
+static int apply_patches(struct module_pack *pack)
+{
+	int ret = 0;
+	struct module *m;
+	pack->abort_cause = NONE;
+
+	if (init_debug_buf(pack) < 0)
+		return -1;
+
+	mutex_lock(&module_mutex);
+
+	list_for_each_entry(m, &modules, list) {
+		if (pack->target_name != NULL &&
+		    strcmp(pack->target_name, m->name) == 0)
+			pack->target = m;
+	}
+
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+	if (pack->target == NULL) {
+		apply_paravirt(pack->primary_parainstructions,
+			       pack->primary_parainstructions_end);
+		apply_paravirt(pack->helper_parainstructions,
+			       pack->helper_parainstructions_end);
+	}
+#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
+
 	ksdebug(pack, 0, KERN_INFO "ksplice_h: Preparing and checking %s\n",
 		pack->name);
 
@@ -729,11 +738,9 @@ int init_ksplice_module(struct module_pack *pack)
 	if (pack->stage == PREPARING)
 		clear_list(pack->safety_records, struct safety_record, list);
 
-out:
 	mutex_unlock(&module_mutex);
 	return ret;
 }
-EXPORT_SYMBOL(init_ksplice_module);
 
 static int activate_helper(struct module_pack *pack)
 {
