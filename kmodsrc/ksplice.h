@@ -74,6 +74,7 @@ struct module_pack {
 	struct kobject kobj;
 	const char *name;
 	const char *kid;
+	struct update_bundle *bundle;
 	const char *target_name;
 	struct module *target;
 	unsigned long map_printk;
@@ -99,6 +100,13 @@ struct module_pack {
 	struct debugfs_blob_wrapper debug_blob;
 	struct dentry *debugfs_dentry;
 #endif /* CONFIG_DEBUG_FS */
+	struct list_head list;
+};
+
+struct update_bundle {
+	const char *kid;
+	struct list_head packs;
+	struct list_head list;
 };
 
 #if defined(CONFIG_DEBUG_FS) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
