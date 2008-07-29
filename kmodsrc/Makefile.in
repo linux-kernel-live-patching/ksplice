@@ -11,6 +11,7 @@ endif
 ifeq ($(KSPLICE_KID),)
     $(error "You must set KSPLICE_KID.")
 endif
+KSPLICE_CFLAGS += -DKSPLICE_KID=$(KSPLICE_KID)
 
 ifeq ($(KSPLICE_MODULES),)
     $(error "You must set KSPLICE_MODULES.")
@@ -27,14 +28,14 @@ endif
 comma ?= ,
 name-fix ?= $(subst $(comma),_,$(subst -,_,$(1)))
 target = $(call name-fix,$(mod))
-KSPLICE_ID = $(KSPLICE_KID)_$(target)
-KSPLICE = ksplice-$(KSPLICE_ID)
+KSPLICE_MID = $(KSPLICE_KID)_$(target)
+KSPLICE = ksplice-$(KSPLICE_MID)
 
 quiet_cmd_ksplice-collect = COLLECT $@
 cmd_ksplice-collect = ld --script=$(src)/ld-script -r -o $@ $<
 
 ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
-	"-DKSPLICE_ID=$(KSPLICE_ID)" \
+	"-DKSPLICE_MID=$(KSPLICE_MID)" \
 	$(addprefix -DKSPLICE_TARGET=,$(filter-out vmlinux,$(target))) \
 	"-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\"" \
 	"-DMAP_PRINTK=0x$(map_printk)L"

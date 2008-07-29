@@ -64,6 +64,7 @@ enum ksplice_abort_cause_enum {
 struct module_pack {
 	struct kobject kobj;
 	const char *name;
+	const char *kid;
 	const char *target_name;
 	struct module *target;
 	unsigned long map_printk;

@@ -27,7 +27,7 @@
 
 #define _PASTE(x, y) x##y
 #define PASTE(x, y) _PASTE(x, y)
-#define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_ID)
+#define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_MID)
 
 extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
 extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
@@ -47,7 +47,8 @@ MODULE_PARM_DESC(debug, "Debug level");
 
 #define pack KSPLICE_UNIQ(pack)
 struct module_pack pack = {
-	.name = "ksplice_" STR(KSPLICE_ID),
+	.name = "ksplice_" STR(KSPLICE_MID),
+	.kid = STR(KSPLICE_KID),
 #ifdef KSPLICE_TARGET
 	.target_name = STR(KSPLICE_TARGET),
 #else
