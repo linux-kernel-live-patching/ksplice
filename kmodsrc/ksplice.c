@@ -313,6 +313,7 @@ void cleanup_ksplice_module(struct module_pack *pack)
 	kobject_unregister(&pack->kobj);
 #endif /* LINUX_VERSION_CODE */
 }
+EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
 static int activate_primary(struct module_pack *pack)
 {
@@ -459,14 +460,9 @@ static int __reverse_patches(void *packptr)
 		return 0;
 
 #ifdef CONFIG_MODULE_UNLOAD
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,23)
+	/* primary's refcount isn't changed by accessing ksplice.ko's sysfs */
 	if (module_refcount(pack->primary) != 1)
 		return -EBUSY;
-#else /* LINUX_VERSION_CODE < */
-/* 0ab66088c855eca68513bdd7442a426c4b374ced was after 2.6.22 */
-	if (module_refcount(pack->primary) != 2)
-		return -EBUSY;
-#endif /* LINUX_VERSION_CODE */
 #endif /* CONFIG_MODULE_UNLOAD */
 
 	if (check_each_task(pack) < 0)
@@ -664,6 +660,7 @@ out:
 	mutex_unlock(&module_mutex);
 	return ret;
 }
+EXPORT_SYMBOL(init_ksplice_module);
 
 static int activate_helper(struct module_pack *pack)
 {
@@ -1428,20 +1425,6 @@ static int module_on_each_symbol(struct module *mod,
 }
 #endif /* CONFIG_KALLSYMS */
 #else /* !KSPLICE_STANDALONE */
-EXPORT_SYMBOL_GPL(init_ksplice_module);
-EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
-
-static int init_ksplice(void)
-{
-	return 0;
-}
-
-static void cleanup_ksplice(void)
-{
-}
-
-module_init(init_ksplice);
-module_exit(cleanup_ksplice);
 
 static int kernel_lookup(const char *name, struct list_head *vals)
 {
@@ -1701,6 +1684,18 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 	return 0;
 }
 #endif /* CONFIG_DEBUG_FS */
+
+static int init_ksplice(void)
+{
+	return 0;
+}
+
+static void cleanup_ksplice(void)
+{
+}
+
+module_init(init_ksplice);
+module_exit(cleanup_ksplice);
 
 MODULE_AUTHOR("Jeffrey Brian Arnold <jbarnold@mit.edu>");
 MODULE_DESCRIPTION("Ksplice rebootless update system");

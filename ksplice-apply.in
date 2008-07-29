@@ -42,13 +42,16 @@ chdir($ksplice);
 my $unload = runstr("lsmod") !~ m/- $/m;
 
 runstr_err(qw(modprobe -q ksplice)) eq "" || die;
-
+(my $kid = $ksplice) =~s|ksplice[-_]([^-_]+)|$1|;
+if (-e "ksplice-$kid.ko") {
+	system(qw(insmod), "ksplice-$kid.ko") == 0 || die;
+}
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 
 	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
 	die unless(-e $primary && -e $helper);
 
-	my ($kid, $target) = $primary =~ m/^ksplice-([^_]+)_(.*)\.ko/;
+	my ($newkid, $target) = $primary =~ m/^ksplice-([^_]+)_(.*)\.ko/;
 	if ($target ne 'vmlinux' && runstr("lsmod") !~ m/^${target}\s/m) {
 		die "Module $target to be patched not loaded";
 	}

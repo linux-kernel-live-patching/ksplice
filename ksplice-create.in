@@ -204,6 +204,7 @@ foreach my $mod (@modules) {
 	rename("kmodsrc/$module.ko", "$ksplice/$module.ko");
 	rename("kmodsrc/$module-helper.ko", "$ksplice/$module-helper.ko");
 }
+rename("kmodsrc/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko") if ($standalone);
 
 mkdir("$ksplice/debug");
 rename("objects", "$ksplice/debug/objects");

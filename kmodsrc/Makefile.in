@@ -30,6 +30,7 @@ name-fix ?= $(subst $(comma),_,$(subst -,_,$(1)))
 target = $(call name-fix,$(mod))
 KSPLICE_MID = $(KSPLICE_KID)_$(target)
 KSPLICE = ksplice-$(KSPLICE_MID)
+KSPLICE_CORE = ksplice-$(KSPLICE_KID)
 
 quiet_cmd_ksplice-collect = COLLECT $@
 cmd_ksplice-collect = ld --script=$(src)/ld-script -r -o $@ $<
@@ -41,10 +42,12 @@ ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
 	"-DMAP_PRINTK=0x$(map_printk)L"
 
 ksplice-primary-objs = primary-$(target).o collect-primary-$(mod).o
-ifneq ($(KSPLICE_STANDALONE),)
-    ksplice-primary-objs += ksplice-rmsyms.o
-endif
 ksplice-helper-objs = helper-$(target).o collect-helper-$(mod).o
+
+ifneq ($(KSPLICE_STANDALONE),)
+obj-m += $(KSPLICE_CORE).o
+$(KSPLICE_CORE)-objs = ksplice-rmsyms.o
+endif
 
 define ksplice-pack-vars
 obj-m += $(KSPLICE).o $(KSPLICE)-helper.o

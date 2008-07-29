@@ -25,10 +25,6 @@
 #undef STR
 #define STR(x) _STR(x)
 
-#define _PASTE(x, y) x##y
-#define PASTE(x, y) _PASTE(x, y)
-#define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_MID)
-
 extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
 extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
 extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
