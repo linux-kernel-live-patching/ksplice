@@ -81,6 +81,6 @@ clean:
 	rm -f $(objutils)
 
 distclean: clean
-	rm -f Makefile
+	rm -f Makefile kmodsrc/Makefile
 	rm -f $(objutils:=-static)
 	rm -f configure config.status config.log

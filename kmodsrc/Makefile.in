@@ -1,4 +1,8 @@
-ksplice-script = /usr/local/share/ksplice/ksplice-obj.pl
+prefix = @prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+
+ksplice-script = $(datadir)/ksplice/ksplice-obj.pl
 
 ifneq ($(KERNELRELEASE),)
 
