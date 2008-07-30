@@ -7,44 +7,66 @@ ksplice-script = $(datadir)/ksplice/ksplice-obj.pl
 ifneq ($(KERNELRELEASE),)
 
 ifneq ($(KSPLICE_STANDALONE),)
-CFLAGS_ksplice.o += -DKSPLICE_STANDALONE
-CFLAGS_primary.o += -DKSPLICE_STANDALONE
-CFLAGS_helper.o += -DKSPLICE_STANDALONE
+    KSPLICE_CFLAGS += -DKSPLICE_STANDALONE
 endif
 
-ifeq ($(KSPLICE_ID),)
-    $(error "You must set KSPLICE_ID.")
+ifeq ($(KSPLICE_KID),)
+    $(error "You must set KSPLICE_KID.")
 endif
-CFLAGS_primary.o += "-DKSPLICE_ID=$(KSPLICE_ID)"
-CFLAGS_helper.o += "-DKSPLICE_ID=$(KSPLICE_ID)"
 
-ifeq ($(KSPLICE_TARGET),)
-    $(error "You must set KSPLICE_TARGET.")
-endif
-ifneq ($(KSPLICE_TARGET),vmlinux)
-    CFLAGS_primary.o += "-DKSPLICE_TARGET=$(KSPLICE_TARGET)"
-    CFLAGS_helper.o += "-DKSPLICE_TARGET=$(KSPLICE_TARGET)"
+ifeq ($(KSPLICE_MODULES),)
+    $(error "You must set KSPLICE_MODULES.")
 endif
 
 ifeq ($(KSPLICE_VERSION),)
     $(error "You must set KSPLICE_VERSION.")
 endif
-CFLAGS_primary.o += "-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\""
-CFLAGS_helper.o += "-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\""
 
 ifeq ($(map_printk),)
     $(error "You must set map_printk.")
 endif
-CFLAGS_primary.o += "-DMAP_PRINTK=0x$(map_printk)L"
 
+comma ?= ,
+name-fix ?= $(subst $(comma),_,$(subst -,_,$(1)))
+target = $(call name-fix,$(mod))
+KSPLICE_ID = $(KSPLICE_KID)_$(target)
 KSPLICE = ksplice-$(KSPLICE_ID)
 
-obj-m = $(KSPLICE)-helper.o $(KSPLICE).o
-$(KSPLICE)-helper-objs = helper.o collection.o.helper
-ifeq ($(KSPLICE_STANDALONE),)
-$(KSPLICE)-objs = primary.o collection.o.primary
-else
-$(KSPLICE)-objs = primary.o ksplice-rmsyms.o collection.o.primary
+quiet_cmd_ksplice-collect = COLLECT $@
+cmd_ksplice-collect = ld --script=$(src)/ld-script -r -o $@ $<
+
+ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
+	"-DKSPLICE_ID=$(KSPLICE_ID)" \
+	$(addprefix -DKSPLICE_TARGET=,$(filter-out vmlinux,$(target))) \
+	"-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\"" \
+	"-DMAP_PRINTK=0x$(map_printk)L"
+
+ksplice-primary-objs = primary-$(target).o collect-primary-$(mod).o
+ifneq ($(KSPLICE_STANDALONE),)
+    ksplice-primary-objs += ksplice-rmsyms.o
+endif
+ksplice-helper-objs = helper-$(target).o collect-helper-$(mod).o
+
+define ksplice-pack-vars
+obj-m += $(KSPLICE).o $(KSPLICE)-helper.o
+$(KSPLICE)-objs = $(ksplice-primary-objs)
+$(KSPLICE)-helper-objs = $(ksplice-helper-objs)
+CFLAGS_primary-$(target).o = $(ksplice-pack-cflags)
+CFLAGS_helper-$(target).o = $(ksplice-pack-cflags)
+endef
+
+$(foreach mod,$(KSPLICE_MODULES),$(obj)/primary-$(target).o): $(obj)/%.o: $(src)/primary.c FORCE
+	$(call if_changed_rule,cc_o_c)
+$(foreach mod,$(KSPLICE_MODULES),$(obj)/helper-$(target).o): $(obj)/%.o: $(src)/helper.c FORCE
+	$(call if_changed_rule,cc_o_c)
+
+$(obj)/collect-primary-%.o: $(obj)/%.o.KSPLICE_primary FORCE
+	$(call if_changed,ksplice-collect)
+$(obj)/collect-helper-%.o: $(obj)/%.o.KSPLICE_helper FORCE
+	$(call if_changed,ksplice-collect)
+
+ifneq ($(KSPLICE_STANDALONE),)
+CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
 extra-y = ksplice.o
 
 RMSYMS = \
@@ -82,3 +104,6 @@ all $(MAKECMDGOALS):
 .PHONY: all $(MAKECMDGOALS)
 
 endif
+
+# make 3.80 can't eval inside an if statement.
+$(foreach mod,$(KSPLICE_MODULES),$(eval $(ksplice-pack-vars)))
