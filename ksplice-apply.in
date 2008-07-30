@@ -72,6 +72,16 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		die "Error loading primary module $primary";
 	}
 	die "Error loading helper module $helper" if (runval_raw("insmod $helper") != 0);
+}
+
+foreach my $helper (glob('ksplice-*-helper.ko')) {
+	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
+	die unless(-e $primary && -e $helper);
+
+	my ($newkid, $target) = $primary =~ m/^ksplice-([^_]+)_(.*)\.ko/;
+	my $mid = "${kid}_$target";
+	my $module = "ksplice_$mid";
+
 	open STAGE, '>', "/sys/module/$module/ksplice/stage" or die $!;
 	print STAGE "applied\n";
 	close STAGE;
@@ -102,8 +112,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		print("Debugging output saved to $debugfs_out\n");
 		die;
 	}
-	die if ($unload && runval_raw("rmmod $helper") != 0)
-
+	die if ($unload && runval_raw("rmmod $helper") != 0);
 }
 
 print "Done!\n";
