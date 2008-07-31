@@ -20,11 +20,6 @@
 #include <linux/ksplice.h>
 #endif
 
-#undef _STR
-#define _STR(x) #x
-#undef STR
-#define STR(x) _STR(x)
-
 extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
 extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
 extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
