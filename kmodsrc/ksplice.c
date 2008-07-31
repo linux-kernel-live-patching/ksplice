@@ -679,19 +679,27 @@ static void add_to_bundle(struct module_pack *pack,
 static void cleanup_ksplice_bundle(struct update_bundle *bundle)
 {
 	list_del(&bundle->list);
+	kfree(bundle->name);
 	kfree(bundle);
 }
 
 static struct update_bundle *init_ksplice_bundle(const char *kid)
 {
 	struct update_bundle *bundle;
+	char *str = "ksplice_";
 	bundle = kmalloc(sizeof(struct update_bundle), GFP_KERNEL);
 	if (bundle == NULL)
 		return NULL;
 	memset(bundle, 0, sizeof(struct update_bundle));
+	bundle->name = kmalloc(strlen(kid) + strlen(str) + 1, GFP_KERNEL);
+	if (bundle->name == NULL) {
+		kfree(bundle);
+		return NULL;
+	}
 	INIT_LIST_HEAD(&bundle->packs);
 	list_add(&bundle->list, &update_bundles);
 	bundle->kid = kid;
+	snprintf(bundle->name, strlen(kid) + strlen(str) + 1, "%s%s", str, kid);
 	return bundle;
 }
 

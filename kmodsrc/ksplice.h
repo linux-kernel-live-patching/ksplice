@@ -109,6 +109,7 @@ struct module_pack {
 
 struct update_bundle {
 	const char *kid;
+	char *name;
 	struct list_head packs;
 	struct list_head list;
 };
