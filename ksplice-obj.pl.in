@@ -17,7 +17,6 @@
 # Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
 # 02110-1301, USA.
 
-use Digest::MD5;
 use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
@@ -60,14 +59,8 @@ sub do_diff {
 	copy($obj, "$obj.KSPLICE_primary");
 	copy($obj_old, "$obj.KSPLICE_helper");
 
-	open OBJ, '<', $obj or die;
-	open OBJ_OLD, '<', $obj_old or die;
-	my $tag = Digest::MD5->new->addfile(*OBJ)->addfile(*OBJ_OLD)->hexdigest;
-	close OBJ;
-	close OBJ_OLD;
-
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "keep-primary", $ENV{KSPLICE_KID}, "____${tag}");
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "keep-helper", $ENV{KSPLICE_KID}, "____${tag}");
+	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "keep-primary", $ENV{KSPLICE_KID});
+	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "keep-helper", $ENV{KSPLICE_KID});
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";

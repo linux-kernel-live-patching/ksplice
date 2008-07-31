@@ -156,7 +156,8 @@ int varargs_count;
 struct str_vec sections, entrysyms, newsyms, delsyms;
 struct export_desc_vec exports;
 
-const char *modestr, *addstr_all = "", *kid;
+const char *modestr, *kid;
+char *addstr_all;
 
 struct wsect *wanted_sections = NULL;
 
@@ -214,7 +215,6 @@ int main(int argc, char *argv[])
 	modestr = argv[2];
 	if (mode("keep")) {
 		kid = argv[3];
-		addstr_all = argv[4];
 	} else if (mode("rmsyms")) {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
@@ -238,6 +238,11 @@ int main(int argc, char *argv[])
 			read_str_set(&ed->names);
 		}
 	}
+
+	char *c = strstr(argv[1], ".KSPLICE");
+	assert(asprintf(&addstr_all, "<%.*s>",
+			(int)(c == NULL ? strlen(argv[1]) : c - argv[1]),
+			argv[1]) >= 0);
 
 	if (mode("keep") || mode("rmsyms"))
 		load_system_map();
