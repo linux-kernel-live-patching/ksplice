@@ -244,7 +244,7 @@ static void ksplice_release(struct kobject *kobj)
 
 static ssize_t stage_show(struct module_pack *pack, char *buf)
 {
-	switch (pack->stage) {
+	switch (pack->bundle->stage) {
 	case PREPARING:
 		return snprintf(buf, PAGE_SIZE, "preparing\n");
 	case APPLIED:
@@ -287,7 +287,8 @@ static ssize_t source_diff_show(struct module_pack *pack, char *buf)
 static ssize_t stage_store(struct module_pack *pack,
 			   const char *buf, size_t len)
 {
-	if (strncmp(buf, "applied\n", len) == 0 && pack->stage == PREPARING)
+	if (strncmp(buf, "applied\n", len) == 0 &&
+	    pack->bundle->stage == PREPARING)
 		apply_update(pack->bundle);
 	else if (strncmp(buf, "reversed\n", len) == 0)
 		reverse_patches(pack->bundle);
@@ -319,7 +320,7 @@ void cleanup_ksplice_module(struct module_pack *pack)
 	if (pack->bundle == NULL)
 		return;
 
-	if (pack->stage != APPLIED) {
+	if (pack->bundle->stage != APPLIED) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 		kobject_put(&pack->kobj);
 #else /* LINUX_VERSION_CODE < */
@@ -362,7 +363,7 @@ static int apply_patches(struct update_bundle *bundle)
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
 	list_for_each_entry(pack, &bundle->packs, list) {
-		if (pack->stage != APPLIED) {
+		if (bundle->stage != APPLIED) {
 			if (ret == -EAGAIN) {
 				pack->abort_cause = CODE_BUSY;
 				print_abort(pack, "stack check: to-be-replaced "
@@ -408,10 +409,8 @@ static void reverse_patches(struct update_bundle *bundle)
 	int i, ret;
 	struct module_pack *pack;
 
-	list_for_each_entry(pack, &bundle->packs, list) {
-		if (pack->stage != APPLIED)
-			return;
-	}
+	if (bundle->stage != APPLIED)
+		return;
 
 	clear_debug_buf(bundle);
 	if (init_debug_buf(bundle) < 0)
@@ -476,8 +475,7 @@ static int __apply_patches(void *bundleptr)
 	list_for_each_entry(pack, &bundle->packs, list)
 		try_module_get(pack->primary);
 
-	list_for_each_entry(pack, &bundle->packs, list)
-		pack->stage = APPLIED;
+	bundle->stage = APPLIED;
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -501,10 +499,8 @@ static int __reverse_patches(void *bundleptr)
 	const struct ksplice_patch *p;
 	mm_segment_t old_fs;
 
-	list_for_each_entry(pack, &bundle->packs, list) {
-		if (pack->stage != APPLIED)
-			return 0;
-	}
+	if (bundle->stage != APPLIED)
+		return 0;
 
 #ifdef CONFIG_MODULE_UNLOAD
 	/* primary's refcount isn't changed by accessing ksplice.ko's sysfs */
@@ -519,9 +515,10 @@ static int __reverse_patches(void *bundleptr)
 			return -EAGAIN;
 	}
 
+	bundle->stage = REVERSED;
+
 	list_for_each_entry(pack, &bundle->packs, list) {
 		clear_list(pack->safety_records, struct safety_record, list);
-		pack->stage = REVERSED;
 		module_put(pack->primary);
 		old_fs = get_fs();
 		set_fs(KERNEL_DS);
@@ -658,7 +655,7 @@ static void unregister_ksplice_module(struct module_pack *pack)
 {
 	if (pack->bundle == NULL)
 		return;
-	if (pack->stage != APPLIED) {
+	if (pack->bundle->stage != APPLIED) {
 		list_del(&pack->list);
 		if (list_empty(&pack->bundle->packs))
 			cleanup_ksplice_bundle(pack->bundle);
@@ -705,6 +702,7 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 		kfree(bundle);
 		return NULL;
 	}
+	bundle->stage = PREPARING;
 	return bundle;
 }
 
@@ -793,7 +791,7 @@ out:
 	list_for_each_entry(pack, &bundle->packs, list) {
 		clear_list(pack->reloc_namevals, struct reloc_nameval, list);
 		clear_list(pack->reloc_addrmaps, struct reloc_addrmap, list);
-		if (pack->stage == PREPARING)
+		if (bundle->stage == PREPARING)
 			clear_list(pack->safety_records, struct safety_record,
 				   list);
 	}
