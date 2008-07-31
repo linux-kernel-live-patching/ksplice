@@ -131,15 +131,15 @@ void load_system_map()
 {
 	const char *config_dir = getenv("KSPLICE_CONFIG_DIR");
 	assert(config_dir);
-	char file[PATH_MAX];
-	snprintf(file, sizeof(file), "%s/System.map", config_dir);
+	char *file;
+	assert(asprintf(&file, "%s/System.map", config_dir) >= 0);
 	FILE *fp = fopen(file, "r");
 	assert(fp);
 	addr_vec_hash_init(&system_map);
 	unsigned long addr;
 	char type;
-	char sym[256];
-	while (fscanf(fp, "%lx %c %256s\n", &addr, &type, sym) == 3)
+	char *sym;
+	while (fscanf(fp, "%lx %c %as\n", &addr, &type, &sym) == 3)
 		*vec_grow(addr_vec_hash_lookup(&system_map, sym, TRUE),
 			  1) = addr;
 	fclose(fp);
@@ -147,8 +147,8 @@ void load_system_map()
 
 int main(int argc, char *argv[])
 {
-	char *debug_name = malloc(strlen(argv[1]) + 4 + strlen(argv[2]) + 1);
-	sprintf(debug_name, "%s.pre%s", argv[1], argv[2]);
+	char *debug_name;
+	assert(asprintf(&debug_name, "%s.pre%s", argv[1], argv[2]) >= 0);
 	rename(argv[1], debug_name);
 
 	bfd_init();
@@ -520,7 +520,7 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 		    (!starts_with(sym->section->name, ".text") ||
 		     get_reloc_offset(ss, *relocp, 1) != 0)) {
 			struct wsect *w = malloc(sizeof(*w));
-			w->name = strdup(((asection *)looking_for)->name);
+			w->name = ((asection *)looking_for)->name;
 			w->next = wanted_sections;
 			wanted_sections = w;
 			break;
