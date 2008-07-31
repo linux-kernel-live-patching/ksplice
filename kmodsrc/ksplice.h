@@ -83,7 +83,6 @@ struct module_pack {
 	struct module *target;
 	unsigned long map_printk;
 	struct module *primary;
-	enum ksplice_abort_cause_enum abort_cause;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
 	const struct ksplice_size *primary_sizes, *primary_sizes_end;
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
@@ -106,6 +105,7 @@ struct update_bundle {
 	const char *kid;
 	char *name;
 	enum ksplice_stage_enum stage;
+	enum ksplice_abort_cause_enum abort_cause;
 #ifdef CONFIG_DEBUG_FS
 	struct debugfs_blob_wrapper debug_blob;
 	struct dentry *debugfs_dentry;

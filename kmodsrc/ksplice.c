@@ -257,7 +257,7 @@ static ssize_t stage_show(struct module_pack *pack, char *buf)
 
 static ssize_t abort_cause_show(struct module_pack *pack, char *buf)
 {
-	switch (pack->abort_cause) {
+	switch (pack->bundle->abort_cause) {
 	case NONE:
 		return snprintf(buf, PAGE_SIZE, "none\n");
 	case NO_MATCH:
@@ -365,11 +365,11 @@ static int apply_patches(struct update_bundle *bundle)
 	list_for_each_entry(pack, &bundle->packs, list) {
 		if (bundle->stage != APPLIED) {
 			if (ret == -EAGAIN) {
-				pack->abort_cause = CODE_BUSY;
+				bundle->abort_cause = CODE_BUSY;
 				print_abort(pack, "stack check: to-be-replaced "
 					    "code is busy");
 			} else {
-				pack->abort_cause = UNEXPECTED;
+				bundle->abort_cause = UNEXPECTED;
 			}
 			return -1;
 		}
@@ -392,7 +392,7 @@ static int resolve_patch_symbols(struct module_pack *pack)
 
 		if (!singular(&vals)) {
 			release_vals(&vals);
-			pack->abort_cause = FAILED_TO_FIND;
+			pack->bundle->abort_cause = FAILED_TO_FIND;
 			failed_to_find(pack, p->oldstr);
 			return -1;
 		}
@@ -431,14 +431,14 @@ static void reverse_patches(struct update_bundle *bundle)
 	}
 	list_for_each_entry(pack, &bundle->packs, list) {
 		if (ret == -EAGAIN) {
-			pack->abort_cause = CODE_BUSY;
+			bundle->abort_cause = CODE_BUSY;
 			print_abort(pack, "stack check: to-be-reversed code is "
 				    "busy");
 		} else if (ret == 0) {
 			ksdebug(pack, 0, KERN_INFO "ksplice: Update %s reversed"
 				" successfully\n", pack->name);
 		} else if (ret == -EBUSY) {
-			pack->abort_cause = MODULE_BUSY;
+			bundle->abort_cause = MODULE_BUSY;
 			ksdebug(pack, 0, KERN_ERR "ksplice: Update module %s is"
 				" in use by another module\n", pack->name);
 		}
@@ -703,6 +703,7 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 		return NULL;
 	}
 	bundle->stage = PREPARING;
+	bundle->abort_cause = NONE;
 	return bundle;
 }
 
@@ -755,8 +756,6 @@ static void apply_update(struct update_bundle *bundle)
 {
 	struct module *m;
 	struct module_pack *pack;
-	list_for_each_entry(pack, &bundle->packs, list)
-		pack->abort_cause = NONE;
 
 	mutex_lock(&module_mutex);
 	list_for_each_entry(pack, &bundle->packs, list) {
@@ -853,7 +852,7 @@ start:
 					"could not match section %s\n",
 					s->name);
 		}
-		pack->abort_cause = NO_MATCH;
+		pack->bundle->abort_cause = NO_MATCH;
 		print_abort(pack, "run-pre: could not match some sections");
 		kfree(finished);
 		return -1;
@@ -864,7 +863,7 @@ start:
 		restart_count++;
 		goto start;
 	}
-	pack->abort_cause = NO_MATCH;
+	pack->bundle->abort_cause = NO_MATCH;
 	print_abort(pack, "run-pre: restart limit exceeded");
 	kfree(finished);
 	return -1;
@@ -1066,7 +1065,7 @@ static int process_reloc(struct module_pack *pack,
 	 */
 	off = (unsigned long)printk - pack->map_printk;
 	if (off & 0xfffff) {
-		pack->abort_cause = BAD_SYSTEM_MAP;
+		pack->bundle->abort_cause = BAD_SYSTEM_MAP;
 		print_abort(pack, "System.map does not match kernel");
 		return -1;
 	}
@@ -1102,7 +1101,7 @@ skip_using_system_map:
 #else /* !KSPLICE_STANDALONE */
 		if (!pre) {
 #endif /* KSPLICE_STANDALONE */
-			pack->abort_cause = FAILED_TO_FIND;
+			pack->bundle->abort_cause = FAILED_TO_FIND;
 			failed_to_find(pack, r->sym_name);
 			return -1;
 		}
@@ -1192,7 +1191,7 @@ skip_using_system_map:
 			    ((val >> r->rightshift) & r->dst_mask);
 			break;
 		default:
-			pack->abort_cause = UNEXPECTED;
+			pack->bundle->abort_cause = UNEXPECTED;
 			print_abort(pack, "Invalid relocation size");
 			return -1;
 		}
@@ -1215,7 +1214,7 @@ skip_using_system_map:
 		ksdebug(pack, 4, "aft=%016llx)\n", *(int64_t *)r->blank_addr);
 		break;
 	default:
-		pack->abort_cause = UNEXPECTED;
+		pack->bundle->abort_cause = UNEXPECTED;
 		print_abort(pack, "Invalid relocation size");
 		return -1;
 	}
@@ -1662,7 +1661,7 @@ static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
 		return (*(int64_t *)blank_addr & dst_mask) ==
 		    (0x7777777777777777ll & dst_mask);
 	default:
-		pack->abort_cause = UNEXPECTED;
+		pack->bundle->abort_cause = UNEXPECTED;
 		print_abort(pack, "Invalid relocation size");
 		return -1;
 	}
