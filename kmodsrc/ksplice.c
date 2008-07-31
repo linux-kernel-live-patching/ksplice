@@ -586,15 +586,13 @@ int init_ksplice_module(struct module_pack *pack)
 	struct module *m;
 	pack->abort_cause = NONE;
 
+#ifdef KSPLICE_STANDALONE
+	if (bootstrapped == 0)
+		return -1;
+#endif /* KSPLICE_STANDALONE */
+
 	if (init_debug_buf(pack) < 0)
 		return -1;
-
-#ifdef KSPLICE_STANDALONE
-	if (process_ksplice_relocs(pack, ksplice_init_relocs,
-				   ksplice_init_relocs_end, 1) != 0)
-		return -1;
-	bootstrapped = 1;
-#endif /* KSPLICE_STANDALONE */
 
 	mutex_lock(&module_mutex);
 
@@ -1688,13 +1686,47 @@ int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
 }
 #endif /* CONFIG_DEBUG_FS */
 
+#ifdef KSPLICE_STANDALONE
+static int debug;
+LIST_HEAD(ksplice_reloc_addrmaps);
+LIST_HEAD(ksplice_reloc_namevals);
+module_param(debug, int, 0600);
+MODULE_PARM_DESC(debug, "Debug level");
+
+struct module_pack ksplice_pack = {
+	.name = "ksplice_" STR(KSPLICE_KID),
+	.kid = "init_" STR(KSPLICE_KID),
+	.target_name = NULL,
+	.target = NULL,
+	.debug = &debug,
+	.map_printk = MAP_PRINTK,
+	.primary = THIS_MODULE,
+	.reloc_addrmaps = &ksplice_reloc_addrmaps,
+	.reloc_namevals = &ksplice_reloc_namevals,
+};
+#endif /* KSPLICE_STANDALONE */
+
 static int init_ksplice(void)
 {
+#ifdef KSPLICE_STANDALONE
+	int ret = 0;
+	struct module_pack *pack = &ksplice_pack;
+	ret = init_debug_buf(pack);
+	if (ret < 0)
+		return -ENOMEM;
+	ret = process_ksplice_relocs(pack, ksplice_init_relocs,
+				     ksplice_init_relocs_end, 1);
+	if (ret == 0)
+		bootstrapped = 1;
+#endif /* KSPLICE_STANDALONE */
 	return 0;
 }
 
 static void cleanup_ksplice(void)
 {
+#ifdef KSPLICE_STANDALONE
+	clear_debug_buf(&ksplice_pack);
+#endif /* KSPLICE_STANDALONE */
 }
 
 module_init(init_ksplice);
