@@ -1793,9 +1793,15 @@ static int init_ksplice(void)
 #ifdef KSPLICE_STANDALONE
 	int ret = 0;
 	struct module_pack *pack = &ksplice_pack;
-	ret = init_debug_buf(pack);
-	if (ret < 0)
+	pack->bundle = init_ksplice_bundle(pack->kid);
+	if (pack->bundle == NULL)
 		return -ENOMEM;
+	add_to_bundle(pack, pack->bundle);
+	ret = init_debug_buf(pack);
+	if (ret < 0) {
+		kfree(pack->bundle);
+		return -ENOMEM;
+	}
 	ret = process_ksplice_relocs(pack, ksplice_init_relocs,
 				     ksplice_init_relocs_end, 1);
 	if (ret == 0)
@@ -1808,6 +1814,7 @@ static void cleanup_ksplice(void)
 {
 #ifdef KSPLICE_STANDALONE
 	clear_debug_buf(&ksplice_pack);
+	cleanup_ksplice_bundle(ksplice_pack.bundle);
 #endif /* KSPLICE_STANDALONE */
 }
 
