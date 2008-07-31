@@ -12,6 +12,7 @@ ifeq ($(KSPLICE_KID),)
     $(error "You must set KSPLICE_KID.")
 endif
 KSPLICE_CFLAGS += -DKSPLICE_KID=$(KSPLICE_KID)
+KSPLICE_CFLAGS += -DMAP_PRINTK=0x$(map_printk)L
 
 ifeq ($(KSPLICE_MODULES),)
     $(error "You must set KSPLICE_MODULES.")
@@ -38,8 +39,7 @@ cmd_ksplice-collect = ld --script=$(src)/ld-script -r -o $@ $<
 ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
 	"-DKSPLICE_MID=$(KSPLICE_MID)" \
 	$(addprefix -DKSPLICE_TARGET=,$(filter-out vmlinux,$(target))) \
-	"-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\"" \
-	"-DMAP_PRINTK=0x$(map_printk)L"
+	"-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\""
 
 ksplice-primary-objs = primary-$(target).o collect-primary-$(mod).o
 ksplice-helper-objs = helper-$(target).o collect-helper-$(mod).o
