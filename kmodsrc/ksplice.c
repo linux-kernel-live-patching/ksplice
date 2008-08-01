@@ -404,7 +404,7 @@ static int resolve_patch_symbols(struct module_pack *pack)
 	return 0;
 }
 
-void reverse_patches(struct update_bundle *bundle)
+static void reverse_patches(struct update_bundle *bundle)
 {
 	int i, ret;
 	struct module_pack *pack;
