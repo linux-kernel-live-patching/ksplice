@@ -73,6 +73,9 @@ if(! -e "$orig_config_dir/System.map") {
 	die "Failed to find System.map file in ORIG_CONFIG directory";
 }
 
+my $kernel_headers_dir = "$orig_config_dir/build";
+$kernel_headers_dir = $linuxtree unless(-d $kernel_headers_dir);
+
 $ENV{KSPLICE_VERBOSE} = $Verbose::level;
 $ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
 
@@ -185,7 +188,7 @@ if(!@modules) {
 
 revert_orig();
 
-runval("make", "-C", $linuxtree, "M=$tmpdir/kmodsrc", @jlevel, "modules", "KSPLICE_KID=$kid", "KSPLICE_MODULES=@modules", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk", @standalone_flag);
+runval("make", "-C", $kernel_headers_dir, "M=$tmpdir/kmodsrc", @jlevel, "modules", "KSPLICE_KID=$kid", "KSPLICE_MODULES=@modules", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk", @standalone_flag);
 
 chdir($tmpdir);
 mkdir($ksplice);
