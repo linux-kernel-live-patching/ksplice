@@ -9,13 +9,14 @@ use File::Temp qw(tempfile tempdir);
 use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
 use IPC::Open3;
 use Pod::Usage;
+use Text::ParseWords;
 use strict;
 use warnings;
 use Verbose qw(:2 copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
-	Verbose GetOptions pod2usage
+	Verbose GetOptions pod2usage shellwords
 	$datadir $libexecdir $version_str
 	runval runval_raw runstr runstr_err runsuc unpack_update get_debugfs
 	abs_path getcwd basename dirname tmpdir

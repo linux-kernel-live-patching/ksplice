@@ -76,6 +76,14 @@ if(! -e "$orig_config_dir/System.map") {
 my $kernel_headers_dir = "$orig_config_dir/build";
 $kernel_headers_dir = $linuxtree unless(-d $kernel_headers_dir);
 
+my @kbuild_flags = ();
+if(-e "$orig_config_dir/flags") {
+	open(FLAGS, '<', "$orig_config_dir/flags") or die;
+	local $/;
+	@kbuild_flags = &shellwords(<FLAGS>);
+	close(FLAGS);
+}
+
 $ENV{KSPLICE_VERBOSE} = $Verbose::level;
 $ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
 
@@ -127,7 +135,7 @@ if(defined $diffext) {
 
 my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : ());
 @jlevel = ("-j$jobs") if(defined $jobs);
-my @make_ksplice = ("make", "-f", "$datadir/Makefile.ksplice", @jlevel);
+my @make_ksplice = ("make", "-f", "$datadir/Makefile.ksplice", @jlevel, @kbuild_flags);
 
 sub revert_orig() {
 	for(split(/\0/, runstr(qw(find -name *.KSPLICE*pre* -print0)))) {
