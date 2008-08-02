@@ -32,38 +32,46 @@ if($wantversion) {
 }
 pod2usage(1) if($help || scalar(@ARGV) != 1);
 
-my $mid = $ARGV[0];
-$mid =~ s/^ksplice[_-]//;
-(my $kid = $mid) =~ s/[-_].*//;
-my $module = "ksplice_$mid";
+my $kid = $ARGV[0];
+my $update = "ksplice_$kid";
 
 if(! -d "/sys/module") {
 	print "/sys not mounted?\n";
 	exit(1);
 }
-if(! -d "/sys/module/$module/ksplice") {
-	print "Ksplice id $mid is not present in the kernel\n";
+if(! -d "/sys/module/$update/$update") {
+	print "Ksplice id $kid is not present in the kernel\n";
 	exit(1);
 }
+open STAGE, '<', "/sys/module/$update/$update/stage" or die $!;
+chomp(my $stage = <STAGE>);
+close STAGE;
 
-if($debug) {
-	if(! -d "/sys/module/$module/parameters") {
-		runval("echo $debug > /sys/module/$module/debug");
-	}
-	else {
-		runval("echo $debug > /sys/module/$module/parameters/debug");
+chdir("/sys/module/");
+foreach my $module (glob("${update}_*")) {
+	if($debug) {
+		if(! -d "/sys/module/$module/parameters") {
+			runval("echo $debug > /sys/module/$module/debug");
+		}
+		else {
+			runval("echo $debug > /sys/module/$module/parameters/debug");
+		}
 	}
 }
 
-open STAGE, '<', "/sys/module/$module/ksplice/stage" or die $!;
-chomp(my $stage = <STAGE>);
-close STAGE;
 if ($stage eq 'applied') {
-	open STAGE, '>', "/sys/module/$module/ksplice/stage" or die $!;
+	open STAGE, '>', "/sys/module/$update/$update/stage" or die $!;
 	print STAGE "reversed\n";
 	close STAGE;
 }
-unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0) {
+my $failed = 0;
+foreach my $module (glob("${update}_*")) {
+	$failed = 1 unless (runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0);
+}
+if (-e "/sys/module/$update") {
+	$failed = 1 unless (runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $update") == 0);
+}
+unless($failed == 0) {
 	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
 					    DIR => tmpdir());
 	my $debugout = get_debugfs("ksplice_$kid", $debugfs_out);
@@ -74,9 +82,9 @@ unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0) {
 		}
 		$debugout = $dmesg;
 	}
-	print STDERR "Error undoing Ksplice update $mid:\n";
+	print STDERR "Error undoing Ksplice update $kid:\n";
 	print "$debugout";
-	open(ABORT, '<', "/sys/module/$module/ksplice/abort_cause")
+	open(ABORT, '<', "/sys/module/$update/$update/abort_cause")
 	    or die $!;
 	chomp(my $abort_cause = <ABORT>);
 	close(ABORT);
@@ -84,8 +92,6 @@ unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0) {
 	print("Debugging output saved to $debugfs_out\n");
 	die;
 }
-
-runstr_err("rmmod", "ksplice_$kid");
 exit(0);
 
 sub print_error {

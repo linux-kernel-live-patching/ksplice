@@ -20,7 +20,7 @@ use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
-my ($mid, $module, $file);
+my ($kid, $mid, $module, $update, $file);
 my ($help, $wantversion) = (0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
@@ -45,24 +45,26 @@ exit(0);
 sub view_mid {
 	$mid =~ s/^ksplice[_-]//;
 	$module = "ksplice_$mid";
+	($kid = $mid) =~ s/[-_].*$//;
+	$update = "ksplice_$kid";
 
 	if(! -d "/sys/module") {
 		print "/sys not mounted?\n";
 		exit(1);
 	}
-	if(! -d "/sys/module/$module/ksplice") {
+	if(! -d "/sys/module/$module/$update") {
 		print "Ksplice id $mid is not present in the kernel\n";
 		return;
 	}
 
-	open STAGE, '<', "/sys/module/$module/ksplice/stage" or die $!;
+	open STAGE, '<', "/sys/module/$update/$update/stage" or die $!;
 	my $stage = <STAGE>;
 	close STAGE;
 	chomp($stage);
 	print "Ksplice id $mid is present in the kernel and is $stage.\n\n";
 
 	local $/;
-	open SOURCE_DIFF, '<', "/sys/module/$module/ksplice/source_diff" or die $!;
+	open SOURCE_DIFF, '<', "/sys/module/$update/$update/source_diff" or die $!;
 	my $source_diff = <SOURCE_DIFF>;
 	close SOURCE_DIFF;
 	return if($source_diff eq "");
@@ -85,8 +87,11 @@ sub view_file {
 sub view_list {
 	foreach(split(/\n/, runstr("lsmod"))) {
 		next unless my ($mid) = m/^ksplice_(\S*)\s/;
-		open STAGE, '<', "/sys/module/ksplice_$mid/ksplice/stage" or next;
-		print "$mid\n" if(<STAGE> eq "applied\n");
+		$module = "ksplice_$mid";
+		($kid = $mid) =~ s/[-_].*$//;
+		next unless (-e "/sys/module/$module/$module/stage");
+		open STAGE, '<', "/sys/module/$module/$module/stage" or next;
+		print "$kid\n" if(<STAGE> eq "applied\n");
 		close STAGE;
 	}
 }

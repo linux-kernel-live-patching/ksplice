@@ -75,7 +75,6 @@ enum ksplice_abort_cause_enum {
 };
 
 struct module_pack {
-	struct kobject kobj;
 	const char *name;
 	const char *kid;
 	struct update_bundle *bundle;
@@ -104,6 +103,8 @@ struct module_pack {
 struct update_bundle {
 	const char *kid;
 	char *name;
+	struct kobject kobj;
+	const char *source_diff, *source_diff_end;
 	enum ksplice_stage_enum stage;
 	enum ksplice_abort_cause_enum abort_cause;
 #ifdef CONFIG_DEBUG_FS

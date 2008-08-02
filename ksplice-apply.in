@@ -57,15 +57,19 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	}
 	my $mid = "${kid}_$target";
 	my $module = "ksplice_$mid";
+	my $update = "ksplice_$kid";
 
 	die "/sys not mounted\n" unless (-d "/sys/module");
-	if(-d "/sys/module/$module/ksplice") {
-		open STAGE, '<', "/sys/module/$module/ksplice/stage";
-		if (<STAGE> eq "applied\n") {
-			print STDERR "Ksplice update $mid already applied; continuing\n";
+	if(-d "/sys/module/$update/$update") {
+		open STAGE, '<', "/sys/module/$update/$update/stage";
+		my $stage = <STAGE>;
+		if ($stage eq "applied\n") {
+			print STDERR "Ksplice update $kid already applied; continuing\n";
 			next;
 		}
-		die "Unapplied Ksplice module $mid already loaded!";
+		if ($stage eq "reversed\n") {
+			die "Reversed Ksplice module $update already loaded!";
+		}
 	}
 
 	if(runval_raw("insmod $primary debug=$debug") != 0) {
@@ -74,45 +78,44 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	die "Error loading helper module $helper" if (runval_raw("insmod $helper") != 0);
 }
 
+my $update = "ksplice_$kid";
+open STAGE, '>', "/sys/module/$update/$update/stage" or die $!;
+print STAGE "applied\n";
+close STAGE;
+open STAGE, '<', "/sys/module/$update/$update/stage" or die $!;
+chomp (my $stage = <STAGE>);
+close STAGE;
 foreach my $helper (glob('ksplice-*-helper.ko')) {
-	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
-	die unless(-e $primary && -e $helper);
-
-	my ($newkid, $target) = $primary =~ m/^ksplice-([^_]+)_(.*)\.ko/;
-	my $mid = "${kid}_$target";
-	my $module = "ksplice_$mid";
-
-	open STAGE, '>', "/sys/module/$module/ksplice/stage" or die $!;
-	print STAGE "applied\n";
-	close STAGE;
-	open STAGE, '<', "/sys/module/$module/ksplice/stage" or die $!;
-	chomp (my $stage = <STAGE>);
-	close STAGE;
-	if($stage ne 'applied') {
-		(my $modname = $primary) =~ s/\.ko$//;
-		$modname =~ s/-/_/g;
-		my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
-						    DIR => tmpdir());
-		my $debugout = get_debugfs("ksplice_$kid", $debugfs_out);
-		if (!defined($debugout)) {
-			my $dmesg = runstr("dmesg | grep ksplice");
-			while($dmesg =~ /ksplice_h: Preparing and checking/) {
-				$dmesg = $';
-			}
-			$debugout = $dmesg;
-		}
-		open(ABORT, '<', "/sys/module/$module/ksplice/abort_cause")
-		    or die $!;
-		chomp(my $abort_cause = <ABORT>);
-		close(ABORT);
-		runval_raw("rmmod $primary") if $unload;
-		print STDERR "Error applying Ksplice update $kid:\n";
-		print "$debugout";
-		print_error($abort_cause);
-		print("Debugging output saved to $debugfs_out\n");
-		die;
-	}
+	$helper =~ s/-/_/g;
+	$helper =~ s/\.ko$//;
 	die if ($unload && runval_raw("rmmod $helper") != 0);
+}
+if($stage ne 'applied') {
+	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
+					    DIR => tmpdir());
+	my $debugout = get_debugfs("$update", $debugfs_out);
+	if (!defined($debugout)) {
+		my $dmesg = runstr("dmesg | grep ksplice");
+		while($dmesg =~ /ksplice_h: Preparing and checking/) {
+			$dmesg = $';
+		}
+		$debugout = $dmesg;
+	}
+	open(ABORT, '<', "/sys/module/$update/$update/abort_cause") or die $!;
+	chomp(my $abort_cause = <ABORT>);
+	close(ABORT);
+	foreach my $helper (glob('ksplice-*-helper.ko')) {
+		$helper =~ s/-/_/g;
+		$helper =~ s/\.ko$//;
+		(my $primary = $helper) =~ s/_helper//;
+		die if ($unload && runval_raw("rmmod $primary") != 0);
+	}
+	die if ($unload && runval_raw("rmmod $update") != 0);
+	print STDERR "Error applying Ksplice update $kid:\n";
+	print "$debugout";
+	print_error($abort_cause);
+	print("Debugging output saved to $debugfs_out\n");
+	die;
 }
 
 print "Done!\n";

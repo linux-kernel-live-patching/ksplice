@@ -204,11 +204,13 @@ static struct update_bundle *init_ksplice_bundle(const char *kid);
 static void cleanup_ksplice_bundle(struct update_bundle *bundle);
 static void add_to_bundle(struct module_pack *pack,
 			  struct update_bundle *bundle);
+static int ksplice_sysfs_init(struct update_bundle *bundle);
 
 struct ksplice_attribute {
 	struct attribute attr;
-	ssize_t (*show)(struct module_pack *pack, char *buf);
-	ssize_t (*store)(struct module_pack *pack, const char *buf, size_t len);
+	ssize_t (*show)(struct update_bundle *bundle, char *buf);
+	ssize_t (*store)(struct update_bundle *bundle, const char *buf,
+			 size_t len);
 };
 
 static ssize_t ksplice_attr_show(struct kobject *kobj, struct attribute *attr,
@@ -216,10 +218,11 @@ static ssize_t ksplice_attr_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct ksplice_attribute *attribute =
 	    container_of(attr, struct ksplice_attribute, attr);
-	struct module_pack *pack = container_of(kobj, struct module_pack, kobj);
+	struct update_bundle *bundle =
+	    container_of(kobj, struct update_bundle, kobj);
 	if (attribute->show == NULL)
 		return -EIO;
-	return attribute->show(pack, buf);
+	return attribute->show(bundle, buf);
 }
 
 static ssize_t ksplice_attr_store(struct kobject *kobj, struct attribute *attr,
@@ -227,10 +230,11 @@ static ssize_t ksplice_attr_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct ksplice_attribute *attribute =
 	    container_of(attr, struct ksplice_attribute, attr);
-	struct module_pack *pack = container_of(kobj, struct module_pack, kobj);
+	struct update_bundle *bundle =
+	    container_of(kobj, struct update_bundle, kobj);
 	if (attribute->store == NULL)
 		return -EIO;
-	return attribute->store(pack, buf, len);
+	return attribute->store(bundle, buf, len);
 }
 
 static struct sysfs_ops ksplice_sysfs_ops = {
@@ -240,11 +244,14 @@ static struct sysfs_ops ksplice_sysfs_ops = {
 
 static void ksplice_release(struct kobject *kobj)
 {
+	struct update_bundle *bundle;
+	bundle = container_of(kobj, struct update_bundle, kobj);
+	cleanup_ksplice_bundle(bundle);
 }
 
-static ssize_t stage_show(struct module_pack *pack, char *buf)
+static ssize_t stage_show(struct update_bundle *bundle, char *buf)
 {
-	switch (pack->bundle->stage) {
+	switch (bundle->stage) {
 	case PREPARING:
 		return snprintf(buf, PAGE_SIZE, "preparing\n");
 	case APPLIED:
@@ -255,9 +262,9 @@ static ssize_t stage_show(struct module_pack *pack, char *buf)
 	return 0;
 }
 
-static ssize_t abort_cause_show(struct module_pack *pack, char *buf)
+static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 {
-	switch (pack->bundle->abort_cause) {
+	switch (bundle->abort_cause) {
 	case NONE:
 		return snprintf(buf, PAGE_SIZE, "none\n");
 	case NO_MATCH:
@@ -276,22 +283,21 @@ static ssize_t abort_cause_show(struct module_pack *pack, char *buf)
 	return 0;
 }
 
-static ssize_t source_diff_show(struct module_pack *pack, char *buf)
+static ssize_t source_diff_show(struct update_bundle *bundle, char *buf)
 {
-	int len = pack->source_diff_end - pack->source_diff;
-	if (len == 0 || pack->source_diff[len - 1] != '\0')
+	int len = bundle->source_diff_end - bundle->source_diff;
+	if (len == 0 || bundle->source_diff[len - 1] != '\0')
 		return 0;
-	return snprintf(buf, PAGE_SIZE, "%s", pack->source_diff);
+	return snprintf(buf, PAGE_SIZE, "%s", bundle->source_diff);
 }
 
-static ssize_t stage_store(struct module_pack *pack,
+static ssize_t stage_store(struct update_bundle *bundle,
 			   const char *buf, size_t len)
 {
-	if (strncmp(buf, "applied\n", len) == 0 &&
-	    pack->bundle->stage == PREPARING)
-		apply_update(pack->bundle);
+	if (strncmp(buf, "applied\n", len) == 0 && bundle->stage == PREPARING)
+		apply_update(bundle);
 	else if (strncmp(buf, "reversed\n", len) == 0)
-		reverse_patches(pack->bundle);
+		reverse_patches(bundle);
 	return len;
 }
 
@@ -319,16 +325,8 @@ void cleanup_ksplice_module(struct module_pack *pack)
 {
 	if (pack->bundle == NULL)
 		return;
-
-	if (pack->bundle->stage != APPLIED) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
-		kobject_put(&pack->kobj);
-#else /* LINUX_VERSION_CODE < */
-/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
-		kobject_unregister(&pack->kobj);
-#endif /* LINUX_VERSION_CODE */
+	if (pack->bundle->stage != APPLIED)
 		unregister_ksplice_module(pack);
-	}
 }
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
@@ -645,6 +643,13 @@ static int register_ksplice_module(struct module_pack *pack)
 		ret = -ENOMEM;
 		goto out;
 	}
+	bundle->source_diff = pack->source_diff;
+	bundle->source_diff_end = pack->source_diff_end;
+	if (ksplice_sysfs_init(bundle) < 0) {
+		cleanup_ksplice_bundle(bundle);
+		ret = -ENOMEM;
+		goto out;
+	}
 	add_to_bundle(pack, bundle);
 out:
 	mutex_unlock(&module_mutex);
@@ -658,7 +663,12 @@ static void unregister_ksplice_module(struct module_pack *pack)
 	if (pack->bundle->stage != APPLIED) {
 		list_del(&pack->list);
 		if (list_empty(&pack->bundle->packs))
-			cleanup_ksplice_bundle(pack->bundle);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+			kobject_put(&pack->bundle->kobj);
+#else /* LINUX_VERSION_CODE < */
+/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
+			kobject_unregister(&pack->bundle->kobj);
+#endif /* LINUX_VERSION_CODE */
 		pack->bundle = NULL;
 	}
 }
@@ -707,48 +717,47 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	return bundle;
 }
 
-int init_ksplice_module(struct module_pack *pack)
+static int ksplice_sysfs_init(struct update_bundle *bundle)
 {
 	int ret = 0;
+	memset(&bundle->kobj, 0, sizeof(bundle->kobj));
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
+	ret = kobject_init_and_add(&bundle->kobj, &ksplice_ktype,
+				   &THIS_MODULE->mkobj.kobj, "%s",
+				   bundle->name);
+#else /* LINUX_VERSION_CODE < */
+	ret = kobject_set_name(&bundle->kobj, "%s", bundle->name);
+	if (ret != 0)
+		return -1;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+/* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
+	bundle->kobj.parent = &THIS_MODULE->mkobj.kobj;
+#else /* LINUX_VERSION_CODE < */
+	bundle->kobj.parent = &THIS_MODULE->mkobj->kobj;
+#endif /* LINUX_VERSION_CODE */
+	bundle->kobj.ktype = &ksplice_ktype;
+	ret = kobject_register(&bundle->kobj);
+#endif /* LINUX_VERSION_CODE */
+	if (ret != 0)
+		return -ENOMEM;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
+/* 312c004d36ce6c739512bac83b452f4c20ab1f62 was after 2.6.14 */
+	kobject_uevent(&bundle->kobj, KOBJ_ADD);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+/* 12025235884570ba7f02a6f427f973ac6be7ec54 was after 2.6.9 */
+	kobject_uevent(&bundle->kobj, KOBJ_ADD, NULL);
+#endif /* LINUX_VERSION_CODE */
+	return 0;
+}
+
+int init_ksplice_module(struct module_pack *pack)
+{
 #ifdef KSPLICE_STANDALONE
 	if (bootstrapped == 0)
 		return -1;
 #endif /* KSPLICE_STANDALONE */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
-/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
-	ret = kobject_init_and_add(&pack->kobj, &ksplice_ktype,
-				   &pack->primary->mkobj.kobj, "ksplice");
-#else /* LINUX_VERSION_CODE < */
-	ret = kobject_set_name(&pack->kobj, "ksplice");
-	if (ret != 0) {
-		ret = -1;
-		goto out;
-	}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
-/* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
-	pack->kobj.parent = &pack->primary->mkobj.kobj;
-#else /* LINUX_VERSION_CODE < */
-	pack->kobj.parent = &pack->primary->mkobj->kobj;
-#endif /* LINUX_VERSION_CODE */
-	pack->kobj.ktype = &ksplice_ktype;
-	ret = kobject_register(&pack->kobj);
-#endif /* LINUX_VERSION_CODE */
-
-	if (ret != 0) {
-		ret = -ENOMEM;
-		goto out;
-	}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
-/* 312c004d36ce6c739512bac83b452f4c20ab1f62 was after 2.6.14 */
-	kobject_uevent(&pack->kobj, KOBJ_ADD);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-/* 12025235884570ba7f02a6f427f973ac6be7ec54 was after 2.6.9 */
-	kobject_uevent(&pack->kobj, KOBJ_ADD, NULL);
-#endif /* LINUX_VERSION_CODE */
-
 	return register_ksplice_module(pack);
-out:
-	return ret;
 }
 EXPORT_SYMBOL(init_ksplice_module);
 
