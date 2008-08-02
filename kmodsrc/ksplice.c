@@ -441,6 +441,9 @@ static int __apply_patches(void *packptr)
 	struct safety_record *rec;
 	mm_segment_t old_fs;
 
+	if (module_is_live(pack->primary) == 0)
+		return -ENODEV;
+
 	list_for_each_entry(rec, pack->safety_records, list) {
 		for (p = pack->patches; p < pack->patches_end; p++) {
 			if (p->oldaddr == rec->addr)
@@ -451,8 +454,7 @@ static int __apply_patches(void *packptr)
 	if (check_each_task(pack) < 0)
 		return -EAGAIN;
 
-	if (!try_module_get(pack->primary))
-		return -ENODEV;
+	try_module_get(pack->primary);
 
 	pack->stage = APPLIED;
 
