@@ -4,8 +4,6 @@ datadir = @datadir@
 
 ksplice-script = $(datadir)/ksplice/ksplice-obj.pl
 
-ifneq ($(KERNELRELEASE),)
-
 ifneq ($(KSPLICE_STANDALONE),)
     KSPLICE_CFLAGS += -DKSPLICE_STANDALONE
 endif
@@ -55,6 +53,8 @@ CFLAGS_primary-$(target).o = $(ksplice-pack-cflags)
 CFLAGS_helper-$(target).o = $(ksplice-pack-cflags)
 endef
 
+$(foreach mod,$(KSPLICE_MODULES),$(eval $(ksplice-pack-vars)))
+
 $(foreach mod,$(KSPLICE_MODULES),$(obj)/primary-$(target).o): $(obj)/%.o: $(src)/primary.c FORCE
 	$(call if_changed_rule,cc_o_c)
 $(foreach mod,$(KSPLICE_MODULES),$(obj)/helper-$(target).o): $(obj)/%.o: $(src)/helper.c FORCE
@@ -95,15 +95,3 @@ cmd_ksplice-rmsyms = \
 $(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o FORCE
 	$(call if_changed,ksplice-rmsyms)
 endif # KSPLICE_STANDALONE
-
-else
-
-all $(MAKECMDGOALS):
-	$(MAKE) -C $(KERNELSRC) M=$(CURDIR) $(MAKECMDGOALS)
-
-.PHONY: all $(MAKECMDGOALS)
-
-endif
-
-# make 3.80 can't eval inside an if statement.
-$(foreach mod,$(KSPLICE_MODULES),$(eval $(ksplice-pack-vars)))

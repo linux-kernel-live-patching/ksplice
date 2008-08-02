@@ -185,7 +185,7 @@ if(!@modules) {
 
 revert_orig();
 
-runval("make", "-C", "$tmpdir/kmodsrc", @jlevel, "modules", "KSPLICE_KID=$kid", "KSPLICE_MODULES=@modules", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk", "KERNELSRC=$linuxtree", @standalone_flag);
+runval("make", "-C", $linuxtree, "M=$tmpdir/kmodsrc", @jlevel, "modules", "KSPLICE_KID=$kid", "KSPLICE_MODULES=@modules", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk", @standalone_flag);
 
 chdir($tmpdir);
 mkdir($ksplice);
