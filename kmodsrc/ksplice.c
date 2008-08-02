@@ -361,6 +361,8 @@ static int activate_primary(struct module_pack *pack)
 			pack->abort_cause = CODE_BUSY;
 			print_abort(pack, "stack check: to-be-replaced code is "
 				    "busy");
+		} else {
+			pack->abort_cause = UNEXPECTED;
 		}
 		return -1;
 	}
@@ -707,8 +709,10 @@ static int apply_patches(struct module_pack *pack)
 	struct module *m;
 	pack->abort_cause = NONE;
 
-	if (init_debug_buf(pack) < 0)
+	if (init_debug_buf(pack) < 0) {
+		pack->abort_cause = UNEXPECTED;
 		return -1;
+	}
 
 	mutex_lock(&module_mutex);
 
