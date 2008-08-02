@@ -401,14 +401,14 @@ void reverse_patches(struct module_pack *pack)
 {
 	int i, ret;
 
+	if (pack->stage != APPLIED)
+		return;
+
 	clear_debug_buf(pack);
 	if (init_debug_buf(pack) < 0)
 		return;
 	ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
 		pack->name);
-
-	if (pack->stage != APPLIED)
-		return;
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
