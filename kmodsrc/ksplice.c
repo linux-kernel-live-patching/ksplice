@@ -320,7 +320,6 @@ void cleanup_ksplice_module(struct module_pack *pack)
 		return;
 
 	if (pack->stage != APPLIED) {
-		clear_debug_buf(pack);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 		kobject_put(&pack->kobj);
 #else /* LINUX_VERSION_CODE < */
@@ -414,11 +413,9 @@ static void reverse_patches(struct update_bundle *bundle)
 			return;
 	}
 
-	list_for_each_entry(pack, &bundle->packs, list) {
-		clear_debug_buf(pack);
-		if (init_debug_buf(pack) < 0)
-			return;
-	}
+	clear_debug_buf(bundle);
+	if (init_debug_buf(bundle) < 0)
+		return;
 
 	list_for_each_entry(pack, &bundle->packs, list)
 		ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
@@ -679,6 +676,7 @@ static void add_to_bundle(struct module_pack *pack,
 static void cleanup_ksplice_bundle(struct update_bundle *bundle)
 {
 	list_del(&bundle->list);
+	clear_debug_buf(bundle);
 	kfree(bundle->name);
 	kfree(bundle);
 }
@@ -686,6 +684,7 @@ static void cleanup_ksplice_bundle(struct update_bundle *bundle)
 static struct update_bundle *init_ksplice_bundle(const char *kid)
 {
 	struct update_bundle *bundle;
+	int ret;
 	char *str = "ksplice_";
 	bundle = kmalloc(sizeof(struct update_bundle), GFP_KERNEL);
 	if (bundle == NULL)
@@ -700,6 +699,12 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	list_add(&bundle->list, &update_bundles);
 	bundle->kid = kid;
 	snprintf(bundle->name, strlen(kid) + strlen(str) + 1, "%s%s", str, kid);
+	ret = init_debug_buf(bundle);
+	if (ret < 0) {
+		kfree(bundle->name);
+		kfree(bundle);
+		return NULL;
+	}
 	return bundle;
 }
 
@@ -754,13 +759,6 @@ static void apply_update(struct update_bundle *bundle)
 	struct module_pack *pack;
 	list_for_each_entry(pack, &bundle->packs, list)
 		pack->abort_cause = NONE;
-
-	list_for_each_entry(pack, &bundle->packs, list) {
-		if (init_debug_buf(pack) < 0) {
-			pack->abort_cause = UNEXPECTED;
-			return;
-		}
-	}
 
 	mutex_lock(&module_mutex);
 	list_for_each_entry(pack, &bundle->packs, list) {
@@ -1752,79 +1750,75 @@ static struct dentry *debugfs_create_blob(const char *name, mode_t mode,
 }
 #endif /* LINUX_VERSION_CODE */
 
-void clear_debug_buf(struct module_pack *pack)
+void clear_debug_buf(struct update_bundle *bundle)
 {
-	if (pack->debugfs_dentry == NULL)
+	if (bundle->debugfs_dentry == NULL)
 		return;
-	debugfs_remove(pack->debugfs_dentry);
-	pack->debugfs_dentry = NULL;
-	pack->debug_blob.size = 0;
-	kfree(pack->debug_blob.data);
-	pack->debug_blob.data = NULL;
+	debugfs_remove(bundle->debugfs_dentry);
+	bundle->debugfs_dentry = NULL;
+	bundle->debug_blob.size = 0;
+	kfree(bundle->debug_blob.data);
+	bundle->debug_blob.data = NULL;
 }
 
-int init_debug_buf(struct module_pack *pack)
+int init_debug_buf(struct update_bundle *bundle)
 {
-	pack->debug_blob.size = 0;
-	pack->debug_blob.data = NULL;
-	pack->debugfs_dentry = debugfs_create_blob(pack->name,
-						   S_IFREG | S_IRUSR, NULL,
-						   &pack->debug_blob);
-	if (pack->debugfs_dentry == NULL)
+	bundle->debug_blob.size = 0;
+	bundle->debug_blob.data = NULL;
+	bundle->debugfs_dentry =
+	    debugfs_create_blob(bundle->name, S_IFREG | S_IRUSR, NULL,
+				&bundle->debug_blob);
+	if (bundle->debugfs_dentry == NULL)
 		return -ENOMEM;
 	return 0;
 }
 
-int ksdebug(struct module_pack *pack, int level, const char *fmt, ...)
+int __ksdebug(struct update_bundle *bundle, const char *fmt, ...)
 {
 	va_list args;
-	int size, old_size, new_size;
+	unsigned long size, old_size, new_size;
 
-	if (*pack->debug < level)
-		return 0;
-
-	if ((pack->debug_blob.data == NULL ||
-	     ((char *)pack->debug_blob.data)[pack->debug_blob.size - 1] == '\n')
-	    && strlen(fmt) >= 3 && fmt[0] == '<' && fmt[1] >= '0' &&
+	if ((bundle->debug_blob.data == NULL ||
+	     ((char *)bundle->debug_blob.data)[bundle->debug_blob.size - 1] ==
+	     '\n') && strlen(fmt) >= 3 && fmt[0] == '<' && fmt[1] >= '0' &&
 	    fmt[1] <= '7' && fmt[2] == '>')
 		fmt += 3;
 
-	va_start(args, fmt);
 	/* size includes the trailing '\0' */
-	size = 1 + vsnprintf(pack->debug_blob.data, 0, fmt, args);
+	va_start(args, fmt);
+	size = 1 + vsnprintf(bundle->debug_blob.data, 0, fmt, args);
 	va_end(args);
-	old_size = pack->debug_blob.size == 0 ? 0 :
-	    roundup_pow_of_two(pack->debug_blob.size);
-	new_size = pack->debug_blob.size + size == 0 ? 0 :
-	    roundup_pow_of_two(pack->debug_blob.size + size);
+	old_size = bundle->debug_blob.size == 0 ? 0 :
+	    roundup_pow_of_two(bundle->debug_blob.size);
+	new_size = bundle->debug_blob.size + size == 0 ? 0 :
+	    roundup_pow_of_two(bundle->debug_blob.size + size);
 	if (new_size > old_size) {
-		char *tmp = pack->debug_blob.data;
+		char *tmp = bundle->debug_blob.data;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-		pack->debug_blob.data = krealloc(pack->debug_blob.data,
-						 new_size, GFP_KERNEL);
+		bundle->debug_blob.data = krealloc(bundle->debug_blob.data,
+						   new_size, GFP_KERNEL);
 #else /* LINUX_VERSION_CODE < */
 		/* We cannot use our own function with the same
 		 * arguments as krealloc, because doing so requires
 		 * ksize, which was first exported in 2.6.24-rc5.
 		 */
-		pack->debug_blob.data = kmalloc(new_size, GFP_KERNEL);
-		if (pack->debug_blob.data != NULL) {
-			memcpy(pack->debug_blob.data, tmp,
-			       pack->debug_blob.size);
+		bundle->debug_blob.data = kmalloc(new_size, GFP_KERNEL);
+		if (bundle->debug_blob.data != NULL) {
+			memcpy(bundle->debug_blob.data, tmp,
+			       bundle->debug_blob.size);
 			kfree(tmp);
 		}
 #endif /* LINUX_VERSION_CODE */
-		if (pack->debug_blob.data == NULL) {
+		if (bundle->debug_blob.data == NULL) {
 			kfree(tmp);
 			return -ENOMEM;
 		}
 	}
 	va_start(args, fmt);
-	pack->debug_blob.size += vsnprintf(pack->debug_blob.data +
-					   pack->debug_blob.size,
-					   size, fmt, args);
+	bundle->debug_blob.size += vsnprintf(bundle->debug_blob.data +
+					     bundle->debug_blob.size,
+					     size, fmt, args);
 	va_end(args);
-
 	return 0;
 }
 #endif /* CONFIG_DEBUG_FS */
@@ -1858,11 +1852,6 @@ static int init_ksplice(void)
 	if (pack->bundle == NULL)
 		return -ENOMEM;
 	add_to_bundle(pack, pack->bundle);
-	ret = init_debug_buf(pack);
-	if (ret < 0) {
-		kfree(pack->bundle);
-		return -ENOMEM;
-	}
 	ret = process_ksplice_relocs(pack, ksplice_init_relocs,
 				     ksplice_init_relocs_end, 1);
 	if (ret == 0)
@@ -1874,7 +1863,6 @@ static int init_ksplice(void)
 static void cleanup_ksplice(void)
 {
 #ifdef KSPLICE_STANDALONE
-	clear_debug_buf(&ksplice_pack);
 	cleanup_ksplice_bundle(ksplice_pack.bundle);
 #endif /* KSPLICE_STANDALONE */
 }

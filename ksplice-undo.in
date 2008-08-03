@@ -66,7 +66,7 @@ if ($stage eq 'applied') {
 unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0) {
 	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
 					    DIR => tmpdir());
-	my $debug = get_debugfs("$module", $debugfs_out);
+	my $debug = get_debugfs("ksplice_$kid", $debugfs_out);
 	if (!defined($debug)) {
 		my $dmesg = runstr("dmesg | grep ksplice");
 		while($dmesg =~ /ksplice: Preparing to reverse/) {

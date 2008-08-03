@@ -100,16 +100,16 @@ struct module_pack {
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
 	int *debug;
-#ifdef CONFIG_DEBUG_FS
-	struct debugfs_blob_wrapper debug_blob;
-	struct dentry *debugfs_dentry;
-#endif /* CONFIG_DEBUG_FS */
 	struct list_head list;
 };
 
 struct update_bundle {
 	const char *kid;
 	char *name;
+#ifdef CONFIG_DEBUG_FS
+	struct debugfs_blob_wrapper debug_blob;
+	struct dentry *debugfs_dentry;
+#endif /* CONFIG_DEBUG_FS */
 	struct list_head packs;
 	struct list_head list;
 };
@@ -207,17 +207,22 @@ struct candidate_val {
 #define singular(list) (!list_empty(list) && (list)->next->next == (list))
 
 #ifdef CONFIG_DEBUG_FS
-extern int init_debug_buf(struct module_pack *pack);
-extern void clear_debug_buf(struct module_pack *pack);
-extern int ksdebug(struct module_pack *pack, int level, const char *fmt, ...);
+extern int init_debug_buf(struct update_bundle *bundle);
+extern void clear_debug_buf(struct update_bundle *bundle);
+extern int __ksdebug(struct update_bundle *bundle, const char *fmt, ...);
+#define ksdebug(pack, level, fmt, ...)					\
+	do {								\
+		if (*(pack)->debug >= (level))				\
+			__ksdebug((pack)->bundle, fmt, ## __VA_ARGS__);	\
+	} while (0)
 #else /* CONFIG_DEBUG_FS */
 #define ksdebug(pack, level, fmt, ...) \
 	do { if (*(pack)->debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
-static inline int init_debug_buf(struct module_pack *pack)
+static inline int init_debug_buf(struct update_bundle *bundle)
 {
 	return 0;
 }
-static inline void clear_debug_buf(struct module_pack *pack)
+static inline void clear_debug_buf(struct update_bundle *bundle)
 {
 	return;
 }

@@ -93,7 +93,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		$modname =~ s/-/_/g;
 		my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
 						    DIR => tmpdir());
-		my $debug = get_debugfs($modname, $debugfs_out);
+		my $debug = get_debugfs("ksplice_$kid", $debugfs_out);
 		if (!defined($debug)) {
 			my $dmesg = runstr("dmesg | grep ksplice");
 			while($dmesg =~ /ksplice_h: Preparing and checking/) {
