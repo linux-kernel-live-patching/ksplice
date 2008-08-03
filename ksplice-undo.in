@@ -66,16 +66,16 @@ if ($stage eq 'applied') {
 unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0) {
 	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
 					    DIR => tmpdir());
-	my $debug = get_debugfs("ksplice_$kid", $debugfs_out);
-	if (!defined($debug)) {
+	my $debugout = get_debugfs("ksplice_$kid", $debugfs_out);
+	if (!defined($debugout)) {
 		my $dmesg = runstr("dmesg | grep ksplice");
 		while($dmesg =~ /ksplice: Preparing to reverse/) {
 			$dmesg = $';
 		}
-		$debug = $dmesg;
+		$debugout = $dmesg;
 	}
 	print STDERR "Error undoing Ksplice update $mid:\n";
-	print "$debug";
+	print "$debugout";
 	open(ABORT, '<', "/sys/module/$module/ksplice/abort_cause")
 	    or die $!;
 	chomp(my $abort_cause = <ABORT>);

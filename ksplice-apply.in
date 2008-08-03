@@ -93,13 +93,13 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		$modname =~ s/-/_/g;
 		my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
 						    DIR => tmpdir());
-		my $debug = get_debugfs("ksplice_$kid", $debugfs_out);
-		if (!defined($debug)) {
+		my $debugout = get_debugfs("ksplice_$kid", $debugfs_out);
+		if (!defined($debugout)) {
 			my $dmesg = runstr("dmesg | grep ksplice");
 			while($dmesg =~ /ksplice_h: Preparing and checking/) {
 				$dmesg = $';
 			}
-			$debug = $dmesg;
+			$debugout = $dmesg;
 		}
 		open(ABORT, '<', "/sys/module/$module/ksplice/abort_cause")
 		    or die $!;
@@ -107,7 +107,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		close(ABORT);
 		runval_raw("rmmod $primary") if $unload;
 		print STDERR "Error applying Ksplice update $kid:\n";
-		print "$debug";
+		print "$debugout";
 		print_error($abort_cause);
 		print("Debugging output saved to $debugfs_out\n");
 		die;
