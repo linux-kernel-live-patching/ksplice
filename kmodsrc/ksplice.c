@@ -304,9 +304,9 @@ static ssize_t stage_store(struct update_bundle *bundle,
 static struct ksplice_attribute stage_attribute =
 	__ATTR(stage, 0600, stage_show, stage_store);
 static struct ksplice_attribute abort_cause_attribute =
-	__ATTR(abort_cause, 0600, abort_cause_show, NULL);
+	__ATTR(abort_cause, 0400, abort_cause_show, NULL);
 static struct ksplice_attribute source_diff_attribute =
-	__ATTR(source_diff, 0600, source_diff_show, NULL);
+	__ATTR(source_diff, 0400, source_diff_show, NULL);
 
 static struct attribute *ksplice_attrs[] = {
 	&stage_attribute.attr,
