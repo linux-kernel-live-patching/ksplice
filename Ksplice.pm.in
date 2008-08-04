@@ -18,7 +18,9 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	Verbose GetOptions pod2usage shellwords
 	$datadir $libexecdir $version_str
-	runval runval_raw runstr runstr_err runsuc unpack_update get_debugfs
+	runval runval_raw runstr runstr_err runsuc unpack_update
+	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
+	get_debugfs
 	abs_path getcwd basename dirname tmpdir
 	copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir
 );
@@ -88,6 +90,54 @@ sub unpack_update {
 	return $ksplice;
 }
 
+sub get_sysfs {
+	my ($kid) = @_;
+	if(! -d "/sys/module") {
+		die "/sys not mounted?\n";
+	}
+	my $update = "ksplice_$kid";
+	if (-d "/sys/module/ksplice/$update") {
+		return "/sys/module/ksplice/$update";
+	}
+	if (-d "/sys/module/$update/$update") {
+		return "/sys/module/$update/$update";
+	}
+	return undef;
+}
+
+sub update_loaded {
+	my ($kid) = @_;
+	return defined(get_sysfs($kid));
+}
+
+sub read_file {
+	my ($file) = @_;
+	local (*INPUT, $/);
+	open(INPUT, "<", $file) or die $!;
+	return <INPUT>;
+}
+
+sub write_file {
+	my ($file, $string) = @_;
+	local *INPUT;
+	open(INPUT, ">", $file) or die $!;
+	print INPUT $string;
+}
+
+sub read_sysfs {
+	my ($kid, $attr) = @_;
+	my $sysfs = get_sysfs($kid);
+	return undef if (!defined($sysfs));
+	return read_file("$sysfs/$attr");
+}
+
+sub write_sysfs {
+	my ($kid, $attr, $string) = @_;
+	my $sysfs = get_sysfs($kid);
+	return undef if (!defined($sysfs));
+	write_file("$sysfs/$attr", $string);
+}
+
 sub get_debugfs {
 	my ($modname, $debugfs_out) = @_;
 	my $debug;
@@ -96,13 +146,38 @@ sub get_debugfs {
 	runval_raw(qw(mount -t debugfs debugfs), $debugfsdir);
 	if (-e "$debugfsdir/$modname") {
 		copy("$debugfsdir/$modname", "$debugfs_out");
-		open(DEBUG, '<', "$debugfsdir/$modname") or die $!;
-		local $/;
-		$debug = <DEBUG>;
-		close(DEBUG);
+		$debug = read_file("$debugfsdir/$modname");
 	}
 	runval_raw(qw(umount), $debugfsdir);
 	return $debug;
+}
+
+sub get_stage {
+	my ($kid) = @_;
+	chomp(my $result = read_sysfs($kid, "stage"));
+	return $result;
+}
+
+sub get_abort_cause {
+	my ($kid) = @_;
+	chomp(my $result = read_sysfs($kid, "abort_cause"));
+	return $result;
+}
+
+sub get_patch {
+	my ($kid) = @_;
+	chomp(my $result = read_sysfs($kid, "source_diff"));
+	return $result;
+}
+
+sub set_stage {
+	my ($kid, $string) = @_;
+	write_sysfs($kid, "stage", "$string\n");
+}
+
+sub set_debug_level {
+	my ($kid, $string) = @_;
+	write_sysfs($kid, "debug", "$string\n");
 }
 
 END {
