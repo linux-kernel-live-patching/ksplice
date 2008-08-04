@@ -171,11 +171,11 @@ static int activate_primary(struct module_pack *pack);
 static int resolve_patch_symbols(struct module_pack *pack);
 static int __apply_patches(void *packptr);
 static int __reverse_patches(void *packptr);
-static int check_each_task(struct module_pack *pack);
-static int check_task(struct module_pack *pack, struct task_struct *t);
-static int check_stack(struct module_pack *pack, struct thread_info *tinfo,
+static int check_each_task(struct update_bundle *bundle);
+static int check_task(struct update_bundle *bundle, struct task_struct *t);
+static int check_stack(struct update_bundle *bundle, struct thread_info *tinfo,
 		       unsigned long *stack);
-static int check_address_for_conflict(struct module_pack *pack,
+static int check_address_for_conflict(struct update_bundle *bundle,
 				      unsigned long addr);
 static int valid_stack_ptr(struct thread_info *tinfo, void *p);
 
@@ -478,9 +478,9 @@ static int __apply_patches(void *bundleptr)
 					rec->care = 1;
 			}
 		}
-		if (check_each_task(pack) < 0)
-			return -EAGAIN;
 	}
+	if (check_each_task(bundle) < 0)
+		return -EAGAIN;
 
 	/* try_module_get must succeed because module is live */
 	list_for_each_entry(pack, &bundle->packs, list)
@@ -521,10 +521,8 @@ static int __reverse_patches(void *bundleptr)
 	}
 #endif /* CONFIG_MODULE_UNLOAD */
 
-	list_for_each_entry(pack, &bundle->packs, list) {
-		if (check_each_task(pack) < 0)
-			return -EAGAIN;
-	}
+	if (check_each_task(bundle) < 0)
+		return -EAGAIN;
 
 	bundle->stage = REVERSED;
 
@@ -542,18 +540,18 @@ static int __reverse_patches(void *bundleptr)
 	return 0;
 }
 
-static int check_each_task(struct module_pack *pack)
+static int check_each_task(struct update_bundle *bundle)
 {
 	struct task_struct *g, *p;
 	int status = 0;
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		if (check_task(pack, p) < 0) {
-			if (pack->bundle->debug == 1) {
-				pack->bundle->debug = 2;
-				check_task(pack, p);
-				pack->bundle->debug = 1;
+		if (check_task(bundle, p) < 0) {
+			if (bundle->debug == 1) {
+				bundle->debug = 2;
+				check_task(bundle, p);
+				bundle->debug = 1;
 			}
 			status = -EAGAIN;
 		}
@@ -563,35 +561,35 @@ static int check_each_task(struct module_pack *pack)
 	return status;
 }
 
-static int check_task(struct module_pack *pack, struct task_struct *t)
+static int check_task(struct update_bundle *bundle, struct task_struct *t)
 {
 	int status, ret;
 
-	ksdebug(pack, 2, KERN_DEBUG "ksplice: stack check: pid %d (%s) eip "
-		"%" ADDR " ", t->pid, t->comm, KSPLICE_IP(t));
-	status = check_address_for_conflict(pack, KSPLICE_IP(t));
-	ksdebug(pack, 2, ": ");
+	_ksdebug(bundle, 2, KERN_DEBUG "ksplice: stack check: pid %d (%s) eip "
+		 "%" ADDR " ", t->pid, t->comm, KSPLICE_IP(t));
+	status = check_address_for_conflict(bundle, KSPLICE_IP(t));
+	_ksdebug(bundle, 2, ": ");
 
 	if (t == current) {
-		ret = check_stack(pack, task_thread_info(t),
+		ret = check_stack(bundle, task_thread_info(t),
 				  (unsigned long *)__builtin_frame_address(0));
 		if (status == 0)
 			status = ret;
 	} else if (!task_curr(t)) {
-		ret = check_stack(pack, task_thread_info(t),
+		ret = check_stack(bundle, task_thread_info(t),
 				  (unsigned long *)KSPLICE_SP(t));
 		if (status == 0)
 			status = ret;
 	} else if (strcmp(t->comm, "kstopmachine") != 0) {
-		ksdebug(pack, 2, "unexpected running task!");
+		_ksdebug(bundle, 2, "unexpected running task!");
 		status = -ENODEV;
 	}
-	ksdebug(pack, 2, "\n");
+	_ksdebug(bundle, 2, "\n");
 	return status;
 }
 
 /* Modified version of Linux's print_context_stack */
-static int check_stack(struct module_pack *pack, struct thread_info *tinfo,
+static int check_stack(struct update_bundle *bundle, struct thread_info *tinfo,
 		       unsigned long *stack)
 {
 	int status = 0;
@@ -600,34 +598,40 @@ static int check_stack(struct module_pack *pack, struct thread_info *tinfo,
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
 		if (__kernel_text_address(addr)) {
-			ksdebug(pack, 2, "%" ADDR " ", addr);
-			if (check_address_for_conflict(pack, addr) < 0)
+			_ksdebug(bundle, 2, "%" ADDR " ", addr);
+			if (check_address_for_conflict(bundle, addr) < 0)
 				status = -EAGAIN;
 		}
 	}
 	return status;
 }
 
-static int check_address_for_conflict(struct module_pack *pack,
+static int check_address_for_conflict(struct update_bundle *bundle,
 				      unsigned long addr)
 {
 	const struct ksplice_size *s;
 	struct safety_record *rec;
+	struct module_pack *pack;
 
-	/* It is safe for addr to point to the beginning of a patched
-	   function, because that location will be overwritten with a
-	   trampoline. */
-	list_for_each_entry(rec, pack->safety_records, list) {
-		if (rec->care == 1 && addr > rec->addr
-		    && addr < rec->addr + rec->size) {
-			ksdebug(pack, 2, "[<-- CONFLICT] ");
-			return -EAGAIN;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		/* It is safe for addr to point to the beginning of a patched
+		   function, because that location will be overwritten with a
+		   trampoline. */
+		list_for_each_entry(rec, pack->safety_records, list) {
+			if (rec->care == 1 && addr > rec->addr
+			    && addr < rec->addr + rec->size) {
+				ksdebug(pack, 2, "[<-- CONFLICT: %s] ",
+					pack->name);
+				return -EAGAIN;
+			}
 		}
-	}
-	for (s = pack->primary_sizes; s < pack->primary_sizes_end; s++) {
-		if (addr >= s->thismod_addr && addr < s->thismod_addr + s->size) {
-			ksdebug(pack, 2, "[<-- CONFLICT] ");
-			return -EAGAIN;
+		for (s = pack->primary_sizes; s < pack->primary_sizes_end; s++) {
+			if (addr >= s->thismod_addr && addr < s->thismod_addr +
+			    s->size) {
+				ksdebug(pack, 2, "[<-- CONFLICT: %s] ",
+					pack->name);
+				return -EAGAIN;
+			}
 		}
 	}
 	return 0;
