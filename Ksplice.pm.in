@@ -20,7 +20,7 @@ our @EXPORT = qw(
 	$datadir $libexecdir $version_str
 	runval runval_raw runstr runstr_err runsuc unpack_update
 	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
-	get_debugfs
+	get_debug_output
 	abs_path getcwd basename dirname tmpdir
 	copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir
 );
@@ -138,18 +138,28 @@ sub write_sysfs {
 	write_file("$sysfs/$attr", $string);
 }
 
-sub get_debugfs {
-	my ($modname, $debugfs_out) = @_;
+sub get_debug_output {
+	my ($kid) = @_;
+	my $update = "ksplice_$kid";
 	my $debug;
+	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX', DIR => tmpdir());
 	my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX',
 				 TMPDIR => 1, CLEANUP => 1);
 	runval_raw(qw(mount -t debugfs debugfs), $debugfsdir);
-	if (-e "$debugfsdir/$modname") {
-		copy("$debugfsdir/$modname", "$debugfs_out");
-		$debug = read_file("$debugfsdir/$modname");
+	if (-e "$debugfsdir/$update") {
+		copy("$debugfsdir/$update", "$debugfs_out");
+		$debug = read_file("$debugfsdir/$update");
+	} else {
+		my $dmesg = runstr("dmesg | grep ksplice");
+		while($dmesg =~ /ksplice: Preparing to reverse/) {
+			$dmesg = $';
+		}
+		$debug = $dmesg;
+		write_file($debugfs_out, $dmesg);
 	}
 	runval_raw(qw(umount), $debugfsdir);
-	return $debug;
+	rmdir($debugfsdir);
+	return ($debugfs_out, $debug);
 }
 
 sub get_stage {
