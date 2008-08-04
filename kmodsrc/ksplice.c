@@ -662,8 +662,14 @@ static int valid_stack_ptr(struct thread_info *tinfo, void *p)
 static int register_ksplice_module(struct module_pack *pack)
 {
 	struct update_bundle *bundle;
+	struct module *m;
 	int ret = 0;
 	mutex_lock(&module_mutex);
+	list_for_each_entry(m, &modules, list) {
+		if (pack->target_name != NULL &&
+		    strcmp(pack->target_name, m->name) == 0)
+			pack->target = m;
+	}
 	list_for_each_entry(bundle, &update_bundles, list) {
 		if (strcmp(pack->kid, bundle->kid) == 0) {
 			add_to_bundle(pack, bundle);
@@ -795,18 +801,9 @@ EXPORT_SYMBOL(init_ksplice_module);
 
 static void apply_update(struct update_bundle *bundle)
 {
-	struct module *m;
 	struct module_pack *pack;
 
 	mutex_lock(&module_mutex);
-	list_for_each_entry(pack, &bundle->packs, list) {
-		list_for_each_entry(m, &modules, list) {
-			if (pack->target_name != NULL &&
-			    strcmp(pack->target_name, m->name) == 0)
-				pack->target = m;
-		}
-	}
-
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	list_for_each_entry(pack, &bundle->packs, list) {
 		if (pack->target == NULL) {
