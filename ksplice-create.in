@@ -87,8 +87,6 @@ if(-e "$orig_config_dir/flags") {
 $ENV{KSPLICE_VERBOSE} = $Verbose::level;
 $ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
 
-copy("$orig_config_dir/.config", "$linuxtree/.config");
-
 my @chars = ('a'..'z', 0..9);
 $kid = join '', map { $chars[int(rand(36))] } 0..7 if(!defined $kid);
 my $ksplice = "ksplice-$kid";
@@ -139,9 +137,10 @@ sub revert_orig() {
 }
 revert_orig();
 
-if(!$skip_prebuild &&
-   runval_raw(@make_ksplice, "KSPLICE_MODE=snap") != 0) {
-	die "Aborting: Prebuild failed";
+if(!$skip_prebuild) {
+	copy("$orig_config_dir/.config", "$linuxtree/.config");
+	runval_raw(@make_ksplice, "KSPLICE_MODE=snap") == 0 or
+	    die "Aborting: Prebuild failed";
 }
 exit(0) if($prebuild);
 
