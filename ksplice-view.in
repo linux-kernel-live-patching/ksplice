@@ -83,9 +83,8 @@ sub view_file {
 }
 
 sub view_list {
-	chdir("/sys/module");
-	foreach $mid (glob("ksplice_*")) {
-		$mid =~ s/^ksplice_//;
+	foreach(split(/\n/, runstr("lsmod"))) {
+		next unless my ($mid) = m/^ksplice_(\S*)\s/;
 		open STAGE, '<', "/sys/module/ksplice_$mid/ksplice/stage" or next;
 		print "$mid\n" if(<STAGE> eq "applied\n");
 		close STAGE;
