@@ -44,29 +44,15 @@ exit(0);
 
 sub view_mid {
 	$mid =~ s/^ksplice[_-]//;
-	$module = "ksplice_$mid";
 	($kid = $mid) =~ s/[-_].*$//;
 	$update = "ksplice_$kid";
-
-	if(! -d "/sys/module") {
-		print "/sys not mounted?\n";
-		exit(1);
-	}
-	if(! -d "/sys/module/$module/$update") {
+	if(!update_loaded($kid)) {
 		print "Ksplice id $mid is not present in the kernel\n";
-		return;
+		exit(0);
 	}
-
-	open STAGE, '<', "/sys/module/$update/$update/stage" or die $!;
-	my $stage = <STAGE>;
-	close STAGE;
-	chomp($stage);
+	my $stage = get_stage($kid);
 	print "Ksplice id $mid is present in the kernel and is $stage.\n\n";
-
-	local $/;
-	open SOURCE_DIFF, '<', "/sys/module/$update/$update/source_diff" or die $!;
-	my $source_diff = <SOURCE_DIFF>;
-	close SOURCE_DIFF;
+	my $source_diff = get_source_diff($kid);
 	return if($source_diff eq "");
 	print "Here is the first 4 KiB of the source code patch";
 	print " associated with this update:\n";
@@ -93,6 +79,13 @@ sub view_list {
 		open STAGE, '<', "/sys/module/$module/$module/stage" or next;
 		print "$kid\n" if(<STAGE> eq "applied\n");
 		close STAGE;
+	}
+	if (-e "/sys/module/ksplice") {
+		chdir("/sys/module/ksplice");
+		foreach $update (glob("ksplice_*")) {
+			($kid = $update) =~ s/^ksplice_//;
+			print "$kid\n" if(get_stage($kid) eq "applied");
+		}
 	}
 }
 
