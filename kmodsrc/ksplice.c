@@ -296,7 +296,8 @@ static ssize_t stage_store(struct update_bundle *bundle,
 {
 	if (strncmp(buf, "applied\n", len) == 0 && bundle->stage == PREPARING)
 		apply_update(bundle);
-	else if (strncmp(buf, "reversed\n", len) == 0)
+	else if (strncmp(buf, "reversed\n", len) == 0 &&
+		 bundle->stage == APPLIED)
 		reverse_patches(bundle);
 	return len;
 }
@@ -421,9 +422,6 @@ static int resolve_patch_symbols(struct module_pack *pack)
 static void reverse_patches(struct update_bundle *bundle)
 {
 	int i, ret;
-
-	if (bundle->stage != APPLIED)
-		return;
 
 	clear_debug_buf(bundle);
 	if (init_debug_buf(bundle) < 0)
