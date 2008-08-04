@@ -158,9 +158,15 @@ void print_newbfd_entry_symbols(asection *sect)
 	for (symp = new_syms.data; symp < new_syms.data + new_syms.size;
 	     symp++) {
 		asymbol *sym = *symp;
-		if (strlen(sym->name) != 0 &&
-		    !starts_with(sym->name, ".text") &&
-		    strcmp(sym->section->name, sect->name) == 0)
-			printf("%s ", sym->name);
+		if (sym->section != sect || sym->name[0] == '\0' ||
+		    starts_with(sym->name, ".text"))
+			continue;
+		if (sym->value != 0) {
+			fprintf(stderr,
+				"Symbol %s [%x] has nonzero value %lx\n",
+				sym->name, sym->flags, sym->value);
+			DIE;
+		}
+		printf("%s ", sym->name);
 	}
 }
