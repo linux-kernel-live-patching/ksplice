@@ -431,6 +431,7 @@ static int apply_patches(struct update_bundle *bundle)
 static void reverse_patches(struct update_bundle *bundle)
 {
 	int i, ret;
+	struct module_pack *pack;
 
 	clear_debug_buf(bundle);
 	if (init_debug_buf(bundle) < 0)
@@ -448,6 +449,8 @@ static void reverse_patches(struct update_bundle *bundle)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
+	list_for_each_entry(pack, &bundle->packs, list)
+		clear_list(pack->safety_records, struct safety_record, list);
 	if (ret == 0) {
 		_ksdebug(bundle, 0, KERN_INFO "ksplice: Update %s reversed"
 			 " successfully\n", bundle->kid);
@@ -525,7 +528,6 @@ static int __reverse_patches(void *bundleptr)
 	bundle->stage = REVERSED;
 
 	list_for_each_entry(pack, &bundle->packs, list) {
-		clear_list(pack->safety_records, struct safety_record, list);
 		module_put(pack->primary);
 		old_fs = get_fs();
 		set_fs(KERNEL_DS);
