@@ -46,39 +46,37 @@ runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 if (-e "ksplice-$kid.ko") {
 	system(qw(insmod), "ksplice-$kid.ko", "debug=$debug") == 0 || die;
 }
-foreach my $helper (glob('ksplice-*-helper.ko')) {
+my $update = "ksplice_$kid";
+die "/sys not mounted\n" unless (-d "/sys/module");
+if(-d "/sys/module/$update/$update") {
+	open STAGE, '<', "/sys/module/$update/$update/stage";
+	my $stage = <STAGE>;
+	if ($stage eq "applied\n") {
+		print STDERR "Ksplice update $kid already applied\n";
+		exit(0);
+	}
+	if ($stage eq "reversed\n") {
+		die "Reversed Ksplice module $update already loaded!";
+	}
+	close STAGE;
+}
 
+foreach my $helper (glob('ksplice-*-helper.ko')) {
 	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
 	die unless(-e $primary && -e $helper);
-
-	my ($newkid, $target) = $primary =~ m/^ksplice-([^_]+)_(.*)\.ko/;
+	(my $target = $primary) =~ s/^ksplice-[^_]+_(.*)\.ko/$1/;
 	if ($target ne 'vmlinux' && runstr("lsmod") !~ m/^${target}\s/m) {
 		die "Module $target to be patched not loaded";
 	}
-	my $mid = "${kid}_$target";
-	my $module = "ksplice_$mid";
-	my $update = "ksplice_$kid";
-
-	die "/sys not mounted\n" unless (-d "/sys/module");
-	if(-d "/sys/module/$update/$update") {
-		open STAGE, '<', "/sys/module/$update/$update/stage";
-		my $stage = <STAGE>;
-		if ($stage eq "applied\n") {
-			print STDERR "Ksplice update $kid already applied; continuing\n";
-			next;
-		}
-		if ($stage eq "reversed\n") {
-			die "Reversed Ksplice module $update already loaded!";
-		}
-	}
-
+}
+foreach my $helper (glob('ksplice-*-helper.ko')) {
+	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
 	if(runval_raw("insmod $primary") != 0) {
 		die "Error loading primary module $primary";
 	}
 	die "Error loading helper module $helper" if (runval_raw("insmod $helper") != 0);
 }
 
-my $update = "ksplice_$kid";
 open DEBUGLEVEL, '>', "/sys/module/$update/$update/debug" or die $!;
 print DEBUGLEVEL "$debug\n";
 close DEBUGLEVEL;
