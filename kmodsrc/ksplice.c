@@ -527,16 +527,18 @@ static int __reverse_patches(void *bundleptr)
 
 	bundle->stage = REVERSED;
 
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &bundle->packs, list)
 		module_put(pack->primary);
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	list_for_each_entry(pack, &bundle->packs, list) {
 		for (p = pack->patches; p < pack->patches_end; p++) {
 			memcpy((void *)p->oldaddr, (void *)p->saved, 5);
 			flush_icache_range(p->oldaddr, p->oldaddr + 5);
 		}
-		set_fs(old_fs);
 	}
+	set_fs(old_fs);
 	return 0;
 }
 
