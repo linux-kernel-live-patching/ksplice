@@ -353,6 +353,8 @@ EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
 static int activate_primary(struct module_pack *pack)
 {
+	const struct ksplice_patch *p;
+	struct safety_record *rec;
 	if (process_ksplice_relocs(pack, pack->primary_relocs,
 				   pack->primary_relocs_end, 0) != 0)
 		return -1;
@@ -364,6 +366,13 @@ static int activate_primary(struct module_pack *pack)
 	if (add_patch_dependencies(pack) != 0)
 		return -1;
 #endif /* CONFIG_MODULE_UNLOAD */
+
+	list_for_each_entry(rec, pack->safety_records, list) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			if (p->oldaddr == rec->addr)
+				rec->care = 1;
+		}
+	}
 	return 0;
 }
 
@@ -461,7 +470,6 @@ static int __apply_patches(void *bundleptr)
 	struct update_bundle *bundle = bundleptr;
 	struct module_pack *pack;
 	const struct ksplice_patch *p;
-	struct safety_record *rec;
 	mm_segment_t old_fs;
 
 	list_for_each_entry(pack, &bundle->packs, list) {
@@ -469,14 +477,6 @@ static int __apply_patches(void *bundleptr)
 			return -ENODEV;
 	}
 
-	list_for_each_entry(pack, &bundle->packs, list) {
-		list_for_each_entry(rec, pack->safety_records, list) {
-			for (p = pack->patches; p < pack->patches_end; p++) {
-				if (p->oldaddr == rec->addr)
-					rec->care = 1;
-			}
-		}
-	}
 	if (check_each_task(bundle) < 0)
 		return -EAGAIN;
 
