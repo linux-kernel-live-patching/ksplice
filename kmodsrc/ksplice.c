@@ -369,7 +369,6 @@ static int activate_primary(struct module_pack *pack)
 static int apply_patches(struct update_bundle *bundle)
 {
 	int i, ret;
-	struct module_pack *pack;
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
@@ -380,21 +379,18 @@ static int apply_patches(struct update_bundle *bundle)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	list_for_each_entry(pack, &bundle->packs, list) {
-		if (bundle->stage != APPLIED) {
-			if (ret == -EAGAIN) {
-				bundle->abort_cause = CODE_BUSY;
-				print_abort(pack, "stack check: to-be-replaced "
-					    "code is busy");
-			} else {
-				bundle->abort_cause = UNEXPECTED;
-			}
-			return -1;
-		}
-		ksdebug(pack, 0, KERN_INFO "ksplice: Update %s applied "
-			"successfully\n", pack->name);
+	if (ret == 0) {
+		_ksdebug(bundle, 0, KERN_INFO "ksplice: Update %s applied "
+			 "successfully\n", bundle->kid);
+		return 0;
+	} else if (ret == -EAGAIN) {
+		bundle->abort_cause = CODE_BUSY;
+		_ksdebug(bundle, 0, KERN_ERR "ksplice: Aborted %s.  stack "
+			 "check: to-be-replaced code is busy\n", bundle->kid);
+	} else {
+		bundle->abort_cause = UNEXPECTED;
 	}
-	return 0;
+	return -1;
 }
 
 static int resolve_patch_symbols(struct module_pack *pack)
@@ -425,7 +421,6 @@ static int resolve_patch_symbols(struct module_pack *pack)
 static void reverse_patches(struct update_bundle *bundle)
 {
 	int i, ret;
-	struct module_pack *pack;
 
 	if (bundle->stage != APPLIED)
 		return;
@@ -434,9 +429,8 @@ static void reverse_patches(struct update_bundle *bundle)
 	if (init_debug_buf(bundle) < 0)
 		return;
 
-	list_for_each_entry(pack, &bundle->packs, list)
-		ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
-			pack->name);
+	_ksdebug(bundle, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
+		 bundle->kid);
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
@@ -447,21 +441,20 @@ static void reverse_patches(struct update_bundle *bundle)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	list_for_each_entry(pack, &bundle->packs, list) {
-		if (ret == -EAGAIN) {
-			bundle->abort_cause = CODE_BUSY;
-			print_abort(pack, "stack check: to-be-reversed code is "
-				    "busy");
-		} else if (ret == 0) {
-			ksdebug(pack, 0, KERN_INFO "ksplice: Update %s reversed"
-				" successfully\n", pack->name);
-		} else if (ret == -EBUSY) {
-			bundle->abort_cause = MODULE_BUSY;
-			ksdebug(pack, 0, KERN_ERR "ksplice: Update module %s is"
-				" in use by another module\n", pack->name);
-		}
+	if (ret == 0) {
+		_ksdebug(bundle, 0, KERN_INFO "ksplice: Update %s reversed"
+			 " successfully\n", bundle->kid);
+	} else if (ret == -EAGAIN) {
+		bundle->abort_cause = CODE_BUSY;
+		_ksdebug(bundle, 0, KERN_ERR "ksplice: Aborted %s.  stack "
+			 "check: to-be-reversed code is busy\n", bundle->kid);
+	} else if (ret == -EBUSY) {
+		bundle->abort_cause = MODULE_BUSY;
+		_ksdebug(bundle, 0, KERN_ERR "ksplice: Update %s is"
+			 " in use by another module\n", bundle->kid);
+	} else {
+		bundle->abort_cause = UNEXPECTED;
 	}
-
 	return;
 }
 
