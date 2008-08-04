@@ -87,16 +87,6 @@ if(-e "$orig_config_dir/flags") {
 $ENV{KSPLICE_VERBOSE} = $Verbose::level;
 $ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
 
-my @standalone_flag;
-my $ksplice_in_kernel = runstr(qw(grep ^CONFIG_KSPLICE=), "$orig_config_dir/.config");
-$ksplice_in_kernel =~ s/^CONFIG_KSPLICE=([nmy])/$1/;
-chomp($ksplice_in_kernel);
-if (!defined($standalone)) {
-	$standalone = 0;
-	$standalone = 1 if ($ksplice_in_kernel ne 'y' && $ksplice_in_kernel ne 'm');
-}
-@standalone_flag = qw(KSPLICE_STANDALONE=1) if ($standalone == 1);
-
 copy("$orig_config_dir/.config", "$linuxtree/.config");
 
 my @chars = ('a'..'z', 0..9);
@@ -154,6 +144,13 @@ if(!$skip_prebuild &&
 	die "Aborting: Prebuild failed";
 }
 exit(0) if($prebuild);
+
+if (!defined($standalone)) {
+	$standalone = (runval_raw(qw(grep -q ^CONFIG_KSPLICE=[ym]$), "$linuxtree/.config") != 0);
+}
+my @standalone_flag;
+@standalone_flag = qw(KSPLICE_STANDALONE=1) if ($standalone);
+
 runval("patch $patch_opt -bz .KSPLICE_pre < $patchfile");
 if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
 	revert_orig();
