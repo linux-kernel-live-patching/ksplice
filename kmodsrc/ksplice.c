@@ -1613,7 +1613,10 @@ static struct dentry *debugfs_create_blob(const char *name, mode_t mode,
 
 void clear_debug_buf(struct module_pack *pack)
 {
+	if (pack->debugfs_dentry == NULL)
+		return;
 	debugfs_remove(pack->debugfs_dentry);
+	pack->debugfs_dentry = NULL;
 	pack->debug_blob.size = 0;
 	kfree(pack->debug_blob.data);
 	pack->debug_blob.data = NULL;
