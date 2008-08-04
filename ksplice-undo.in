@@ -33,32 +33,25 @@ if($wantversion) {
 pod2usage(1) if($help || scalar(@ARGV) != 1);
 
 my $kid = $ARGV[0];
+$kid =~ s/^ksplice[-_]//;
+$kid =~ s/[-_].*$//;
 my $update = "ksplice_$kid";
 
-if(! -d "/sys/module") {
-	print "/sys not mounted?\n";
-	exit(1);
-}
-if(! -d "/sys/module/$update/$update") {
+if (!update_loaded($kid)) {
 	print "Ksplice id $kid is not present in the kernel\n";
 	exit(1);
 }
-open STAGE, '<', "/sys/module/$update/$update/stage" or die $!;
-chomp(my $stage = <STAGE>);
-close STAGE;
 
 chdir("/sys/module/");
-if($debug) {
-	open DEBUGLEVEL, '>', "/sys/module/$update/$update/debug" or die $!;
-	print DEBUGLEVEL "$debug\n";
-	close DEBUGLEVEL;
+set_debug_level($kid, $debug) if(defined($debug));
+my $stage = get_stage($kid);
+if ($stage ne 'applied') {
+	print "Ksplice id $kid is not applied\n";
+}
+else {
+	set_stage($kid, "reversed");
 }
 
-if ($stage eq 'applied') {
-	open STAGE, '>', "/sys/module/$update/$update/stage" or die $!;
-	print STAGE "reversed\n";
-	close STAGE;
-}
 my $failed = 0;
 foreach my $module (glob("${update}_*")) {
 	$failed = 1 unless (runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0);
@@ -79,12 +72,9 @@ unless($failed == 0) {
 	}
 	print STDERR "Error undoing Ksplice update $kid:\n";
 	print "$debugout";
-	open(ABORT, '<', "/sys/module/$update/$update/abort_cause")
-	    or die $!;
-	chomp(my $abort_cause = <ABORT>);
-	close(ABORT);
+	my $abort_cause = get_abort_cause($kid);
 	print_error($abort_cause);
-	print("Debugging output saved to $debugfs_out\n");
+	print("Debugging output saved to $debugout\n");
 	die;
 }
 exit(0);
