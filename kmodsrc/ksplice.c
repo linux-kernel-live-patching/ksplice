@@ -44,6 +44,8 @@
 #include <asm/ksplice-run-pre.h>
 #endif /* KSPLICE_STANDALONE */
 
+LIST_HEAD(update_bundles);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* Old kernels do not have kcalloc
  * e629946abd0bb8266e9c3d0fd1bff2ef8dec5443 was after 2.6.8
@@ -194,6 +196,12 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		    unsigned long run_addr, unsigned long pre_addr);
 
 static void reverse_patches(struct module_pack *pack);
+static int register_ksplice_module(struct module_pack *pack);
+static void unregister_ksplice_module(struct module_pack *pack);
+static struct update_bundle *init_ksplice_bundle(const char *kid);
+static void cleanup_ksplice_bundle(struct update_bundle *bundle);
+static void add_to_bundle(struct module_pack *pack,
+			  struct update_bundle *bundle);
 
 struct ksplice_attribute {
 	struct attribute attr;
@@ -304,14 +312,19 @@ static struct kobj_type ksplice_ktype = {
 
 void cleanup_ksplice_module(struct module_pack *pack)
 {
-	clear_debug_buf(pack);
+	if (pack->bundle == NULL)
+		return;
 
+	if (pack->stage != APPLIED) {
+		clear_debug_buf(pack);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
-	kobject_put(&pack->kobj);
+		kobject_put(&pack->kobj);
 #else /* LINUX_VERSION_CODE < */
 /* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
-	kobject_unregister(&pack->kobj);
+		kobject_unregister(&pack->kobj);
 #endif /* LINUX_VERSION_CODE */
+		unregister_ksplice_module(pack);
+	}
 }
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
@@ -580,6 +593,66 @@ static int valid_stack_ptr(struct thread_info *tinfo, void *p)
 	    && p <= (void *)tinfo + THREAD_SIZE - sizeof(long);
 }
 
+static int register_ksplice_module(struct module_pack *pack)
+{
+	struct update_bundle *bundle;
+	int ret = 0;
+	mutex_lock(&module_mutex);
+	list_for_each_entry(bundle, &update_bundles, list) {
+		if (strcmp(pack->kid, bundle->kid) == 0) {
+			add_to_bundle(pack, bundle);
+			goto out;
+		}
+	}
+	bundle = init_ksplice_bundle(pack->kid);
+	if (bundle == NULL) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	add_to_bundle(pack, bundle);
+out:
+	mutex_unlock(&module_mutex);
+	return ret;
+}
+
+static void unregister_ksplice_module(struct module_pack *pack)
+{
+	if (pack->bundle == NULL)
+		return;
+	if (pack->stage != APPLIED) {
+		list_del(&pack->list);
+		if (list_empty(&pack->bundle->packs))
+			cleanup_ksplice_bundle(pack->bundle);
+		pack->bundle = NULL;
+	}
+}
+
+static void add_to_bundle(struct module_pack *pack,
+			  struct update_bundle *bundle)
+{
+	pack->bundle = bundle;
+	list_add(&pack->list, &bundle->packs);
+}
+
+static void cleanup_ksplice_bundle(struct update_bundle *bundle)
+{
+	list_del(&bundle->list);
+	kfree(bundle);
+}
+
+static struct update_bundle *init_ksplice_bundle(const char *kid)
+{
+	struct update_bundle *bundle;
+	bundle = kmalloc(sizeof(struct update_bundle), GFP_KERNEL);
+	if (bundle == NULL)
+		return NULL;
+	memset(bundle, 0, sizeof(struct update_bundle));
+	INIT_LIST_HEAD(&bundle->packs);
+	list_add(&bundle->list, &update_bundles);
+	bundle->kid = kid;
+	return bundle;
+}
+
 int init_ksplice_module(struct module_pack *pack)
 {
 	int ret = 0;
@@ -590,6 +663,8 @@ int init_ksplice_module(struct module_pack *pack)
 	if (bootstrapped == 0)
 		return -1;
 #endif /* KSPLICE_STANDALONE */
+	if (register_ksplice_module(pack) < 0)
+		return -1;
 
 	if (init_debug_buf(pack) < 0)
 		return -1;

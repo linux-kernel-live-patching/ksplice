@@ -47,6 +47,7 @@ static int init_helper(void)
 
 static void cleanup_helper(void)
 {
+	cleanup_ksplice_module(&pack);
 }
 
 module_init(init_helper);
