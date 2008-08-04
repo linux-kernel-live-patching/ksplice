@@ -44,7 +44,9 @@ my $unload = runstr("lsmod") !~ m/- $/m;
 runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 (my $kid = $ksplice) =~s|ksplice[-_]([^-_]+)|$1|;
 if (-e "ksplice-$kid.ko") {
-	system(qw(insmod), "ksplice-$kid.ko", "debug=$debug") == 0 || die;
+	if (system(qw(insmod), "ksplice-$kid.ko", "debug=$debug") != 0) {
+		die "Error loading Ksplice core for update $kid";
+	}
 }
 my $update = "ksplice_$kid";
 if(update_loaded($kid)) {
@@ -69,7 +71,17 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	if(runval_raw("insmod $primary") != 0) {
 		die "Error loading primary module $primary";
 	}
-	die "Error loading helper module $helper" if (runval_raw("insmod $helper") != 0);
+	if (runval_raw("insmod $helper") != 0) {
+		my ($debugfile, $debugout) = get_debug_output("init_$kid");
+		print STDERR "Error loading helper module $helper\n";
+		(my $module = $primary) =~ s/-/_/g;
+		$module =~ s/\.ko//;
+		system(qw(rmmod), $module);
+		system(qw(rmmod), "ksplice_$kid");
+		print $debugout;
+		print("Debugging output saved to $debugfile\n");
+		die;
+	}
 }
 
 set_debug_level($kid, $debug);
