@@ -55,9 +55,14 @@ if($debug) {
 	}
 }
 
-open STAGE, '>', "/sys/module/$module/ksplice/stage" or die $!;
-print STAGE "reversed\n";
+open STAGE, '<', "/sys/module/$module/ksplice/stage" or die $!;
+chomp(my $stage = <STAGE>);
 close STAGE;
+if ($stage eq 'applied') {
+	open STAGE, '>', "/sys/module/$module/ksplice/stage" or die $!;
+	print STAGE "reversed\n";
+	close STAGE;
+}
 unless(runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0) {
 	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX',
 					    DIR => tmpdir());

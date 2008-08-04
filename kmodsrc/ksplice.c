@@ -195,8 +195,9 @@ static int search_for_match(struct module_pack *pack,
 static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		    unsigned long run_addr, unsigned long pre_addr);
 
-static void reverse_patches(struct module_pack *pack);
-static int apply_patches(struct module_pack *pack);
+static void reverse_patches(struct update_bundle *bundle);
+static int apply_patches(struct update_bundle *bundle);
+static void apply_update(struct update_bundle *bundle);
 static int register_ksplice_module(struct module_pack *pack);
 static void unregister_ksplice_module(struct module_pack *pack);
 static struct update_bundle *init_ksplice_bundle(const char *kid);
@@ -287,9 +288,9 @@ static ssize_t stage_store(struct module_pack *pack,
 			   const char *buf, size_t len)
 {
 	if (strncmp(buf, "applied\n", len) == 0 && pack->stage == PREPARING)
-		apply_patches(pack);
+		apply_update(pack->bundle);
 	else if (strncmp(buf, "reversed\n", len) == 0)
-		reverse_patches(pack);
+		reverse_patches(pack->bundle);
 	return len;
 }
 
@@ -333,8 +334,6 @@ EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
 static int activate_primary(struct module_pack *pack)
 {
-	int i, ret;
-
 	if (process_ksplice_relocs(pack, pack->primary_relocs,
 				   pack->primary_relocs_end, 0) != 0)
 		return -1;
@@ -346,29 +345,37 @@ static int activate_primary(struct module_pack *pack)
 	if (add_patch_dependencies(pack) != 0)
 		return -1;
 #endif /* CONFIG_MODULE_UNLOAD */
+	return 0;
+}
+
+static int apply_patches(struct update_bundle *bundle)
+{
+	int i, ret;
+	struct module_pack *pack;
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
-		ret = stop_machine_run(__apply_patches, pack, NR_CPUS);
+		ret = stop_machine_run(__apply_patches, bundle, NR_CPUS);
 		bust_spinlocks(0);
 		if (ret != -EAGAIN)
 			break;
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (pack->stage != APPLIED) {
-		if (ret == -EAGAIN) {
-			pack->abort_cause = CODE_BUSY;
-			print_abort(pack, "stack check: to-be-replaced code is "
-				    "busy");
-		} else {
-			pack->abort_cause = UNEXPECTED;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (pack->stage != APPLIED) {
+			if (ret == -EAGAIN) {
+				pack->abort_cause = CODE_BUSY;
+				print_abort(pack, "stack check: to-be-replaced "
+					    "code is busy");
+			} else {
+				pack->abort_cause = UNEXPECTED;
+			}
+			return -1;
 		}
-		return -1;
+		ksdebug(pack, 0, KERN_INFO "ksplice: Update %s applied "
+			"successfully\n", pack->name);
 	}
-
-	ksdebug(pack, 0, KERN_INFO "ksplice: Update %s applied successfully\n",
-		pack->name);
 	return 0;
 }
 
@@ -397,108 +404,136 @@ static int resolve_patch_symbols(struct module_pack *pack)
 	return 0;
 }
 
-void reverse_patches(struct module_pack *pack)
+void reverse_patches(struct update_bundle *bundle)
 {
 	int i, ret;
+	struct module_pack *pack;
 
-	if (pack->stage != APPLIED)
-		return;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (pack->stage != APPLIED)
+			return;
+	}
 
-	clear_debug_buf(pack);
-	if (init_debug_buf(pack) < 0)
-		return;
-	ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
-		pack->name);
+	list_for_each_entry(pack, &bundle->packs, list) {
+		clear_debug_buf(pack);
+		if (init_debug_buf(pack) < 0)
+			return;
+	}
+
+	list_for_each_entry(pack, &bundle->packs, list)
+		ksdebug(pack, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
+			pack->name);
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
-		ret = stop_machine_run(__reverse_patches, pack, NR_CPUS);
+		ret = stop_machine_run(__reverse_patches, bundle, NR_CPUS);
 		bust_spinlocks(0);
 		if (ret != -EAGAIN)
 			break;
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	if (ret == -EAGAIN) {
-		pack->abort_cause = CODE_BUSY;
-		print_abort(pack, "stack check: to-be-reversed code is busy");
-	} else if (ret == 0) {
-		ksdebug(pack, 0, KERN_INFO "ksplice: Update %s reversed "
-			"successfully\n", pack->name);
-	} else if (ret == -EBUSY) {
-		pack->abort_cause = MODULE_BUSY;
-		ksdebug(pack, 0, KERN_ERR "ksplice: Update module %s is in use "
-			"by another module\n", pack->name);
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (ret == -EAGAIN) {
+			pack->abort_cause = CODE_BUSY;
+			print_abort(pack, "stack check: to-be-reversed code is "
+				    "busy");
+		} else if (ret == 0) {
+			ksdebug(pack, 0, KERN_INFO "ksplice: Update %s reversed"
+				" successfully\n", pack->name);
+		} else if (ret == -EBUSY) {
+			pack->abort_cause = MODULE_BUSY;
+			ksdebug(pack, 0, KERN_ERR "ksplice: Update module %s is"
+				" in use by another module\n", pack->name);
+		}
 	}
 
 	return;
 }
 
-static int __apply_patches(void *packptr)
+static int __apply_patches(void *bundleptr)
 {
-	struct module_pack *pack = packptr;
+	struct update_bundle *bundle = bundleptr;
+	struct module_pack *pack;
 	const struct ksplice_patch *p;
 	struct safety_record *rec;
 	mm_segment_t old_fs;
 
-	if (module_is_live(pack->primary) == 0)
-		return -ENODEV;
-
-	list_for_each_entry(rec, pack->safety_records, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			if (p->oldaddr == rec->addr)
-				rec->care = 1;
-		}
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (!module_is_live(pack->primary))
+			return -ENODEV;
 	}
 
-	if (check_each_task(pack) < 0)
-		return -EAGAIN;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		list_for_each_entry(rec, pack->safety_records, list) {
+			for (p = pack->patches; p < pack->patches_end; p++) {
+				if (p->oldaddr == rec->addr)
+					rec->care = 1;
+			}
+		}
+		if (check_each_task(pack) < 0)
+			return -EAGAIN;
+	}
 
-	try_module_get(pack->primary);
+	/* try_module_get must succeed because module is live */
+	list_for_each_entry(pack, &bundle->packs, list)
+		try_module_get(pack->primary);
 
-	pack->stage = APPLIED;
+	list_for_each_entry(pack, &bundle->packs, list)
+		pack->stage = APPLIED;
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		memcpy((void *)p->saved, (void *)p->oldaddr, 5);
-		*((u8 *) p->oldaddr) = 0xE9;
-		*((u32 *) (p->oldaddr + 1)) = p->repladdr - (p->oldaddr + 5);
-		flush_icache_range(p->oldaddr, p->oldaddr + 5);
+	list_for_each_entry(pack, &bundle->packs, list) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			memcpy((void *)p->saved, (void *)p->oldaddr, 5);
+			*((u8 *)p->oldaddr) = 0xE9;
+			*((u32 *)(p->oldaddr + 1)) =
+			    p->repladdr - (p->oldaddr + 5);
+			flush_icache_range(p->oldaddr, p->oldaddr + 5);
+		}
 	}
 	set_fs(old_fs);
 	return 0;
 }
 
-static int __reverse_patches(void *packptr)
+static int __reverse_patches(void *bundleptr)
 {
-	struct module_pack *pack = packptr;
+	struct update_bundle *bundle = bundleptr;
+	struct module_pack *pack;
 	const struct ksplice_patch *p;
 	mm_segment_t old_fs;
 
-	if (pack->stage != APPLIED)
-		return 0;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (pack->stage != APPLIED)
+			return 0;
+	}
 
 #ifdef CONFIG_MODULE_UNLOAD
 	/* primary's refcount isn't changed by accessing ksplice.ko's sysfs */
-	if (module_refcount(pack->primary) != 1)
-		return -EBUSY;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (module_refcount(pack->primary) != 1)
+			return -EBUSY;
+	}
 #endif /* CONFIG_MODULE_UNLOAD */
 
-	if (check_each_task(pack) < 0)
-		return -EAGAIN;
-
-	clear_list(pack->safety_records, struct safety_record, list);
-	pack->stage = REVERSED;
-	module_put(pack->primary);
-
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		memcpy((void *)p->oldaddr, (void *)p->saved, 5);
-		flush_icache_range(p->oldaddr, p->oldaddr + 5);
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (check_each_task(pack) < 0)
+			return -EAGAIN;
 	}
-	set_fs(old_fs);
+
+	list_for_each_entry(pack, &bundle->packs, list) {
+		clear_list(pack->safety_records, struct safety_record, list);
+		pack->stage = REVERSED;
+		module_put(pack->primary);
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			memcpy((void *)p->oldaddr, (void *)p->saved, 5);
+			flush_icache_range(p->oldaddr, p->oldaddr + 5);
+		}
+		set_fs(old_fs);
+	}
 	return 0;
 }
 
@@ -705,47 +740,59 @@ out:
 }
 EXPORT_SYMBOL(init_ksplice_module);
 
-static int apply_patches(struct module_pack *pack)
+static void apply_update(struct update_bundle *bundle)
 {
-	int ret = 0;
 	struct module *m;
-	pack->abort_cause = NONE;
+	struct module_pack *pack;
+	list_for_each_entry(pack, &bundle->packs, list)
+		pack->abort_cause = NONE;
 
-	if (init_debug_buf(pack) < 0) {
-		pack->abort_cause = UNEXPECTED;
-		return -1;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (init_debug_buf(pack) < 0) {
+			pack->abort_cause = UNEXPECTED;
+			return;
+		}
 	}
 
 	mutex_lock(&module_mutex);
-
-	list_for_each_entry(m, &modules, list) {
-		if (pack->target_name != NULL &&
-		    strcmp(pack->target_name, m->name) == 0)
-			pack->target = m;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		list_for_each_entry(m, &modules, list) {
+			if (pack->target_name != NULL &&
+			    strcmp(pack->target_name, m->name) == 0)
+				pack->target = m;
+		}
 	}
 
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-	if (pack->target == NULL) {
-		apply_paravirt(pack->primary_parainstructions,
-			       pack->primary_parainstructions_end);
-		apply_paravirt(pack->helper_parainstructions,
-			       pack->helper_parainstructions_end);
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (pack->target == NULL) {
+			apply_paravirt(pack->primary_parainstructions,
+				       pack->primary_parainstructions_end);
+			apply_paravirt(pack->helper_parainstructions,
+				       pack->helper_parainstructions_end);
+		}
 	}
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
-	ksdebug(pack, 0, KERN_INFO "ksplice_h: Preparing and checking %s\n",
-		pack->name);
-
-	if (activate_helper(pack) != 0 || activate_primary(pack) != 0)
-		ret = -1;
-
-	clear_list(pack->reloc_namevals, struct reloc_nameval, list);
-	clear_list(pack->reloc_addrmaps, struct reloc_addrmap, list);
-	if (pack->stage == PREPARING)
-		clear_list(pack->safety_records, struct safety_record, list);
-
+	list_for_each_entry(pack, &bundle->packs, list) {
+		ksdebug(pack, 0, KERN_INFO "ksplice_h: Preparing and checking "
+			"%s\n", pack->name);
+		if (activate_helper(pack) != 0)
+			goto out;
+		if (activate_primary(pack) != 0)
+			goto out;
+	}
+	apply_patches(bundle);
+out:
+	list_for_each_entry(pack, &bundle->packs, list) {
+		clear_list(pack->reloc_namevals, struct reloc_nameval, list);
+		clear_list(pack->reloc_addrmaps, struct reloc_addrmap, list);
+		if (pack->stage == PREPARING)
+			clear_list(pack->safety_records, struct safety_record,
+				   list);
+	}
 	mutex_unlock(&module_mutex);
-	return ret;
+	return;
 }
 
 static int activate_helper(struct module_pack *pack)
