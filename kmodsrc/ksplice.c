@@ -277,6 +277,8 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 		return snprintf(buf, PAGE_SIZE, "module_busy\n");
 	case FAILED_TO_FIND:
 		return snprintf(buf, PAGE_SIZE, "failed_to_find\n");
+	case ALREADY_REVERSED:
+		return snprintf(buf, PAGE_SIZE, "already_reversed\n");
 	case UNEXPECTED:
 		return snprintf(buf, PAGE_SIZE, "unexpected\n");
 	}
@@ -422,6 +424,11 @@ static int apply_patches(struct update_bundle *bundle)
 		bundle->abort_cause = CODE_BUSY;
 		_ksdebug(bundle, 0, KERN_ERR "ksplice: Aborted %s.  stack "
 			 "check: to-be-replaced code is busy\n", bundle->kid);
+	} else if (ret == -1) {
+		bundle->abort_cause = ALREADY_REVERSED;
+		_ksdebug(bundle, 0, KERN_ERR "ksplice: Aborted %s.  Ksplice "
+			 "update %s is already reversed.\n", bundle->kid,
+			 bundle->kid);
 	} else {
 		bundle->abort_cause = UNEXPECTED;
 	}
@@ -474,6 +481,12 @@ static int __apply_patches(void *bundleptr)
 	struct module_pack *pack;
 	const struct ksplice_patch *p;
 	mm_segment_t old_fs;
+
+	if (bundle->stage == APPLIED)
+		return 0;
+
+	if (bundle->stage != PREPARING)
+		return -1;
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		if (!module_is_live(pack->primary))

@@ -127,6 +127,11 @@ END
 Ksplice has aborted the upgrade because it was unable to resolve some
 of the symbols used in the update.
 END
+		"already_reversed" => <<'END',
+The Ksplice update you are attempting to apply has already been
+applied and reversed.  You need to unload the Ksplice modules related
+to this update before you can reapply this update.
+END
 		"UNKNOWN" => <<'END',
 The Ksplice kernel interface has returned an error string that
 ksplice-apply does not understand.  This is probably the result of
