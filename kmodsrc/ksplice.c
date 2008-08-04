@@ -367,6 +367,31 @@ static int activate_primary(struct module_pack *pack)
 	return 0;
 }
 
+static int resolve_patch_symbols(struct module_pack *pack)
+{
+	struct ksplice_patch *p;
+	int ret;
+	LIST_HEAD(vals);
+
+	for (p = pack->patches; p < pack->patches_end; p++) {
+		ret = compute_address(pack, p->oldstr, &vals, 0);
+		if (ret < 0)
+			return ret;
+
+		if (!singular(&vals)) {
+			release_vals(&vals);
+			pack->bundle->abort_cause = FAILED_TO_FIND;
+			failed_to_find(pack, p->oldstr);
+			return -1;
+		}
+		p->oldaddr =
+		    list_entry(vals.next, struct candidate_val, list)->val;
+		release_vals(&vals);
+	}
+
+	return 0;
+}
+
 static int apply_patches(struct update_bundle *bundle)
 {
 	int i, ret;
@@ -392,31 +417,6 @@ static int apply_patches(struct update_bundle *bundle)
 		bundle->abort_cause = UNEXPECTED;
 	}
 	return -1;
-}
-
-static int resolve_patch_symbols(struct module_pack *pack)
-{
-	struct ksplice_patch *p;
-	int ret;
-	LIST_HEAD(vals);
-
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		ret = compute_address(pack, p->oldstr, &vals, 0);
-		if (ret < 0)
-			return ret;
-
-		if (!singular(&vals)) {
-			release_vals(&vals);
-			pack->bundle->abort_cause = FAILED_TO_FIND;
-			failed_to_find(pack, p->oldstr);
-			return -1;
-		}
-		p->oldaddr =
-		    list_entry(vals.next, struct candidate_val, list)->val;
-		release_vals(&vals);
-	}
-
-	return 0;
 }
 
 static void reverse_patches(struct update_bundle *bundle)
