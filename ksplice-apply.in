@@ -41,7 +41,6 @@ chdir($ksplice);
 
 my $unload = runstr("lsmod") !~ m/- $/m;
 
-runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 (my $kid = $ksplice) =~s|ksplice[-_]([^-_]+)|$1|;
 if (-e "ksplice-$kid.ko") {
 	if (runstr("lsmod") =~ m/^ksplice_$kid\s+/) {
@@ -50,6 +49,9 @@ if (-e "ksplice-$kid.ko") {
 	if (system(qw(insmod), "ksplice-$kid.ko", "debug=$debug") != 0) {
 		die "Error loading Ksplice core for update $kid";
 	}
+}
+else {
+	runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 }
 my $update = "ksplice_$kid";
 if(update_loaded($kid)) {
