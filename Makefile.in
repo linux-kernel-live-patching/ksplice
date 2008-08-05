@@ -58,7 +58,7 @@ install: default $(addprefix install-,$(objutils))
 	install -m644 -D ksplice-undo.8 $(DESTDIR)$(mandir)/man8/ksplice-undo.8
 	install -m644 -D ksplice-view.8 $(DESTDIR)$(mandir)/man8/ksplice-view.8
 	install -m755 -D ksplice-create $(DESTDIR)$(bindir)/ksplice-create
-	install -m755 -D ksplice-view $(DESTDIR)$(bindir)/ksplice-view
+	install -m755 -D ksplice-view $(DESTDIR)$(sbindir)/ksplice-view
 	install -m755 -D ksplice-apply $(DESTDIR)$(sbindir)/ksplice-apply
 	install -m755 -D ksplice-undo $(DESTDIR)$(sbindir)/ksplice-undo
 	install -m755 -D $(srcdir)/gendiff-reversed $(DESTDIR)$(libexecdir)/ksplice-gendiff-reversed
