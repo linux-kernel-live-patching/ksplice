@@ -740,6 +740,7 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	memset(bundle, 0, sizeof(struct update_bundle));
 	bundle->name = kmalloc(strlen(kid) + strlen(str) + 1, GFP_KERNEL);
 	if (bundle->name == NULL) {
+		printk(KERN_ERR "ksplice: out of memory\n");
 		kfree(bundle);
 		return NULL;
 	}
@@ -1848,6 +1849,7 @@ int __ksdebug(struct update_bundle *bundle, const char *fmt, ...)
 		}
 #endif /* LINUX_VERSION_CODE */
 		if (bundle->debug_blob.data == NULL) {
+			printk(KERN_ERR "ksplice: out of memory\n");
 			kfree(tmp);
 			return -ENOMEM;
 		}
