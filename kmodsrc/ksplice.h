@@ -96,7 +96,6 @@ struct module_pack {
 	struct list_head *reloc_addrmaps;
 	struct list_head *reloc_namevals;
 	struct list_head *safety_records;
-	int *debug;
 	struct list_head list;
 };
 
@@ -107,6 +106,7 @@ struct update_bundle {
 	const char *source_diff, *source_diff_end;
 	enum ksplice_stage_enum stage;
 	enum ksplice_abort_cause_enum abort_cause;
+	int debug;
 #ifdef CONFIG_DEBUG_FS
 	struct debugfs_blob_wrapper debug_blob;
 	struct dentry *debugfs_dentry;
@@ -213,12 +213,15 @@ extern void clear_debug_buf(struct update_bundle *bundle);
 extern int __ksdebug(struct update_bundle *bundle, const char *fmt, ...);
 #define ksdebug(pack, level, fmt, ...)					\
 	do {								\
-		if (*(pack)->debug >= (level))				\
+		if ((pack)->bundle->debug >= (level))			\
 			__ksdebug((pack)->bundle, fmt, ## __VA_ARGS__);	\
 	} while (0)
 #else /* CONFIG_DEBUG_FS */
-#define ksdebug(pack, level, fmt, ...) \
-	do { if (*(pack)->debug >= (level)) printk(fmt, ## __VA_ARGS__); } while (0)
+#define ksdebug(pack, level, fmt, ...)			\
+	do {						\
+		if ((pack)->bundle->debug >= (level))	\
+			printk(fmt, ## __VA_ARGS__);	\
+	} while (0)
 static inline int init_debug_buf(struct update_bundle *bundle)
 {
 	return 0;

@@ -48,15 +48,10 @@ chomp(my $stage = <STAGE>);
 close STAGE;
 
 chdir("/sys/module/");
-foreach my $module (glob("${update}_*")) {
-	if($debug) {
-		if(! -d "/sys/module/$module/parameters") {
-			runval("echo $debug > /sys/module/$module/debug");
-		}
-		else {
-			runval("echo $debug > /sys/module/$module/parameters/debug");
-		}
-	}
+if($debug) {
+	open DEBUGLEVEL, '>', "/sys/module/$update/$update/debug" or die $!;
+	print DEBUGLEVEL "$debug\n";
+	close DEBUGLEVEL;
 }
 
 if ($stage eq 'applied') {

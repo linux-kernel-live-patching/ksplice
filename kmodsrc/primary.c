@@ -32,10 +32,6 @@ LIST_HEAD(reloc_addrmaps);
 LIST_HEAD(reloc_namevals);
 LIST_HEAD(safety_records);
 
-static int debug;
-module_param(debug, int, 0600);
-MODULE_PARM_DESC(debug, "Debug level");
-
 #define pack KSPLICE_UNIQ(pack)
 struct module_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_MID),
@@ -68,7 +64,6 @@ EXPORT_SYMBOL_GPL(pack);
 
 static int init_primary(void)
 {
-	pack.debug = &debug;
 	return 0;
 }
 

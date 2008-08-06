@@ -301,17 +301,37 @@ static ssize_t stage_store(struct update_bundle *bundle,
 	return len;
 }
 
+static ssize_t debug_show(struct update_bundle *bundle, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", bundle->debug);
+}
+
+static ssize_t debug_store(struct update_bundle *bundle, const char *buf,
+			   size_t len)
+{
+	char *tmp;
+	int d = simple_strtoul(buf, &tmp, 10);
+	if (*buf && (*tmp == '\0' || *tmp == '\n')) {
+		bundle->debug = d;
+		return len;
+	}
+	return -EINVAL;
+}
+
 static struct ksplice_attribute stage_attribute =
 	__ATTR(stage, 0600, stage_show, stage_store);
 static struct ksplice_attribute abort_cause_attribute =
 	__ATTR(abort_cause, 0400, abort_cause_show, NULL);
 static struct ksplice_attribute source_diff_attribute =
 	__ATTR(source_diff, 0400, source_diff_show, NULL);
+static struct ksplice_attribute debug_attribute =
+	__ATTR(debug, 0600, debug_show, debug_store);
 
 static struct attribute *ksplice_attrs[] = {
 	&stage_attribute.attr,
 	&abort_cause_attribute.attr,
 	&source_diff_attribute.attr,
+	&debug_attribute.attr,
 	NULL
 };
 
@@ -537,10 +557,10 @@ static int check_each_task(struct module_pack *pack)
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
 		if (check_task(pack, p) < 0) {
-			if (*pack->debug == 1) {
-				*pack->debug = 2;
+			if (pack->bundle->debug == 1) {
+				pack->bundle->debug = 2;
 				check_task(pack, p);
-				*pack->debug = 1;
+				pack->bundle->debug = 1;
 			}
 			status = -EAGAIN;
 		}
@@ -932,7 +952,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, "(r_a=%" ADDR " p_a=%" ADDR " s=%ld)\n",
 			run_addr, pre_addr, s->size);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
-		if (*pack->debug >= 1) {
+		if (pack->bundle->debug >= 1) {
 			run_pre_cmp(pack, run_addr, pre_addr, s->size, 1);
 			set_temp_myst_relocs(pack, NOVAL);
 		}
@@ -1437,8 +1457,8 @@ static int brute_search_all(struct module_pack *pack,
 
 	ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: searching for %s\n",
 		s->name);
-	saved_debug = *pack->debug;
-	*pack->debug = 0;
+	saved_debug = pack->bundle->debug;
+	pack->bundle->debug = 0;
 
 	list_for_each_entry(m, &modules, list) {
 		if (starts_with(m->name, pack->name) ||
@@ -1460,7 +1480,7 @@ static int brute_search_all(struct module_pack *pack,
 		}
 	}
 
-	*pack->debug = saved_debug;
+	pack->bundle->debug = saved_debug;
 	if (ret == 1)
 		ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: found %s "
 			"in %s\n", s->name, where);
@@ -1841,7 +1861,6 @@ struct module_pack ksplice_pack = {
 	.kid = "init_" STR(KSPLICE_KID),
 	.target_name = NULL,
 	.target = NULL,
-	.debug = &debug,
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
 	.reloc_addrmaps = &ksplice_reloc_addrmaps,
@@ -1858,6 +1877,7 @@ static int init_ksplice(void)
 	if (pack->bundle == NULL)
 		return -ENOMEM;
 	add_to_bundle(pack, pack->bundle);
+	pack->bundle->debug = debug;
 	ret = process_ksplice_relocs(pack, ksplice_init_relocs,
 				     ksplice_init_relocs_end, 1);
 	if (ret == 0)

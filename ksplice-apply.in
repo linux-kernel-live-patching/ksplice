@@ -44,7 +44,7 @@ my $unload = runstr("lsmod") !~ m/- $/m;
 runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 (my $kid = $ksplice) =~s|ksplice[-_]([^-_]+)|$1|;
 if (-e "ksplice-$kid.ko") {
-	system(qw(insmod), "ksplice-$kid.ko") == 0 || die;
+	system(qw(insmod), "ksplice-$kid.ko", "debug=$debug") == 0 || die;
 }
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 
@@ -72,13 +72,16 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		}
 	}
 
-	if(runval_raw("insmod $primary debug=$debug") != 0) {
+	if(runval_raw("insmod $primary") != 0) {
 		die "Error loading primary module $primary";
 	}
 	die "Error loading helper module $helper" if (runval_raw("insmod $helper") != 0);
 }
 
 my $update = "ksplice_$kid";
+open DEBUGLEVEL, '>', "/sys/module/$update/$update/debug" or die $!;
+print DEBUGLEVEL "$debug\n";
+close DEBUGLEVEL;
 open STAGE, '>', "/sys/module/$update/$update/stage" or die $!;
 print STAGE "applied\n";
 close STAGE;
