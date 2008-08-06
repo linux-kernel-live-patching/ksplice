@@ -39,7 +39,7 @@ chdir($tmpdir);
 my $ksplice = unpack_update($file);
 chdir($ksplice);
 
-my $unload = runstr("lsmod") !~ m/- $/m;
+my $nounload = runstr("lsmod") =~ m/- $/m;
 
 (my $kid = $ksplice) =~s|ksplice[-_]([^-_]+)|$1|;
 if (-e "ksplice-$kid.ko") {
@@ -95,7 +95,7 @@ my $stage = get_stage($kid);
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 	$helper =~ s/-/_/g;
 	$helper =~ s/\.ko$//;
-	die if ($unload && runval_raw("rmmod $helper") != 0);
+	die if (!$nounload && runval_raw("rmmod $helper") != 0);
 }
 if($stage ne 'applied') {
 	my ($debugfile, $debugout) = get_debug_output($kid);
@@ -104,9 +104,9 @@ if($stage ne 'applied') {
 		$helper =~ s/-/_/g;
 		$helper =~ s/\.ko$//;
 		(my $primary = $helper) =~ s/_helper//;
-		die if ($unload && runval_raw("rmmod $primary") != 0);
+		die if (!$nounload && runval_raw("rmmod $primary") != 0);
 	}
-	die if ($unload && runval_raw("rmmod $update") != 0);
+	die if (!$nounload && runval_raw("rmmod $update") != 0);
 	print STDERR "Error applying Ksplice update $kid:\n";
 	print $debugout;
 	print_error($abort_cause);
