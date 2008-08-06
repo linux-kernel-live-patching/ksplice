@@ -488,17 +488,20 @@ static int __apply_patches(void *bundleptr)
 	if (bundle->stage != PREPARING)
 		return -1;
 
-	list_for_each_entry(pack, &bundle->packs, list) {
-		if (!module_is_live(pack->primary))
-			return -ENODEV;
-	}
-
 	if (check_each_task(bundle) < 0)
 		return -EAGAIN;
 
-	/* try_module_get must succeed because module is live */
-	list_for_each_entry(pack, &bundle->packs, list)
-		try_module_get(pack->primary);
+	list_for_each_entry(pack, &bundle->packs, list) {
+		if (try_module_get(pack->primary) != 1) {
+			struct module_pack *p;
+			list_for_each_entry(p, &bundle->packs, list) {
+				if (p == pack)
+					break;
+				module_put(p->primary);
+			}
+			return -ENODEV;
+		}
+	}
 
 	bundle->stage = APPLIED;
 
