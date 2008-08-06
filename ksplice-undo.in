@@ -36,6 +36,7 @@ my $kid = $ARGV[0];
 $kid =~ s/^ksplice[-_]//;
 $kid =~ s/[-_].*$//;
 my $update = "ksplice_$kid";
+my $nounload = runstr("lsmod") =~ m/- $/m;
 
 if (!update_loaded($kid)) {
 	print "Ksplice id $kid is not present in the kernel\n";
@@ -54,10 +55,10 @@ else {
 
 my $failed = 0;
 foreach my $module (glob("${update}_*")) {
-	$failed = 1 unless (runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $module") == 0);
+	$failed = 1 unless ($nounload or runval_raw("rmmod $module") == 0);
 }
-if (-e "/sys/module/$update") {
-	$failed = 1 unless (runstr("lsmod") =~ m/- $/m or runval_raw("rmmod $update") == 0);
+if ($failed == 0 && -e "/sys/module/$update") {
+	$failed = 1 unless ($nounload or runval_raw("rmmod $update") == 0);
 }
 unless($failed == 0) {
 	my ($debugfile, $debugout) = get_debug_output($kid);
