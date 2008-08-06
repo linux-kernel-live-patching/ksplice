@@ -668,10 +668,16 @@ static int register_ksplice_module(struct module_pack *pack)
 	struct module *m;
 	int ret = 0;
 	mutex_lock(&module_mutex);
-	list_for_each_entry(m, &modules, list) {
-		if (pack->target_name != NULL &&
-		    strcmp(pack->target_name, m->name) == 0)
-			pack->target = m;
+	pack->target = NULL;
+	if (pack->target_name != NULL) {
+		list_for_each_entry(m, &modules, list) {
+			if (strcmp(pack->target_name, m->name) == 0)
+				pack->target = m;
+		}
+		if (pack->target == NULL || !module_is_live(pack->target)) {
+			ret = -ENODEV;
+			goto out;
+		}
 	}
 	list_for_each_entry(bundle, &update_bundles, list) {
 		if (strcmp(pack->kid, bundle->kid) == 0) {

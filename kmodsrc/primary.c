@@ -41,7 +41,6 @@ struct module_pack pack = {
 #else
 	.target_name = NULL,
 #endif
-	.target = NULL,
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
 	.primary_relocs = ksplice_relocs,
