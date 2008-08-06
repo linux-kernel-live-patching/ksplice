@@ -25,7 +25,7 @@ my ($help, $wantversion) = (0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
 	"verbose|v:+" => \$Verbose::level,
-	"id=s" => \$mid,
+	"id=s" => \$kid,
 	"file=s" => \$file) or pod2usage(1);
 
 if($wantversion) {
@@ -33,25 +33,25 @@ if($wantversion) {
 	exit(0);
 }
 pod2usage(1) if($help || scalar(@ARGV) != 0);
-my $actions = (defined $mid) + (defined $file);
+my $actions = (defined $kid) + (defined $file);
 pod2usage(1) if($actions > 1);
 
-view_mid() if(defined $mid);
+view_kid() if(defined $kid);
 view_file() if(defined $file);
 view_list() if($actions == 0);
 
 exit(0);
 
-sub view_mid {
-	$mid =~ s/^ksplice[_-]//;
-	($kid = $mid) =~ s/[-_].*$//;
+sub view_kid {
+	$kid =~ s/^ksplice[_-]//;
+	$kid =~ s/[-_].*$//; # In case we got an mid instead
 	$update = "ksplice_$kid";
 	if(!update_loaded($kid)) {
-		print "Ksplice id $mid is not present in the kernel\n";
+		print "Ksplice id $kid is not present in the kernel\n";
 		exit(0);
 	}
 	my $stage = get_stage($kid);
-	print "Ksplice id $mid is present in the kernel and is $stage.\n\n";
+	print "Ksplice id $kid is present in the kernel and is $stage.\n\n";
 	my $source_diff = get_source_diff($kid);
 	return if($source_diff eq "");
 	print "Here is the first 4 KiB of the source code patch";
