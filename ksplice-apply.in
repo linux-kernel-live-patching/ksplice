@@ -92,14 +92,14 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 set_debug_level($kid, $debug);
 set_stage($kid, "applied");
 my $stage = get_stage($kid);
-foreach my $helper (glob('ksplice-*-helper.ko')) {
-	$helper =~ s/-/_/g;
-	$helper =~ s/\.ko$//;
-	die if (!$nounload && runval_raw("rmmod $helper") != 0);
-}
 if($stage ne 'applied') {
 	my ($debugfile, $debugout) = get_debug_output($kid);
 	my $abort_cause = get_abort_cause($kid);
+	foreach my $helper (glob('ksplice-*-helper.ko')) {
+		$helper =~ s/-/_/g;
+		$helper =~ s/\.ko$//;
+		die if (!$nounload && runval_raw("rmmod $helper") != 0);
+	}
 	foreach my $helper (glob('ksplice-*-helper.ko')) {
 		$helper =~ s/-/_/g;
 		$helper =~ s/\.ko$//;
@@ -112,6 +112,11 @@ if($stage ne 'applied') {
 	print_error($abort_cause);
 	print("Debugging output saved to $debugfile\n");
 	die;
+}
+foreach my $helper (glob('ksplice-*-helper.ko')) {
+	$helper =~ s/-/_/g;
+	$helper =~ s/\.ko$//;
+	die if (!$nounload && runval_raw("rmmod $helper") != 0);
 }
 
 print "Done!\n";
