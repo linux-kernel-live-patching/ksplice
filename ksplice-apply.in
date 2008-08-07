@@ -47,18 +47,13 @@ if (-e "ksplice-$kid.ko") {
 	system(qw(insmod), "ksplice-$kid.ko", "debug=$debug") == 0 || die;
 }
 my $update = "ksplice_$kid";
-die "/sys not mounted\n" unless (-d "/sys/module");
-if(-d "/sys/module/$update/$update") {
-	open STAGE, '<', "/sys/module/$update/$update/stage";
-	my $stage = <STAGE>;
-	if ($stage eq "applied\n") {
-		print STDERR "Ksplice update $kid already applied\n";
+if(update_loaded($kid)) {
+	my $stage = get_stage($kid);
+	if ($stage eq "applied") {
+		print STDERR "Ksplice update $kid already applied.\n";
 		exit(0);
 	}
-	if ($stage eq "reversed\n") {
-		die "Reversed Ksplice module $update already loaded!";
-	}
-	close STAGE;
+	die "Reversed Ksplice module $update already loaded!" if ($stage eq "reversed");
 }
 
 foreach my $helper (glob('ksplice-*-helper.ko')) {
@@ -77,15 +72,9 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	die "Error loading helper module $helper" if (runval_raw("insmod $helper") != 0);
 }
 
-open DEBUGLEVEL, '>', "/sys/module/$update/$update/debug" or die $!;
-print DEBUGLEVEL "$debug\n";
-close DEBUGLEVEL;
-open STAGE, '>', "/sys/module/$update/$update/stage" or die $!;
-print STAGE "applied\n";
-close STAGE;
-open STAGE, '<', "/sys/module/$update/$update/stage" or die $!;
-chomp (my $stage = <STAGE>);
-close STAGE;
+set_debug_level($kid, $debug);
+set_stage($kid, "applied");
+my $stage = get_stage($kid);
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 	$helper =~ s/-/_/g;
 	$helper =~ s/\.ko$//;
@@ -102,9 +91,7 @@ if($stage ne 'applied') {
 		}
 		$debugout = $dmesg;
 	}
-	open(ABORT, '<', "/sys/module/$update/$update/abort_cause") or die $!;
-	chomp(my $abort_cause = <ABORT>);
-	close(ABORT);
+	my $abort_cause = get_abort_cause($kid);
 	foreach my $helper (glob('ksplice-*-helper.ko')) {
 		$helper =~ s/-/_/g;
 		$helper =~ s/\.ko$//;
