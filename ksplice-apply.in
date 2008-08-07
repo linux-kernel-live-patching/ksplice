@@ -102,12 +102,13 @@ if($stage ne 'applied') {
 	print("Debugging output saved to $debugfile\n");
 	die;
 }
+mkpath("/var/run/ksplice/updates/$kid");
+copy("patch", "/var/run/ksplice/updates/$kid/patch");
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 	$helper =~ s/-/_/g;
 	$helper =~ s/\.ko$//;
 	die if (!$nounload && runval_raw("rmmod $helper") != 0);
 }
-
 print "Done!\n";
 exit(0);
 
