@@ -42,17 +42,6 @@ chdir($ksplice);
 my $nounload = runstr("lsmod") =~ m/- $/m;
 
 (my $kid = $ksplice) =~s|ksplice[-_]([^-_]+)|$1|;
-if (-e "ksplice-$kid.ko") {
-	if (runstr("lsmod") =~ m/^ksplice_$kid\s+/) {
-		die "Ksplice core module ksplice_$kid already loaded.";
-	}
-	if (system(qw(insmod), "ksplice-$kid.ko", "debug=$debug") != 0) {
-		die "Error loading Ksplice core for update $kid";
-	}
-}
-else {
-	runstr_err(qw(modprobe -q ksplice)) eq "" || die;
-}
 my $update = "ksplice_$kid";
 if(update_loaded($kid)) {
 	my $stage = get_stage($kid);
@@ -61,6 +50,18 @@ if(update_loaded($kid)) {
 		exit(0);
 	}
 	die "Reversed Ksplice module $update already loaded!" if ($stage eq "reversed");
+}
+
+if (-e "ksplice-$kid.ko") {
+	if (runstr("lsmod") =~ m/^ksplice_$kid\s+/) {
+		die "Ksplice core module ksplice_$kid already loaded.";
+	}
+	if (!load_module("ksplice-$kid.ko", "debug=$debug")) {
+		die "Error loading Ksplice core for update $kid";
+	}
+}
+else {
+	runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 }
 
 foreach my $helper (glob('ksplice-*-helper.ko')) {
@@ -73,16 +74,15 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 }
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
-	if(runval_raw("insmod $primary") != 0) {
+	if(!load_module($primary)) {
 		die "Error loading primary module $primary";
 	}
-	if (runval_raw("insmod $helper") != 0) {
+	if(!load_module($helper)) {
 		my ($debugfile, $debugout) = get_debug_output("init_$kid");
 		print STDERR "Error loading helper module $helper\n";
 		(my $module = $primary) =~ s/-/_/g;
 		$module =~ s/\.ko//;
-		system(qw(rmmod), $module);
-		system(qw(rmmod), "ksplice_$kid");
+		cleanup_modules();
 		print $debugout;
 		print("Debugging output saved to $debugfile\n");
 		die;
@@ -95,18 +95,7 @@ my $stage = get_stage($kid);
 if($stage ne 'applied') {
 	my ($debugfile, $debugout) = get_debug_output($kid);
 	my $abort_cause = get_abort_cause($kid);
-	foreach my $helper (glob('ksplice-*-helper.ko')) {
-		$helper =~ s/-/_/g;
-		$helper =~ s/\.ko$//;
-		die if (!$nounload && runval_raw("rmmod $helper") != 0);
-	}
-	foreach my $helper (glob('ksplice-*-helper.ko')) {
-		$helper =~ s/-/_/g;
-		$helper =~ s/\.ko$//;
-		(my $primary = $helper) =~ s/_helper//;
-		die if (!$nounload && runval_raw("rmmod $primary") != 0);
-	}
-	die if (!$nounload && runval_raw("rmmod $update") != 0);
+	cleanup_modules();
 	print STDERR "Error applying Ksplice update $kid:\n";
 	print $debugout;
 	print_error($abort_cause);
@@ -121,6 +110,25 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 
 print "Done!\n";
 exit(0);
+
+my @modules_loaded = qw();
+
+sub load_module {
+	my ($module, @params) = @_;
+	if (runval_raw("insmod", $module, @params) != 0) {
+		return 0;
+	}
+	$module =~ s/\.ko//;
+	$module =~ s/-/_/g;
+	push @modules_loaded, $module;
+	return 1;
+}
+
+sub cleanup_modules {
+	foreach my $module (reverse(@modules_loaded)) {
+		die if (!$nounload && runval_raw("rmmod", $module) != 0);
+	}
+}
 
 sub print_error {
 	my ($error) = @_;
