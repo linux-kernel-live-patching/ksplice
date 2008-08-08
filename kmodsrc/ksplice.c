@@ -409,7 +409,12 @@ static int apply_patches(struct update_bundle *bundle)
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+		ret = stop_machine(__apply_patches, bundle, NULL);
+#else /* LINUX_VERSION_CODE < */
+/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
 		ret = stop_machine_run(__apply_patches, bundle, NR_CPUS);
+#endif /* LINUX_VERSION_CODE */
 		bust_spinlocks(0);
 		if (ret != -EAGAIN)
 			break;
@@ -449,7 +454,12 @@ static void reverse_patches(struct update_bundle *bundle)
 
 	for (i = 0; i < 5; i++) {
 		bust_spinlocks(1);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+		ret = stop_machine(__reverse_patches, bundle, NULL);
+#else /* LINUX_VERSION_CODE < */
+/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
 		ret = stop_machine_run(__reverse_patches, bundle, NR_CPUS);
+#endif /* LINUX_VERSION_CODE */
 		bust_spinlocks(0);
 		if (ret != -EAGAIN)
 			break;
