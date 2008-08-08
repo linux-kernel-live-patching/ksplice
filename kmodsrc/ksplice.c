@@ -286,14 +286,6 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 	return 0;
 }
 
-static ssize_t source_diff_show(struct update_bundle *bundle, char *buf)
-{
-	int len = bundle->source_diff_end - bundle->source_diff;
-	if (len == 0 || bundle->source_diff[len - 1] != '\0')
-		return 0;
-	return snprintf(buf, PAGE_SIZE, "%s", bundle->source_diff);
-}
-
 static ssize_t stage_store(struct update_bundle *bundle,
 			   const char *buf, size_t len)
 {
@@ -326,15 +318,12 @@ static struct ksplice_attribute stage_attribute =
 	__ATTR(stage, 0600, stage_show, stage_store);
 static struct ksplice_attribute abort_cause_attribute =
 	__ATTR(abort_cause, 0400, abort_cause_show, NULL);
-static struct ksplice_attribute source_diff_attribute =
-	__ATTR(source_diff, 0400, source_diff_show, NULL);
 static struct ksplice_attribute debug_attribute =
 	__ATTR(debug, 0600, debug_show, debug_store);
 
 static struct attribute *ksplice_attrs[] = {
 	&stage_attribute.attr,
 	&abort_cause_attribute.attr,
-	&source_diff_attribute.attr,
 	&debug_attribute.attr,
 	NULL
 };
@@ -718,8 +707,6 @@ static int register_ksplice_module(struct module_pack *pack)
 		ret = -ENOMEM;
 		goto out;
 	}
-	bundle->source_diff = pack->source_diff;
-	bundle->source_diff_end = pack->source_diff_end;
 	if (ksplice_sysfs_init(bundle) < 0) {
 		cleanup_ksplice_bundle(bundle);
 		ret = -ENOMEM;
