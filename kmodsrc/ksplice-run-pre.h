@@ -152,7 +152,6 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 {
 	int runc, prec, matched;
 	unsigned char *run, *pre;
-	struct reloc_addrmap *map;
 
 	if (size == 0)
 		return 1;
@@ -168,18 +167,14 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 		if (!virtual_address_mapped((unsigned long)run))
 			return 1;
 
-		map = find_addrmap(pack, (unsigned long)pre);
-		if (map != NULL) {
-			if (!rerun)
-				ksdebug(pack, 3, KERN_DEBUG "ksplice_h: "
-					"run-pre: reloc at r_a=%" ADDR
-					" p_o=%lx: ", run_addr,
-					(unsigned long)pre - pre_addr);
-			matched =
-			    handle_myst_reloc(pack, (unsigned long)pre,
-					      (unsigned long)run, map, rerun);
-			if (matched < 0)
-				return 1;
+		matched = handle_myst_reloc(pack, (unsigned long)pre,
+					    (unsigned long)run, rerun);
+		if (matched < 0) {
+			ksdebug(pack, 3, KERN_DEBUG "Matching failure at "
+				"offset %lx\n", (unsigned long)pre - pre_addr);
+			return 1;
+		}
+		if (matched > 0) {
 			if (rerun)
 				print_bytes(pack, run, matched, pre, matched);
 			run += matched;
@@ -196,14 +191,15 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 				    jumpsize(pre));
 			run += jumpsize(run);
 			pre += jumpsize(pre);
-			map = find_addrmap(pack, (unsigned long)pre);
-			if (map != NULL) {
-				matched =
-				    handle_myst_reloc(pack, (unsigned long)pre,
-						      (unsigned long)run, map,
-						      rerun);
-				if (matched < 0)
-					return 1;
+			matched = handle_myst_reloc(pack, (unsigned long)pre,
+						    (unsigned long)run, rerun);
+			if (matched < 0) {
+				ksdebug(pack, 3, KERN_DEBUG "Matching failure"
+					"at offset %lx\n", (unsigned long)pre -
+					pre_addr);
+				return 1;
+			}
+			if (matched > 0) {
 				if (rerun)
 					print_bytes(pack, run, matched, pre,
 						    matched);

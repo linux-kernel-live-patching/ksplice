@@ -1041,12 +1041,17 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 }
 
 int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
-		      unsigned long run_addr, struct reloc_addrmap *map,
-		      int rerun)
+		      unsigned long run_addr, int rerun)
 {
-	int offset = (int)(pre_addr - map->addr);
+	unsigned long run_reloc_addr;
 	long run_reloc_val, expected;
-	unsigned long run_reloc_addr = run_addr - offset;
+	int offset;
+
+	struct reloc_addrmap *map = find_addrmap(pack, pre_addr);
+	if (map == NULL)
+		return 0;
+	offset = (int)(pre_addr - map->addr);
+	run_reloc_addr = run_addr - offset;
 	switch (map->size) {
 	case 1:
 		run_reloc_val =
@@ -1068,10 +1073,13 @@ int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
 		return -1;
 	}
 
-	if (!rerun)
+	if (!rerun) {
+		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%"
+			ADDR " p_a=%" ADDR ": ", run_addr, pre_addr);
 		ksdebug(pack, 3, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
 			map->nameval->name, map->nameval->val, map->addend,
 			run_reloc_val);
+	}
 
 	if (!starts_with(map->nameval->name, ".rodata.str")) {
 		int ret;

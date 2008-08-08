@@ -188,8 +188,7 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 struct reloc_addrmap *find_addrmap(struct module_pack *pack,
 				   unsigned long addr);
 int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
-		      unsigned long run_addr, struct reloc_addrmap *map,
-		      int rerun);
+		      unsigned long run_addr, int rerun);
 
 struct safety_record {
 	struct list_head list;
