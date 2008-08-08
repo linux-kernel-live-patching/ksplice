@@ -144,6 +144,8 @@ static int jumplen(unsigned char *addr);
 static int jumpsize(unsigned char *addr);
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr);
+static int match_jump_types(unsigned char *run, unsigned char *pre);
+static int canonicalize_jump(unsigned char *addr);
 
 static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 		       unsigned long pre_addr, unsigned int size, int rerun)
@@ -215,7 +217,7 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 			continue;
 		}
 
-		if (jumplen(run) && jumplen(pre)) {
+		if (match_jump_types(run, pre)) {
 			if (rerun)
 				print_bytes(pack,
 					    run, jumpsize(run) + jumplen(run),
@@ -271,6 +273,21 @@ static int jumpsize(unsigned char *addr)
 	if (addr[0] == 0x0f && addr[1] >= 0x80 && addr[1] < 0x90)
 		return 2;
 	return 1;
+}
+
+static int canonicalize_jump(unsigned char *addr)
+{
+	if (addr[0] == 0x0f)
+		return addr[1] - 0x10;
+	if (addr[0] == 0xe9)
+		return 0xeb;
+	return addr[0];
+}
+
+static int match_jump_types(unsigned char *run, unsigned char *pre)
+{
+	return jumplen(run) && jumplen(pre) &&
+	    canonicalize_jump(run) == canonicalize_jump(pre);
 }
 
 static int match_nop(unsigned char *addr)
