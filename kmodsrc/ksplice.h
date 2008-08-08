@@ -101,7 +101,7 @@ struct module_pack {
 
 struct update_bundle {
 	const char *kid;
-	char *name;
+	const char *name;
 	struct kobject kobj;
 	const char *source_diff, *source_diff_end;
 	enum ksplice_stage_enum stage;

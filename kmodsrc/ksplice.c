@@ -759,6 +759,7 @@ static void cleanup_ksplice_bundle(struct update_bundle *bundle)
 {
 	list_del(&bundle->list);
 	clear_debug_buf(bundle);
+	kfree(bundle->kid);
 	kfree(bundle->name);
 	kfree(bundle);
 }
@@ -768,26 +769,37 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	struct update_bundle *bundle;
 	int ret;
 	char *str = "ksplice_";
+	char *buf;
 	bundle = kmalloc(sizeof(struct update_bundle), GFP_KERNEL);
 	if (bundle == NULL)
 		return NULL;
 	memset(bundle, 0, sizeof(struct update_bundle));
-	bundle->name = kmalloc(strlen(kid) + strlen(str) + 1, GFP_KERNEL);
-	if (bundle->name == NULL) {
+	buf = kmalloc(strlen(kid) + strlen(str) + 1, GFP_KERNEL);
+	if (buf == NULL) {
 		printk(KERN_ERR "ksplice: out of memory\n");
 		kfree(bundle);
 		return NULL;
 	}
-	INIT_LIST_HEAD(&bundle->packs);
-	list_add(&bundle->list, &update_bundles);
-	bundle->kid = kid;
-	snprintf(bundle->name, strlen(kid) + strlen(str) + 1, "%s%s", str, kid);
-	ret = init_debug_buf(bundle);
-	if (ret < 0) {
+	snprintf(buf, strlen(kid) + strlen(str) + 1, "%s%s", str, kid);
+	bundle->name = buf;
+	buf = kmalloc(strlen(kid) + 1, GFP_KERNEL);
+	if (buf == NULL) {
+		printk(KERN_ERR "ksplice: out of memory\n");
 		kfree(bundle->name);
 		kfree(bundle);
 		return NULL;
 	}
+	strncpy(buf, kid, strlen(kid) + 1);
+	bundle->kid = buf;
+	INIT_LIST_HEAD(&bundle->packs);
+	ret = init_debug_buf(bundle);
+	if (ret < 0) {
+		kfree(bundle->kid);
+		kfree(bundle->name);
+		kfree(bundle);
+		return NULL;
+	}
+	list_add(&bundle->list, &update_bundles);
 	bundle->stage = PREPARING;
 	bundle->abort_cause = NONE;
 	return bundle;
