@@ -178,6 +178,7 @@ static int check_stack(struct update_bundle *bundle, struct thread_info *tinfo,
 static int check_address_for_conflict(struct update_bundle *bundle,
 				      unsigned long addr);
 static int valid_stack_ptr(struct thread_info *tinfo, void *p);
+static int is_stop_machine(struct task_struct *t);
 
 #ifdef CONFIG_MODULE_UNLOAD
 static int add_dependency_on_address(struct module_pack *pack,
@@ -608,7 +609,7 @@ static int check_task(struct update_bundle *bundle, struct task_struct *t)
 				  (unsigned long *)KSPLICE_SP(t));
 		if (status == 0)
 			status = ret;
-	} else if (strcmp(t->comm, "kstopmachine") != 0) {
+	} else if (!is_stop_machine(t)) {
 		_ksdebug(bundle, 2, "unexpected running task!");
 		status = -ENODEV;
 	}
@@ -670,6 +671,19 @@ static int valid_stack_ptr(struct thread_info *tinfo, void *p)
 {
 	return p > (void *)tinfo
 	    && p <= (void *)tinfo + THREAD_SIZE - sizeof(long);
+}
+
+static int is_stop_machine(struct task_struct *t)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+	char *num;
+	if (!starts_with(t->comm, "kstop"))
+		return 0;
+	num = t->comm + strlen("kstop");
+	return num[strspn(num, "0123456789")] == '\0';
+#else /* LINUX_VERSION_CODE < */
+	return strcmp(t->comm, "kstopmachine") == 0;
+#endif /* LINUX_VERSION_CODE */
 }
 
 static int register_ksplice_module(struct module_pack *pack)
