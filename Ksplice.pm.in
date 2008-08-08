@@ -176,7 +176,7 @@ sub get_abort_cause {
 
 sub get_patch {
 	my ($kid) = @_;
-	chomp(my $result = read_sysfs($kid, "source_diff"));
+	my $result = read_file("/var/run/ksplice/updates/$kid/patch");
 	return $result;
 }
 

@@ -52,10 +52,9 @@ sub view_kid {
 	}
 	my $stage = get_stage($kid);
 	print "Ksplice id $kid is present in the kernel and is $stage.\n\n";
-	my $source_diff = get_source_diff($kid);
+	my $source_diff = get_patch($kid);
 	return if($source_diff eq "");
-	print "Here is the first 4 KiB of the source code patch";
-	print " associated with this update:\n";
+	print "Here is the source code patch associated with this update:\n";
 	print $source_diff;
 }
 
