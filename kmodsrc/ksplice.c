@@ -705,6 +705,10 @@ static int register_ksplice_module(struct module_pack *pack)
 	}
 	list_for_each_entry(bundle, &update_bundles, list) {
 		if (strcmp(pack->kid, bundle->kid) == 0) {
+			if (bundle->stage != PREPARING) {
+				ret = -1;
+				goto out;
+			}
 			add_to_bundle(pack, bundle);
 			goto out;
 		}
