@@ -723,7 +723,9 @@ static void unregister_ksplice_module(struct module_pack *pack)
 	if (pack->bundle == NULL)
 		return;
 	if (pack->bundle->stage != APPLIED) {
+		mutex_lock(&module_mutex);
 		list_del(&pack->list);
+		mutex_unlock(&module_mutex);
 		if (list_empty(&pack->bundle->packs))
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 			kobject_put(&pack->bundle->kobj);
@@ -744,7 +746,9 @@ static void add_to_bundle(struct module_pack *pack,
 
 static void cleanup_ksplice_bundle(struct update_bundle *bundle)
 {
+	mutex_lock(&module_mutex);
 	list_del(&bundle->list);
+	mutex_unlock(&module_mutex);
 	clear_debug_buf(bundle);
 	kfree(bundle->kid);
 	kfree(bundle->name);
