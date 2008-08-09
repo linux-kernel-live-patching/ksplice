@@ -27,6 +27,7 @@
 #include <linux/sysfs.h>
 #include <linux/time.h>
 #include <linux/version.h>
+#include <linux/vmalloc.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
 #include <linux/uaccess.h>
 #else /* LINUX_VERSION_CODE < */
@@ -1946,7 +1947,7 @@ void clear_debug_buf(struct update_bundle *bundle)
 	debugfs_remove(bundle->debugfs_dentry);
 	bundle->debugfs_dentry = NULL;
 	bundle->debug_blob.size = 0;
-	kfree(bundle->debug_blob.data);
+	vfree(bundle->debug_blob.data);
 	bundle->debug_blob.data = NULL;
 }
 
@@ -1978,29 +1979,19 @@ int __ksdebug(struct update_bundle *bundle, const char *fmt, ...)
 	size = 1 + vsnprintf(bundle->debug_blob.data, 0, fmt, args);
 	va_end(args);
 	old_size = bundle->debug_blob.size == 0 ? 0 :
-	    roundup_pow_of_two(bundle->debug_blob.size);
+	    max(PAGE_SIZE, roundup_pow_of_two(bundle->debug_blob.size));
 	new_size = bundle->debug_blob.size + size == 0 ? 0 :
-	    roundup_pow_of_two(bundle->debug_blob.size + size);
+	    max(PAGE_SIZE, roundup_pow_of_two(bundle->debug_blob.size + size));
 	if (new_size > old_size) {
 		char *tmp = bundle->debug_blob.data;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-		bundle->debug_blob.data = krealloc(bundle->debug_blob.data,
-						   new_size, GFP_KERNEL);
-#else /* LINUX_VERSION_CODE < */
-		/* We cannot use our own function with the same
-		 * arguments as krealloc, because doing so requires
-		 * ksize, which was first exported in 2.6.24-rc5.
-		 */
-		bundle->debug_blob.data = kmalloc(new_size, GFP_KERNEL);
+		bundle->debug_blob.data = vmalloc(new_size);
 		if (bundle->debug_blob.data != NULL) {
 			memcpy(bundle->debug_blob.data, tmp,
 			       bundle->debug_blob.size);
-			kfree(tmp);
-		}
-#endif /* LINUX_VERSION_CODE */
-		if (bundle->debug_blob.data == NULL) {
+			vfree(tmp);
+		} else {
 			printk(KERN_ERR "ksplice: out of memory\n");
-			kfree(tmp);
+			vfree(tmp);
 			return -ENOMEM;
 		}
 	}
