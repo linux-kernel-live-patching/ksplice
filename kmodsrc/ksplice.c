@@ -123,7 +123,7 @@ struct reloc_nameval {
 struct reloc_addrmap {
 	struct list_head list;
 	unsigned long addr;
-	struct reloc_nameval *nameval;
+	const char *name;
 	int pcrel;
 	long addend;
 	int size;
@@ -1590,6 +1590,7 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 				 unsigned long pre_addr, unsigned long run_addr,
 				 int rerun, int *matched)
 {
+	struct reloc_nameval *nv;
 	unsigned long run_reloc_addr;
 	long run_reloc_val, expected;
 	int offset;
@@ -1599,6 +1600,8 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		*matched = 0;
 		return OK;
 	}
+	nv = find_nameval(pack, map->name, 0);
+
 	offset = (int)(pre_addr - map->addr);
 	run_reloc_addr = run_addr - offset;
 	switch (map->size) {
@@ -1626,11 +1629,11 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%"
 			ADDR " p_a=%" ADDR ": ", run_addr, pre_addr);
 		ksdebug(pack, 3, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
-			map->nameval->name, map->nameval->val, map->addend,
+			map->name, nv != NULL ? nv->val : 0, map->addend,
 			run_reloc_val);
 	}
 
-	if (!starts_with(map->nameval->name, ".rodata.str")) {
+	if (!starts_with(map->name, ".rodata.str")) {
 		if (contains_canary(pack, run_reloc_addr, map->size,
 				    map->dst_mask) != 0)
 			return UNEXPECTED;
@@ -1638,17 +1641,25 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		expected = run_reloc_val - map->addend;
 		if (map->pcrel)
 			expected += run_reloc_addr;
-		if (map->nameval->status == NOVAL) {
-			map->nameval->val = expected;
-			map->nameval->status = TEMP;
-		} else if (map->nameval->val != expected) {
+
+		if (nv == NULL) {
+			nv = find_nameval(pack, map->name, 1);
+			if (nv == NULL)
+				return OUT_OF_MEMORY;
+		}
+		if (nv->status == NOVAL) {
+			nv->val = expected;
+			nv->status = TEMP;
+		} else if (nv->val != expected) {
 			if (rerun)
 				return NO_MATCH;
 			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
-				"Nameval address %" ADDR " does not match "
-				"expected %" ADDR " for %s!\n",
-				map->nameval->val, expected,
-				map->nameval->name);
+				"Nameval address %" ADDR "(%d) does not match "
+				"expected %" ADDR " for %s!\n", nv->val,
+				nv->status, expected, map->name);
+			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
+				"run_reloc: %" ADDR " %" ADDR " %" ADDR "\n",
+				run_reloc_addr, run_reloc_val, map->addend);
 			return NO_MATCH;
 		}
 	}
@@ -1678,6 +1689,7 @@ static abort_t process_reloc(struct module_pack *pack,
 	long off;
 	unsigned long sym_addr;
 	struct reloc_addrmap *map;
+	struct reloc_nameval *nv;
 	LIST_HEAD(vals);
 
 #ifdef KSPLICE_STANDALONE
@@ -1754,11 +1766,7 @@ skip_using_system_map:
 		if (map == NULL)
 			return OUT_OF_MEMORY;
 		map->addr = r->blank_addr;
-		map->nameval = find_nameval(pack, r->sym_name, 1);
-		if (map->nameval == NULL) {
-			kfree(map);
-			return OUT_OF_MEMORY;
-		}
+		map->name = r->sym_name;
 		map->pcrel = r->pcrel;
 		map->addend = r->addend;
 		map->size = r->size;
@@ -1780,17 +1788,17 @@ skip_using_system_map:
 #else /* !KSPLICE_STANDALONE */
 	if (r->pcrel && pre) {
 #endif /* KSPLICE_STANDALONE */
+		nv = find_nameval(pack, "ksplice_zero", 1);
+		if (nv == NULL)
+			return OUT_OF_MEMORY;
+		nv->val = 0;
+		nv->status = VAL;
+
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL)
 			return OUT_OF_MEMORY;
 		map->addr = r->blank_addr;
-		map->nameval = find_nameval(pack, "ksplice_zero", 1);
-		if (map->nameval == NULL) {
-			kfree(map);
-			return OUT_OF_MEMORY;
-		}
-		map->nameval->val = 0;
-		map->nameval->status = VAL;
+		map->name = nv->name;
 		map->pcrel = r->pcrel;
 		map->addend = sym_addr + r->addend;
 		map->size = r->size;
