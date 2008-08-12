@@ -29,8 +29,6 @@ extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 /* Defined in primary.c */
 #define pack KSPLICE_UNIQ(pack)
 extern struct module_pack pack;
-#define helper_init_module KSPLICE_UNIQ(helper_init_module)
-extern int helper_init_module(void);
 
 static int init_helper(void)
 {
@@ -42,7 +40,7 @@ static int init_helper(void)
 	pack.helper_parainstructions = parainstructions;
 	pack.helper_parainstructions_end = parainstructions_end;
 #endif
-	return helper_init_module();
+	return init_ksplice_module(&pack);
 }
 
 static void cleanup_helper(void)

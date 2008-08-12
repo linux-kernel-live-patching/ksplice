@@ -68,13 +68,6 @@ static void cleanup_primary(void)
 	cleanup_ksplice_module(&pack);
 }
 
-#define helper_init_module KSPLICE_UNIQ(helper_init_module)
-int helper_init_module(void)
-{
-	return init_ksplice_module(&pack);
-}
-EXPORT_SYMBOL_GPL(helper_init_module);
-
 module_init(init_primary);
 module_exit(cleanup_primary);
 
