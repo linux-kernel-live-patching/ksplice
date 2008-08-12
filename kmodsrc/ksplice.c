@@ -1646,8 +1646,6 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 			nv = find_nameval(pack, map->name, 1);
 			if (nv == NULL)
 				return OUT_OF_MEMORY;
-		}
-		if (nv->status == NOVAL) {
 			nv->val = expected;
 			nv->status = TEMP;
 		} else if (nv->val != expected) {
@@ -1963,7 +1961,7 @@ static abort_t compute_address(struct module_pack *pack, const char *sym_name,
 
 	if (!pre) {
 		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
-		if (nv != NULL && nv->status != NOVAL) {
+		if (nv != NULL) {
 			release_vals(vals);
 			ret = add_candidate_val(vals, nv->val);
 			if (ret != OK)
@@ -2407,10 +2405,16 @@ static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
 
 static void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 {
-	struct reloc_nameval *nv;
-	list_for_each_entry(nv, &pack->reloc_namevals, list) {
-		if (nv->status == TEMP)
-			nv->status = status_val;
+	struct reloc_nameval *nv, *n;
+	list_for_each_entry_safe(nv, n, &pack->reloc_namevals, list) {
+		if (nv->status == TEMP) {
+			if (status_val == NOVAL) {
+				list_del(&nv->list);
+				kfree(nv);
+			} else {
+				nv->status = status_val;
+			}
+		}
 	}
 }
 
