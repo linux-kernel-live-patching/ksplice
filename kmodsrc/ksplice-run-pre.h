@@ -187,8 +187,9 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 			if (jumpsize(run) != jumpsize(pre) ||
 			    (jumpsize(run) == 2 && pre[1] != run[1]))
 				return 1;
-			print_bytes(pack, run, jumpsize(run), pre,
-				    jumpsize(pre));
+			if (rerun)
+				print_bytes(pack, run, jumpsize(run), pre,
+					    jumpsize(pre));
 			run += jumpsize(run);
 			pre += jumpsize(pre);
 			matched = handle_myst_reloc(pack, (unsigned long)pre,
@@ -207,6 +208,8 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 				pre += matched;
 			} else {
 				/* lenient; we should check these addresses */
+				if (rerun)
+					print_bytes(pack, run, len, pre, len);
 				run += len;
 				pre += len;
 			}
@@ -226,9 +229,9 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 
 		runc = match_nop(run);
 		prec = match_nop(pre);
-		if (rerun)
-			print_bytes(pack, run, runc, pre, prec);
 		if (runc > 0 || prec > 0) {
+			if (rerun)
+				print_bytes(pack, run, runc, pre, prec);
 			run += runc;
 			pre += prec;
 			continue;
@@ -237,7 +240,8 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 		if (*run == *pre) {
 			if (rerun)
 				print_bytes(pack, run, 1, pre, 1);
-			pre++, run++;
+			run++;
+			pre++;
 			continue;
 		}
 
