@@ -176,7 +176,9 @@ static inline int virtual_address_mapped(unsigned long addr)
 #endif /* LINUX_VERSION_CODE */
 
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
-					  const char *name, int create);
+					  const char *name);
+static abort_t create_nameval(struct module_pack *pack, const char *name,
+			      unsigned long val, int status);
 static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
 					  unsigned long addr);
 static abort_t handle_myst_reloc(struct module_pack *pack,
@@ -1509,7 +1511,6 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, unsigned long pre_addr)
 {
 	struct safety_record *rec;
-	struct reloc_nameval *nv;
 	abort_t ret;
 	const struct module *run_module;
 
@@ -1577,13 +1578,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	rec->name = s->name;
 	list_add(&rec->list, &pack->safety_records);
 
-	nv = find_nameval(pack, s->name, 1);
-	if (nv == NULL)
-		return OUT_OF_MEMORY;
-	nv->val = run_addr;
-	nv->status = VAL;
-
-	return OK;
+	return create_nameval(pack, s->name, run_addr, VAL);
 }
 
 static abort_t handle_myst_reloc(struct module_pack *pack,
@@ -1594,13 +1589,14 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 	unsigned long run_reloc_addr;
 	long run_reloc_val, expected;
 	int offset;
+	abort_t ret;
 
 	struct reloc_addrmap *map = find_addrmap(pack, pre_addr);
 	if (map == NULL) {
 		*matched = 0;
 		return OK;
 	}
-	nv = find_nameval(pack, map->name, 0);
+	nv = find_nameval(pack, map->name);
 
 	offset = (int)(pre_addr - map->addr);
 	run_reloc_addr = run_addr - offset;
@@ -1642,15 +1638,8 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		if (map->pcrel)
 			expected += run_reloc_addr;
 
-		if (nv == NULL) {
-			nv = find_nameval(pack, map->name, 1);
-			if (nv == NULL)
-				return OUT_OF_MEMORY;
-			nv->val = expected;
-			nv->status = TEMP;
-		} else if (nv->val != expected) {
-			if (rerun)
-				return NO_MATCH;
+		ret = create_nameval(pack, map->name, expected, TEMP);
+		if (ret == NO_MATCH && !rerun) {
 			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"Nameval address %" ADDR "(%d) does not match "
 				"expected %" ADDR " for %s!\n", nv->val,
@@ -1658,7 +1647,9 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"run_reloc: %" ADDR " %" ADDR " %" ADDR "\n",
 				run_reloc_addr, run_reloc_val, map->addend);
-			return NO_MATCH;
+			return ret;
+		} else if (ret != OK) {
+			return ret;
 		}
 	}
 	*matched = map->size - offset;
@@ -1687,7 +1678,6 @@ static abort_t process_reloc(struct module_pack *pack,
 	long off;
 	unsigned long sym_addr;
 	struct reloc_addrmap *map;
-	struct reloc_nameval *nv;
 	LIST_HEAD(vals);
 
 #ifdef KSPLICE_STANDALONE
@@ -1786,17 +1776,15 @@ skip_using_system_map:
 #else /* !KSPLICE_STANDALONE */
 	if (r->pcrel && pre) {
 #endif /* KSPLICE_STANDALONE */
-		nv = find_nameval(pack, "ksplice_zero", 1);
-		if (nv == NULL)
-			return OUT_OF_MEMORY;
-		nv->val = 0;
-		nv->status = VAL;
+		ret1 = create_nameval(pack, "ksplice_zero", 0, VAL);
+		if (ret1 != OK)
+			return ret1;
 
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
 		if (map == NULL)
 			return OUT_OF_MEMORY;
 		map->addr = r->blank_addr;
-		map->name = nv->name;
+		map->name = "ksplice_zero";
 		map->pcrel = r->pcrel;
 		map->addend = sym_addr + r->addend;
 		map->size = r->size;
@@ -1960,7 +1948,7 @@ static abort_t compute_address(struct module_pack *pack, const char *sym_name,
 #endif /* KSPLICE_STANDALONE */
 
 	if (!pre) {
-		struct reloc_nameval *nv = find_nameval(pack, sym_name, 0);
+		struct reloc_nameval *nv = find_nameval(pack, sym_name);
 		if (nv != NULL) {
 			release_vals(vals);
 			ret = add_candidate_val(vals, nv->val);
@@ -2366,9 +2354,9 @@ static void release_vals(struct list_head *vals)
 }
 
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
-					  const char *name, int create)
+					  const char *name)
 {
-	struct reloc_nameval *nv, *new;
+	struct reloc_nameval *nv;
 	const char *newname;
 	if (starts_with(name, ".text."))
 		name += 6;
@@ -2379,17 +2367,26 @@ static struct reloc_nameval *find_nameval(struct module_pack *pack,
 		if (strcmp(newname, name) == 0)
 			return nv;
 	}
-	if (!create)
-		return NULL;
+	return NULL;
+}
 
-	new = kmalloc(sizeof(*new), GFP_KERNEL);
-	if (new == NULL)
-		return NULL;
-	new->name = name;
-	new->val = 0;
-	new->status = NOVAL;
-	list_add(&new->list, &pack->reloc_namevals);
-	return new;
+static abort_t create_nameval(struct module_pack *pack, const char *name,
+			      unsigned long val, int status)
+{
+	struct reloc_nameval *nv = find_nameval(pack, name);
+	if (nv != NULL)
+		return nv->val == val ? OK : NO_MATCH;
+
+	nv = kmalloc(sizeof(*nv), GFP_KERNEL);
+	if (nv == NULL)
+		return OUT_OF_MEMORY;
+	if (starts_with(name, ".text."))
+		name += 6;
+	nv->name = name;
+	nv->val = val;
+	nv->status = status;
+	list_add(&nv->list, &pack->reloc_namevals);
+	return OK;
 }
 
 static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
