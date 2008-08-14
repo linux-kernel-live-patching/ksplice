@@ -147,7 +147,7 @@ DECLARE_VEC_TYPE(asymbol *, asymbolp_vec);
 
 struct supersect {
 	bfd *parent;
-	char *name;
+	const char *name;
 	flagword flags;
 	struct void_vec contents;
 	int alignment;
@@ -161,7 +161,7 @@ void get_syms(bfd *abfd, struct asymbolp_vec *syms);
 struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 				  struct asymbolp_vec *syms);
 extern struct supersect *new_supersects;
-struct supersect *new_supersect(char *name);
+struct supersect *new_supersect(const char *name);
 
 #define sect_grow(ss, n, type)					\
 	((type *)sect_do_grow(ss, n, sizeof(type), __alignof__(type)))
@@ -173,5 +173,5 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment);
 	(strlen(str) >= strlen(suffix) &&				\
 	 strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0)
 
-bfd_vma addr_offset(struct supersect *ss, void *addr);
+bfd_vma addr_offset(struct supersect *ss, const void *addr);
 bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc);

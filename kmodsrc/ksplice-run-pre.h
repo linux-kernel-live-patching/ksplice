@@ -30,15 +30,15 @@ static const char jumps[256] = {
 #define NUM_NOPS (sizeof(nops) / sizeof(nops[0]))
 struct insn {
 	size_t len;
-	unsigned char *data;
+	const unsigned char *data;
 };
 
 /* *INDENT-OFF* */
-#define I(...) {						\
-		.len = sizeof((unsigned char []){__VA_ARGS__}),	\
-		.data = ((unsigned char []){__VA_ARGS__}),	\
+#define I(...) {							\
+		.len = sizeof((const unsigned char []){__VA_ARGS__}),	\
+		.data = ((const unsigned char []){__VA_ARGS__}),	\
 	}
-static struct insn nops[] = {
+static const struct insn nops[] = {
 /* GNU assembler no-op patterns from
    binutils-2.17/gas/config/tc-i386.c line 500 */
 I(0x90),					/* nop                  */
@@ -137,21 +137,22 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 };
 /* *INDENT-ON* */
 
-static int match_nop(unsigned char *addr);
-static void print_bytes(struct module_pack *pack, unsigned char *run, int runc,
-			unsigned char *pre, int prec);
-static int jumplen(unsigned char *addr);
-static int jumpsize(unsigned char *addr);
+static int match_nop(const unsigned char *addr);
+static void print_bytes(struct module_pack *pack,
+			const unsigned char *run, int runc,
+			const unsigned char *pre, int prec);
+static int jumplen(const unsigned char *addr);
+static int jumpsize(const unsigned char *addr);
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr);
-static int match_jump_types(unsigned char *run, unsigned char *pre);
-static int canonicalize_jump(unsigned char *addr);
+static int match_jump_types(const unsigned char *run, const unsigned char *pre);
+static int canonicalize_jump(const unsigned char *addr);
 
 static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 		       unsigned long pre_addr, unsigned int size, int rerun)
 {
 	int runc, prec, matched;
-	unsigned char *run, *pre;
+	const unsigned char *run, *pre;
 
 	if (size == 0)
 		return 1;
@@ -159,11 +160,11 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 	if (size >= 5)
 		run_addr = follow_trampolines(pack, run_addr);
 
-	run = (unsigned char *)run_addr;
-	pre = (unsigned char *)pre_addr;
+	run = (const unsigned char *)run_addr;
+	pre = (const unsigned char *)pre_addr;
 
-	while (run < (unsigned char *)run_addr + size &&
-	       pre < (unsigned char *)pre_addr + size) {
+	while (run < (const unsigned char *)run_addr + size &&
+	       pre < (const unsigned char *)pre_addr + size) {
 		if (!virtual_address_mapped((unsigned long)run))
 			return 1;
 
@@ -256,7 +257,7 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 	return 0;
 }
 
-static int jumplen(unsigned char *addr)
+static int jumplen(const unsigned char *addr)
 {
 	if (!jumps[addr[0]])
 		return 0;
@@ -266,7 +267,7 @@ static int jumplen(unsigned char *addr)
 	return jumps[addr[0]];
 }
 
-static int jumpsize(unsigned char *addr)
+static int jumpsize(const unsigned char *addr)
 {
 	if (!jumps[addr[0]])
 		return 0;
@@ -275,7 +276,7 @@ static int jumpsize(unsigned char *addr)
 	return 1;
 }
 
-static int canonicalize_jump(unsigned char *addr)
+static int canonicalize_jump(const unsigned char *addr)
 {
 	if (addr[0] == 0x0f)
 		return addr[1] - 0x10;
@@ -284,16 +285,16 @@ static int canonicalize_jump(unsigned char *addr)
 	return addr[0];
 }
 
-static int match_jump_types(unsigned char *run, unsigned char *pre)
+static int match_jump_types(const unsigned char *run, const unsigned char *pre)
 {
 	return jumplen(run) && jumplen(pre) &&
 	    canonicalize_jump(run) == canonicalize_jump(pre);
 }
 
-static int match_nop(unsigned char *addr)
+static int match_nop(const unsigned char *addr)
 {
 	int i, j;
-	struct insn *nop;
+	const struct insn *nop;
 	for (i = NUM_NOPS - 1; i >= 0; i--) {
 		nop = &nops[i];
 		for (j = 0; j < nop->len; j++) {
@@ -308,8 +309,9 @@ static int match_nop(unsigned char *addr)
 	return 0;
 }
 
-static void print_bytes(struct module_pack *pack, unsigned char *run, int runc,
-			unsigned char *pre, int prec)
+static void print_bytes(struct module_pack *pack,
+			const unsigned char *run, int runc,
+			const unsigned char *pre, int prec)
 {
 	int o;
 	int matched = min(runc, prec);
@@ -330,7 +332,7 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 {
 	if (virtual_address_mapped(addr) &&
 	    virtual_address_mapped(addr + 4) &&
-	    *((unsigned char *)addr) == 0xE9) {
+	    *((const unsigned char *)addr) == 0xE9) {
 		/* Remember to add the length of the e9 */
 		unsigned long new_addr = addr + 5 + *(int32_t *)(addr + 1);
 		/* Confirm that it is a jump into a ksplice module */

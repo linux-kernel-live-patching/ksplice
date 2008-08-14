@@ -108,11 +108,11 @@ struct asymbolp_vec isyms;
 
 char **varargs;
 int varargs_count;
-char *modestr, *addstr_all = "", *addstr_sect_pre = "", *addstr_sect = "";
+const char *modestr, *addstr_all = "", *addstr_sect_pre = "", *addstr_sect = "";
 
 struct wsect *wanted_sections = NULL;
 
-struct specsect special_sections[] = {
+const struct specsect special_sections[] = {
 	{".altinstructions", 1, ".altinstr_replacement",
 	 2 * sizeof(void *) + 4},
 	{".smp_locks", 0, NULL, sizeof(void *)},
@@ -145,7 +145,7 @@ void load_system_map()
 	fclose(fp);
 }
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
 	char *debug_name = malloc(strlen(argv[1]) + 4 + strlen(argv[2]) + 1);
 	sprintf(debug_name, "%s.pre%s", argv[1], argv[2]);
@@ -186,7 +186,7 @@ int main(int argc, char **argv)
 
 	if (mode("keep")) {
 		while (1) {
-			struct wsect *tmp = wanted_sections;
+			const struct wsect *tmp = wanted_sections;
 			bfd_map_over_sections(ibfd, mark_wanted_if_referenced,
 					      NULL);
 			if (tmp == wanted_sections)
@@ -218,7 +218,7 @@ int main(int argc, char **argv)
 			rm_some_relocs(ibfd, p);
 	}
 
-	struct specsect *ss;
+	const struct specsect *ss;
 	if (mode("keep")) {
 		for (ss = special_sections; ss != end_special_sections; ss++)
 			rm_from_special(ibfd, ss);
@@ -258,7 +258,8 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 	}
 }
 
-struct supersect *make_section(bfd *abfd, struct asymbolp_vec *syms, char *name)
+struct supersect *make_section(bfd *abfd, struct asymbolp_vec *syms,
+			       const char *name)
 {
 	asection *sect = bfd_get_section_by_name(abfd, name);
 	if (sect != NULL)
@@ -267,8 +268,8 @@ struct supersect *make_section(bfd *abfd, struct asymbolp_vec *syms, char *name)
 		return new_supersect(name);
 }
 
-void write_reloc(bfd *abfd, struct supersect *ss, void *addr, asymbol **symp,
-		 bfd_vma offset)
+void write_reloc(bfd *abfd, struct supersect *ss, const void *addr,
+		 asymbol **symp, bfd_vma offset)
 {
 	bfd_reloc_code_real_type code;
 	switch (bfd_arch_bits_per_address(abfd)) {
@@ -291,7 +292,7 @@ void write_reloc(bfd *abfd, struct supersect *ss, void *addr, asymbol **symp,
 }
 
 void __attribute__((format(printf, 4, 5)))
-write_string(bfd *ibfd, struct supersect *ss, void *addr,
+write_string(bfd *ibfd, struct supersect *ss, const char **addr,
 	     const char *fmt, ...)
 {
 	va_list ap;
@@ -309,7 +310,7 @@ write_string(bfd *ibfd, struct supersect *ss, void *addr,
 }
 
 void write_system_map_array(bfd *ibfd, struct supersect *ss,
-			    unsigned long **sym_addrs,
+			    const unsigned long **sym_addrs,
 			    unsigned long *num_sym_addrs, asymbol *sym)
 {
 	const char *system_map_name = sym->name;
@@ -419,7 +420,7 @@ void write_ksplice_size(bfd *ibfd, asymbol **symp)
 			       &ksize->num_sym_addrs, sym);
 }
 
-void write_ksplice_patch(bfd *ibfd, char *symname)
+void write_ksplice_patch(bfd *ibfd, const char *symname)
 {
 	struct supersect *kpatch_ss = make_section(ibfd, &isyms,
 						   ".ksplice_patches");
@@ -439,7 +440,7 @@ void write_ksplice_patch(bfd *ibfd, char *symname)
 	write_reloc(ibfd, kpatch_ss, &kpatch->repladdr, symp, 0);
 }
 
-void rm_from_special(bfd *ibfd, struct specsect *s)
+void rm_from_special(bfd *ibfd, const struct specsect *s)
 {
 	asection *isection = bfd_get_section_by_name(ibfd, s->sectname);
 	if (isection == NULL)
@@ -459,7 +460,7 @@ void rm_from_special(bfd *ibfd, struct specsect *s)
 	assert((orig_contents.size / entry_size) * relocs_per_entry ==
 	       orig_relocs.size);
 
-	void *orig_entry;
+	const void *orig_entry;
 	arelent **relocp;
 	for (orig_entry = orig_contents.data, relocp = orig_relocs.data;
 	     orig_entry < orig_contents.data + orig_contents.size;
@@ -784,7 +785,7 @@ int want_section(asection *sect)
 	if (!mode("keep"))
 		return 1;
 
-	struct wsect *w = wanted_sections;
+	const struct wsect *w = wanted_sections;
 	for (; w != NULL; w = w->next) {
 		if (strcmp(w->name, name) == 0)
 			return 1;
@@ -805,9 +806,9 @@ int want_section(asection *sect)
 	return 0;
 }
 
-struct specsect *is_special(asection *sect)
+const struct specsect *is_special(asection *sect)
 {
-	struct specsect *ss;
+	const struct specsect *ss;
 	for (ss = special_sections; ss != end_special_sections; ss++) {
 		if (strcmp(ss->sectname, sect->name) == 0)
 			return ss;

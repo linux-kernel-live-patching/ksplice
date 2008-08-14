@@ -99,7 +99,7 @@ struct debugfs_blob_wrapper {
 
 struct reloc_nameval {
 	struct list_head list;
-	char *name;
+	const char *name;
 	unsigned long val;
 	enum { NOVAL, TEMP, VAL } status;
 };
@@ -160,7 +160,7 @@ static inline int virtual_address_mapped(unsigned long addr)
 #endif /* LINUX_VERSION_CODE */
 
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
-					  char *name, int create);
+					  const char *name, int create);
 static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
 					  unsigned long addr);
 static int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
@@ -315,7 +315,7 @@ static int process_ksplice_relocs(struct module_pack *pack,
 				  int pre);
 static int process_reloc(struct module_pack *pack,
 			 const struct ksplice_reloc *r, int pre);
-static int compute_address(struct module_pack *pack, char *sym_name,
+static int compute_address(struct module_pack *pack, const char *sym_name,
 			   struct list_head *vals, int pre);
 
 struct accumulate_struct {
@@ -325,16 +325,16 @@ struct accumulate_struct {
 
 #ifdef CONFIG_KALLSYMS
 static int label_offset(const char *sym_name);
-static const char *dup_wolabel(const char *sym_name);
+static char *dup_wolabel(const char *sym_name);
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val);
 static int kernel_lookup(const char *name, struct list_head *vals);
 static int other_module_lookup(const char *name, struct list_head *vals,
 			       const char *ksplice_name);
 #ifdef KSPLICE_STANDALONE
-static int module_on_each_symbol(struct module *mod,
-				 int (*fn) (void *, const char *,
-					    unsigned long), void *data);
+static int module_on_each_symbol(const struct module *mod,
+				 int (*fn)(void *, const char *, unsigned long),
+				 void *data);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 						    char *result);
@@ -370,15 +370,16 @@ static int resolve_patch_symbols(struct module_pack *pack);
 static int __apply_patches(void *packptr);
 static int __reverse_patches(void *packptr);
 static int check_each_task(struct update_bundle *bundle);
-static int check_task(struct update_bundle *bundle, struct task_struct *t,
+static int check_task(struct update_bundle *bundle, const struct task_struct *t,
 		      int save_conflicts);
 static int check_stack(struct update_bundle *bundle, struct conflict *conf,
-		       struct thread_info *tinfo, unsigned long *stack);
+		       const struct thread_info *tinfo,
+		       const unsigned long *stack);
 static int check_address_for_conflict(struct update_bundle *bundle,
 				      struct conflict *conf,
 				      unsigned long addr);
-static int valid_stack_ptr(struct thread_info *tinfo, void *p);
-static int is_stop_machine(struct task_struct *t);
+static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
+static int is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update_bundle *bundle);
 static void print_conflicts(struct update_bundle *bundle);
 
@@ -490,8 +491,8 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 
 static ssize_t conflict_show(struct update_bundle *bundle, char *buf)
 {
-	struct conflict *conf;
-	struct ksplice_frame *frame;
+	const struct conflict *conf;
+	const struct ksplice_frame *frame;
 	int used = 0;
 	list_for_each_entry(conf, &bundle->conflicts, list) {
 		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
@@ -807,7 +808,7 @@ static int __reverse_patches(void *bundleptr)
 
 static int check_each_task(struct update_bundle *bundle)
 {
-	struct task_struct *g, *p;
+	const struct task_struct *g, *p;
 	int status = 0;
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
@@ -820,7 +821,7 @@ static int check_each_task(struct update_bundle *bundle)
 	return status;
 }
 
-static int check_task(struct update_bundle *bundle, struct task_struct *t,
+static int check_task(struct update_bundle *bundle, const struct task_struct *t,
 		      int save_conflicts)
 {
 	int status, ret;
@@ -859,7 +860,8 @@ static int check_task(struct update_bundle *bundle, struct task_struct *t,
 
 /* Modified version of Linux's print_context_stack */
 static int check_stack(struct update_bundle *bundle, struct conflict *conf,
-		       struct thread_info *tinfo, unsigned long *stack)
+		       const struct thread_info *tinfo,
+		       const unsigned long *stack)
 {
 	int status = 0, ret = 0;
 	unsigned long addr;
@@ -878,7 +880,7 @@ static int check_stack(struct update_bundle *bundle, struct conflict *conf,
 static int check_address_for_conflict(struct update_bundle *bundle,
 				      struct conflict *conf, unsigned long addr)
 {
-	struct safety_record *rec;
+	const struct safety_record *rec;
 	struct module_pack *pack;
 	struct ksplice_frame *frame = NULL;
 
@@ -907,16 +909,16 @@ static int check_address_for_conflict(struct update_bundle *bundle,
 }
 
 /* Modified version of Linux's valid_stack_ptr */
-static int valid_stack_ptr(struct thread_info *tinfo, void *p)
+static int valid_stack_ptr(const struct thread_info *tinfo, const void *p)
 {
-	return p > (void *)tinfo
-	    && p <= (void *)tinfo + THREAD_SIZE - sizeof(long);
+	return p > (const void *)tinfo
+	    && p <= (const void *)tinfo + THREAD_SIZE - sizeof(long);
 }
 
-static int is_stop_machine(struct task_struct *t)
+static int is_stop_machine(const struct task_struct *t)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-	char *num;
+	const char *num;
 	if (!starts_with(t->comm, "kstop"))
 		return 0;
 	num = t->comm + strlen("kstop");
@@ -938,8 +940,8 @@ static void cleanup_conflicts(struct update_bundle *bundle)
 
 static void print_conflicts(struct update_bundle *bundle)
 {
-	struct conflict *conf;
-	struct ksplice_frame *frame;
+	const struct conflict *conf;
+	const struct ksplice_frame *frame;
 	list_for_each_entry(conf, &bundle->conflicts, list) {
 		_ksdebug(bundle, 2, KERN_DEBUG "ksplice: stack check: pid %d "
 			 "(%s):", conf->pid, conf->process_name);
@@ -1042,7 +1044,7 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 {
 	struct update_bundle *bundle;
 	int ret;
-	char *str = "ksplice_";
+	const char *str = "ksplice_";
 	char *buf;
 	bundle = kmalloc(sizeof(struct update_bundle), GFP_KERNEL);
 	if (bundle == NULL)
@@ -1277,7 +1279,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	struct safety_record *rec;
 	struct reloc_nameval *nv;
 
-	struct module *run_module = module_text_address(run_addr);
+	const struct module *run_module = module_text_address(run_addr);
 	if (run_module != pack->target) {
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ignoring "
 			"address %" ADDR " in other module %s for sect %s\n",
@@ -1688,13 +1690,13 @@ static int use_module(struct module *a, struct module *b)
 #endif /* KSPLICE_STANDALONE */
 #endif /* CONFIG_MODULE_UNLOAD */
 
-static int compute_address(struct module_pack *pack, char *sym_name,
+static int compute_address(struct module_pack *pack, const char *sym_name,
 			   struct list_head *vals, int pre)
 {
 	int i, ret;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
 #ifdef CONFIG_KALLSYMS
-	const char *name;
+	char *name;
 #endif /* CONFIG_KALLSYMS */
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
@@ -1744,7 +1746,7 @@ static int other_module_lookup(const char *name, struct list_head *vals,
 {
 	int ret = 0;
 	struct accumulate_struct acc = { name, vals };
-	struct module *m;
+	const struct module *m;
 
 	if (acc.desired_name == NULL)
 		return -ENOMEM;
@@ -1775,7 +1777,7 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 #ifdef KSPLICE_STANDALONE
 static int brute_search(struct module_pack *pack,
 			const struct ksplice_size *s,
-			void *start, unsigned long len)
+			const void *start, unsigned long len)
 {
 	unsigned long addr;
 	char run, pre;
@@ -1788,8 +1790,8 @@ static int brute_search(struct module_pack *pack,
 		if (!virtual_address_mapped(addr))
 			return 1;
 
-		run = *(unsigned char *)(addr);
-		pre = *(unsigned char *)(s->thismod_addr);
+		run = *(const unsigned char *)(addr);
+		pre = *(const unsigned char *)(s->thismod_addr);
 
 		if (run != pre)
 			continue;
@@ -1807,7 +1809,7 @@ static int brute_search_all(struct module_pack *pack,
 	struct module *m;
 	int ret = 0;
 	int saved_debug;
-	char *where = NULL;
+	const char *where = NULL;
 
 	ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: searching for %s\n",
 		s->name);
@@ -1827,7 +1829,7 @@ static int brute_search_all(struct module_pack *pack,
 	}
 
 	if (ret == 0) {
-		if (brute_search(pack, s, (void *)init_mm.start_code,
+		if (brute_search(pack, s, (const void *)init_mm.start_code,
 				 init_mm.end_code - init_mm.start_code) == 0) {
 			ret = 1;
 			where = "vmlinux";
@@ -1927,9 +1929,9 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 }
 #endif /* LINUX_VERSION_CODE */
 
-static int module_on_each_symbol(struct module *mod,
-				 int (*fn) (void *, const char *,
-					    unsigned long), void *data)
+static int module_on_each_symbol(const struct module *mod,
+				 int (*fn)(void *, const char *, unsigned long),
+				 void *data)
 {
 	unsigned int i;
 	int ret;
@@ -1982,10 +1984,10 @@ static void release_vals(struct list_head *vals)
 }
 
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
-					  char *name, int create)
+					  const char *name, int create)
 {
 	struct reloc_nameval *nv, *new;
-	char *newname;
+	const char *newname;
 	if (starts_with(name, ".text."))
 		name += 6;
 	list_for_each_entry(nv, &pack->reloc_namevals, list) {
@@ -2078,7 +2080,7 @@ static int label_offset(const char *sym_name)
 	return -1;
 }
 
-static const char *dup_wolabel(const char *sym_name)
+static char *dup_wolabel(const char *sym_name)
 {
 	int offset, entire_strlen, label_strlen, new_strlen;
 	char *newstr;

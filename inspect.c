@@ -24,7 +24,8 @@
 bfd *ibfd;
 struct asymbolp_vec isyms;
 
-bfd_vma read_reloc(asection *sect, void *addr, size_t size, asymbol **symp)
+bfd_vma read_reloc(asection *sect, const void *addr, size_t size,
+		   asymbol **symp)
 {
 	struct supersect *ss = fetch_supersect(ibfd, sect, &isyms);
 	arelent **relocp;
@@ -52,7 +53,7 @@ bfd_vma read_reloc(asection *sect, void *addr, size_t size, asymbol **symp)
 #define read_num(sect, addr) ((typeof(*(addr))) \
 			      read_reloc(sect, addr, sizeof(*(addr)), NULL))
 
-char *str_pointer(asection *sect, void **addr)
+char *str_pointer(asection *sect, void *const *addr)
 {
 	asymbol *sym;
 	bfd_vma offset = read_reloc(sect, addr, sizeof(*addr), &sym);
@@ -61,7 +62,7 @@ char *str_pointer(asection *sect, void **addr)
 	return str;
 }
 
-void *read_pointer(asection *sect, void **addr, asection **sectp)
+const void *read_pointer(asection *sect, void *const *addr, asection **sectp)
 {
 	asymbol *sym;
 	bfd_vma offset = read_reloc(sect, addr, sizeof(*addr), &sym);
@@ -79,15 +80,17 @@ void *read_pointer(asection *sect, void **addr, asection **sectp)
 	return ss->contents.data + sym->value + offset;
 }
 
-char *read_string(asection *sect, char **addr)
+const char *read_string(asection *sect, const char *const *addr)
 {
-	return read_pointer(sect, (void **)addr, NULL);
+	return read_pointer(sect, (void *const *)addr, NULL);
 }
 
-char *str_ulong_vec(asection *sect, unsigned long **datap, unsigned long *sizep)
+char *str_ulong_vec(asection *sect, const unsigned long *const *datap,
+		    const unsigned long *sizep)
 {
 	asection *data_sect;
-	long *data = read_pointer(sect, (void **)datap, &data_sect);
+	const unsigned long *data =
+	    read_pointer(sect, (void *const *)datap, &data_sect);
 	unsigned long size = read_num(sect, sizep);
 
 	char *buf = NULL;
@@ -102,7 +105,7 @@ char *str_ulong_vec(asection *sect, unsigned long **datap, unsigned long *sizep)
 	return buf;
 }
 
-void show_ksplice_reloc(asection *sect, struct ksplice_reloc *kreloc)
+void show_ksplice_reloc(asection *sect, const struct ksplice_reloc *kreloc)
 {
 	printf("blank_addr: %s  blank_offset: %lx\n"
 	       "sym_name: %s\n"
@@ -110,7 +113,7 @@ void show_ksplice_reloc(asection *sect, struct ksplice_reloc *kreloc)
 	       "pcrel: %x  size: %x  dst_mask: %lx  rightshift: %x\n"
 	       "sym_addrs: %s\n"
 	       "\n",
-	       str_pointer(sect, (void **)&kreloc->blank_addr),
+	       str_pointer(sect, (void *const *)&kreloc->blank_addr),
 	       read_num(sect, &kreloc->blank_offset),
 	       read_string(sect, &kreloc->sym_name),
 	       read_num(sect, &kreloc->addend),
@@ -126,21 +129,21 @@ void show_ksplice_relocs(asection *kreloc_sect)
 	printf("KSPLICE RELOCATIONS:\n\n");
 	struct supersect *kreloc_ss = fetch_supersect(ibfd, kreloc_sect,
 						      &isyms);
-	struct ksplice_reloc *kreloc;
+	const struct ksplice_reloc *kreloc;
 	for (kreloc = kreloc_ss->contents.data; (void *)kreloc <
 	     kreloc_ss->contents.data + kreloc_ss->contents.size; kreloc++)
 		show_ksplice_reloc(kreloc_sect, kreloc);
 	printf("\n");
 }
 
-void show_ksplice_size(asection *sect, struct ksplice_size *ksize)
+void show_ksplice_size(asection *sect, const struct ksplice_size *ksize)
 {
 	printf("name: %s\n"
 	       "thismod_addr: %s  size: %lx\n"
 	       "sym_addrs: %s\n"
 	       "\n",
 	       read_string(sect, &ksize->name),
-	       str_pointer(sect, (void **)&ksize->thismod_addr),
+	       str_pointer(sect, (void *const *)&ksize->thismod_addr),
 	       read_num(sect, &ksize->size),
 	       str_ulong_vec(sect, &ksize->sym_addrs, &ksize->num_sym_addrs));
 }
@@ -156,13 +159,13 @@ void show_ksplice_sizes(asection *ksize_sect)
 	printf("\n");
 }
 
-void show_ksplice_patch(asection *sect, struct ksplice_patch *kpatch)
+void show_ksplice_patch(asection *sect, const struct ksplice_patch *kpatch)
 {
 	printf("oldstr: %s\n"
 	       "repladdr: %s\n"
 	       "\n",
 	       read_string(sect, &kpatch->oldstr),
-	       str_pointer(sect, (void **)&kpatch->repladdr));
+	       str_pointer(sect, (void *const *)&kpatch->repladdr));
 }
 
 void show_ksplice_patches(asection *kpatch_sect)
@@ -170,14 +173,14 @@ void show_ksplice_patches(asection *kpatch_sect)
 	printf("KSPLICE PATCHES:\n\n");
 	struct supersect *kpatch_ss = fetch_supersect(ibfd, kpatch_sect,
 						      &isyms);
-	struct ksplice_patch *kpatch;
+	const struct ksplice_patch *kpatch;
 	for (kpatch = kpatch_ss->contents.data; (void *)kpatch <
 	     kpatch_ss->contents.data + kpatch_ss->contents.size; kpatch++)
 		show_ksplice_patch(kpatch_sect, kpatch);
 	printf("\n");
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, char *argv[])
 {
 	assert(argc >= 1);
 	bfd_init();

@@ -32,7 +32,7 @@
 bfd *newbfd;
 struct asymbolp_vec new_syms, old_syms;
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
 	bfd_init();
 	bfd *oldbfd = bfd_openr(argv[1], NULL);

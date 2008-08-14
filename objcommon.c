@@ -49,8 +49,7 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 	struct supersect *new = malloc(sizeof(*new));
 	sect->userdata = new;
 	new->parent = abfd;
-	new->name = malloc(strlen(sect->name) + 1);
-	strcpy(new->name, sect->name);
+	new->name = sect->name;
 	new->flags = bfd_get_section_flags(abfd, sect);
 
 	vec_init(&new->contents);
@@ -72,7 +71,7 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 
 struct supersect *new_supersects = NULL;
 
-struct supersect *new_supersect(char *name)
+struct supersect *new_supersect(const char *name)
 {
 	struct supersect *ss;
 	for (ss = new_supersects; ss != NULL; ss = ss->next) {
@@ -105,7 +104,7 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment)
 	return out + pad;
 }
 
-bfd_vma addr_offset(struct supersect *ss, void *addr)
+bfd_vma addr_offset(struct supersect *ss, const void *addr)
 {
 	return (void *)addr - ss->contents.data;
 }
