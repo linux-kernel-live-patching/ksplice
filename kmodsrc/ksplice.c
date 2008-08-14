@@ -172,13 +172,17 @@ static int resolve_patch_symbols(struct module_pack *pack);
 static int __apply_patches(void *packptr);
 static int __reverse_patches(void *packptr);
 static int check_each_task(struct update_bundle *bundle);
-static int check_task(struct update_bundle *bundle, struct task_struct *t);
-static int check_stack(struct update_bundle *bundle, struct thread_info *tinfo,
-		       unsigned long *stack);
+static int check_task(struct update_bundle *bundle, struct task_struct *t,
+		      int save_conflicts);
+static int check_stack(struct update_bundle *bundle, struct conflict *conf,
+		       struct thread_info *tinfo, unsigned long *stack);
 static int check_address_for_conflict(struct update_bundle *bundle,
+				      struct conflict *conf,
 				      unsigned long addr);
 static int valid_stack_ptr(struct thread_info *tinfo, void *p);
 static int is_stop_machine(struct task_struct *t);
+static void cleanup_conflicts(struct update_bundle *bundle);
+static void print_conflicts(struct update_bundle *bundle);
 
 #ifdef CONFIG_MODULE_UNLOAD
 static int add_dependency_on_address(struct module_pack *pack,
@@ -286,6 +290,25 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 	return 0;
 }
 
+static ssize_t conflict_show(struct update_bundle *bundle, char *buf)
+{
+	struct conflict *conf;
+	struct ksplice_frame *frame;
+	int used = 0;
+	list_for_each_entry(conf, &bundle->conflicts, list) {
+		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
+				 conf->process_name, conf->pid);
+		list_for_each_entry(frame, &conf->stack, list) {
+			if (!frame->has_conflict)
+				continue;
+			used += snprintf(buf + used, PAGE_SIZE - used, " %s",
+					 frame->symbol_name);
+		}
+		used += snprintf(buf + used, PAGE_SIZE - used, "\n");
+	}
+	return used;
+}
+
 static ssize_t stage_store(struct update_bundle *bundle,
 			   const char *buf, size_t len)
 {
@@ -320,11 +343,14 @@ static struct ksplice_attribute abort_cause_attribute =
 	__ATTR(abort_cause, 0400, abort_cause_show, NULL);
 static struct ksplice_attribute debug_attribute =
 	__ATTR(debug, 0600, debug_show, debug_store);
+static struct ksplice_attribute conflict_attribute =
+	__ATTR(conflicts, 0400, conflict_show, NULL);
 
 static struct attribute *ksplice_attrs[] = {
 	&stage_attribute.attr,
 	&abort_cause_attribute.attr,
 	&debug_attribute.attr,
+	&conflict_attribute.attr,
 	NULL
 };
 
@@ -398,6 +424,7 @@ static int apply_patches(struct update_bundle *bundle)
 	int i, ret;
 
 	for (i = 0; i < 5; i++) {
+		cleanup_conflicts(bundle);
 		bust_spinlocks(1);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 		ret = stop_machine(__apply_patches, bundle, NULL);
@@ -426,6 +453,7 @@ static int apply_patches(struct update_bundle *bundle)
 				rec->addr = s->thismod_addr;
 				rec->size = s->size;
 				rec->care = 1;
+				rec->name = s->name;
 				list_add(&rec->list, &pack->safety_records);
 			}
 		}
@@ -434,6 +462,7 @@ static int apply_patches(struct update_bundle *bundle)
 		return 0;
 	} else if (ret == -EAGAIN) {
 		bundle->abort_cause = CODE_BUSY;
+		print_conflicts(bundle);
 		_ksdebug(bundle, 0, KERN_ERR "ksplice: Aborted %s.  stack "
 			 "check: to-be-replaced code is busy\n", bundle->kid);
 	} else if (ret == -1) {
@@ -460,6 +489,8 @@ static void reverse_patches(struct update_bundle *bundle)
 		 bundle->kid);
 
 	for (i = 0; i < 5; i++) {
+		cleanup_conflicts(bundle);
+		clear_list(&bundle->conflicts, struct conflict, list);
 		bust_spinlocks(1);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 		ret = stop_machine(__reverse_patches, bundle, NULL);
@@ -480,6 +511,7 @@ static void reverse_patches(struct update_bundle *bundle)
 			 " successfully\n", bundle->kid);
 	} else if (ret == -EAGAIN) {
 		bundle->abort_cause = CODE_BUSY;
+		print_conflicts(bundle);
 		_ksdebug(bundle, 0, KERN_ERR "ksplice: Aborted %s.  stack "
 			 "check: to-be-reversed code is busy\n", bundle->kid);
 	} else if (ret == -EBUSY) {
@@ -582,77 +614,96 @@ static int check_each_task(struct update_bundle *bundle)
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		if (check_task(bundle, p) < 0) {
-			if (bundle->debug == 1) {
-				bundle->debug = 2;
-				check_task(bundle, p);
-				bundle->debug = 1;
-			}
-			status = -EAGAIN;
-		}
+		if (check_task(bundle, p, 0) < 0)
+			status = check_task(bundle, p, 1);
 	}
 	while_each_thread(g, p);
 	read_unlock(&tasklist_lock);
 	return status;
 }
 
-static int check_task(struct update_bundle *bundle, struct task_struct *t)
+static int check_task(struct update_bundle *bundle, struct task_struct *t,
+		      int save_conflicts)
 {
 	int status, ret;
+	struct conflict *conf = NULL;
+	char *buf;
 
-	_ksdebug(bundle, 2, KERN_DEBUG "ksplice: stack check: pid %d (%s) eip "
-		 "%" ADDR " ", t->pid, t->comm, KSPLICE_IP(t));
-	status = check_address_for_conflict(bundle, KSPLICE_IP(t));
-	_ksdebug(bundle, 2, ": ");
+	if (save_conflicts == 1) {
+		conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
+		if (conf == NULL)
+			return -ENOMEM;
+		buf = kmalloc(strlen(t->comm) + 1, GFP_ATOMIC);
+		if (buf == NULL) {
+			kfree(conf);
+			return -ENOMEM;
+		}
+		snprintf(buf, strlen(t->comm) + 1, "%s", t->comm);
+		conf->process_name = buf;
+		conf->pid = t->pid;
+		INIT_LIST_HEAD(&conf->stack);
+		list_add(&conf->list, &bundle->conflicts);
+	}
 
+	status = check_address_for_conflict(bundle, conf, KSPLICE_IP(t));
 	if (t == current) {
-		ret = check_stack(bundle, task_thread_info(t),
+		ret = check_stack(bundle, conf, task_thread_info(t),
 				  (unsigned long *)__builtin_frame_address(0));
 		if (status == 0)
 			status = ret;
 	} else if (!task_curr(t)) {
-		ret = check_stack(bundle, task_thread_info(t),
+		ret = check_stack(bundle, conf, task_thread_info(t),
 				  (unsigned long *)KSPLICE_SP(t));
 		if (status == 0)
 			status = ret;
 	} else if (!is_stop_machine(t)) {
-		_ksdebug(bundle, 2, "unexpected running task!");
 		status = -ENODEV;
 	}
-	_ksdebug(bundle, 2, "\n");
 	return status;
 }
 
 /* Modified version of Linux's print_context_stack */
-static int check_stack(struct update_bundle *bundle, struct thread_info *tinfo,
-		       unsigned long *stack)
+static int check_stack(struct update_bundle *bundle, struct conflict *conf,
+		       struct thread_info *tinfo, unsigned long *stack)
 {
-	int status = 0;
+	int status = 0, ret = 0;
 	unsigned long addr;
 
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
 		if (__kernel_text_address(addr)) {
-			_ksdebug(bundle, 2, "%" ADDR " ", addr);
-			if (check_address_for_conflict(bundle, addr) < 0)
-				status = -EAGAIN;
+			ret = check_address_for_conflict(bundle, conf, addr);
+			if (ret != 0)
+				status = ret;
 		}
 	}
 	return status;
 }
 
 static int check_address_for_conflict(struct update_bundle *bundle,
-				      unsigned long addr)
+				      struct conflict *conf, unsigned long addr)
 {
 	struct safety_record *rec;
 	struct module_pack *pack;
+	struct ksplice_frame *frame = NULL;
 
+	if (conf != NULL) {
+		frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
+		if (frame == NULL)
+			return -ENOMEM;
+		frame->addr = addr;
+		frame->has_conflict = 0;
+		frame->symbol_name = NULL;
+		list_add(&frame->list, &conf->stack);
+	}
 	list_for_each_entry(pack, &bundle->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (rec->care == 1 && addr >= rec->addr
 			    && addr < rec->addr + rec->size) {
-				ksdebug(pack, 2, "[<-- CONFLICT: %s] ",
-					pack->name);
+				if (frame != NULL) {
+					frame->symbol_name = rec->name;
+					frame->has_conflict = 1;
+				}
 				return -EAGAIN;
 			}
 		}
@@ -678,6 +729,32 @@ static int is_stop_machine(struct task_struct *t)
 #else /* LINUX_VERSION_CODE < */
 	return strcmp(t->comm, "kstopmachine") == 0;
 #endif /* LINUX_VERSION_CODE */
+}
+
+static void cleanup_conflicts(struct update_bundle *bundle)
+{
+	struct conflict *conf;
+	list_for_each_entry(conf, &bundle->conflicts, list) {
+		clear_list(&conf->stack, struct ksplice_frame, list);
+		kfree(conf->process_name);
+	}
+	clear_list(&bundle->conflicts, struct conflict, list);
+}
+
+static void print_conflicts(struct update_bundle *bundle)
+{
+	struct conflict *conf;
+	struct ksplice_frame *frame;
+	list_for_each_entry(conf, &bundle->conflicts, list) {
+		_ksdebug(bundle, 2, KERN_DEBUG "ksplice: stack check: pid %d "
+			 "(%s):", conf->pid, conf->process_name);
+		list_for_each_entry(frame, &conf->stack, list) {
+			_ksdebug(bundle, 2, " %" ADDR, frame->addr);
+			if (frame->has_conflict)
+				_ksdebug(bundle, 2, " [<-CONFLICT]");
+		}
+		_ksdebug(bundle, 2, "\n");
+	}
 }
 
 static int register_ksplice_module(struct module_pack *pack)
@@ -759,6 +836,7 @@ static void cleanup_ksplice_bundle(struct update_bundle *bundle)
 	mutex_lock(&module_mutex);
 	list_del(&bundle->list);
 	mutex_unlock(&module_mutex);
+	cleanup_conflicts(bundle);
 	clear_debug_buf(bundle);
 	kfree(bundle->kid);
 	kfree(bundle->name);
@@ -803,6 +881,7 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	list_add(&bundle->list, &update_bundles);
 	bundle->stage = PREPARING;
 	bundle->abort_cause = NONE;
+	INIT_LIST_HEAD(&bundle->conflicts);
 	return bundle;
 }
 
@@ -1043,6 +1122,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		   trampoline. */
 		tmp->addr = run_addr + 1;
 		tmp->size = s->size - 1;
+		tmp->name = s->name;
 		tmp->care = 0;
 		list_add(&tmp->list, &pack->safety_records);
 

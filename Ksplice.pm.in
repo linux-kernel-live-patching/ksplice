@@ -20,7 +20,7 @@ our @EXPORT = qw(
 	$datadir $libexecdir $version_str
 	runval runval_raw runstr runstr_err runsuc unpack_update
 	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
-	get_debug_output
+	get_debug_output display_conflicts
 	abs_path getcwd basename dirname tmpdir
 	copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir
 );
@@ -172,6 +172,19 @@ sub get_abort_cause {
 	my ($kid) = @_;
 	chomp(my $result = read_sysfs($kid, "abort_cause"));
 	return $result;
+}
+
+sub display_conflicts {
+	my ($kid) = @_;
+	chomp(my $conflicts = read_sysfs($kid, "conflicts"));
+	my @conflicts = split('\n', $conflicts);
+	foreach my $conflict (@conflicts) {
+		my ($name, $pid, @symbols) = split(' ', $conflict);
+		print "Process $name(pid $pid) is using the following symbols changed by update $kid:\n";
+		foreach my $symbol (@symbols) {
+			print "  $symbol\n";
+		}
+	}
 }
 
 sub get_patch {

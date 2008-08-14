@@ -110,6 +110,21 @@ struct update_bundle {
 	struct dentry *debugfs_dentry;
 #endif /* CONFIG_DEBUG_FS */
 	struct list_head packs;
+	struct list_head conflicts;
+	struct list_head list;
+};
+
+struct conflict {
+	const char *process_name;
+	pid_t pid;
+	struct list_head stack;
+	struct list_head list;
+};
+
+struct ksplice_frame {
+	unsigned long addr;
+	int has_conflict;
+	const char *symbol_name;
 	struct list_head list;
 };
 
@@ -192,6 +207,7 @@ int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
 
 struct safety_record {
 	struct list_head list;
+	const char *name;
 	unsigned long addr;
 	unsigned int size;
 	int care;

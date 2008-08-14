@@ -95,6 +95,9 @@ my $stage = get_stage($kid);
 if($stage ne 'applied') {
 	my ($debugfile, $debugout) = get_debug_output($kid);
 	my $abort_cause = get_abort_cause($kid);
+	if ($abort_cause eq 'code_busy') {
+		display_conflicts($kid);
+	}
 	cleanup_modules();
 	print STDERR "Error applying Ksplice update $kid:\n";
 	print $debugout;
