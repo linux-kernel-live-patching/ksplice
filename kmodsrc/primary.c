@@ -27,10 +27,6 @@ extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
 extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 #endif
 
-LIST_HEAD(reloc_addrmaps);
-LIST_HEAD(reloc_namevals);
-LIST_HEAD(safety_records);
-
 #define pack KSPLICE_UNIQ(pack)
 struct module_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_MID),
@@ -52,9 +48,6 @@ struct module_pack pack = {
 	.primary_parainstructions = parainstructions,
 	.primary_parainstructions_end = parainstructions_end,
 #endif
-	.reloc_addrmaps = &reloc_addrmaps,
-	.reloc_namevals = &reloc_namevals,
-	.safety_records = &safety_records,
 };
 EXPORT_SYMBOL_GPL(pack);
 

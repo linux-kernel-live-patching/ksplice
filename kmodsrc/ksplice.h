@@ -92,9 +92,9 @@ struct module_pack {
 	    *primary_parainstructions, *primary_parainstructions_end,
 	    *helper_parainstructions, *helper_parainstructions_end;
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
-	struct list_head *reloc_addrmaps;
-	struct list_head *reloc_namevals;
-	struct list_head *safety_records;
+	struct list_head reloc_addrmaps;
+	struct list_head reloc_namevals;
+	struct list_head safety_records;
 	struct list_head list;
 };
 

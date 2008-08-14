@@ -359,7 +359,7 @@ static int activate_primary(struct module_pack *pack)
 		return -1;
 #endif /* CONFIG_MODULE_UNLOAD */
 
-	list_for_each_entry(rec, pack->safety_records, list) {
+	list_for_each_entry(rec, &pack->safety_records, list) {
 		for (p = pack->patches; p < pack->patches_end; p++) {
 			if (p->oldaddr == rec->addr)
 				rec->care = 1;
@@ -457,7 +457,7 @@ static void reverse_patches(struct update_bundle *bundle)
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
 	list_for_each_entry(pack, &bundle->packs, list)
-		clear_list(pack->safety_records, struct safety_record, list);
+		clear_list(&pack->safety_records, struct safety_record, list);
 	if (ret == 0) {
 		_ksdebug(bundle, 0, KERN_INFO "ksplice: Update %s reversed"
 			 " successfully\n", bundle->kid);
@@ -635,7 +635,7 @@ static int check_address_for_conflict(struct update_bundle *bundle,
 		/* It is safe for addr to point to the beginning of a patched
 		   function, because that location will be overwritten with a
 		   trampoline. */
-		list_for_each_entry(rec, pack->safety_records, list) {
+		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (rec->care == 1 && addr > rec->addr
 			    && addr < rec->addr + rec->size) {
 				ksdebug(pack, 2, "[<-- CONFLICT: %s] ",
@@ -680,6 +680,11 @@ static int register_ksplice_module(struct module_pack *pack)
 	struct update_bundle *bundle;
 	struct module *m;
 	int ret = 0;
+
+	INIT_LIST_HEAD(&pack->reloc_addrmaps);
+	INIT_LIST_HEAD(&pack->reloc_namevals);
+	INIT_LIST_HEAD(&pack->safety_records);
+
 	mutex_lock(&module_mutex);
 	pack->target = NULL;
 	if (pack->target_name != NULL) {
@@ -867,10 +872,10 @@ static void apply_update(struct update_bundle *bundle)
 	apply_patches(bundle);
 out:
 	list_for_each_entry(pack, &bundle->packs, list) {
-		clear_list(pack->reloc_namevals, struct reloc_nameval, list);
-		clear_list(pack->reloc_addrmaps, struct reloc_addrmap, list);
+		clear_list(&pack->reloc_namevals, struct reloc_nameval, list);
+		clear_list(&pack->reloc_addrmaps, struct reloc_addrmap, list);
 		if (bundle->stage == PREPARING)
-			clear_list(pack->safety_records, struct safety_record,
+			clear_list(&pack->safety_records, struct safety_record,
 				   list);
 	}
 	mutex_unlock(&module_mutex);
@@ -1031,7 +1036,7 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		tmp->addr = run_addr;
 		tmp->size = s->size;
 		tmp->care = 0;
-		list_add(&tmp->list, pack->safety_records);
+		list_add(&tmp->list, &pack->safety_records);
 
 		nv = find_nameval(pack, s->name, 1);
 		if (nv == NULL)
@@ -1221,7 +1226,7 @@ skip_using_system_map:
 		map->addend = r->addend;
 		map->size = r->size;
 		map->dst_mask = r->dst_mask;
-		list_add(&map->list, pack->reloc_addrmaps);
+		list_add(&map->list, &pack->reloc_addrmaps);
 		return 0;
 	}
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
@@ -1257,7 +1262,7 @@ skip_using_system_map:
 		map->addend = sym_addr + r->addend;
 		map->size = r->size;
 		map->dst_mask = r->dst_mask;
-		list_add(&map->list, pack->reloc_addrmaps);
+		list_add(&map->list, &pack->reloc_addrmaps);
 
 	} else {
 		unsigned long val;
@@ -1700,7 +1705,7 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 {
 	struct reloc_nameval *nv, *new;
 	char *newname;
-	list_for_each_entry(nv, pack->reloc_namevals, list) {
+	list_for_each_entry(nv, &pack->reloc_namevals, list) {
 		newname = nv->name;
 		if (starts_with(newname, ".text."))
 			newname += 6;
@@ -1718,14 +1723,14 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 	new->name = name;
 	new->val = 0;
 	new->status = NOVAL;
-	list_add(&new->list, pack->reloc_namevals);
+	list_add(&new->list, &pack->reloc_namevals);
 	return new;
 }
 
 struct reloc_addrmap *find_addrmap(struct module_pack *pack, unsigned long addr)
 {
 	struct reloc_addrmap *map;
-	list_for_each_entry(map, pack->reloc_addrmaps, list) {
+	list_for_each_entry(map, &pack->reloc_addrmaps, list) {
 		if (addr >= map->addr && addr < map->addr + map->size)
 			return map;
 	}
@@ -1735,7 +1740,7 @@ struct reloc_addrmap *find_addrmap(struct module_pack *pack, unsigned long addr)
 static void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 {
 	struct reloc_nameval *nv;
-	list_for_each_entry(nv, pack->reloc_namevals, list) {
+	list_for_each_entry(nv, &pack->reloc_namevals, list) {
 		if (nv->status == TEMP)
 			nv->status = status_val;
 	}
@@ -1920,8 +1925,6 @@ int __ksdebug(struct update_bundle *bundle, const char *fmt, ...)
 
 #ifdef KSPLICE_STANDALONE
 static int debug;
-LIST_HEAD(ksplice_reloc_addrmaps);
-LIST_HEAD(ksplice_reloc_namevals);
 module_param(debug, int, 0600);
 MODULE_PARM_DESC(debug, "Debug level");
 
@@ -1932,8 +1935,8 @@ struct module_pack ksplice_pack = {
 	.target = NULL,
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
-	.reloc_addrmaps = &ksplice_reloc_addrmaps,
-	.reloc_namevals = &ksplice_reloc_namevals,
+	.reloc_addrmaps = LIST_HEAD_INIT(ksplice_pack.reloc_addrmaps),
+	.reloc_namevals = LIST_HEAD_INIT(ksplice_pack.reloc_namevals),
 };
 #endif /* KSPLICE_STANDALONE */
 
