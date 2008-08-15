@@ -1705,6 +1705,8 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 {
 	struct reloc_nameval *nv, *new;
 	char *newname;
+	if (starts_with(name, ".text."))
+		name += 6;
 	list_for_each_entry(nv, &pack->reloc_namevals, list) {
 		newname = nv->name;
 		if (starts_with(newname, ".text."))
