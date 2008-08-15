@@ -186,26 +186,25 @@ static int init_debug_buf(struct update_bundle *bundle);
 static void clear_debug_buf(struct update_bundle *bundle);
 static int __attribute__((format(printf, 2, 3)))
 __ksdebug(struct update_bundle *bundle, const char *fmt, ...);
+#else /* !CONFIG_DEBUG_FS */
+static inline int init_debug_buf(struct update_bundle *bundle)
+{
+	return 0;
+}
+
+static inline void clear_debug_buf(struct update_bundle *bundle)
+{
+	return;
+}
+
+#define __ksdebug(bundle, fmt, ...) printk(fmt, ## __VA_ARGS__)
+#endif /* CONFIG_DEBUG_FS */
+
 #define _ksdebug(bundle, level, fmt, ...)			\
 	do {							\
 		if ((bundle)->debug >= (level))			\
 			__ksdebug(bundle, fmt, ## __VA_ARGS__);	\
 	} while (0)
-#else /* !CONFIG_DEBUG_FS */
-#define _ksdebug(bundle, level, fmt, ...)		\
-	do {						\
-		if ((bundle)->debug >= (level))		\
-			printk(fmt, ## __VA_ARGS__);	\
-	} while (0)
-static inline int init_debug_buf(struct update_bundle *bundle)
-{
-	return 0;
-}
-static inline void clear_debug_buf(struct update_bundle *bundle)
-{
-	return;
-}
-#endif /* CONFIG_DEBUG_FS */
 #define ksdebug(pack, level, fmt, ...) \
 	do { _ksdebug((pack)->bundle, level, fmt, ## __VA_ARGS__); } while (0)
 #define failed_to_find(pack, sym_name) \
