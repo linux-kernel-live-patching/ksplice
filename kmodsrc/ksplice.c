@@ -184,7 +184,8 @@ struct candidate_val {
 #ifdef CONFIG_DEBUG_FS
 static int init_debug_buf(struct update_bundle *bundle);
 static void clear_debug_buf(struct update_bundle *bundle);
-static int __ksdebug(struct update_bundle *bundle, const char *fmt, ...);
+static int __attribute__((format(printf, 2, 3)))
+__ksdebug(struct update_bundle *bundle, const char *fmt, ...);
 #define _ksdebug(bundle, level, fmt, ...)			\
 	do {							\
 		if ((bundle)->debug >= (level))			\
