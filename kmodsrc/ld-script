@@ -15,6 +15,11 @@ SECTIONS {
     KEEP(*(.ksplice_patches))
     ksplice_patches_end = .;
   }
+  .ksplice_exports : {
+    ksplice_exports = .;
+    KEEP(*(.ksplice_exports))
+    ksplice_exports_end = .;
+  }
   .parainstructions : {
     parainstructions = .;
     KEEP(*(.parainstructions))

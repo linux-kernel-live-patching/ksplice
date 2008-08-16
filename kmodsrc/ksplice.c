@@ -56,7 +56,7 @@ enum ksplice_stage_enum {
 
 enum ksplice_abort_cause_enum {
 	NONE, NO_MATCH, BAD_SYSTEM_MAP, CODE_BUSY, MODULE_BUSY, UNEXPECTED,
-	FAILED_TO_FIND, ALREADY_REVERSED
+	FAILED_TO_FIND, ALREADY_REVERSED, MISSING_EXPORT
 };
 
 struct update_bundle {
@@ -394,6 +394,7 @@ static int ends_with(const char *str, const char *suffix);
 /* primary */
 static int activate_primary(struct module_pack *pack);
 static int resolve_patch_symbols(struct module_pack *pack);
+static int process_exports(struct module_pack *pack);
 static int __apply_patches(void *packptr);
 static int __reverse_patches(void *packptr);
 static int check_each_task(struct update_bundle *bundle);
@@ -515,6 +516,8 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 		return snprintf(buf, PAGE_SIZE, "failed_to_find\n");
 	case ALREADY_REVERSED:
 		return snprintf(buf, PAGE_SIZE, "already_reversed\n");
+	case MISSING_EXPORT:
+		return snprintf(buf, PAGE_SIZE, "missing_export\n");
 	case UNEXPECTED:
 		return snprintf(buf, PAGE_SIZE, "unexpected\n");
 	}
@@ -611,6 +614,9 @@ static int activate_primary(struct module_pack *pack)
 	if (resolve_patch_symbols(pack) != 0)
 		return -1;
 
+	if (process_exports(pack) != 0)
+		return -1;
+
 	if (add_patch_dependencies(pack) != 0)
 		return -1;
 
@@ -645,6 +651,38 @@ static int resolve_patch_symbols(struct module_pack *pack)
 		release_vals(&vals);
 	}
 
+	return 0;
+}
+
+static int process_exports(struct module_pack *pack)
+{
+	struct ksplice_export *export;
+	struct module *m;
+	const struct kernel_symbol *sym;
+	const char *export_type;
+
+	for (export = pack->exports; export < pack->exports_end; export++) {
+		sym = __find_symbol(export->name, &m, NULL, &export_type, 1, 0);
+		if (sym == NULL) {
+			ksdebug(pack, 0, "Could not find kernel_symbol struct"
+				"for %s (%s)\n", export->name, export->type);
+			pack->bundle->abort_cause = MISSING_EXPORT;
+			return -1;
+		}
+		if (strcmp(export_type, export->type) != 0) {
+			ksdebug(pack, 0, "Nonmatching export type for %s "
+				"(%s/%s)\n", export->name, export->type,
+				export_type);
+			pack->bundle->abort_cause = MISSING_EXPORT;
+			return -1;
+		}
+		/* Cast away const since we are planning to mutate the
+		 * kernel_symbol structure. */
+		export->sym = (struct kernel_symbol *)sym;
+		export->saved_name = export->sym->name;
+		if (m != pack->primary && use_module(pack->primary, m) != 1)
+			return -EBUSY;
+	}
 	return 0;
 }
 
@@ -760,6 +798,7 @@ static int __apply_patches(void *bundleptr)
 	struct update_bundle *bundle = bundleptr;
 	struct module_pack *pack;
 	const struct ksplice_patch *p;
+	struct ksplice_export *export;
 	mm_segment_t old_fs;
 
 	if (bundle->stage == APPLIED)
@@ -785,6 +824,12 @@ static int __apply_patches(void *bundleptr)
 
 	bundle->stage = APPLIED;
 
+	list_for_each_entry(pack, &bundle->packs, list) {
+		for (export = pack->exports; export < pack->exports_end;
+		     export++)
+			export->sym->name = export->new_name;
+	}
+
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 	list_for_each_entry(pack, &bundle->packs, list) {
@@ -805,6 +850,7 @@ static int __reverse_patches(void *bundleptr)
 	struct update_bundle *bundle = bundleptr;
 	struct module_pack *pack;
 	const struct ksplice_patch *p;
+	struct ksplice_export *export;
 	mm_segment_t old_fs;
 
 	if (bundle->stage != APPLIED)
@@ -825,6 +871,12 @@ static int __reverse_patches(void *bundleptr)
 
 	list_for_each_entry(pack, &bundle->packs, list)
 		module_put(pack->primary);
+
+	list_for_each_entry(pack, &bundle->packs, list) {
+		for (export = pack->exports; export < pack->exports_end;
+		     export++)
+			export->sym->name = export->saved_name;
+	}
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);

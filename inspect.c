@@ -180,6 +180,29 @@ void show_ksplice_patches(asection *kpatch_sect)
 	printf("\n");
 }
 
+void show_ksplice_export(asection *sect, const struct ksplice_export *export)
+{
+	printf("name: %s\n"
+	       "newname: %s\n"
+	       "type: %s\n"
+	       "\n",
+	       read_string(sect, &export->name),
+	       read_string(sect, &export->new_name),
+	       read_string(sect, &export->type));
+}
+
+void show_ksplice_exports(asection *export_sect)
+{
+	printf("KSPLICE EXPORTS:\n\n");
+	struct supersect *export_ss = fetch_supersect(ibfd, export_sect,
+						      &isyms);
+	const struct ksplice_export *export;
+	for (export = export_ss->contents.data; (void *)export <
+	     export_ss->contents.data + export_ss->contents.size; export++)
+		show_ksplice_export(export_sect, export);
+	printf("\n");
+}
+
 int main(int argc, char *argv[])
 {
 	assert(argc >= 1);
@@ -211,6 +234,13 @@ int main(int argc, char *argv[])
 		show_ksplice_patches(kpatch_sect);
 	else
 		printf("No ksplice patches.\n\n");
+
+	asection *export_sect = bfd_get_section_by_name(ibfd,
+							".ksplice_exports");
+	if (export_sect != NULL)
+		show_ksplice_exports(export_sect);
+	else
+		printf("No ksplice exports.\n\n");
 
 	return 0;
 }

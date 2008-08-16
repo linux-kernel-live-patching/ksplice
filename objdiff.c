@@ -63,7 +63,8 @@ int main(int argc, char *argv[])
 	foreach_nonmatching(oldbfd, newbfd, print_newbfd_entry_symbols);
 	printf("\n");
 	compare_symbols(oldbfd, newbfd, BSF_GLOBAL);
-	compare_exported_symbols(oldbfd, newbfd);
+	compare_exported_symbols(oldbfd, newbfd, "");
+	compare_exported_symbols(newbfd, oldbfd, "del_");
 	printf("\n");
 
 	assert(bfd_close(oldbfd));
@@ -105,7 +106,7 @@ struct export_vec *get_export_syms(bfd *ibfd, struct asymbolp_vec *isyms)
 	return exports;
 }
 
-void compare_exported_symbols(bfd *oldbfd, bfd *newbfd)
+void compare_exported_symbols(bfd *oldbfd, bfd *newbfd, char *addstr)
 {
 	struct export_vec *new_exports, *old_exports;
 	new_exports = get_export_syms(newbfd, &new_syms);
@@ -134,7 +135,7 @@ void compare_exported_symbols(bfd *oldbfd, bfd *newbfd)
 		/* last_sect can go away once we make objdiff | objmanip */
 		if (last_sect != new->sect) {
 			last_sect = new->sect;
-			printf("\n%s", new->sect->name);
+			printf("\n%s%s", addstr, new->sect->name);
 		}
 		if (found == 0)
 			printf(" %s", new->name);

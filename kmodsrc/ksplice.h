@@ -26,6 +26,14 @@ struct ksplice_patch {
 	char saved[5];
 };
 
+struct ksplice_export {
+	const char *name;
+	const char *type;
+	const char *saved_name;
+	const char *new_name;
+	struct kernel_symbol *sym;
+};
+
 #ifdef __KERNEL__
 #include <linux/module.h>
 #include <linux/version.h>
@@ -67,6 +75,7 @@ struct module_pack {
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
 	const struct ksplice_size *helper_sizes, *helper_sizes_end;
 	struct ksplice_patch *patches, *patches_end;
+	struct ksplice_export *exports, *exports_end;
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	struct paravirt_patch_site
 	    *primary_parainstructions, *primary_parainstructions_end,

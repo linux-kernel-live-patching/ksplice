@@ -178,9 +178,10 @@ int main(int argc, char *argv[])
 		varargs = &argv[6];
 		varargs_count = argc - 6;
 	} else if (mode("export")) {
-		export_name = argv[3];
-		varargs = &argv[4];
-		varargs_count = argc - 4;
+		addstr_all = argv[3];
+		export_name = argv[4];
+		varargs = &argv[5];
+		varargs_count = argc - 5;
 	} else {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
@@ -229,7 +230,15 @@ int main(int argc, char *argv[])
 			rm_from_special(ibfd, ss);
 	}
 
-	if (mode("export")) {
+	if (mode("exportdel")) {
+		char **symname;
+		assert(mode("exportdel___ksymtab"));
+		for (symname = varargs; symname < varargs + varargs_count;
+		     symname++)
+			write_ksplice_export(ibfd, *symname,
+					     modestr +
+					     strlen("exportdel___ksymtab"));
+	} else if (mode("export")) {
 		assert(starts_with(export_name, "__ksymtab"));
 		asection *sym_sect = bfd_get_section_by_name(ibfd, export_name);
 		assert(sym_sect != NULL);
@@ -289,13 +298,19 @@ void rm_some_exports(bfd *ibfd, asection *sym_sect, asection *crc_sect)
 		if (match_varargs(sym_ptr->name)) {
 			new_entry = vec_grow(&ss->contents, entry_size);
 			memcpy(new_entry, orig_entry, entry_size);
+			struct kernel_symbol *sym =
+			    (struct kernel_symbol *)new_entry;
 			mod = ((new_entry - ss->contents.data) -
 			       (orig_entry - orig_contents.data));
-			new_relocp = vec_grow(&ss->relocs, relocs_per_entry);
+			new_relocp = vec_grow(&ss->relocs, 1);
 			*new_relocp = *relocp;
 			(*new_relocp)->address += mod;
-			*(new_relocp + 1) = *(relocp + 1);
-			(*new_relocp + 1)->address += mod;
+			/* Replace name with a mangled name */
+			write_ksplice_export(ibfd, sym_ptr->name, modestr
+					     + strlen("export__ksymtab"));
+			write_string(ibfd, ss, (const char **)&sym->name,
+				     "DISABLED_%s_%s", sym_ptr->name,
+				     addstr_all);
 
 			if (crc_sect != NULL) {
 				new_crc_entry = vec_grow(&crc_ss->contents,
@@ -522,6 +537,26 @@ void write_ksplice_patch(bfd *ibfd, const char *symname)
 		     symname, addstr_all, addstr_sect_pre);
 	kpatch->oldaddr = 0;
 	write_reloc(ibfd, kpatch_ss, &kpatch->repladdr, symp, 0);
+}
+
+void write_ksplice_export(bfd *ibfd, const char *symname,
+			  const char *export_type)
+{
+	struct supersect *export_ss = make_section(ibfd, &isyms,
+						   ".ksplice_exports");
+	struct ksplice_export *export = sect_grow(export_ss, 1,
+						  struct ksplice_export);
+
+	write_string(ibfd, export_ss, &export->type, "%s", export_type);
+	if (mode("exportdel")) {
+		write_string(ibfd, export_ss, &export->name, "%s", symname);
+		write_string(ibfd, export_ss, &export->new_name,
+			     "DISABLED_%s_%s", symname, addstr_all);
+	} else {
+		write_string(ibfd, export_ss, &export->new_name, "%s", symname);
+		write_string(ibfd, export_ss, &export->name, "DISABLED_%s_%s",
+			     symname, addstr_all);
+	}
 }
 
 void rm_from_special(bfd *ibfd, const struct specsect *s)
