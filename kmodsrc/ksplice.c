@@ -1082,7 +1082,7 @@ static int search_for_match(struct module_pack *pack,
 static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		    unsigned long run_addr, unsigned long pre_addr)
 {
-	struct safety_record *tmp;
+	struct safety_record *rec;
 	struct reloc_nameval *nv;
 
 	struct module *run_module = module_text_address(run_addr);
@@ -1113,19 +1113,19 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect "
 			"%s=%" ADDR "\n", s->name, run_addr);
 
-		tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
-		if (tmp == NULL) {
+		rec = kmalloc(sizeof(*rec), GFP_KERNEL);
+		if (rec == NULL) {
 			printk(KERN_ERR "ksplice: out of memory\n");
 			return -ENOMEM;
 		}
 		/* It is safe for addr to point to the beginning of a patched
 		   function, because that location will be overwritten with a
 		   trampoline. */
-		tmp->addr = run_addr + 1;
-		tmp->size = s->size - 1;
-		tmp->name = s->name;
-		tmp->care = 0;
-		list_add(&tmp->list, &pack->safety_records);
+		rec->addr = run_addr + 1;
+		rec->size = s->size - 1;
+		rec->name = s->name;
+		rec->care = 0;
+		list_add(&rec->list, &pack->safety_records);
 
 		nv = find_nameval(pack, s->name, 1);
 		if (nv == NULL)
