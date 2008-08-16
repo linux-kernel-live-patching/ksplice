@@ -618,6 +618,7 @@ static int apply_patches(struct update_bundle *bundle)
 {
 	int i, ret;
 
+	bundle->abort_cause = NONE;
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(bundle);
 		bust_spinlocks(1);
@@ -683,6 +684,7 @@ static void reverse_patches(struct update_bundle *bundle)
 	_ksdebug(bundle, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
 		 bundle->kid);
 
+	bundle->abort_cause = NONE;
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(bundle);
 		clear_list(&bundle->conflicts, struct conflict, list);
