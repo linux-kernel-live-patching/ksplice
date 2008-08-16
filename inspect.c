@@ -136,16 +136,25 @@ void show_ksplice_relocs(asection *kreloc_sect)
 	printf("\n");
 }
 
+void show_ksplice_size_flags(const struct ksplice_size *ksize)
+{
+	printf("flags:");
+	if (ksize->flags & KSPLICE_SIZE_DELETED)
+		printf(" deleted");
+	printf("\n");
+}
+
 void show_ksplice_size(asection *sect, const struct ksplice_size *ksize)
 {
 	printf("name: %s\n"
 	       "thismod_addr: %s  size: %lx\n"
-	       "sym_addrs: %s\n"
-	       "\n",
+	       "sym_addrs: %s\n",
 	       read_string(sect, &ksize->name),
 	       str_pointer(sect, (void *const *)&ksize->thismod_addr),
 	       read_num(sect, &ksize->size),
 	       str_ulong_vec(sect, &ksize->sym_addrs, &ksize->num_sym_addrs));
+	show_ksplice_size_flags(ksize);
+	printf("\n");
 }
 
 void show_ksplice_sizes(asection *ksize_sect)

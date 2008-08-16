@@ -17,7 +17,9 @@ struct ksplice_size {
 	unsigned long thismod_addr;
 	unsigned long num_sym_addrs;
 	const unsigned long *sym_addrs;
+	unsigned int flags;
 };
+#define KSPLICE_SIZE_DELETED 0x00000001
 
 struct ksplice_patch {
 	const char *oldstr;

@@ -1400,10 +1400,16 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		/* It is safe for addr to point to the beginning of a patched
 		   function, because that location will be overwritten with a
 		   trampoline. */
-		rec->addr = run_addr + 1;
-		rec->size = s->size - 1;
+		if ((s->flags & KSPLICE_SIZE_DELETED) == 0) {
+			rec->addr = run_addr + 1;
+			rec->size = s->size - 1;
+			rec->care = 0;	/* May be changed later by ksplice_patches */
+		} else {
+			rec->addr = run_addr;
+			rec->size = s->size;
+			rec->care = 1;
+		}
 		rec->name = s->name;
-		rec->care = 0;
 		list_add(&rec->list, &pack->safety_records);
 
 		nv = find_nameval(pack, s->name, 1);

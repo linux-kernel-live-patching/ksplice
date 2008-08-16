@@ -63,6 +63,8 @@ int main(int argc, char *argv[])
 	foreach_nonmatching(oldbfd, newbfd, print_newbfd_entry_symbols);
 	printf("\n");
 	compare_symbols(oldbfd, newbfd, BSF_GLOBAL);
+	printf("\n");
+	compare_symbols(newbfd, oldbfd, BSF_FUNCTION);
 	compare_exported_symbols(oldbfd, newbfd, "");
 	compare_exported_symbols(newbfd, oldbfd, "del_");
 	printf("\n");

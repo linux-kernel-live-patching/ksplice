@@ -514,6 +514,9 @@ void write_ksplice_size(bfd *ibfd, asymbol **symp)
 	write_string(ibfd, ksize_ss, &ksize->name, "%s%s%s",
 		     sym->name, addstr_all, addstr_sect);
 	ksize->size = symsize;
+	ksize->flags = 0;
+	if (match_varargs(sym->name))
+		ksize->flags = KSPLICE_SIZE_DELETED;
 	write_reloc(ibfd, ksize_ss, &ksize->thismod_addr, symp, 0);
 	write_system_map_array(ibfd, ksize_ss, &ksize->sym_addrs,
 			       &ksize->num_sym_addrs, sym);
