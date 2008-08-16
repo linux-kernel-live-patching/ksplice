@@ -61,7 +61,27 @@ static inline void *kcalloc(size_t n, size_t size, typeof(GFP_KERNEL) flags)
 		memset(mem, 0, n * size);
 	return mem;
 }
-#endif
+#endif /* LINUX_VERSION_CODE */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,13)
+/* Old kernels do not have kstrdup
+ * 543537bd922692bc978e2e356fcd8bfc9c2ee7d5 was 2.6.13-rc4
+ */
+char *kstrdup(const char *s, typeof(GFP_KERNEL) gfp)
+{
+	size_t len;
+	char *buf;
+
+	if (!s)
+		return NULL;
+
+	len = strlen(s) + 1;
+	buf = kmalloc(len, gfp);
+	if (buf)
+		memcpy(buf, s, len);
+	return buf;
+}
+#endif /* LINUX_VERSION_CODE */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
 /* Old kernels use semaphore instead of mutex
@@ -628,19 +648,16 @@ static int check_task(struct update_bundle *bundle, struct task_struct *t,
 {
 	int status, ret;
 	struct conflict *conf = NULL;
-	char *buf;
 
 	if (save_conflicts == 1) {
 		conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
 		if (conf == NULL)
 			return -ENOMEM;
-		buf = kmalloc(strlen(t->comm) + 1, GFP_ATOMIC);
-		if (buf == NULL) {
+		conf->process_name = kstrdup(t->comm, GFP_ATOMIC);
+		if (conf->process_name == NULL) {
 			kfree(conf);
 			return -ENOMEM;
 		}
-		snprintf(buf, strlen(t->comm) + 1, "%s", t->comm);
-		conf->process_name = buf;
 		conf->pid = t->pid;
 		INIT_LIST_HEAD(&conf->stack);
 		list_add(&conf->list, &bundle->conflicts);
@@ -862,15 +879,13 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	}
 	snprintf(buf, strlen(kid) + strlen(str) + 1, "%s%s", str, kid);
 	bundle->name = buf;
-	buf = kmalloc(strlen(kid) + 1, GFP_KERNEL);
-	if (buf == NULL) {
+	bundle->kid = kstrdup(kid, GFP_KERNEL);
+	if (bundle->kid == NULL) {
 		printk(KERN_ERR "ksplice: out of memory\n");
 		kfree(bundle->name);
 		kfree(bundle);
 		return NULL;
 	}
-	strncpy(buf, kid, strlen(kid) + 1);
-	bundle->kid = buf;
 	INIT_LIST_HEAD(&bundle->packs);
 	ret = init_debug_buf(bundle);
 	if (ret < 0) {
