@@ -159,12 +159,12 @@ static inline int virtual_address_mapped(unsigned long addr)
 }
 #endif /* LINUX_VERSION_CODE */
 
-struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
-				   int create);
-struct reloc_addrmap *find_addrmap(struct module_pack *pack,
-				   unsigned long addr);
-int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
-		      unsigned long run_addr, int rerun);
+static struct reloc_nameval *find_nameval(struct module_pack *pack,
+					  char *name, int create);
+static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
+					  unsigned long addr);
+static int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
+			     unsigned long run_addr, int rerun);
 
 struct safety_record {
 	struct list_head list;
@@ -182,9 +182,9 @@ struct candidate_val {
 #define singular(list) (!list_empty(list) && (list)->next->next == (list))
 
 #ifdef CONFIG_DEBUG_FS
-extern int init_debug_buf(struct update_bundle *bundle);
-extern void clear_debug_buf(struct update_bundle *bundle);
-extern int __ksdebug(struct update_bundle *bundle, const char *fmt, ...);
+static int init_debug_buf(struct update_bundle *bundle);
+static void clear_debug_buf(struct update_bundle *bundle);
+static int __ksdebug(struct update_bundle *bundle, const char *fmt, ...);
 #define _ksdebug(bundle, level, fmt, ...)			\
 	do {							\
 		if ((bundle)->debug >= (level))			\
@@ -222,7 +222,7 @@ static inline void print_abort(struct module_pack *pack, const char *str)
 #include <asm/ksplice-run-pre.h>
 #endif /* KSPLICE_STANDALONE */
 
-LIST_HEAD(update_bundles);
+static LIST_HEAD(update_bundles);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* Old kernels do not have kcalloc
@@ -244,7 +244,7 @@ static inline void *kcalloc(size_t n, size_t size, typeof(GFP_KERNEL) flags)
 /* Old kernels do not have kstrdup
  * 543537bd922692bc978e2e356fcd8bfc9c2ee7d5 was 2.6.13-rc4
  */
-char *kstrdup(const char *s, typeof(GFP_KERNEL) gfp)
+static char *kstrdup(const char *s, typeof(GFP_KERNEL) gfp)
 {
 	size_t len;
 	char *buf;
@@ -1330,8 +1330,8 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	return 0;
 }
 
-int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
-		      unsigned long run_addr, int rerun)
+static int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
+			     unsigned long run_addr, int rerun)
 {
 	unsigned long run_reloc_addr;
 	long run_reloc_val, expected;
@@ -1981,8 +1981,8 @@ static void release_vals(struct list_head *vals)
 	clear_list(vals, struct candidate_val, list);
 }
 
-struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
-				   int create)
+static struct reloc_nameval *find_nameval(struct module_pack *pack,
+					  char *name, int create)
 {
 	struct reloc_nameval *nv, *new;
 	char *newname;
@@ -2010,7 +2010,8 @@ struct reloc_nameval *find_nameval(struct module_pack *pack, char *name,
 	return new;
 }
 
-struct reloc_addrmap *find_addrmap(struct module_pack *pack, unsigned long addr)
+static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
+					  unsigned long addr)
 {
 	struct reloc_addrmap *map;
 	list_for_each_entry(map, &pack->reloc_addrmaps, list) {
@@ -2132,7 +2133,7 @@ static struct dentry *debugfs_create_blob(const char *name, mode_t mode,
 }
 #endif /* LINUX_VERSION_CODE */
 
-void clear_debug_buf(struct update_bundle *bundle)
+static void clear_debug_buf(struct update_bundle *bundle)
 {
 	if (bundle->debugfs_dentry == NULL)
 		return;
@@ -2143,7 +2144,7 @@ void clear_debug_buf(struct update_bundle *bundle)
 	bundle->debug_blob.data = NULL;
 }
 
-int init_debug_buf(struct update_bundle *bundle)
+static int init_debug_buf(struct update_bundle *bundle)
 {
 	bundle->debug_blob.size = 0;
 	bundle->debug_blob.data = NULL;
@@ -2155,7 +2156,7 @@ int init_debug_buf(struct update_bundle *bundle)
 	return 0;
 }
 
-int __ksdebug(struct update_bundle *bundle, const char *fmt, ...)
+static int __ksdebug(struct update_bundle *bundle, const char *fmt, ...)
 {
 	va_list args;
 	unsigned long size, old_size, new_size;
