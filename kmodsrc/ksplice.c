@@ -412,6 +412,23 @@ static int apply_patches(struct update_bundle *bundle)
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
 	if (ret == 0) {
+		struct module_pack *pack;
+		const struct ksplice_size *s;
+		struct safety_record *rec;
+		list_for_each_entry(pack, &bundle->packs, list) {
+			for (s = pack->primary_sizes;
+			     s < pack->primary_sizes_end; s++) {
+				rec = kmalloc(sizeof(*rec), GFP_KERNEL);
+				if (rec == NULL) {
+					bundle->abort_cause = UNEXPECTED;
+					return -ENOMEM;
+				}
+				rec->addr = s->thismod_addr;
+				rec->size = s->size;
+				rec->care = 1;
+				list_add(&rec->list, &pack->safety_records);
+			}
+		}
 		_ksdebug(bundle, 0, KERN_INFO "ksplice: Update %s applied "
 			 "successfully\n", bundle->kid);
 		return 0;
@@ -627,25 +644,13 @@ static int check_stack(struct update_bundle *bundle, struct thread_info *tinfo,
 static int check_address_for_conflict(struct update_bundle *bundle,
 				      unsigned long addr)
 {
-	const struct ksplice_size *s;
 	struct safety_record *rec;
 	struct module_pack *pack;
 
 	list_for_each_entry(pack, &bundle->packs, list) {
-		/* It is safe for addr to point to the beginning of a patched
-		   function, because that location will be overwritten with a
-		   trampoline. */
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (rec->care == 1 && addr > rec->addr
+			if (rec->care == 1 && addr >= rec->addr
 			    && addr < rec->addr + rec->size) {
-				ksdebug(pack, 2, "[<-- CONFLICT: %s] ",
-					pack->name);
-				return -EAGAIN;
-			}
-		}
-		for (s = pack->primary_sizes; s < pack->primary_sizes_end; s++) {
-			if (addr >= s->thismod_addr && addr < s->thismod_addr +
-			    s->size) {
 				ksdebug(pack, 2, "[<-- CONFLICT: %s] ",
 					pack->name);
 				return -EAGAIN;
@@ -1033,8 +1038,11 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			printk(KERN_ERR "ksplice: out of memory\n");
 			return -ENOMEM;
 		}
-		tmp->addr = run_addr;
-		tmp->size = s->size;
+		/* It is safe for addr to point to the beginning of a patched
+		   function, because that location will be overwritten with a
+		   trampoline. */
+		tmp->addr = run_addr + 1;
+		tmp->size = s->size - 1;
 		tmp->care = 0;
 		list_add(&tmp->list, &pack->safety_records);
 
