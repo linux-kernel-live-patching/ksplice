@@ -36,3 +36,6 @@ int want_section(asection *sect);
 const struct specsect *is_special(asection *sect);
 struct supersect *make_section(bfd *abfd, struct asymbolp_vec *syms,
 			       const char *name);
+void __attribute__((format(printf, 4, 5)))
+write_string(bfd *ibfd, struct supersect *ss, const char **addr,
+	     const char *fmt, ...);

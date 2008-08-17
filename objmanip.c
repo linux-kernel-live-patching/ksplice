@@ -291,9 +291,8 @@ void write_reloc(bfd *abfd, struct supersect *ss, const void *addr,
 	*vec_grow(&ss->new_relocs, 1) = reloc;
 }
 
-void __attribute__((format(printf, 4, 5)))
-write_string(bfd *ibfd, struct supersect *ss, const char **addr,
-	     const char *fmt, ...)
+void write_string(bfd *ibfd, struct supersect *ss, const char **addr,
+		  const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
