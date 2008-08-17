@@ -43,6 +43,8 @@ void get_syms(bfd *abfd, struct asymbolp_vec *syms)
 struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 				  struct asymbolp_vec *syms)
 {
+	if (sect == NULL)
+		DIE;
 	if (sect->userdata != NULL)
 		return sect->userdata;
 
