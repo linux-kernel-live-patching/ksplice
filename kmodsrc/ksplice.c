@@ -306,6 +306,33 @@ extern const struct ksplice_reloc ksplice_init_relocs[],
 /* Obtained via System.map */
 extern struct list_head modules;
 extern struct mutex module_mutex;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+/* f71d20e961474dde77e6558396efb93d6ac80a4b was after 2.6.17 */
+#define KSPLICE_KSYMTAB_UNUSED_SUPPORT 1
+#endif /* LINUX_VERSION_CODE */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17)
+/* 9f28bb7e1d0188a993403ab39b774785892805e1 was after 2.6.16 */
+#define KSPLICE_KSYMTAB_FUTURE_SUPPORT 1
+#endif /* LINUX_VERSION_CODE */
+extern const struct kernel_symbol __start___ksymtab[];
+extern const struct kernel_symbol __stop___ksymtab[];
+extern const unsigned long __start___kcrctab[];
+extern const struct kernel_symbol __start___ksymtab_gpl[];
+extern const struct kernel_symbol __stop___ksymtab_gpl[];
+extern const unsigned long __start___kcrctab_gpl[];
+#ifdef KSPLICE_KSYMTAB_UNUSED_SUPPORT
+extern const struct kernel_symbol __start___ksymtab_unused[];
+extern const struct kernel_symbol __stop___ksymtab_unused[];
+extern const unsigned long __start___kcrctab_unused[];
+extern const struct kernel_symbol __start___ksymtab_unused_gpl[];
+extern const struct kernel_symbol __stop___ksymtab_unused_gpl[];
+extern const unsigned long __start___kcrctab_unused_gpl[];
+#endif /* KSPLICE_KSYMTAB_UNUSED_SUPPORT */
+#ifdef KSPLICE_KSYMTAB_FUTURE_SUPPORT
+extern const struct kernel_symbol __start___ksymtab_gpl_future[];
+extern const struct kernel_symbol __stop___ksymtab_gpl_future[];
+extern const unsigned long __start___kcrctab_gpl_future[];
+#endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
 
 #endif /* KSPLICE_STANDALONE */
 
@@ -382,6 +409,13 @@ static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 static int is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update_bundle *bundle);
 static void print_conflicts(struct update_bundle *bundle);
+#ifdef KSPLICE_STANDALONE
+static const struct kernel_symbol *__find_symbol(const char *name,
+						 struct module **owner,
+						 const unsigned long **crc,
+						 const char **export_type,
+						 _Bool gplok, _Bool warn);
+#endif /* KSPLICE_STANDALONE */
 
 static int add_dependency_on_address(struct module_pack *pack,
 				     unsigned long addr);
@@ -1742,6 +1776,126 @@ static int compute_address(struct module_pack *pack, const char *sym_name,
 	}
 	return 0;
 }
+
+#ifdef KSPLICE_STANDALONE
+/* lookup symbol in given range of kernel_symbols */
+static const struct kernel_symbol *lookup_symbol(const char *name,
+						 const struct kernel_symbol *start,
+						 const struct kernel_symbol *stop)
+{
+	const struct kernel_symbol *ks = start;
+	for (; ks < stop; ks++)
+		if (strcmp(ks->name, name) == 0)
+			return ks;
+	return NULL;
+}
+
+struct symsearch {
+	const struct kernel_symbol *start, *stop;
+	const unsigned long *crcs;
+	const char *export_type;
+};
+
+#ifndef CONFIG_MODVERSIONS
+#define symversion(base, idx) NULL
+#else
+#define symversion(base, idx) ((base != NULL) ? ((base) + (idx)) : NULL)
+#endif
+
+/* Modified version of search_symarrays from kernel/module.c */
+static const struct kernel_symbol *search_symarrays(const struct symsearch *arr,
+						    unsigned int num,
+						    const char *name,
+						    const char **export_type,
+						    _Bool gplok,
+						    _Bool warn,
+						    const unsigned long **crc)
+{
+	unsigned int i;
+	const struct kernel_symbol *ks;
+
+	for (i = 0; i < num; i++) {
+		ks = lookup_symbol(name, arr[i].start, arr[i].stop);
+		if (!ks)
+			continue;
+
+		if (crc)
+			*crc = symversion(arr[i].crcs, ks - arr[i].start);
+		if (export_type)
+			*export_type = arr[i].export_type;
+		return ks;
+	}
+	return NULL;
+}
+
+/* Modified version of kernel/module.c's find_symbol */
+static const struct kernel_symbol *__find_symbol(const char *name,
+						 struct module **owner,
+						 const unsigned long **crc,
+						 const char **export_type,
+						 _Bool gplok, _Bool warn)
+{
+	struct module *mod;
+	const struct kernel_symbol *ks;
+
+	const struct symsearch arr[] = {
+		{ __start___ksymtab, __stop___ksymtab, __start___kcrctab, "" },
+		{ __start___ksymtab_gpl, __stop___ksymtab_gpl,
+		  __start___kcrctab_gpl, "_gpl" },
+#ifdef KSPLICE_KSYMTAB_FUTURE_SUPPORT
+		{ __start___ksymtab_gpl_future, __stop___ksymtab_gpl_future,
+		  __start___kcrctab_gpl_future, "_gpl_future" },
+#endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
+#ifdef KSPLICE_KSYMTAB_UNUSED_SUPPORT
+		{ __start___ksymtab_unused, __stop___ksymtab_unused,
+		  __start___kcrctab_unused, "_unused" },
+		{ __start___ksymtab_unused_gpl, __stop___ksymtab_unused_gpl,
+		  __start___kcrctab_unused_gpl, "_unused_gpl" },
+#endif /* KSPLICE_KSYMTAB_UNUSED_SUPPORT */
+	};
+
+	/* Core kernel first. */
+	ks = search_symarrays(arr, ARRAY_SIZE(arr), name, export_type, gplok,
+			      warn, crc);
+	if (ks) {
+		if (owner)
+			*owner = NULL;
+		return ks;
+	}
+
+	/* Now try modules. */
+	list_for_each_entry(mod, &modules, list) {
+		struct symsearch arr[] = {
+			{ mod->syms, mod->syms + mod->num_syms, mod->crcs, "" },
+			{ mod->gpl_syms, mod->gpl_syms + mod->num_gpl_syms,
+			  mod->gpl_crcs, "_gpl" },
+#ifdef KSPLICE_KSYMTAB_FUTURE_SUPPORT
+			{ mod->gpl_future_syms,
+			  mod->gpl_future_syms + mod->num_gpl_future_syms,
+			  mod->gpl_future_crcs, "_gpl_future" },
+#endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
+#ifdef KSPLICE_KSYMTAB_UNUSED_SUPPORT
+			{ mod->unused_syms,
+			  mod->unused_syms + mod->num_unused_syms,
+			  mod->unused_crcs, "_unused" },
+			{ mod->unused_gpl_syms,
+			  mod->unused_gpl_syms + mod->num_unused_gpl_syms,
+			  mod->unused_gpl_crcs, "_unused_gpl" },
+#endif /* KSPLICE_KSYMTAB_UNUSED_SUPPORT */
+		};
+
+		ks = search_symarrays(arr, ARRAY_SIZE(arr),
+				      name, export_type, gplok, warn, crc);
+		if (ks) {
+			if (owner)
+				*owner = mod;
+			return ks;
+		}
+	}
+
+	return NULL;
+}
+#endif /* KSPLICE_STANDALONE */
 
 #ifdef CONFIG_KALLSYMS
 static int other_module_lookup(const char *name, struct list_head *vals,
