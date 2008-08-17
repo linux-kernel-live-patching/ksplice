@@ -351,8 +351,6 @@ struct accumulate_struct {
 };
 
 #ifdef CONFIG_KALLSYMS
-static int label_offset(const char *sym_name);
-static char *dup_wolabel(const char *sym_name);
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val);
 static int kernel_lookup(const char *name, struct list_head *vals);
@@ -368,6 +366,9 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 #endif /* LINUX_VERSION_CODE */
 #endif /* KSPLICE_STANDALONE */
 #endif /* CONFIG_KALLSYMS */
+static int label_offset(const char *sym_name);
+static char *dup_wolabel(const char *sym_name);
+static int exported_symbol_lookup(const char *name, struct list_head *vals);
 
 #ifdef KSPLICE_STANDALONE
 static int brute_search_all(struct module_pack *pack,
@@ -1784,9 +1785,7 @@ static int compute_address(struct module_pack *pack, const char *sym_name,
 {
 	int i, ret;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
-#ifdef CONFIG_KALLSYMS
 	char *name;
-#endif /* CONFIG_KALLSYMS */
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return 0;
@@ -1808,15 +1807,17 @@ static int compute_address(struct module_pack *pack, const char *sym_name,
 	if (starts_with(sym_name, ".rodata"))
 		return 0;
 
-#ifdef CONFIG_KALLSYMS
 	name = dup_wolabel(sym_name);
-	ret = kernel_lookup(name, vals);
+	ret = exported_symbol_lookup(name, vals);
+#ifdef CONFIG_KALLSYMS
+	if (ret == 0)
+		ret = kernel_lookup(name, vals);
 	if (ret == 0)
 		ret = other_module_lookup(name, vals, pack->name);
+#endif /* CONFIG_KALLSYMS */
 	kfree(name);
 	if (ret < 0)
 		return ret;
-#endif /* CONFIG_KALLSYMS */
 
 	for (i = 0; prefix[i] != NULL; i++) {
 		if (starts_with(sym_name, prefix[i])) {
@@ -1827,6 +1828,15 @@ static int compute_address(struct module_pack *pack, const char *sym_name,
 		}
 	}
 	return 0;
+}
+
+static int exported_symbol_lookup(const char *name, struct list_head *vals)
+{
+	const struct kernel_symbol *sym;
+	sym = __find_symbol(name, NULL, NULL, NULL, 1, 0);
+	if (sym == NULL)
+		return 0;
+	return add_candidate_val(vals, sym->value);
 }
 
 #ifdef KSPLICE_STANDALONE
@@ -2275,7 +2285,6 @@ static int ends_with(const char *str, const char *suffix)
 	    strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0;
 }
 
-#ifdef CONFIG_KALLSYMS
 static int label_offset(const char *sym_name)
 {
 	int i;
@@ -2311,7 +2320,6 @@ static char *dup_wolabel(const char *sym_name)
 	newstr[new_strlen] = 0;
 	return newstr;
 }
-#endif /* CONFIG_KALLSYMS */
 
 #ifdef CONFIG_DEBUG_FS
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
