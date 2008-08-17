@@ -1390,8 +1390,10 @@ static int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
 			if (rerun)
 				return -1;
 			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
-				"Expected %" ADDR " based on previous %s!\n",
-				expected, map->nameval->name);
+				"Nameval address %" ADDR " does not match "
+				"expected %" ADDR " for %s!\n",
+				map->nameval->val, expected,
+				map->nameval->name);
 			return -1;
 		}
 	}
