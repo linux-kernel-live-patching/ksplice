@@ -1386,41 +1386,39 @@ static int try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			set_temp_myst_relocs(pack, NOVAL);
 		}
 		ksdebug(pack, 1, "\n");
-	} else {
-		set_temp_myst_relocs(pack, VAL);
-
-		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect "
-			"%s=%" ADDR "\n", s->name, run_addr);
-
-		rec = kmalloc(sizeof(*rec), GFP_KERNEL);
-		if (rec == NULL) {
-			printk(KERN_ERR "ksplice: out of memory\n");
-			return -ENOMEM;
-		}
-		/* It is safe for addr to point to the beginning of a patched
-		   function, because that location will be overwritten with a
-		   trampoline. */
-		if ((s->flags & KSPLICE_SIZE_DELETED) == 0) {
-			rec->addr = run_addr + 1;
-			rec->size = s->size - 1;
-			rec->care = 0;	/* May be changed later by ksplice_patches */
-		} else {
-			rec->addr = run_addr;
-			rec->size = s->size;
-			rec->care = 1;
-		}
-		rec->name = s->name;
-		list_add(&rec->list, &pack->safety_records);
-
-		nv = find_nameval(pack, s->name, 1);
-		if (nv == NULL)
-			return -ENOMEM;
-		nv->val = run_addr;
-		nv->status = VAL;
-
-		return 1;
+		return 0;
 	}
-	return 0;
+
+	set_temp_myst_relocs(pack, VAL);
+	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect %s=%" ADDR
+		"\n", s->name, run_addr);
+
+	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
+	if (rec == NULL) {
+		printk(KERN_ERR "ksplice: out of memory\n");
+		return -ENOMEM;
+	}
+	/* It is safe for addr to point to the beginning of a patched function,
+	   because that location will be overwritten with a trampoline. */
+	if ((s->flags & KSPLICE_SIZE_DELETED) == 0) {
+		rec->addr = run_addr + 1;
+		rec->size = s->size - 1;
+		rec->care = 0;	/* May be changed later by ksplice_patches */
+	} else {
+		rec->addr = run_addr;
+		rec->size = s->size;
+		rec->care = 1;
+	}
+	rec->name = s->name;
+	list_add(&rec->list, &pack->safety_records);
+
+	nv = find_nameval(pack, s->name, 1);
+	if (nv == NULL)
+		return -ENOMEM;
+	nv->val = run_addr;
+	nv->status = VAL;
+
+	return 1;
 }
 
 static int handle_myst_reloc(struct module_pack *pack, unsigned long pre_addr,
