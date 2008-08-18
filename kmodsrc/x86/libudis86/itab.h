@@ -148,7 +148,7 @@ enum ud_itab_index {
 };
 
 
-enum ud_mnemonic_code {
+enum __attribute__((packed)) ud_mnemonic_code {
   UD_I3dnow,
   UD_Iaaa,
   UD_Iaad,

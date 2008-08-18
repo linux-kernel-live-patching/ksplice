@@ -64,7 +64,7 @@
 
 /* operand type constants -- order is important! */
 
-enum ud_operand_code {
+enum __attribute__((packed)) ud_operand_code {
     OP_NONE,
 
     OP_A,      OP_E,      OP_M,       OP_G,       
@@ -105,7 +105,7 @@ enum ud_operand_code {
 
 /* operand size constants */
 
-enum ud_operand_size {
+enum __attribute__((packed)) ud_operand_size {
     SZ_NA  = 0,
     SZ_Z   = 1,
     SZ_V   = 2,
