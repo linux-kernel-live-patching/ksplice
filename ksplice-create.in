@@ -139,7 +139,11 @@ revert_orig();
 
 if(!$skip_prebuild) {
 	copy("$orig_config_dir/.config", "$linuxtree/.config");
-	runval_raw(@make_ksplice, "KSPLICE_MODE=snap") == 0 or
+	my @snap_flags = ("KSPLICE_MODE=snap");
+	if(-e "include/config/kernel.release") {
+		push(@snap_flags, "-o", "include/config/kernel.release");
+	}
+	runval_raw(@make_ksplice, @snap_flags) == 0 or
 	    die "Aborting: Prebuild failed";
 }
 exit(0) if($prebuild);
