@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#include <stdio.h>
+#include <linux/kernel.h>
 #include "types.h"
 
 /* ============================= PUBLIC API ================================= */

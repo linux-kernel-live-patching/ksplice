@@ -8,7 +8,10 @@
 #ifndef UD_TYPES_H
 #define UD_TYPES_H
 
-#include <stdio.h>
+#define __UD_STANDALONE__ 1
+
+#include <linux/kernel.h>
+#include <linux/string.h>
 
 #ifdef _MSC_VER
 # define FMT64 "%I64"
@@ -22,7 +25,6 @@
   typedef __int64 int64_t;
 #else
 # define FMT64 "%ll"
-# include <inttypes.h>
 #endif
 
 #include "itab.h"
@@ -136,7 +138,9 @@ struct ud
   int 			(*inp_hook) (struct ud*);
   uint8_t		inp_curr;
   uint8_t		inp_fill;
+#ifndef __UD_STANDALONE__
   FILE*			inp_file;
+#endif /* __UD_STANDALONE__ */
   uint8_t		inp_ctr;
   uint8_t*		inp_buff;
   uint8_t*		inp_buff_end;

@@ -6,9 +6,7 @@
  * -----------------------------------------------------------------------------
  */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include <linux/kernel.h>
 
 #include "input.h"
 #include "extern.h"
