@@ -47,8 +47,8 @@ sub do_diff {
 	my ($out) = @_;
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
 	my $obj_old = "$obj.KSPLICE_pre";
-	return do_snap($out) if (!-e $obj_old);
 	die if (!-e $obj);
+	die "Patch creates new object $obj" if (!-e $obj_old);
 	if (system('cmp', '-s', '--', $obj_old, $obj) == 0) {
 		unlink $obj_old;
 		return empty_diff($out);
