@@ -129,7 +129,7 @@ sub revert_orig() {
 	for(split(/\0/, runstr(qw(find -name *.KSPLICE*pre* -print0)))) {
 		if(my ($file) = m/^(.*)\.KSPLICE_pre$/) {
 			rename($_, $file);
-			unlink("$file.KSPLICE") if(-e "$file.KSPLICE");
+			runval("$datadir/ksplice-obj.pl", "snap", "$file.KSPLICE") if(-e "$file.KSPLICE");
 		} elsif(m/\.KSPLICE.*\.pre/) {
 			unlink($_);
 		}
