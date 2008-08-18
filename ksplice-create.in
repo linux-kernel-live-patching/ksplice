@@ -159,7 +159,7 @@ if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
 sub copy_debug {
 	my ($file) = @_;
 	my ($dir, $base) = (dirname($file), basename($file));
-	mkpath("$tmpdir/objects/$dir");
+	-d "$tmpdir/objects/$dir" or mkpath("$tmpdir/objects/$dir");
 	copy($file, "$tmpdir/objects/$file");
 	my $cmdfile = "$dir/.$base.cmd";
 	copy($cmdfile, "$tmpdir/objects/$cmdfile") if(-e $cmdfile);
