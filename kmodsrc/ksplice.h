@@ -20,6 +20,7 @@ struct ksplice_size {
 	unsigned int flags;
 };
 #define KSPLICE_SIZE_DELETED 0x00000001
+#define KSPLICE_SIZE_RODATA 0x00000002
 
 struct ksplice_patch {
 	const char *oldstr;

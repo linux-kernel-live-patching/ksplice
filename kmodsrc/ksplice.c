@@ -451,6 +451,10 @@ static abort_t search_for_match(struct module_pack *pack,
 				const struct ksplice_size *s);
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, unsigned long pre_addr);
+static abort_t rodata_run_pre_cmp(struct module_pack *pack,
+				  unsigned long run_addr,
+				  unsigned long pre_addr, unsigned int size,
+				  int rerun);
 
 static abort_t reverse_patches(struct update_bundle *bundle);
 static abort_t apply_patches(struct update_bundle *bundle);
@@ -1449,14 +1453,70 @@ static abort_t search_for_match(struct module_pack *pack,
 	return NO_MATCH;
 }
 
+static abort_t rodata_run_pre_cmp(struct module_pack *pack,
+				  unsigned long run_addr,
+				  unsigned long pre_addr, unsigned int size,
+				  int rerun)
+{
+	int off, matched;
+	abort_t ret;
+	const unsigned char *pre = (const unsigned char *)pre_addr;
+	const unsigned char *run = (const unsigned char *)run_addr;
+	if (rerun)
+		print_bytes(pack, run, size, pre, size);
+	for (off = 0; off < size; off++) {
+		if (!virtual_address_mapped((unsigned long)run + off)) {
+			if (!rerun)
+				ksdebug(pack, 3, "rodata unmapped after "
+					"%u/%u bytes\n", off, size);
+			return NO_MATCH;
+		}
+		ret = handle_myst_reloc(pack, pre_addr + off, run_addr + off,
+					rerun, &matched);
+		if (ret != OK) {
+			if (!rerun)
+				ksdebug(pack, 3, "reloc in rodata section does "
+					"not match after %u/%u bytes\n", off,
+					size);
+			return ret;
+		}
+		if (matched != 0) {
+			off += matched - 1;
+		} else if (run[off] != pre[off]) {
+			if (!rerun)
+				ksdebug(pack, 3, "rodata does not match after "
+					"%u/%u bytes\n", off, size);
+			return NO_MATCH;
+		}
+	}
+	return OK;
+}
+
+static struct module *module_data_address(unsigned long addr)
+{
+	struct module *mod;
+
+	list_for_each_entry(mod, &modules, list) {
+		if (addr >= (unsigned long)mod->module_core +
+		    mod->core_text_size &&
+		    addr < (unsigned long)mod->module_core + mod->core_size)
+			return mod;
+	}
+	return NULL;
+}
+
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, unsigned long pre_addr)
 {
 	struct safety_record *rec;
 	struct reloc_nameval *nv;
 	abort_t ret;
+	const struct module *run_module;
 
-	const struct module *run_module = module_text_address(run_addr);
+	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
+		run_module = module_data_address(run_addr);
+	else
+		run_module = module_text_address(run_addr);
 	if (run_module != pack->target) {
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ignoring "
 			"address %" ADDR " in other module %s for sect %s\n",
@@ -1466,16 +1526,26 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return NO_MATCH;
 	}
 
-	ret = run_pre_cmp(pack, run_addr, pre_addr, s->size, 0);
+	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
+		ret = rodata_run_pre_cmp(pack, run_addr, pre_addr, s->size, 0);
+	else
+		ret = run_pre_cmp(pack, run_addr, pre_addr, s->size, 0);
 	if (ret == NO_MATCH) {
 		set_temp_myst_relocs(pack, NOVAL);
-		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: sect %s does "
-			"not match ", s->name);
+		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: %s sect %s "
+			"does not match ",
+			(s->flags & KSPLICE_SIZE_RODATA) != 0 ? "data" : "text",
+			s->name);
 		ksdebug(pack, 1, "(r_a=%" ADDR " p_a=%" ADDR " s=%ld)\n",
 			run_addr, pre_addr, s->size);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
 		if (pack->bundle->debug >= 1) {
-			run_pre_cmp(pack, run_addr, pre_addr, s->size, 1);
+			if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
+				ret = rodata_run_pre_cmp(pack, run_addr,
+							 pre_addr, s->size, 1);
+			else
+				ret = run_pre_cmp(pack, run_addr, pre_addr,
+						  s->size, 1);
 			set_temp_myst_relocs(pack, NOVAL);
 		}
 		ksdebug(pack, 1, "\n");
@@ -1493,7 +1563,8 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return OUT_OF_MEMORY;
 	/* It is safe for addr to point to the beginning of a patched function,
 	   because that location will be overwritten with a trampoline. */
-	if ((s->flags & KSPLICE_SIZE_DELETED) == 0) {
+	if ((s->flags & KSPLICE_SIZE_DELETED) == 0 &&
+	    (s->flags & KSPLICE_SIZE_RODATA) == 0) {
 		rec->addr = run_addr + 1;
 		rec->size = s->size - 1;
 		rec->care = 0;	/* May be changed later by ksplice_patches */

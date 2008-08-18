@@ -76,6 +76,8 @@ void show_ksplice_size_flags(const struct ksplice_size *ksize)
 	printf("flags:");
 	if (ksize->flags & KSPLICE_SIZE_DELETED)
 		printf(" deleted");
+	if (ksize->flags & KSPLICE_SIZE_RODATA)
+		printf(" rodata");
 	printf("\n");
 }
 

@@ -243,6 +243,10 @@ int main(int argc, char *argv[])
 		if ((sym->flags & BSF_FUNCTION)
 		    && sym->value == 0 && !(sym->flags & BSF_WEAK))
 			write_ksplice_size(isbfd, symp);
+		if (starts_with(sym->section->name, ".rodata") &&
+		    (sym->flags & BSF_DEBUGGING) == 0 &&
+		    sym->value == 0 && (sym->flags & BSF_WEAK) == 0)
+			write_ksplice_size(isbfd, symp);
 	}
 
 	if (mode("patchlist")) {
@@ -525,6 +529,8 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	ksize->flags = 0;
 	if (match_varargs(sym->name) && (sym->flags & BSF_FUNCTION))
 		ksize->flags |= KSPLICE_SIZE_DELETED;
+	if (starts_with(sym->section->name, ".rodata"))
+		ksize->flags |= KSPLICE_SIZE_RODATA;
 	write_reloc(ksize_ss, &ksize->thismod_addr, symp, 0);
 	write_system_map_array(sbfd, ksize_ss, &ksize->sym_addrs,
 			       &ksize->num_sym_addrs, sym);
