@@ -110,8 +110,6 @@ struct wsect {
 
 struct specsect {
 	const char *sectname;
-	unsigned char odd_relocs;
-	const char *odd_relocname;
 	int entry_size;
 };
 
@@ -150,10 +148,9 @@ const char *modestr, *addstr_all = "", *addstr_sect_pre = "", *addstr_sect = "";
 struct wsect *wanted_sections = NULL;
 
 const struct specsect special_sections[] = {
-	{".altinstructions", 1, ".altinstr_replacement",
-	 2 * sizeof(void *) + 4},
-	{".smp_locks", 0, NULL, sizeof(void *)},
-	{".parainstructions", 0, NULL, sizeof(void *) + 4},
+	{".altinstructions", 2 * sizeof(void *) + 4},
+	{".smp_locks", sizeof(void *)},
+	{".parainstructions", sizeof(void *) + 4},
 }, *const end_special_sections = *(&special_sections + 1);
 
 #define mode(str) starts_with(modestr, str)
@@ -600,30 +597,16 @@ void rm_from_special(struct superbfd *sbfd, const struct specsect *s)
 	if (isection == NULL)
 		return;
 
-	struct supersect *ss = fetch_supersect(sbfd, isection);
-	struct void_vec orig_contents;
-	vec_move(&orig_contents, &ss->contents);
-	size_t pad = align(orig_contents.size, 1 << ss->alignment) -
-	    orig_contents.size;
-	memset(vec_grow(&orig_contents, pad), 0, pad);
-	struct arelentp_vec orig_relocs;
-	vec_move(&orig_relocs, &ss->relocs);
-
-	int entry_size = align(s->entry_size, 1 << ss->alignment);
-	int relocs_per_entry = s->odd_relocs ? 2 : 1;
-	assert(orig_contents.size * relocs_per_entry ==
-	       orig_relocs.size * entry_size);
+	struct supersect *ss = fetch_supersect(sbfd, isection), orig_ss;
+	supersect_move(&orig_ss, ss);
 
 	const void *orig_entry;
-	arelent **relocp;
-	for (orig_entry = orig_contents.data, relocp = orig_relocs.data;
-	     orig_entry < orig_contents.data + orig_contents.size;
-	     orig_entry += entry_size, relocp += relocs_per_entry) {
-		asymbol *sym = *(*relocp)->sym_ptr_ptr;
-		if (s->odd_relocs) {
-			asymbol *odd_sym = *(*(relocp + 1))->sym_ptr_ptr;
-			assert(strcmp(odd_sym->name, s->odd_relocname) == 0);
-		}
+	for (orig_entry = orig_ss.contents.data;
+	     orig_entry < orig_ss.contents.data + orig_ss.contents.size;
+	     orig_entry += align(s->entry_size, 1 << ss->alignment)) {
+		asymbol *sym;
+		read_reloc(&orig_ss, orig_entry, sizeof(void *), &sym);
+
 		asection *p;
 		for (p = sbfd->abfd->sections; p != NULL; p = p->next) {
 			if (strcmp(sym->name, p->name) == 0
@@ -633,18 +616,9 @@ void rm_from_special(struct superbfd *sbfd, const struct specsect *s)
 		if (p != NULL)
 			continue;
 
-		void *new_entry = vec_grow(&ss->contents, entry_size);
-		memcpy(new_entry, orig_entry, entry_size);
-		int modifier = (new_entry - ss->contents.data) -
-		    (orig_entry - orig_contents.data);
-		arelent **new_relocp = vec_grow(&ss->relocs, 1);
-		*new_relocp = *relocp;
-		(*new_relocp)->address += modifier;
-		if (s->odd_relocs) {
-			new_relocp = vec_grow(&ss->relocs, 1);
-			*new_relocp = *(relocp + 1);
-			(*new_relocp)->address += modifier;
-		}
+		sect_copy(ss, sect_do_grow(ss, 1, s->entry_size,
+					   1 << ss->alignment),
+			  &orig_ss, orig_entry, s->entry_size);
 	}
 }
 
