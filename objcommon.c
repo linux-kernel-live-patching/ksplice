@@ -40,8 +40,22 @@ void get_syms(bfd *abfd, struct asymbolp_vec *syms)
 	assert(syms->size >= 0);
 }
 
-struct supersect *fetch_supersect(bfd *abfd, asection *sect,
-				  struct asymbolp_vec *syms)
+struct superbfd *fetch_superbfd(bfd *abfd)
+{
+	assert(abfd != NULL);
+	if (abfd->usrdata != NULL)
+		return abfd->usrdata;
+
+	struct superbfd *sbfd = malloc(sizeof(*sbfd));
+	assert(sbfd != NULL);
+
+	abfd->usrdata = sbfd;
+	sbfd->abfd = abfd;
+	get_syms(abfd, &sbfd->syms);
+	return sbfd;
+}
+
+struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 {
 	assert(sect != NULL);
 	if (sect->userdata != NULL)
@@ -51,21 +65,21 @@ struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 	assert(new != NULL);
 
 	sect->userdata = new;
-	new->parent = abfd;
+	new->parent = sbfd;
 	new->name = sect->name;
-	new->flags = bfd_get_section_flags(abfd, sect);
+	new->flags = bfd_get_section_flags(sbfd->abfd, sect);
 
 	vec_init(&new->contents);
 	vec_resize(&new->contents, bfd_get_section_size(sect));
 	assert(bfd_get_section_contents
-	       (abfd, sect, new->contents.data, 0, new->contents.size));
-	new->alignment = bfd_get_section_alignment(abfd, sect);
+	       (sbfd->abfd, sect, new->contents.data, 0, new->contents.size));
+	new->alignment = bfd_get_section_alignment(sbfd->abfd, sect);
 
 	vec_init(&new->relocs);
-	vec_reserve(&new->relocs, bfd_get_reloc_upper_bound(abfd, sect));
+	vec_reserve(&new->relocs, bfd_get_reloc_upper_bound(sbfd->abfd, sect));
 	vec_resize(&new->relocs,
-		   bfd_canonicalize_reloc(abfd, sect, new->relocs.data,
-					  syms->data));
+		   bfd_canonicalize_reloc(sbfd->abfd, sect, new->relocs.data,
+					  sbfd->syms.data));
 	assert(new->relocs.size >= 0);
 	vec_init(&new->new_relocs);
 
@@ -116,7 +130,7 @@ bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc)
 {
 	int size = bfd_get_reloc_size(reloc->howto);
 
-	bfd_vma x = bfd_get(size * 8, ss->parent,
+	bfd_vma x = bfd_get(size * 8, ss->parent->abfd,
 			    ss->contents.data + reloc->address);
 	x &= reloc->howto->src_mask;
 	x >>= reloc->howto->bitpos;
@@ -143,3 +157,4 @@ bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc)
 	}
 	return x + add;
 }
+

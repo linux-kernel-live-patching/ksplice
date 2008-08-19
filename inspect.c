@@ -22,12 +22,12 @@
 #include <stdio.h>
 
 bfd *ibfd;
-struct asymbolp_vec isyms;
+struct superbfd *sbfd;
 
 bfd_vma read_reloc(asection *sect, const void *addr, size_t size,
 		   asymbol **symp)
 {
-	struct supersect *ss = fetch_supersect(ibfd, sect, &isyms);
+	struct supersect *ss = fetch_supersect(sbfd, sect);
 	arelent **relocp;
 	bfd_vma val = bfd_get(size * 8, ibfd, addr);
 	bfd_vma address = addr_offset(ss, addr);
@@ -66,7 +66,7 @@ const void *read_pointer(asection *sect, void *const *addr, asection **sectp)
 {
 	asymbol *sym;
 	bfd_vma offset = read_reloc(sect, addr, sizeof(*addr), &sym);
-	struct supersect *ss = fetch_supersect(ibfd, sym->section, &isyms);
+	struct supersect *ss = fetch_supersect(sbfd, sym->section);
 	if (bfd_is_abs_section(sym->section) && sym->value + offset == 0)
 		return NULL;
 	if (bfd_is_const_section(sym->section)) {
@@ -127,8 +127,7 @@ void show_ksplice_reloc(asection *sect, const struct ksplice_reloc *kreloc)
 void show_ksplice_relocs(asection *kreloc_sect)
 {
 	printf("KSPLICE RELOCATIONS:\n\n");
-	struct supersect *kreloc_ss = fetch_supersect(ibfd, kreloc_sect,
-						      &isyms);
+	struct supersect *kreloc_ss = fetch_supersect(sbfd, kreloc_sect);
 	const struct ksplice_reloc *kreloc;
 	for (kreloc = kreloc_ss->contents.data; (void *)kreloc <
 	     kreloc_ss->contents.data + kreloc_ss->contents.size; kreloc++)
@@ -160,7 +159,7 @@ void show_ksplice_size(asection *sect, const struct ksplice_size *ksize)
 void show_ksplice_sizes(asection *ksize_sect)
 {
 	printf("KSPLICE SIZES:\n\n");
-	struct supersect *ksize_ss = fetch_supersect(ibfd, ksize_sect, &isyms);
+	struct supersect *ksize_ss = fetch_supersect(sbfd, ksize_sect);
 	struct ksplice_size *ksize;
 	for (ksize = ksize_ss->contents.data; (void *)ksize <
 	     ksize_ss->contents.data + ksize_ss->contents.size; ksize++)
@@ -180,8 +179,7 @@ void show_ksplice_patch(asection *sect, const struct ksplice_patch *kpatch)
 void show_ksplice_patches(asection *kpatch_sect)
 {
 	printf("KSPLICE PATCHES:\n\n");
-	struct supersect *kpatch_ss = fetch_supersect(ibfd, kpatch_sect,
-						      &isyms);
+	struct supersect *kpatch_ss = fetch_supersect(sbfd, kpatch_sect);
 	const struct ksplice_patch *kpatch;
 	for (kpatch = kpatch_ss->contents.data; (void *)kpatch <
 	     kpatch_ss->contents.data + kpatch_ss->contents.size; kpatch++)
@@ -203,8 +201,7 @@ void show_ksplice_export(asection *sect, const struct ksplice_export *export)
 void show_ksplice_exports(asection *export_sect)
 {
 	printf("KSPLICE EXPORTS:\n\n");
-	struct supersect *export_ss = fetch_supersect(ibfd, export_sect,
-						      &isyms);
+	struct supersect *export_ss = fetch_supersect(sbfd, export_sect);
 	const struct ksplice_export *export;
 	for (export = export_ss->contents.data; (void *)export <
 	     export_ss->contents.data + export_ss->contents.size; export++)
@@ -222,7 +219,7 @@ int main(int argc, char *argv[])
 	char **matching;
 	assert(bfd_check_format_matches(ibfd, bfd_object, &matching));
 
-	get_syms(ibfd, &isyms);
+	sbfd = fetch_superbfd(ibfd);
 
 	asection *kreloc_sect = bfd_get_section_by_name(ibfd,
 							".ksplice_relocs");

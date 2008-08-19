@@ -38,43 +38,43 @@ struct export {
 };
 DECLARE_VEC_TYPE(struct export, export_vec);
 
-void foreach_nonmatching(bfd *oldbfd, bfd *newbfd,
+void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 			 void (*s_fn)(struct supersect *));
-void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags);
-struct export_vec *get_export_syms(bfd *ibfd, struct asymbolp_vec *isyms);
-void compare_exported_symbols(bfd *oldbfd, bfd *newbfd, char *addstr);
-int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp);
+void compare_symbols(struct superbfd *oldsbfd, struct superbfd *newsbfd,
+		     flagword flags);
+struct export_vec *get_export_syms(struct superbfd *sbfd);
+void compare_exported_symbols(struct superbfd *oldsbfd,
+			      struct superbfd *newsbfd, char *addstr);
+int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
+	      struct superbfd *newsbfd, asection *newp);
 static void print_newbfd_section_name(struct supersect *ss);
 static void print_newbfd_entry_symbols(struct supersect *ss);
-
-bfd *newbfd;
-struct asymbolp_vec new_syms, old_syms;
 
 int main(int argc, char *argv[])
 {
 	bfd_init();
 	bfd *oldbfd = bfd_openr(argv[1], NULL);
 	assert(oldbfd != NULL);
-	newbfd = bfd_openr(argv[2], NULL);
+	bfd *newbfd = bfd_openr(argv[2], NULL);
 	assert(newbfd != NULL);
 
 	char **matching;
 	assert(bfd_check_format_matches(oldbfd, bfd_object, &matching));
 	assert(bfd_check_format_matches(newbfd, bfd_object, &matching));
 
-	get_syms(newbfd, &new_syms);
-	get_syms(oldbfd, &old_syms);
+	struct superbfd *oldsbfd = fetch_superbfd(oldbfd);
+	struct superbfd *newsbfd = fetch_superbfd(newbfd);
 
 	printf("%d\n", bfd_arch_bits_per_address(oldbfd));
-	foreach_nonmatching(oldbfd, newbfd, print_newbfd_section_name);
+	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_section_name);
 	printf("\n");
-	foreach_nonmatching(oldbfd, newbfd, print_newbfd_entry_symbols);
+	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_entry_symbols);
 	printf("\n");
-	compare_symbols(oldbfd, newbfd, BSF_GLOBAL);
+	compare_symbols(oldsbfd, newsbfd, BSF_GLOBAL);
 	printf("\n");
-	compare_symbols(newbfd, oldbfd, BSF_FUNCTION);
-	compare_exported_symbols(oldbfd, newbfd, "");
-	compare_exported_symbols(newbfd, oldbfd, "del_");
+	compare_symbols(newsbfd, oldsbfd, BSF_FUNCTION);
+	compare_exported_symbols(oldsbfd, newsbfd, "");
+	compare_exported_symbols(newsbfd, oldsbfd, "del_");
 	printf("\n");
 
 	assert(bfd_close(oldbfd));
@@ -82,23 +82,24 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-struct export_vec *get_export_syms(bfd *ibfd, struct asymbolp_vec *isyms)
+struct export_vec *get_export_syms(struct superbfd *sbfd)
 {
 	asection *sect;
 	struct export_vec *exports;
-	asection *str_sect = bfd_get_section_by_name(ibfd, "__ksymtab_strings");
+	asection *str_sect = bfd_get_section_by_name(sbfd->abfd,
+						     "__ksymtab_strings");
 	exports = malloc(sizeof(*exports));
 	assert(exports != NULL);
 	vec_init(exports);
 	if (str_sect == NULL)
 		return NULL;
-	struct supersect *str_ss = fetch_supersect(ibfd, str_sect, isyms);
+	struct supersect *str_ss = fetch_supersect(sbfd, str_sect);
 
-	for (sect = ibfd->sections; sect != NULL; sect = sect->next) {
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		if (!starts_with(sect->name, "__ksymtab") ||
 		    ends_with(sect->name, "_strings"))
 			continue;
-		struct supersect *ss = fetch_supersect(ibfd, sect, isyms);
+		struct supersect *ss = fetch_supersect(sbfd, sect);
 		struct kernel_symbol *sym;
 		arelent **reloc;
 		assert(ss->contents.size * 2 == ss->relocs.size *
@@ -116,13 +117,14 @@ struct export_vec *get_export_syms(bfd *ibfd, struct asymbolp_vec *isyms)
 	return exports;
 }
 
-void compare_exported_symbols(bfd *oldbfd, bfd *newbfd, char *addstr)
+void compare_exported_symbols(struct superbfd *oldsbfd,
+			      struct superbfd *newsbfd, char *addstr)
 {
 	struct export_vec *new_exports, *old_exports;
-	new_exports = get_export_syms(newbfd, &new_syms);
+	new_exports = get_export_syms(newsbfd);
 	if (new_exports == NULL)
 		return;
-	old_exports = get_export_syms(oldbfd, &old_syms);
+	old_exports = get_export_syms(oldsbfd);
 	struct export *old, *new;
 	int found;
 	asection *last_sect = NULL;
@@ -152,12 +154,14 @@ void compare_exported_symbols(bfd *oldbfd, bfd *newbfd, char *addstr)
 	}
 }
 
-void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags)
+void compare_symbols(struct superbfd *oldsbfd, struct superbfd *newsbfd,
+		     flagword flags)
 {
 	asymbol **old, **new, **tmp;
 	struct symbol_hash old_hash;
 	symbol_hash_init(&old_hash);
-	for (old = old_syms.data; old < old_syms.data + old_syms.size; old++) {
+	for (old = oldsbfd->syms.data; old < oldsbfd->syms.data +
+		 oldsbfd->syms.size; old++) {
 		if (((*old)->flags & flags) == 0 ||
 		    ((*old)->flags & BSF_DEBUGGING) != 0)
 			continue;
@@ -169,7 +173,8 @@ void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags)
 		}
 		*tmp = *old;
 	}
-	for (new = new_syms.data; new < new_syms.data + new_syms.size; new++) {
+	for (new = newsbfd->syms.data; new < newsbfd->syms.data +
+		 newsbfd->syms.size; new++) {
 		if (((*new)->flags & flags) == 0 ||
 		    ((*new)->flags & BSF_DEBUGGING) != 0)
 			continue;
@@ -180,26 +185,26 @@ void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags)
 	symbol_hash_free(&old_hash);
 }
 
-void foreach_nonmatching(bfd *oldbfd, bfd *newbfd,
+void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 			 void (*s_fn)(struct supersect *))
 {
 	asection *newp, *oldp;
 	struct supersect *old_ss, *new_ss;
-	for (newp = newbfd->sections; newp != NULL; newp = newp->next) {
+	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
 		if (!starts_with(newp->name, ".text"))
 			continue;
-		new_ss = fetch_supersect(newbfd, newp, &new_syms);
-		oldp = bfd_get_section_by_name(oldbfd, newp->name);
+		new_ss = fetch_supersect(newsbfd, newp);
+		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
 		if (oldp == NULL) {
 			if (s_fn == print_newbfd_section_name)
 				s_fn(new_ss);
 			continue;
 		}
-		old_ss = fetch_supersect(oldbfd, oldp, &old_syms);
+		old_ss = fetch_supersect(oldsbfd, oldp);
 		if (new_ss->contents.size == old_ss->contents.size &&
 		    memcmp(new_ss->contents.data, old_ss->contents.data,
 			   new_ss->contents.size) == 0 &&
-		    reloc_cmp(oldbfd, oldp, newbfd, newp) == 0)
+		    reloc_cmp(oldsbfd, oldp, newsbfd, newp) == 0)
 			continue;
 		s_fn(new_ss);
 	}
@@ -211,13 +216,14 @@ void foreach_nonmatching(bfd *oldbfd, bfd *newbfd,
  * string has been changed between the old file and the new file, reloc_cmp
  * will detect the difference.
  */
-int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
+int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
+	      struct superbfd *newsbfd, asection *newp)
 {
 	int i;
 	struct supersect *old_ss, *new_ss;
 
-	old_ss = fetch_supersect(oldbfd, oldp, &old_syms);
-	new_ss = fetch_supersect(newbfd, newp, &new_syms);
+	old_ss = fetch_supersect(oldsbfd, oldp);
+	new_ss = fetch_supersect(newsbfd, newp);
 
 	if (old_ss->relocs.size != new_ss->relocs.size)
 		return -1;
@@ -230,8 +236,8 @@ int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
 		asection *ro_newp =
 		    (*new_ss->relocs.data[i]->sym_ptr_ptr)->section;
 
-		ro_old_ss = fetch_supersect(oldbfd, ro_oldp, &old_syms);
-		ro_new_ss = fetch_supersect(newbfd, ro_newp, &new_syms);
+		ro_old_ss = fetch_supersect(oldsbfd, ro_oldp);
+		ro_new_ss = fetch_supersect(newsbfd, ro_newp);
 
 		if (!starts_with(ro_old_ss->name, ".rodata"))
 			continue;
@@ -272,13 +278,13 @@ void print_newbfd_section_name(struct supersect *ss)
 
 void print_newbfd_entry_symbols(struct supersect *ss)
 {
+	struct asymbolp_vec new_syms = ss->parent->syms;
 	asymbol **symp;
 	for (symp = new_syms.data; symp < new_syms.data + new_syms.size;
 	     symp++) {
 		asymbol *sym = *symp;
 		struct supersect *sym_ss = fetch_supersect(ss->parent,
-							   sym->section,
-							   &new_syms);
+							   sym->section);
 		if (sym_ss != ss || sym->name[0] == '\0' ||
 		    starts_with(sym->name, ".text"))
 			continue;

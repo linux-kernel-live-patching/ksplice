@@ -145,8 +145,14 @@ DECLARE_VEC_TYPE(asymbol *, asymbolp_vec);
 #define bfd_get_section_size(x) ((x)->_cooked_size)
 #endif
 
+
+struct superbfd {
+	bfd *abfd;
+	struct asymbolp_vec syms;
+};
+
 struct supersect {
-	bfd *parent;
+	struct superbfd *parent;
 	const char *name;
 	flagword flags;
 	struct void_vec contents;
@@ -162,9 +168,8 @@ struct kernel_symbol {
 	char *name;
 };
 
-void get_syms(bfd *abfd, struct asymbolp_vec *syms);
-struct supersect *fetch_supersect(bfd *abfd, asection *sect,
-				  struct asymbolp_vec *syms);
+struct superbfd *fetch_superbfd(bfd *abfd);
+struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect);
 extern struct supersect *new_supersects;
 struct supersect *new_supersect(const char *name);
 

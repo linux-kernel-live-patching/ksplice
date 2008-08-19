@@ -115,39 +115,37 @@ struct specsect {
 	int entry_size;
 };
 
-void rm_some_relocs(bfd *ibfd, asection *isection);
-void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
-			 struct supersect *ss);
-void blot_section(bfd *abfd, asection *sect, int offset,
+void rm_some_relocs(struct superbfd *sbfd, asection *isection);
+void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
+			 arelent *orig_reloc, struct supersect *ss);
+void blot_section(struct superbfd *sbfd, asection *sect, int offset,
 		  reloc_howto_type *howto);
-void write_ksplice_size(bfd *ibfd, asymbol **symp);
-void write_ksplice_patch(bfd *ibfd, const char *symname);
-void rm_from_special(bfd *ibfd, const struct specsect *s);
+void write_ksplice_size(struct superbfd *sbfd, asymbol **symp);
+void write_ksplice_patch(struct superbfd *sbfd, const char *symname);
+void rm_from_special(struct superbfd *sbfd, const struct specsect *s);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for);
-static bfd_boolean copy_object(bfd *ibfd, bfd *obfd);
-static void setup_section(bfd *ibfd, asection *isection, void *obfdarg);
+bfd_boolean copy_object(bfd *ibfd, bfd *obfd);
+void setup_section(bfd *ibfd, asection *isection, void *obfdarg);
 static void setup_new_section(bfd *obfd, struct supersect *ss);
 static void write_section(bfd *obfd, asection *osection, void *arg);
-static void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
-					     void *symbolsarg);
+void mark_symbols_used_in_relocations(bfd *abfd, asection *isection,
+				      void *ignored);
 static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
-static void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
-			   struct asymbolp_vec *isyms);
+void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
+		    struct asymbolp_vec *isyms);
 int match_varargs(const char *str);
 int want_section(asection *sect);
 const struct specsect *is_special(asection *sect);
-struct supersect *make_section(bfd *abfd, struct asymbolp_vec *syms,
-			       const char *name);
+struct supersect *make_section(struct superbfd *sbfd, const char *name);
 void __attribute__((format(printf, 4, 5)))
-write_string(bfd *ibfd, struct supersect *ss, const char **addr,
+write_string(struct superbfd *sbfd, struct supersect *ss, const char **addr,
 	     const char *fmt, ...);
-void rm_some_exports(bfd *ibfd, asection *sym_sect, asection *crc_sect);
-void write_ksplice_export(bfd *ibfd, const char *symname,
+void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
+		     asection *crc_sect);
+void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 			  const char *export_type);
-
-struct asymbolp_vec isyms;
 
 char **varargs;
 int varargs_count;
@@ -206,7 +204,7 @@ int main(int argc, char *argv[])
 	bfd *obfd = bfd_openw(argv[1], output_target);
 	assert(obfd);
 
-	get_syms(ibfd, &isyms);
+	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
 	modestr = argv[2];
 	if (mode("keep") || mode("sizelist")) {
@@ -244,19 +242,20 @@ int main(int argc, char *argv[])
 	}
 
 	asymbol **symp;
-	for (symp = isyms.data;
-	     mode("sizelist") && symp < isyms.data + isyms.size; symp++) {
+	for (symp = isbfd->syms.data;
+	     mode("sizelist") && symp < isbfd->syms.data + isbfd->syms.size;
+	     symp++) {
 		asymbol *sym = *symp;
 		if ((sym->flags & BSF_FUNCTION)
 		    && sym->value == 0 && !(sym->flags & BSF_WEAK))
-			write_ksplice_size(ibfd, symp);
+			write_ksplice_size(isbfd, symp);
 	}
 
 	if (mode("patchlist")) {
 		char **symname;
 		for (symname = varargs; symname < varargs + varargs_count;
 		     symname++)
-			write_ksplice_patch(ibfd, *symname);
+			write_ksplice_patch(isbfd, *symname);
 	}
 
 	asection *p;
@@ -264,13 +263,13 @@ int main(int argc, char *argv[])
 		if (is_special(p) || starts_with(p->name, ".ksplice"))
 			continue;
 		if (want_section(p) || mode("rmsyms"))
-			rm_some_relocs(ibfd, p);
+			rm_some_relocs(isbfd, p);
 	}
 
 	const struct specsect *ss;
 	if (mode("keep")) {
 		for (ss = special_sections; ss != end_special_sections; ss++)
-			rm_from_special(ibfd, ss);
+			rm_from_special(isbfd, ss);
 	}
 
 	if (mode("exportdel")) {
@@ -278,7 +277,7 @@ int main(int argc, char *argv[])
 		assert(mode("exportdel___ksymtab"));
 		for (symname = varargs; symname < varargs + varargs_count;
 		     symname++)
-			write_ksplice_export(ibfd, *symname,
+			write_ksplice_export(isbfd, *symname,
 					     modestr +
 					     strlen("exportdel___ksymtab"));
 	} else if (mode("export")) {
@@ -290,7 +289,7 @@ int main(int argc, char *argv[])
 				strlen("__ksymtab")) >= 0);
 		asection *crc_sect = bfd_get_section_by_name(ibfd,
 							     export_crc_name);
-		rm_some_exports(ibfd, sym_sect, crc_sect);
+		rm_some_exports(isbfd, sym_sect, crc_sect);
 	}
 
 	copy_object(ibfd, obfd);
@@ -299,11 +298,12 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-void rm_some_exports(bfd *ibfd, asection *sym_sect, asection *crc_sect)
+void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
+		     asection *crc_sect)
 {
 	struct void_vec orig_contents;
 	struct arelentp_vec orig_relocs;
-	struct supersect *ss = fetch_supersect(ibfd, sym_sect, &isyms);
+	struct supersect *ss = fetch_supersect(sbfd, sym_sect);
 	vec_move(&orig_contents, &ss->contents);
 	vec_move(&orig_relocs, &ss->relocs);
 
@@ -311,7 +311,7 @@ void rm_some_exports(bfd *ibfd, asection *sym_sect, asection *crc_sect)
 	struct arelentp_vec orig_crc_relocs;
 	struct supersect *crc_ss;
 	if (crc_sect != NULL) {
-		crc_ss = fetch_supersect(ibfd, crc_sect, &isyms);
+		crc_ss = fetch_supersect(sbfd, crc_sect);
 		vec_move(&orig_crc_contents, &crc_ss->contents);
 		vec_move(&orig_crc_relocs, &crc_ss->relocs);
 	}
@@ -349,9 +349,9 @@ void rm_some_exports(bfd *ibfd, asection *sym_sect, asection *crc_sect)
 			*new_relocp = *relocp;
 			(*new_relocp)->address += mod;
 			/* Replace name with a mangled name */
-			write_ksplice_export(ibfd, sym_ptr->name, modestr
+			write_ksplice_export(sbfd, sym_ptr->name, modestr
 					     + strlen("export__ksymtab"));
-			write_string(ibfd, ss, (const char **)&sym->name,
+			write_string(sbfd, ss, (const char **)&sym->name,
 				     "DISABLED_%s_%s", sym_ptr->name,
 				     addstr_all);
 
@@ -373,9 +373,9 @@ void rm_some_exports(bfd *ibfd, asection *sym_sect, asection *crc_sect)
 	}
 }
 
-void rm_some_relocs(bfd *ibfd, asection *isection)
+void rm_some_relocs(struct superbfd *sbfd, asection *isection)
 {
-	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
+	struct supersect *ss = fetch_supersect(sbfd, isection);
 	struct arelentp_vec orig_relocs;
 	vec_move(&orig_relocs, &ss->relocs);
 
@@ -395,27 +395,26 @@ void rm_some_relocs(bfd *ibfd, asection *isection)
 			rm_reloc = 0;
 
 		if (rm_reloc)
-			write_ksplice_reloc(ibfd, isection, *relocp, ss);
+			write_ksplice_reloc(sbfd, isection, *relocp, ss);
 		else
 			*vec_grow(&ss->relocs, 1) = *relocp;
 	}
 }
 
-struct supersect *make_section(bfd *abfd, struct asymbolp_vec *syms,
-			       const char *name)
+struct supersect *make_section(struct superbfd *sbfd, const char *name)
 {
-	asection *sect = bfd_get_section_by_name(abfd, name);
+	asection *sect = bfd_get_section_by_name(sbfd->abfd, name);
 	if (sect != NULL)
-		return fetch_supersect(abfd, sect, syms);
+		return fetch_supersect(sbfd, sect);
 	else
 		return new_supersect(name);
 }
 
-void write_reloc(bfd *abfd, struct supersect *ss, const void *addr,
+void write_reloc(struct superbfd *sbfd, struct supersect *ss, const void *addr,
 		 asymbol **symp, bfd_vma offset)
 {
 	bfd_reloc_code_real_type code;
-	switch (bfd_arch_bits_per_address(abfd)) {
+	switch (bfd_arch_bits_per_address(sbfd->abfd)) {
 	case 32:
 		code = BFD_RELOC_32;
 		break;
@@ -429,29 +428,29 @@ void write_reloc(bfd *abfd, struct supersect *ss, const void *addr,
 	arelent *reloc = malloc(sizeof(*reloc));
 	reloc->sym_ptr_ptr = symp;
 	reloc->address = addr - ss->contents.data;
-	reloc->howto = bfd_reloc_type_lookup(abfd, code);
+	reloc->howto = bfd_reloc_type_lookup(sbfd->abfd, code);
 	reloc->addend = offset;
 	*vec_grow(&ss->new_relocs, 1) = reloc;
 }
 
-void write_string(bfd *ibfd, struct supersect *ss, const char **addr,
-		  const char *fmt, ...)
+void write_string(struct superbfd *sbfd, struct supersect *ss,
+		  const char **addr, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
 	int len = vsnprintf(NULL, 0, fmt, ap);
 	va_end(ap);
-	struct supersect *str_ss = make_section(ibfd, &isyms, ".ksplice_str");
+	struct supersect *str_ss = make_section(sbfd, ".ksplice_str");
 	char *buf = sect_grow(str_ss, len + 1, char);
 	va_start(ap, fmt);
 	vsnprintf(buf, len + 1, fmt, ap);
 	va_end(ap);
 
-	write_reloc(ibfd, ss, addr, &str_ss->symbol,
+	write_reloc(sbfd, ss, addr, &str_ss->symbol,
 		    (void *)buf - str_ss->contents.data);
 }
 
-void write_system_map_array(bfd *ibfd, struct supersect *ss,
+void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 			    const unsigned long **sym_addrs,
 			    unsigned long *num_sym_addrs, asymbol *sym)
 {
@@ -465,13 +464,13 @@ void write_system_map_array(bfd *ibfd, struct supersect *ss,
 	struct addr_vec *addrs = addr_vec_hash_lookup(&system_map,
 						      system_map_name, FALSE);
 	if (addrs != NULL) {
-		struct supersect *array_ss = make_section(ibfd, &isyms,
+		struct supersect *array_ss = make_section(sbfd,
 							  ".ksplice_array");
 		void *buf = sect_grow(array_ss, addrs->size,
 				      typeof(*addrs->data));
 		memcpy(buf, addrs->data, addrs->size * sizeof(*addrs->data));
 		*num_sym_addrs = addrs->size;
-		write_reloc(ibfd, ss, sym_addrs, &array_ss->symbol,
+		write_reloc(sbfd, ss, sym_addrs, &array_ss->symbol,
 			    buf - array_ss->contents.data);
 	} else {
 		*num_sym_addrs = 0;
@@ -479,29 +478,29 @@ void write_system_map_array(bfd *ibfd, struct supersect *ss,
 	}
 }
 
-void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
-			 struct supersect *ss)
+void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
+			 arelent *orig_reloc, struct supersect *ss)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
 
 	reloc_howto_type *howto = orig_reloc->howto;
 
 	bfd_vma addend = get_reloc_offset(ss, orig_reloc, 0);
-	blot_section(ibfd, isection, orig_reloc->address, howto);
+	blot_section(sbfd, isection, orig_reloc->address, howto);
 
-	struct supersect *kreloc_ss = make_section(ibfd, &isyms,
+	struct supersect *kreloc_ss = make_section(sbfd,
 						   mode("rmsyms") ?
 						   ".ksplice_init_relocs" :
 						   ".ksplice_relocs");
 	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
 						 struct ksplice_reloc);
 
-	write_string(ibfd, kreloc_ss, &kreloc->sym_name, "%s%s",
+	write_string(sbfd, kreloc_ss, &kreloc->sym_name, "%s%s",
 		     sym_ptr->name, addstr_all);
-	write_reloc(ibfd, kreloc_ss, &kreloc->blank_addr,
+	write_reloc(sbfd, kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address);
 	kreloc->blank_offset = (unsigned long)orig_reloc->address;
-	write_system_map_array(ibfd, kreloc_ss, &kreloc->sym_addrs,
+	write_system_map_array(sbfd, kreloc_ss, &kreloc->sym_addrs,
 			       &kreloc->num_sym_addrs, sym_ptr);
 	kreloc->pcrel = howto->pc_relative;
 	kreloc->addend = addend;
@@ -512,19 +511,19 @@ void write_ksplice_reloc(bfd *ibfd, asection *isection, arelent *orig_reloc,
 
 #define CANARY(x, canary) ((x & ~howto->dst_mask) | (canary & howto->dst_mask))
 
-void blot_section(bfd *abfd, asection *sect, int offset,
+void blot_section(struct superbfd *sbfd, asection *sect, int offset,
 		  reloc_howto_type *howto)
 {
-	struct supersect *ss = fetch_supersect(abfd, sect, &isyms);
+	struct supersect *ss = fetch_supersect(sbfd, sect);
 	int bits = bfd_get_reloc_size(howto) * 8;
 	void *address = ss->contents.data + offset;
-	bfd_vma x = bfd_get(bits, abfd, address);
+	bfd_vma x = bfd_get(bits, sbfd->abfd, address);
 	x = (x & ~howto->dst_mask) |
 	    ((bfd_vma)0x7777777777777777LL & howto->dst_mask);
-	bfd_put(bits, abfd, x, address);
+	bfd_put(bits, sbfd->abfd, x, address);
 }
 
-void write_ksplice_size(bfd *ibfd, asymbol **symp)
+void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 {
 	asymbol *sym = *symp;
 
@@ -535,7 +534,7 @@ void write_ksplice_size(bfd *ibfd, asymbol **symp)
 	char *buf = NULL;
 	size_t bufsize = 0;
 	FILE *fp = open_memstream(&buf, &bufsize);
-	bfd_print_symbol(ibfd, fp, sym, bfd_print_symbol_all);
+	bfd_print_symbol(sbfd->abfd, fp, sym, bfd_print_symbol_all);
 	fclose(fp);
 	assert(buf != NULL);
 
@@ -549,69 +548,67 @@ void write_ksplice_size(bfd *ibfd, asymbol **symp)
 	free(symname);
 	free(buf);
 
-	struct supersect *ksize_ss = make_section(ibfd, &isyms,
-						  ".ksplice_sizes");
+	struct supersect *ksize_ss = make_section(sbfd, ".ksplice_sizes");
 	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
 					       struct ksplice_size);
 
-	write_string(ibfd, ksize_ss, &ksize->name, "%s%s%s",
+	write_string(sbfd, ksize_ss, &ksize->name, "%s%s%s",
 		     sym->name, addstr_all, addstr_sect);
 	ksize->size = symsize;
 	ksize->flags = 0;
-	if (match_varargs(sym->name))
-		ksize->flags = KSPLICE_SIZE_DELETED;
-	write_reloc(ibfd, ksize_ss, &ksize->thismod_addr, symp, 0);
-	write_system_map_array(ibfd, ksize_ss, &ksize->sym_addrs,
+	if (match_varargs(sym->name) && (sym->flags & BSF_FUNCTION))
+		ksize->flags |= KSPLICE_SIZE_DELETED;
+	write_reloc(sbfd, ksize_ss, &ksize->thismod_addr, symp, 0);
+	write_system_map_array(sbfd, ksize_ss, &ksize->sym_addrs,
 			       &ksize->num_sym_addrs, sym);
 }
 
-void write_ksplice_patch(bfd *ibfd, const char *symname)
+void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 {
-	struct supersect *kpatch_ss = make_section(ibfd, &isyms,
-						   ".ksplice_patches");
+	struct supersect *kpatch_ss = make_section(sbfd, ".ksplice_patches");
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
 
 	asymbol **symp;
-	for (symp = isyms.data; symp < isyms.data + isyms.size; symp++) {
+	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
+	     symp++) {
 		if (strcmp((*symp)->name, symname) == 0)
 			break;
 	}
-	assert(symp < isyms.data + isyms.size);
+	assert(symp < sbfd->syms.data + sbfd->syms.size);
 
-	write_string(ibfd, kpatch_ss, &kpatch->oldstr, "%s%s%s",
+	write_string(sbfd, kpatch_ss, &kpatch->oldstr, "%s%s%s",
 		     symname, addstr_all, addstr_sect_pre);
 	kpatch->oldaddr = 0;
-	write_reloc(ibfd, kpatch_ss, &kpatch->repladdr, symp, 0);
+	write_reloc(sbfd, kpatch_ss, &kpatch->repladdr, symp, 0);
 }
 
-void write_ksplice_export(bfd *ibfd, const char *symname,
+void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 			  const char *export_type)
 {
-	struct supersect *export_ss = make_section(ibfd, &isyms,
-						   ".ksplice_exports");
+	struct supersect *export_ss = make_section(sbfd, ".ksplice_exports");
 	struct ksplice_export *export = sect_grow(export_ss, 1,
 						  struct ksplice_export);
 
-	write_string(ibfd, export_ss, &export->type, "%s", export_type);
+	write_string(sbfd, export_ss, &export->type, "%s", export_type);
 	if (mode("exportdel")) {
-		write_string(ibfd, export_ss, &export->name, "%s", symname);
-		write_string(ibfd, export_ss, &export->new_name,
+		write_string(sbfd, export_ss, &export->name, "%s", symname);
+		write_string(sbfd, export_ss, &export->new_name,
 			     "DISABLED_%s_%s", symname, addstr_all);
 	} else {
-		write_string(ibfd, export_ss, &export->new_name, "%s", symname);
-		write_string(ibfd, export_ss, &export->name, "DISABLED_%s_%s",
+		write_string(sbfd, export_ss, &export->new_name, "%s", symname);
+		write_string(sbfd, export_ss, &export->name, "DISABLED_%s_%s",
 			     symname, addstr_all);
 	}
 }
 
-void rm_from_special(bfd *ibfd, const struct specsect *s)
+void rm_from_special(struct superbfd *sbfd, const struct specsect *s)
 {
-	asection *isection = bfd_get_section_by_name(ibfd, s->sectname);
+	asection *isection = bfd_get_section_by_name(sbfd->abfd, s->sectname);
 	if (isection == NULL)
 		return;
 
-	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
+	struct supersect *ss = fetch_supersect(sbfd, isection);
 	struct void_vec orig_contents;
 	vec_move(&orig_contents, &ss->contents);
 	size_t pad = align(orig_contents.size, 1 << ss->alignment) -
@@ -636,7 +633,7 @@ void rm_from_special(bfd *ibfd, const struct specsect *s)
 			assert(strcmp(odd_sym->name, s->odd_relocname) == 0);
 		}
 		asection *p;
-		for (p = ibfd->sections; p != NULL; p = p->next) {
+		for (p = sbfd->abfd->sections; p != NULL; p = p->next) {
 			if (strcmp(sym->name, p->name) == 0
 			    && !is_special(p) && !want_section(p))
 				break;
@@ -676,7 +673,8 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 	if (!want_section(looking_at) || is_special(looking_at))
 		return;
 
-	struct supersect *ss = fetch_supersect(abfd, looking_at, &isyms);
+	struct superbfd *sbfd = fetch_superbfd(abfd);
+	struct supersect *ss = fetch_supersect(sbfd, looking_at);
 	arelent **relocp;
 	for (relocp = ss->relocs.data;
 	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
@@ -730,12 +728,12 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 	   ignore input sections which have no corresponding output
 	   section.  */
 
-	bfd_map_over_sections(ibfd, mark_symbols_used_in_relocations, &isyms);
+	bfd_map_over_sections(ibfd, mark_symbols_used_in_relocations, NULL);
 	for (ss = new_supersects; ss != NULL; ss = ss->next)
 		ss_mark_symbols_used_in_relocations(ss);
 	struct asymbolp_vec osyms;
 	vec_init(&osyms);
-	filter_symbols(ibfd, obfd, &osyms, &isyms);
+	filter_symbols(ibfd, obfd, &osyms, &fetch_superbfd(ibfd)->syms);
 
 	bfd_set_symtab(obfd, osyms.data, osyms.size);
 
@@ -763,7 +761,8 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	asection *osection = bfd_make_section_anyway(obfd, isection->name);
 	assert(osection != NULL);
 
-	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
+	struct superbfd *isbfd = fetch_superbfd(ibfd);
+	struct supersect *ss = fetch_supersect(isbfd, isection);
 	osection->userdata = ss;
 	bfd_set_section_flags(obfd, osection, ss->flags);
 	ss->symbol = osection->symbol;
@@ -842,13 +841,14 @@ void write_section(bfd *obfd, asection *osection, void *arg)
  *
  * Ignore relocations which will not appear in the output file.
  */
-void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
-				      void *symbolsarg)
+void mark_symbols_used_in_relocations(bfd *abfd, asection *isection,
+				      void *ignored)
 {
+	struct superbfd *sbfd = fetch_superbfd(abfd);
 	if (isection->output_section == NULL)
 		return;
 
-	struct supersect *ss = fetch_supersect(ibfd, isection, &isyms);
+	struct supersect *ss = fetch_supersect(sbfd, isection);
 	ss_mark_symbols_used_in_relocations(ss);
 }
 
@@ -872,7 +872,7 @@ void ss_mark_symbols_used_in_relocations(struct supersect *ss)
  * We don't copy in place, because that confuses the relocs.
  * Return the number of symbols to print.
  */
-void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
+void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms)
 {
 	asymbol **symp;
@@ -906,7 +906,7 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 		else if ((sym->flags & BSF_DEBUGGING) != 0)
 			keep = 1;
 		else
-			keep = !bfd_is_local_label(abfd, sym);
+			keep = !bfd_is_local_label(ibfd, sym);
 
 		if (!want_section(sym->section))
 			keep = 0;
