@@ -456,8 +456,8 @@ void rm_from_special(bfd *ibfd, const struct specsect *s)
 
 	int entry_size = align(s->entry_size, 1 << ss->alignment);
 	int relocs_per_entry = s->odd_relocs ? 2 : 1;
-	assert((orig_contents.size / entry_size) * relocs_per_entry ==
-	       orig_relocs.size);
+	assert(orig_contents.size * relocs_per_entry ==
+	       orig_relocs.size * entry_size);
 
 	const void *orig_entry;
 	arelent **relocp;
