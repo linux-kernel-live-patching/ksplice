@@ -74,6 +74,8 @@ install: default $(addprefix install-,$(objutils))
 	install -m644 -D $(srcdir)/kmodsrc/Makefile $(DESTDIR)$(datadir)/ksplice/kmodsrc/Makefile
 	install -m644 -D $(srcdir)/kmodsrc/ld-script $(DESTDIR)$(datadir)/ksplice/kmodsrc/ld-script
 	install -m644 -D $(srcdir)/kmodsrc/ksplice.lds $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.lds
+	cp -a $(srcdir)/kmodsrc/x86/libudis86 $(DESTDIR)$(datadir)/ksplice/kmodsrc/x86/
+	cp -a $(srcdir)/kmodsrc/x86/udis86.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/x86/
 
 clean:
 	rm -f $(perl_primary)

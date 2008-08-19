@@ -48,7 +48,16 @@ ksplice-helper-objs = helper-$(target).o collect-helper-$(mod).o
 
 ifneq ($(KSPLICE_STANDALONE),)
 obj-m += $(KSPLICE_CORE).o
-$(KSPLICE_CORE)-objs = ksplice-rmsyms.o
+UDIS86 = x86/libudis86
+kudis86 += \
+	$(UDIS86)/itab.o \
+	$(UDIS86)/input.o \
+	$(UDIS86)/decode.o \
+	$(UDIS86)/syn.o \
+	$(UDIS86)/syn-intel.o \
+	$(UDIS86)/syn-att.o \
+	$(UDIS86)/udis86.o
+$(KSPLICE_CORE)-objs = ksplice-rmsyms.o $(kudis86)
 endif
 
 define ksplice-pack-vars
