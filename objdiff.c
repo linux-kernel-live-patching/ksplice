@@ -86,14 +86,9 @@ struct export_vec *get_export_syms(struct superbfd *sbfd)
 {
 	asection *sect;
 	struct export_vec *exports;
-	asection *str_sect = bfd_get_section_by_name(sbfd->abfd,
-						     "__ksymtab_strings");
 	exports = malloc(sizeof(*exports));
 	assert(exports != NULL);
 	vec_init(exports);
-	if (str_sect == NULL)
-		return NULL;
-	struct supersect *str_ss = fetch_supersect(sbfd, str_sect);
 
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		if (!starts_with(sect->name, "__ksymtab") ||
@@ -101,16 +96,14 @@ struct export_vec *get_export_syms(struct superbfd *sbfd)
 			continue;
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		struct kernel_symbol *sym;
-		arelent **reloc;
 		assert(ss->contents.size * 2 == ss->relocs.size *
 		       sizeof(struct kernel_symbol));
-		for (sym = ss->contents.data, reloc = ss->relocs.data + 1;
+		for (sym = ss->contents.data;
 		     (void *)sym < ss->contents.data + ss->contents.size;
-		     sym++, reloc += 2) {
-			char *sym_name = str_ss->contents.data +
-			    get_reloc_offset(ss, *reloc, 1);
+		     sym++) {
 			struct export *exp = vec_grow(exports, 1);
-			exp->name = strdup(sym_name);
+			exp->name =
+			    read_string(ss, (const char *const *)&sym->name);
 			exp->sect = sect;
 		}
 	}
