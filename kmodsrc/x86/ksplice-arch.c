@@ -16,31 +16,8 @@
  *  02110-1301, USA.
  */
 
-#include <linux/kernel.h>
-
 #ifndef FUNCTION_SECTIONS
-static const char jumps[256] = {
-	[0x0f] = 4,		/* je */
-	[0x70] = 1,		/* jo */
-	[0x71] = 1,		/* jno */
-	[0x72] = 1,		/* jb */
-	[0x73] = 1,		/* jnb */
-	[0x74] = 1,		/* jc */
-	[0x75] = 1,		/* jne */
-	[0x76] = 1,		/* jbe */
-	[0x77] = 1,		/* ja */
-	[0x78] = 1,		/* js */
-	[0x79] = 1,		/* jns */
-	[0x7a] = 1,		/* jp */
-	[0x7b] = 1,		/* jnp */
-	[0x7c] = 1,		/* jl */
-	[0x7d] = 1,		/* jge */
-	[0x7e] = 1,		/* jle */
-	[0x7f] = 1,		/* jg */
-	[0xe9] = 4,		/* jmp */
-	[0xe8] = 4,		/* call */
-	[0xeb] = 1,		/* jmp */
-};
+#include "udis86.h"
 
 /* Various efficient no-op patterns for aligning code labels.
    Note: Don't try to assemble the instructions in the comments.
@@ -156,19 +133,27 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 };
 /* *INDENT-ON* */
 
+static abort_t compare_operands(struct module_pack *pack,
+				const struct ksplice_size *s,
+				unsigned long run_addr,
+				const unsigned char *run,
+				const unsigned char *pre, struct ud *run_ud,
+				struct ud *pre_ud, int opnum, int rerun);
 static int match_nop(const unsigned char *addr);
-static int jumplen(const unsigned char *addr);
-static int jumpsize(const unsigned char *addr);
-static int match_jump_types(const unsigned char *run, const unsigned char *pre);
-static int canonicalize_jump(const unsigned char *addr);
+static uint8_t ud_operand_len(struct ud_operand *operand);
+static uint8_t ud_prefix_len(struct ud *ud);
+static long jump_lval(struct ud_operand *operand);
+static int next_run_byte(struct ud *ud);
 
 static abort_t run_pre_cmp(struct module_pack *pack,
-			   const struct ksplice_size *s, unsigned long run_addr,
-			   int rerun)
+			   const struct ksplice_size *s,
+			   unsigned long run_addr, int rerun)
 {
-	int runc, prec, matched;
-	const unsigned char *run, *pre;
+	int runc, prec;
+	int i;
 	abort_t ret;
+	const unsigned char *run, *pre;
+	struct ud pre_ud, run_ud;
 	unsigned long pre_addr = s->thismod_addr;
 
 	if (s->size == 0)
@@ -179,132 +164,237 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 	run = (const unsigned char *)run_addr;
 	pre = (const unsigned char *)pre_addr;
 
-	while (run < (const unsigned char *)run_addr + s->size &&
-	       pre < (const unsigned char *)pre_addr + s->size) {
-		if (!virtual_address_mapped((unsigned long)run))
-			return NO_MATCH;
+	ud_init(&pre_ud);
+	ud_set_mode(&pre_ud, BITS_PER_LONG);
+	ud_set_syntax(&pre_ud, UD_SYN_ATT);
+	ud_set_input_buffer(&pre_ud, (unsigned char *)pre, s->size);
+	ud_set_pc(&pre_ud, 0);
 
-		ret = handle_reloc(pack, (unsigned long)pre, (unsigned long)run,
-				   rerun, &matched);
-		if (ret != OK) {
-			ksdebug(pack, 3, KERN_DEBUG "Matching failure at "
-				"offset %lx\n", (unsigned long)pre - pre_addr);
-			return ret;
-		}
-		if (matched > 0) {
-			if (rerun)
-				print_bytes(pack, run, matched, pre, matched);
-			run += matched;
-			pre += matched;
-			continue;
-		}
+	ud_init(&run_ud);
+	ud_set_mode(&run_ud, BITS_PER_LONG);
+	ud_set_syntax(&run_ud, UD_SYN_ATT);
+	ud_set_input_hook(&run_ud, next_run_byte);
+	ud_set_pc(&run_ud, 0);
+	run_ud.userdata = (unsigned char *)run_addr;
 
-		if (*run == *pre && jumplen(run)) {
-			int len = jumplen(run);
-			if (jumpsize(run) != jumpsize(pre) ||
-			    (jumpsize(run) == 2 && pre[1] != run[1]))
-				return NO_MATCH;
-			if (rerun)
-				print_bytes(pack, run, jumpsize(run), pre,
-					    jumpsize(pre));
-			run += jumpsize(run);
-			pre += jumpsize(pre);
-			ret = handle_reloc(pack, (unsigned long)pre,
-					   (unsigned long)run, rerun, &matched);
-			if (ret != OK) {
-				ksdebug(pack, 3, KERN_DEBUG "Matching failure "
-					"at offset %lx\n", (unsigned long)pre -
-					pre_addr);
-				return NO_MATCH;
-			}
-			if (matched > 0) {
-				if (rerun)
-					print_bytes(pack, run, matched, pre,
-						    matched);
-				run += matched;
-				pre += matched;
-			} else {
-				/* lenient; we should check these addresses */
-				if (rerun)
-					print_bytes(pack, run, len, pre, len);
-				run += len;
-				pre += len;
-			}
-			continue;
-		}
-
-		if (match_jump_types(run, pre)) {
-			if (rerun)
-				print_bytes(pack,
-					    run, jumpsize(run) + jumplen(run),
-					    pre, jumpsize(pre) + jumplen(pre));
-			/* lenient; we should check these addresses */
-			run += jumpsize(run) + jumplen(run);
-			pre += jumpsize(pre) + jumplen(pre);
-			continue;
-		}
-
+	while (1) {
+		/* Nops are the only sense in which the instruction
+		   sequences are allowed to not match */
 		runc = match_nop(run);
 		prec = match_nop(pre);
 		if (runc > 0 || prec > 0) {
 			if (rerun)
 				print_bytes(pack, run, runc, pre, prec);
+			ud_input_skip(&run_ud, runc);
+			ud_input_skip(&pre_ud, prec);
 			run += runc;
 			pre += prec;
 			continue;
 		}
+		if (ud_disassemble(&pre_ud) == 0) {
+			/* Ran out of pre bytes to match; we're done! */
+			const struct ksplice_patch *p;
+			int bytes_matched = (unsigned long)run - run_addr;
+			if (bytes_matched >= 5)
+				return OK;
+			for (p = pack->patches; p < pack->patches_end; p++) {
+				if (p->oldaddr == run_addr) {
+					print_abort(pack, "Function too short "
+						    "for trampoline");
+					return NO_MATCH;
+				}
+			}
+			return OK;
+		}
+		if (ud_disassemble(&run_ud) == 0)
+			return NO_MATCH;
 
-		if (*run == *pre) {
+		if (rerun)
+			ksdebug(pack, 0, "| ");
+		if (rerun)
+			print_bytes(pack, run, ud_insn_len(&run_ud),
+				    pre, ud_insn_len(&pre_ud));
+
+		if (run_ud.mnemonic != pre_ud.mnemonic) {
 			if (rerun)
-				print_bytes(pack, run, 1, pre, 1);
-			run++;
-			pre++;
-			continue;
+				ksdebug(pack, 3, "mnemonic mismatch: %s %s\n",
+					ud_lookup_mnemonic(run_ud.mnemonic),
+					ud_lookup_mnemonic(pre_ud.mnemonic));
+			return NO_MATCH;
+		}
+		if (s->extended_size == 0 && run_ud.mnemonic == UD_Ijmp) {
+			ksdebug(pack, 3, KERN_DEBUG "Matched %lx bytes of locks"
+				" section\n", (unsigned long)run - run_addr);
+			return OK;
 		}
 
-		if (rerun) {
-			print_bytes(pack, run, 1, pre, 1);
-			ksdebug(pack, 0, "[p_o=%lx] ! ", (unsigned long)pre -
-				pre_addr);
-			print_bytes(pack, run + 1, 2, pre + 1, 2);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && \
+    defined(_I386_BUG_H) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11) || \
+			     defined(CONFIG_DEBUG_BUGVERBOSE))
+/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
+/* 38326f786cf4529a86b1ccde3aa17f4fa7e8472a was after 2.6.10 */
+		if (run_ud.mnemonic == UD_Iud2) {
+			/* ud2 means BUG().  On old i386 kernels, it is followed
+			   by 2 bytes and then a 4-byte relocation; and is not
+			   disassembler-friendly. */
+			int matched = 0;
+			ret = handle_reloc(pack, (unsigned long)(pre + 4),
+					   (unsigned long)(run + 4), rerun,
+					   &matched);
+			if (ret != OK)
+				return ret;
+			if (matched > 0) {
+				/* If there's a relocation, then it's a BUG? */
+				if (rerun) {
+					ksdebug(pack, 0, "[BUG?: ");
+					print_bytes(pack, run + 2, 6, pre + 2,
+						    6);
+					ksdebug(pack, 0, "] ");
+				}
+				pre += 8;
+				run += 8;
+				ud_input_skip(&run_ud, 6);
+				ud_input_skip(&pre_ud, 6);
+				continue;
+			} else {
+				if (!rerun)
+					ksdebug(pack, 0, KERN_DEBUG
+						"Unrecognized ud2\n");
+				return NO_MATCH;
+			}
 		}
+#endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
+
+		for (i = 0; i < ARRAY_SIZE(run_ud.operand); i++) {
+			ret = compare_operands(pack, s, run_addr, run, pre,
+					       &run_ud, &pre_ud, i, rerun);
+			if (ret != OK)
+				return ret;
+		}
+
+		run += ud_insn_len(&run_ud);
+		pre += ud_insn_len(&pre_ud);
+	}
+}
+
+static abort_t compare_operands(struct module_pack *pack,
+				const struct ksplice_size *s,
+				unsigned long run_addr,
+				const unsigned char *run,
+				const unsigned char *pre, struct ud *run_ud,
+				struct ud *pre_ud, int opnum, int rerun)
+{
+	abort_t ret;
+	int i, matched = 0;
+	unsigned long pre_addr = s->thismod_addr;
+	struct ud_operand *run_op = &run_ud->operand[opnum];
+	struct ud_operand *pre_op = &pre_ud->operand[opnum];
+	uint8_t run_off = ud_prefix_len(run_ud);
+	uint8_t pre_off = ud_prefix_len(pre_ud);
+	for (i = 0; i < opnum; i++) {
+		run_off += ud_operand_len(&run_ud->operand[i]);
+		pre_off += ud_operand_len(&pre_ud->operand[i]);
+	}
+
+	if (run_op->type != pre_op->type) {
+		if (rerun)
+			ksdebug(pack, 3, "type mismatch: %d %d\n", run_op->type,
+				pre_op->type);
 		return NO_MATCH;
 	}
-	return OK;
-}
+	if (run_op->base != pre_op->base) {
+		if (rerun)
+			ksdebug(pack, 3, "base mismatch: %d %d\n", run_op->base,
+				pre_op->base);
+		return NO_MATCH;
+	}
+	if (run_op->index != pre_op->index) {
+		if (rerun)
+			ksdebug(pack, 3, "index mismatch: %d %d\n",
+				run_op->index, pre_op->index);
+		return NO_MATCH;
+	}
+	if (ud_operand_len(run_op) == 0 && ud_operand_len(pre_op) == 0)
+		return OK;
 
-static int jumplen(const unsigned char *addr)
-{
-	if (!jumps[addr[0]])
-		return 0;
-	if (addr[0] == 0x0f && (!virtual_address_mapped((unsigned long)&addr[1])
-				|| addr[1] < 0x80 || addr[1] >= 0x90))
-		return 0;
-	return jumps[addr[0]];
-}
-
-static int jumpsize(const unsigned char *addr)
-{
-	if (!jumps[addr[0]])
-		return 0;
-	if (addr[0] == 0x0f && addr[1] >= 0x80 && addr[1] < 0x90)
-		return 2;
-	return 1;
-}
-
-static int canonicalize_jump(const unsigned char *addr)
-{
-	if (addr[0] == 0x0f)
-		return addr[1] - 0x10;
-	if (addr[0] == 0xe9)
-		return 0xeb;
-	return addr[0];
-}
-
-static int match_jump_types(const unsigned char *run, const unsigned char *pre)
-{
-	return jumplen(run) && jumplen(pre) &&
-	    canonicalize_jump(run) == canonicalize_jump(pre);
+	ret = handle_reloc(pack, (unsigned long)(pre + pre_off),
+				(unsigned long)(run + run_off),
+				rerun, &matched);
+	if (ret != OK) {
+		if (rerun)
+			ksdebug(pack, 3, KERN_DEBUG "Matching failure at "
+				"offset %lx\n", (unsigned long)pre - pre_addr);
+		return ret;
+	}
+	if (matched != 0)
+		/* This operand is a successfully processed relocation */
+		return OK;
+	if (pre_op->type == UD_OP_JIMM) {
+		/* Immediate jump without a relocation */
+		unsigned long pre_target = (unsigned long)pre +
+		    ud_insn_len(pre_ud) + jump_lval(pre_op);
+		unsigned long run_target = (unsigned long)run +
+		    ud_insn_len(run_ud) + jump_lval(run_op);
+		if (pre_target >= pre_addr + s->size &&
+		    pre_target < pre_addr + s->extended_size) {
+			struct ksplice_size smplocks_size = {
+				.symbol = NULL,
+				.size = 1000000,
+				.extended_size = 0,
+				.flags = KSPLICE_SIZE_TEXT,
+				.thismod_addr = pre_target,
+			};
+			if (rerun)
+				ksdebug(pack, 3, "Locks section %lx %lx: ",
+					run_target, pre_target);
+			if (rerun)
+				ksdebug(pack, 3, "[ ");
+			/* jump into .text.lock subsection */
+			ret = run_pre_cmp(pack, &smplocks_size, run_target,
+					  rerun);
+			if (rerun)
+				ksdebug(pack, 3, "] ");
+			if (ret != OK) {
+				if (!rerun)
+					ksdebug(pack, 3, KERN_DEBUG
+						"Locks section mismatch: %lx "
+						"%lx\n", run_target,
+						pre_target);
+				return ret;
+			}
+			return OK;
+		} else if (s->extended_size == 0) {
+			/* FIXME: Ignoring targets of jumps out of smplocks */
+			return OK;
+		} else if (pre_target == run_target) {
+			/* Paravirt-inserted pcrel jump; OK! */
+			return OK;
+		} else if (pre_target >= pre_addr &&
+			   pre_target < pre_addr + s->size) {
+			/* Jump within the current function.
+			   We should ideally check it's to a corresponding place */
+			return OK;
+		} else {
+			if (rerun) {
+				ksdebug(pack, 3, "<--Different operands!\n");
+				ksdebug(pack, 3, KERN_DEBUG
+					"%lx %lx %lx %lx %x %lx %lx %lx\n",
+					pre_addr, pre_target,
+					pre_addr + s->size, (unsigned long)pre,
+					ud_insn_len(pre_ud), s->size,
+					jump_lval(pre_op), run_target);
+			}
+			return NO_MATCH;
+		}
+	} else if (ud_operand_len(pre_op) == ud_operand_len(run_op) &&
+		   memcmp(pre + pre_off, run + run_off,
+			  ud_operand_len(run_op)) == 0) {
+		return OK;
+	} else {
+		if (rerun)
+			ksdebug(pack, 3, "<--Different operands!\n");
+		return NO_MATCH;
+	}
 }
 
 static int match_nop(const unsigned char *addr)
@@ -325,6 +415,54 @@ static int match_nop(const unsigned char *addr)
 	return 0;
 }
 
+static uint8_t ud_operand_len(struct ud_operand *operand)
+{
+	if (operand->type == UD_OP_MEM)
+		return operand->offset / 8;
+	if (operand->type == UD_OP_REG)
+		return 0;
+	return operand->size / 8;
+}
+
+static uint8_t ud_prefix_len(struct ud *ud)
+{
+	int len = ud_insn_len(ud);
+	int i;
+	for (i = 0; i < ARRAY_SIZE(ud->operand); i++)
+		len -= ud_operand_len(&ud->operand[i]);
+	return len;
+}
+
+static long jump_lval(struct ud_operand *operand)
+{
+	if (operand->type == UD_OP_JIMM) {
+		switch(operand->size) {
+		case 8:
+			return operand->lval.sbyte;
+		case 16:
+			return operand->lval.sword;
+		case 32:
+			return operand->lval.sdword;
+		case 64:
+			return operand->lval.sqword;
+		default:
+			return 0;
+		}
+	}
+	return 0;
+}
+
+static int next_run_byte(struct ud *ud)
+{
+	unsigned char byte;
+	unsigned char *run_ptr = ud->userdata;
+	if (!virtual_address_mapped((unsigned long)run_ptr))
+		return UD_EOI;
+	byte = *run_ptr;
+	run_ptr++;
+	ud->userdata = run_ptr;
+	return byte;
+}
 #endif /* !FUNCTION_SECTIONS */
 
 static unsigned long follow_trampolines(struct module_pack *pack,
