@@ -27,7 +27,6 @@
  */
 
 #include "objcommon.h"
-#include "objdiff.h"
 
 #define symbol_init(sym) *(sym) = (asymbol *)NULL
 DEFINE_HASH_TYPE(asymbol *, symbol_hash, symbol_hash_init, symbol_hash_free,
@@ -38,6 +37,16 @@ struct export {
 	asection *sect;
 };
 DECLARE_VEC_TYPE(struct export, export_vec);
+
+typedef void (*section_fn) (asection *);
+
+void foreach_nonmatching(bfd *oldbfd, bfd *newbfd, section_fn s_fn);
+void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags);
+struct export_vec *get_export_syms(bfd *ibfd, struct asymbolp_vec *isyms);
+void compare_exported_symbols(bfd *oldbfd, bfd *newbfd, char *addstr);
+int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp);
+static void print_newbfd_section_name(asection *sect);
+static void print_newbfd_entry_symbols(asection *sect);
 
 bfd *newbfd;
 struct asymbolp_vec new_syms, old_syms;
