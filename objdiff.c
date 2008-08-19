@@ -172,6 +172,7 @@ void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags)
 void foreach_nonmatching(bfd *oldbfd, bfd *newbfd, section_fn s_fn)
 {
 	asection *newp, *oldp;
+	struct supersect *old_ss, *new_ss;
 	for (newp = newbfd->sections; newp != NULL; newp = newp->next) {
 		if (!starts_with(newp->name, ".text"))
 			continue;
@@ -181,19 +182,13 @@ void foreach_nonmatching(bfd *oldbfd, bfd *newbfd, section_fn s_fn)
 				s_fn(newp);
 			continue;
 		}
-		int newsize = bfd_get_section_size(newp);
-		int oldsize = bfd_get_section_size(oldp);
-		if (newsize == oldsize) {
-			void *newmem = malloc(newsize);
-			void *oldmem = malloc(oldsize);
-			assert(bfd_get_section_contents
-			       (oldbfd, oldp, oldmem, 0, oldsize));
-			assert(bfd_get_section_contents
-			       (newbfd, newp, newmem, 0, newsize));
-			if (memcmp(newmem, oldmem, newsize) == 0 &&
-			    reloc_cmp(oldbfd, oldp, newbfd, newp) == 0)
-				continue;
-		}
+		new_ss = fetch_supersect(newbfd, newp, &new_syms);
+		old_ss = fetch_supersect(oldbfd, oldp, &old_syms);
+		if (new_ss->contents.size == old_ss->contents.size &&
+		    memcmp(new_ss->contents.data, old_ss->contents.data,
+			   new_ss->contents.size) == 0 &&
+		    reloc_cmp(oldbfd, oldp, newbfd, newp) == 0)
+			continue;
 		s_fn(newp);
 	}
 }
