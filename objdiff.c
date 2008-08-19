@@ -38,15 +38,14 @@ struct export {
 };
 DECLARE_VEC_TYPE(struct export, export_vec);
 
-typedef void (*section_fn) (asection *);
-
-void foreach_nonmatching(bfd *oldbfd, bfd *newbfd, section_fn s_fn);
+void foreach_nonmatching(bfd *oldbfd, bfd *newbfd,
+			 void (*s_fn)(struct supersect *));
 void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags);
 struct export_vec *get_export_syms(bfd *ibfd, struct asymbolp_vec *isyms);
 void compare_exported_symbols(bfd *oldbfd, bfd *newbfd, char *addstr);
 int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp);
-static void print_newbfd_section_name(asection *sect);
-static void print_newbfd_entry_symbols(asection *sect);
+static void print_newbfd_section_name(struct supersect *ss);
+static void print_newbfd_entry_symbols(struct supersect *ss);
 
 bfd *newbfd;
 struct asymbolp_vec new_syms, old_syms;
@@ -181,27 +180,28 @@ void compare_symbols(bfd *oldbfd, bfd *newbfd, flagword flags)
 	symbol_hash_free(&old_hash);
 }
 
-void foreach_nonmatching(bfd *oldbfd, bfd *newbfd, section_fn s_fn)
+void foreach_nonmatching(bfd *oldbfd, bfd *newbfd,
+			 void (*s_fn)(struct supersect *))
 {
 	asection *newp, *oldp;
 	struct supersect *old_ss, *new_ss;
 	for (newp = newbfd->sections; newp != NULL; newp = newp->next) {
 		if (!starts_with(newp->name, ".text"))
 			continue;
+		new_ss = fetch_supersect(newbfd, newp, &new_syms);
 		oldp = bfd_get_section_by_name(oldbfd, newp->name);
 		if (oldp == NULL) {
 			if (s_fn == print_newbfd_section_name)
-				s_fn(newp);
+				s_fn(new_ss);
 			continue;
 		}
-		new_ss = fetch_supersect(newbfd, newp, &new_syms);
 		old_ss = fetch_supersect(oldbfd, oldp, &old_syms);
 		if (new_ss->contents.size == old_ss->contents.size &&
 		    memcmp(new_ss->contents.data, old_ss->contents.data,
 			   new_ss->contents.size) == 0 &&
 		    reloc_cmp(oldbfd, oldp, newbfd, newp) == 0)
 			continue;
-		s_fn(newp);
+		s_fn(new_ss);
 	}
 }
 
@@ -265,18 +265,21 @@ int reloc_cmp(bfd *oldbfd, asection *oldp, bfd *newbfd, asection *newp)
 	return 0;
 }
 
-void print_newbfd_section_name(asection *sect)
+void print_newbfd_section_name(struct supersect *ss)
 {
-	printf("%s ", sect->name);
+	printf("%s ", ss->name);
 }
 
-void print_newbfd_entry_symbols(asection *sect)
+void print_newbfd_entry_symbols(struct supersect *ss)
 {
 	asymbol **symp;
 	for (symp = new_syms.data; symp < new_syms.data + new_syms.size;
 	     symp++) {
 		asymbol *sym = *symp;
-		if (sym->section != sect || sym->name[0] == '\0' ||
+		struct supersect *sym_ss = fetch_supersect(ss->parent,
+							   sym->section,
+							   &new_syms);
+		if (sym_ss != ss || sym->name[0] == '\0' ||
 		    starts_with(sym->name, ".text"))
 			continue;
 		if (sym->value != 0) {
