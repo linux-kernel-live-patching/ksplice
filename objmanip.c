@@ -135,7 +135,6 @@ static void mark_symbols_used_in_relocations(bfd *ibfd, asection *isection,
 static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
 static void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 			   struct asymbolp_vec *isyms);
-int exists_sym_with_name(struct asymbolp_vec *syms, const char *desired);
 int match_varargs(const char *str);
 int want_section(asection *sect);
 const struct specsect *is_special(asection *sect);
@@ -918,16 +917,6 @@ void filter_symbols(bfd *abfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (keep)
 			*vec_grow(osyms, 1) = sym;
 	}
-}
-
-int exists_sym_with_name(struct asymbolp_vec *syms, const char *desired)
-{
-	asymbol **symp;
-	for (symp = syms->data; symp < syms->data + syms->size; symp++) {
-		if (strcmp(bfd_asymbol_name(*symp), desired) == 0)
-			return 1;
-	}
-	return 0;
 }
 
 int match_varargs(const char *str)
