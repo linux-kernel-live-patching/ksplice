@@ -43,12 +43,13 @@ void get_syms(bfd *abfd, struct asymbolp_vec *syms)
 struct supersect *fetch_supersect(bfd *abfd, asection *sect,
 				  struct asymbolp_vec *syms)
 {
-	if (sect == NULL)
-		DIE;
+	assert(sect != NULL);
 	if (sect->userdata != NULL)
 		return sect->userdata;
 
 	struct supersect *new = malloc(sizeof(*new));
+	assert(new != NULL);
+
 	sect->userdata = new;
 	new->parent = abfd;
 	new->name = sect->name;
