@@ -69,6 +69,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 	die unless(-e $primary && -e $helper);
 	(my $target = $primary) =~ s/^ksplice-[^_]+_(.*)\.ko/$1/;
 	if ($target ne 'vmlinux' && runstr("lsmod") !~ m/^${target}\s/m) {
+		cleanup_modules();
 		die "Module $target to be patched not loaded";
 	}
 }
