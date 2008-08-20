@@ -409,11 +409,11 @@ struct supersect *make_section(struct superbfd *sbfd, const char *name)
 		return new_supersect(sbfd, name);
 }
 
-void write_reloc(struct superbfd *sbfd, struct supersect *ss, const void *addr,
-		 asymbol **symp, bfd_vma offset)
+void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
+		 bfd_vma offset)
 {
 	bfd_reloc_code_real_type code;
-	switch (bfd_arch_bits_per_address(sbfd->abfd)) {
+	switch (bfd_arch_bits_per_address(ss->parent->abfd)) {
 	case 32:
 		code = BFD_RELOC_32;
 		break;
@@ -427,7 +427,7 @@ void write_reloc(struct superbfd *sbfd, struct supersect *ss, const void *addr,
 	arelent *reloc = malloc(sizeof(*reloc));
 	reloc->sym_ptr_ptr = symp;
 	reloc->address = addr - ss->contents.data;
-	reloc->howto = bfd_reloc_type_lookup(sbfd->abfd, code);
+	reloc->howto = bfd_reloc_type_lookup(ss->parent->abfd, code);
 	reloc->addend = offset;
 	*vec_grow(&ss->new_relocs, 1) = reloc;
 }
@@ -444,7 +444,7 @@ void write_string(struct supersect *ss, const char **addr, const char *fmt, ...)
 	vsnprintf(buf, len + 1, fmt, ap);
 	va_end(ap);
 
-	write_reloc(ss->parent, ss, addr, &str_ss->symbol,
+	write_reloc(ss, addr, &str_ss->symbol,
 		    (void *)buf - str_ss->contents.data);
 }
 
@@ -468,7 +468,7 @@ void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 				      typeof(*addrs->data));
 		memcpy(buf, addrs->data, addrs->size * sizeof(*addrs->data));
 		*num_sym_addrs = addrs->size;
-		write_reloc(sbfd, ss, sym_addrs, &array_ss->symbol,
+		write_reloc(ss, sym_addrs, &array_ss->symbol,
 			    buf - array_ss->contents.data);
 	} else {
 		*num_sym_addrs = 0;
@@ -495,7 +495,7 @@ void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
 
 	write_string(kreloc_ss, &kreloc->sym_name, "%s%s",
 		     sym_ptr->name, addstr_all);
-	write_reloc(sbfd, kreloc_ss, &kreloc->blank_addr,
+	write_reloc(kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address);
 	kreloc->blank_offset = (unsigned long)orig_reloc->address;
 	write_system_map_array(sbfd, kreloc_ss, &kreloc->sym_addrs,
@@ -556,7 +556,7 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	ksize->flags = 0;
 	if (match_varargs(sym->name) && (sym->flags & BSF_FUNCTION))
 		ksize->flags |= KSPLICE_SIZE_DELETED;
-	write_reloc(sbfd, ksize_ss, &ksize->thismod_addr, symp, 0);
+	write_reloc(ksize_ss, &ksize->thismod_addr, symp, 0);
 	write_system_map_array(sbfd, ksize_ss, &ksize->sym_addrs,
 			       &ksize->num_sym_addrs, sym);
 }
@@ -578,7 +578,7 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	write_string(kpatch_ss, &kpatch->oldstr, "%s%s%s",
 		     symname, addstr_all, addstr_sect_pre);
 	kpatch->oldaddr = 0;
-	write_reloc(sbfd, kpatch_ss, &kpatch->repladdr, symp, 0);
+	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
