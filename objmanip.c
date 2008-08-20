@@ -139,8 +139,7 @@ const struct specsect *is_special(asection *sect);
 struct supersect *make_section(struct superbfd *sbfd, const char *name);
 void __attribute__((format(printf, 3, 4)))
 write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
-void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
-		     asection *crc_sect);
+void rm_some_exports(struct supersect *ss, struct supersect *crc_ss);
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 			  const char *export_type);
 
@@ -287,7 +286,11 @@ int main(int argc, char *argv[])
 				strlen("__ksymtab")) >= 0);
 		asection *crc_sect = bfd_get_section_by_name(ibfd,
 							     export_crc_name);
-		rm_some_exports(isbfd, sym_sect, crc_sect);
+		struct supersect *sym_ss, *crc_ss = NULL;
+		sym_ss = fetch_supersect(isbfd, sym_sect);
+		if (crc_sect != NULL)
+			crc_ss = fetch_supersect(isbfd, crc_sect);
+		rm_some_exports(sym_ss, crc_ss);
 	}
 
 	copy_object(ibfd, obfd);
@@ -296,20 +299,16 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
-		     asection *crc_sect)
+void rm_some_exports(struct supersect *ss, struct supersect *crc_ss)
 {
 	struct void_vec orig_contents;
 	struct arelentp_vec orig_relocs;
-	struct supersect *ss = fetch_supersect(sbfd, sym_sect);
 	vec_move(&orig_contents, &ss->contents);
 	vec_move(&orig_relocs, &ss->relocs);
 
 	struct void_vec orig_crc_contents;
 	struct arelentp_vec orig_crc_relocs;
-	struct supersect *crc_ss;
-	if (crc_sect != NULL) {
-		crc_ss = fetch_supersect(sbfd, crc_sect);
+	if (crc_ss != NULL) {
 		vec_move(&orig_crc_contents, &crc_ss->contents);
 		vec_move(&orig_crc_relocs, &crc_ss->relocs);
 	}
@@ -322,7 +321,7 @@ void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
 	int crc_relocs_per_entry = 1;
 	assert(orig_contents.size * relocs_per_entry ==
 	       orig_relocs.size * entry_size);
-	if (crc_sect != NULL) {
+	if (crc_ss != NULL) {
 		assert(orig_contents.size * crc_entry_size ==
 		       orig_crc_contents.size * entry_size);
 		assert(orig_crc_contents.size * crc_relocs_per_entry ==
@@ -347,13 +346,13 @@ void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
 			*new_relocp = *relocp;
 			(*new_relocp)->address += mod;
 			/* Replace name with a mangled name */
-			write_ksplice_export(sbfd, sym_ptr->name, modestr
+			write_ksplice_export(ss->parent, sym_ptr->name, modestr
 					     + strlen("export__ksymtab"));
 			write_string(ss, (const char **)&sym->name,
 				     "DISABLED_%s_%s", sym_ptr->name,
 				     addstr_all);
 
-			if (crc_sect != NULL) {
+			if (crc_ss != NULL) {
 				new_crc_entry = vec_grow(&crc_ss->contents,
 							 crc_entry_size);
 				memcpy(new_crc_entry, orig_crc_entry,
