@@ -116,8 +116,7 @@ struct specsect {
 };
 
 void rm_some_relocs(struct superbfd *sbfd, asection *isection);
-void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
-			 arelent *orig_reloc, struct supersect *ss);
+void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 void write_ksplice_size(struct superbfd *sbfd, asymbol **symp);
 void write_ksplice_patch(struct superbfd *sbfd, const char *symname);
@@ -393,7 +392,7 @@ void rm_some_relocs(struct superbfd *sbfd, asection *isection)
 			rm_reloc = 0;
 
 		if (rm_reloc)
-			write_ksplice_reloc(sbfd, isection, *relocp, ss);
+			write_ksplice_reloc(ss, *relocp);
 		else
 			*vec_grow(&ss->relocs, 1) = *relocp;
 	}
@@ -475,8 +474,7 @@ void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 	}
 }
 
-void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
-			 arelent *orig_reloc, struct supersect *ss)
+void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
 
@@ -485,7 +483,7 @@ void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
 	bfd_vma addend = get_reloc_offset(ss, orig_reloc, 0);
 	blot_section(ss, orig_reloc->address, howto);
 
-	struct supersect *kreloc_ss = make_section(sbfd,
+	struct supersect *kreloc_ss = make_section(ss->parent,
 						   mode("rmsyms") ?
 						   ".ksplice_init_relocs" :
 						   ".ksplice_relocs");
@@ -497,7 +495,7 @@ void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
 	write_reloc(kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address);
 	kreloc->blank_offset = (unsigned long)orig_reloc->address;
-	write_system_map_array(sbfd, kreloc_ss, &kreloc->sym_addrs,
+	write_system_map_array(ss->parent, kreloc_ss, &kreloc->sym_addrs,
 			       &kreloc->num_sym_addrs, sym_ptr);
 	kreloc->pcrel = howto->pc_relative;
 	kreloc->addend = addend;
