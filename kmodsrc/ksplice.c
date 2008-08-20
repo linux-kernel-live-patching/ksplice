@@ -383,14 +383,12 @@ static int is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update_bundle *bundle);
 static void print_conflicts(struct update_bundle *bundle);
 
-#ifdef CONFIG_MODULE_UNLOAD
 static int add_dependency_on_address(struct module_pack *pack,
 				     unsigned long addr);
 static int add_patch_dependencies(struct module_pack *pack);
 #ifdef KSPLICE_STANDALONE
 static int use_module(struct module *a, struct module *b);
 #endif /* KSPLICE_STANDALONE */
-#endif /* CONFIG_MODULE_UNLOAD */
 
 /* helper */
 static int activate_helper(struct module_pack *pack);
@@ -579,10 +577,8 @@ static int activate_primary(struct module_pack *pack)
 	if (resolve_patch_symbols(pack) != 0)
 		return -1;
 
-#ifdef CONFIG_MODULE_UNLOAD
 	if (add_patch_dependencies(pack) != 0)
 		return -1;
-#endif /* CONFIG_MODULE_UNLOAD */
 
 	list_for_each_entry(rec, &pack->safety_records, list) {
 		for (p = pack->patches; p < pack->patches_end; p++) {
@@ -1515,13 +1511,11 @@ skip_using_system_map:
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
 
-#ifdef CONFIG_MODULE_UNLOAD
 	if (!pre) {
 		ret = add_dependency_on_address(pack, sym_addr);
 		if (ret < 0)
 			return ret;
 	}
-#endif /* CONFIG_MODULE_UNLOAD */
 
 #ifdef KSPLICE_STANDALONE
 	if (r->pcrel && run_pre_reloc) {
@@ -1606,7 +1600,6 @@ skip_using_system_map:
 	return 0;
 }
 
-#ifdef CONFIG_MODULE_UNLOAD
 static int add_dependency_on_address(struct module_pack *pack,
 				     unsigned long addr)
 {
@@ -1634,6 +1627,7 @@ static int add_patch_dependencies(struct module_pack *pack)
 }
 
 #ifdef KSPLICE_STANDALONE
+#ifdef CONFIG_MODULE_UNLOAD
 struct module_use {
 	struct list_head list;
 	struct module *module_which_uses;
@@ -1687,8 +1681,13 @@ static int use_module(struct module *a, struct module *b)
 #endif /* LINUX_VERSION_CODE */
 	return 1;
 }
-#endif /* KSPLICE_STANDALONE */
+#else /* CONFIG_MODULE_UNLOAD */
+static int use_module(struct module *a, struct module *b)
+{
+	return 1;
+}
 #endif /* CONFIG_MODULE_UNLOAD */
+#endif /* KSPLICE_STANDALONE */
 
 static int compute_address(struct module_pack *pack, const char *sym_name,
 			   struct list_head *vals, int pre)
