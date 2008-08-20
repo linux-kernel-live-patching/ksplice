@@ -139,9 +139,8 @@ int match_varargs(const char *str);
 int want_section(asection *sect);
 const struct specsect *is_special(asection *sect);
 struct supersect *make_section(struct superbfd *sbfd, const char *name);
-void __attribute__((format(printf, 4, 5)))
-write_string(struct superbfd *sbfd, struct supersect *ss, const char **addr,
-	     const char *fmt, ...);
+void __attribute__((format(printf, 3, 4)))
+write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
 void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
 		     asection *crc_sect);
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
@@ -351,7 +350,7 @@ void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
 			/* Replace name with a mangled name */
 			write_ksplice_export(sbfd, sym_ptr->name, modestr
 					     + strlen("export__ksymtab"));
-			write_string(sbfd, ss, (const char **)&sym->name,
+			write_string(ss, (const char **)&sym->name,
 				     "DISABLED_%s_%s", sym_ptr->name,
 				     addstr_all);
 
@@ -433,20 +432,19 @@ void write_reloc(struct superbfd *sbfd, struct supersect *ss, const void *addr,
 	*vec_grow(&ss->new_relocs, 1) = reloc;
 }
 
-void write_string(struct superbfd *sbfd, struct supersect *ss,
-		  const char **addr, const char *fmt, ...)
+void write_string(struct supersect *ss, const char **addr, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
 	int len = vsnprintf(NULL, 0, fmt, ap);
 	va_end(ap);
-	struct supersect *str_ss = make_section(sbfd, ".ksplice_str");
+	struct supersect *str_ss = make_section(ss->parent, ".ksplice_str");
 	char *buf = sect_grow(str_ss, len + 1, char);
 	va_start(ap, fmt);
 	vsnprintf(buf, len + 1, fmt, ap);
 	va_end(ap);
 
-	write_reloc(sbfd, ss, addr, &str_ss->symbol,
+	write_reloc(ss->parent, ss, addr, &str_ss->symbol,
 		    (void *)buf - str_ss->contents.data);
 }
 
@@ -495,7 +493,7 @@ void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
 	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
 						 struct ksplice_reloc);
 
-	write_string(sbfd, kreloc_ss, &kreloc->sym_name, "%s%s",
+	write_string(kreloc_ss, &kreloc->sym_name, "%s%s",
 		     sym_ptr->name, addstr_all);
 	write_reloc(sbfd, kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address);
@@ -552,7 +550,7 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
 					       struct ksplice_size);
 
-	write_string(sbfd, ksize_ss, &ksize->name, "%s%s%s",
+	write_string(ksize_ss, &ksize->name, "%s%s%s",
 		     sym->name, addstr_all, addstr_sect);
 	ksize->size = symsize;
 	ksize->flags = 0;
@@ -577,7 +575,7 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	}
 	assert(symp < sbfd->syms.data + sbfd->syms.size);
 
-	write_string(sbfd, kpatch_ss, &kpatch->oldstr, "%s%s%s",
+	write_string(kpatch_ss, &kpatch->oldstr, "%s%s%s",
 		     symname, addstr_all, addstr_sect_pre);
 	kpatch->oldaddr = 0;
 	write_reloc(sbfd, kpatch_ss, &kpatch->repladdr, symp, 0);
@@ -590,14 +588,14 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 	struct ksplice_export *export = sect_grow(export_ss, 1,
 						  struct ksplice_export);
 
-	write_string(sbfd, export_ss, &export->type, "%s", export_type);
+	write_string(export_ss, &export->type, "%s", export_type);
 	if (mode("exportdel")) {
-		write_string(sbfd, export_ss, &export->name, "%s", symname);
-		write_string(sbfd, export_ss, &export->new_name,
+		write_string(export_ss, &export->name, "%s", symname);
+		write_string(export_ss, &export->new_name,
 			     "DISABLED_%s_%s", symname, addstr_all);
 	} else {
-		write_string(sbfd, export_ss, &export->new_name, "%s", symname);
-		write_string(sbfd, export_ss, &export->name, "DISABLED_%s_%s",
+		write_string(export_ss, &export->new_name, "%s", symname);
+		write_string(export_ss, &export->name, "DISABLED_%s_%s",
 			     symname, addstr_all);
 	}
 }
