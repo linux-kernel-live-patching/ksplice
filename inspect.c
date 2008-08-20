@@ -63,7 +63,7 @@ void show_ksplice_reloc(struct supersect *ss,
 
 void show_ksplice_relocs(struct supersect *kreloc_ss)
 {
-	printf("KSPLICE RELOCATIONS:\n\n");
+	printf("KSPLICE RELOCATIONS IN SECTION %s:\n\n", kreloc_ss->name);
 	const struct ksplice_reloc *kreloc;
 	for (kreloc = kreloc_ss->contents.data; (void *)kreloc <
 	     kreloc_ss->contents.data + kreloc_ss->contents.size; kreloc++)
@@ -157,6 +157,16 @@ int main(int argc, char *argv[])
 	assert(bfd_check_format_matches(ibfd, bfd_object, &matching));
 
 	struct superbfd *sbfd = fetch_superbfd(ibfd);
+
+	asection *kreloc_init_sect =
+	    bfd_get_section_by_name(ibfd, ".ksplice_init_relocs");
+	if (kreloc_init_sect != NULL) {
+		struct supersect *kreloc_init_ss =
+		    fetch_supersect(sbfd, kreloc_init_sect);
+		show_ksplice_relocs(kreloc_init_ss);
+	} else {
+		printf("No ksplice init relocations.\n\n");
+	}
 
 	asection *kreloc_sect = bfd_get_section_by_name(ibfd,
 							".ksplice_relocs");
