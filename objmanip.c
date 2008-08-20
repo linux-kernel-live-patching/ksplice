@@ -104,7 +104,7 @@
 #include <limits.h>
 
 struct wsect {
-	const char *name;
+	asection *sect;
 	struct wsect *next;
 };
 
@@ -577,7 +577,7 @@ void rm_from_special(struct superbfd *sbfd, const struct specsect *s)
 
 		asection *p;
 		for (p = sbfd->abfd->sections; p != NULL; p = p->next) {
-			if (strcmp(sym->name, p->name) == 0
+			if (sym->section == p
 			    && !is_special(p) && !want_section(p))
 				break;
 		}
@@ -617,7 +617,7 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 		    (!starts_with(sym->section->name, ".text") ||
 		     get_reloc_offset(ss, *relocp, 1) != 0)) {
 			struct wsect *w = malloc(sizeof(*w));
-			w->name = ((asection *)looking_for)->name;
+			w->sect = looking_for;
 			w->next = wanted_sections;
 			wanted_sections = w;
 			break;
@@ -869,7 +869,6 @@ int want_section(asection *sect)
 		".parainstructions",
 		NULL
 	};
-	const char *name = sect->name;
 
 	if (!mode("keep"))
 		return 1;
@@ -878,24 +877,24 @@ int want_section(asection *sect)
 		return 1;
 	const struct wsect *w = wanted_sections;
 	for (; w != NULL; w = w->next) {
-		if (strcmp(w->name, name) == 0)
+		if (w->sect == sect)
 			return 1;
 	}
 
-	if (starts_with(name, ".ksplice"))
+	if (starts_with(sect->name, ".ksplice"))
 		return 1;
-	if (mode("keep-helper") && starts_with(name, ".text"))
+	if (mode("keep-helper") && starts_with(sect->name, ".text"))
 		return 1;
-	if (mode("keep-primary") && starts_with(name, "__ksymtab"))
+	if (mode("keep-primary") && starts_with(sect->name, "__ksymtab"))
 		return 1;
-	if (mode("keep-primary") && starts_with(name, "__kcrctab"))
+	if (mode("keep-primary") && starts_with(sect->name, "__kcrctab"))
 		return 1;
-	if (match_varargs(name))
+	if (match_varargs(sect->name))
 		return 1;
 
 	int i;
 	for (i = 0; static_want[i] != NULL; i++) {
-		if (strcmp(name, static_want[i]) == 0)
+		if (strcmp(sect->name, static_want[i]) == 0)
 			return 1;
 	}
 	return 0;
