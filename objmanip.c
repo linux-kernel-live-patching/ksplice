@@ -115,7 +115,7 @@ struct specsect {
 	int entry_size;
 };
 
-void rm_some_relocs(struct superbfd *sbfd, asection *isection);
+void rm_some_relocs(struct supersect *ss);
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 void write_ksplice_size(struct superbfd *sbfd, asymbol **symp);
@@ -257,10 +257,11 @@ int main(int argc, char *argv[])
 
 	asection *p;
 	for (p = ibfd->sections; p != NULL; p = p->next) {
+		struct supersect *ss = fetch_supersect(isbfd, p);
 		if (is_special(p) || starts_with(p->name, ".ksplice"))
 			continue;
 		if (want_section(p) || mode("rmsyms"))
-			rm_some_relocs(isbfd, p);
+			rm_some_relocs(ss);
 	}
 
 	const struct specsect *ss;
@@ -370,9 +371,8 @@ void rm_some_exports(struct superbfd *sbfd, asection *sym_sect,
 	}
 }
 
-void rm_some_relocs(struct superbfd *sbfd, asection *isection)
+void rm_some_relocs(struct supersect *ss)
 {
-	struct supersect *ss = fetch_supersect(sbfd, isection);
 	struct arelentp_vec orig_relocs;
 	vec_move(&orig_relocs, &ss->relocs);
 
