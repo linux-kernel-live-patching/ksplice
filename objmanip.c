@@ -118,8 +118,7 @@ struct specsect {
 void rm_some_relocs(struct superbfd *sbfd, asection *isection);
 void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
 			 arelent *orig_reloc, struct supersect *ss);
-void blot_section(struct superbfd *sbfd, asection *sect, int offset,
-		  reloc_howto_type *howto);
+void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 void write_ksplice_size(struct superbfd *sbfd, asymbol **symp);
 void write_ksplice_patch(struct superbfd *sbfd, const char *symname);
 void rm_from_special(struct superbfd *sbfd, const struct specsect *s);
@@ -484,7 +483,7 @@ void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
 	reloc_howto_type *howto = orig_reloc->howto;
 
 	bfd_vma addend = get_reloc_offset(ss, orig_reloc, 0);
-	blot_section(sbfd, isection, orig_reloc->address, howto);
+	blot_section(ss, orig_reloc->address, howto);
 
 	struct supersect *kreloc_ss = make_section(sbfd,
 						   mode("rmsyms") ?
@@ -509,16 +508,14 @@ void write_ksplice_reloc(struct superbfd *sbfd, asection *isection,
 
 #define CANARY(x, canary) ((x & ~howto->dst_mask) | (canary & howto->dst_mask))
 
-void blot_section(struct superbfd *sbfd, asection *sect, int offset,
-		  reloc_howto_type *howto)
+void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto)
 {
-	struct supersect *ss = fetch_supersect(sbfd, sect);
 	int bits = bfd_get_reloc_size(howto) * 8;
 	void *address = ss->contents.data + offset;
-	bfd_vma x = bfd_get(bits, sbfd->abfd, address);
+	bfd_vma x = bfd_get(bits, ss->parent->abfd, address);
 	x = (x & ~howto->dst_mask) |
 	    ((bfd_vma)0x7777777777777777LL & howto->dst_mask);
-	bfd_put(bits, sbfd->abfd, x, address);
+	bfd_put(bits, ss->parent->abfd, x, address);
 }
 
 void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
