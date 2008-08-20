@@ -185,3 +185,13 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment);
 
 bfd_vma addr_offset(struct supersect *ss, const void *addr);
 bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc);
+bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
+		   asymbol **symp);
+const void *read_pointer(struct supersect *ss, void *const *addr,
+			 struct supersect **ssp);
+const char *read_string(struct supersect *ss, const char *const *addr);
+char *str_pointer(struct supersect *ss, void *const *addr);
+
+#define read_num(ss, addr) ((typeof(*(addr))) \
+			    read_reloc(ss, addr, sizeof(*(addr)), NULL))
+

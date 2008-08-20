@@ -14,7 +14,9 @@
  *  02110-1301, USA.
  */
 
+#define _GNU_SOURCE
 #include "objcommon.h"
+#include <stdio.h>
 
 void vec_do_reserve(void **data, size_t *mem_size, size_t new_size)
 {
@@ -158,3 +160,60 @@ bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc)
 	return x + add;
 }
 
+bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
+		   asymbol **symp)
+{
+	arelent **relocp;
+	bfd_vma val = bfd_get(size * 8, ss->parent->abfd, addr);
+	bfd_vma address = addr_offset(ss, addr);
+	for (relocp = ss->relocs.data;
+	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+		arelent *reloc = *relocp;
+		if (reloc->address == address) {
+			if (symp != NULL)
+				*symp = *reloc->sym_ptr_ptr;
+			else if (*reloc->sym_ptr_ptr !=
+				 bfd_abs_section_ptr->symbol)
+				fprintf(stderr, "warning: unexpected "
+					"non-absolute relocation at %s+%lx\n",
+					ss->name, (unsigned long)address);
+			return get_reloc_offset(ss, reloc, 0);
+		}
+	}
+	if (symp != NULL)
+		*symp = *bfd_abs_section_ptr->symbol_ptr_ptr;
+	return val;
+}
+
+char *str_pointer(struct supersect *ss, void *const *addr)
+{
+	asymbol *sym;
+	bfd_vma offset = read_reloc(ss, addr, sizeof(*addr), &sym);
+	char *str;
+	assert(asprintf(&str, "%s+%lx", sym->name, (unsigned long)offset) >= 0);
+	return str;
+}
+
+const void *read_pointer(struct supersect *ss, void *const *addr,
+			 struct supersect **data_ssp)
+{
+	asymbol *sym;
+	bfd_vma offset = read_reloc(ss, addr, sizeof(*addr), &sym);
+	struct supersect *data_ss = fetch_supersect(ss->parent, sym->section);
+	if (bfd_is_abs_section(sym->section) && sym->value + offset == 0)
+		return NULL;
+	if (bfd_is_const_section(sym->section)) {
+		fprintf(stderr, "warning: unexpected relocation to const "
+			"section at %s+%lx\n", data_ss->name,
+			(unsigned long)addr_offset(data_ss, addr));
+		return NULL;
+	}
+	if (data_ssp != NULL)
+		*data_ssp = data_ss;
+	return data_ss->contents.data + sym->value + offset;
+}
+
+const char *read_string(struct supersect *ss, const char *const *addr)
+{
+	return read_pointer(ss, (void *const *)addr, NULL);
+}
