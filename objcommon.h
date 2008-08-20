@@ -171,7 +171,7 @@ struct kernel_symbol {
 struct superbfd *fetch_superbfd(bfd *abfd);
 struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect);
 extern struct supersect *new_supersects;
-struct supersect *new_supersect(const char *name);
+struct supersect *new_supersect(struct superbfd *sbfd, const char *name);
 
 #define sect_grow(ss, n, type)					\
 	((type *)sect_do_grow(ss, n, sizeof(type), __alignof__(type)))

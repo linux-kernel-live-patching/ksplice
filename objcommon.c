@@ -90,7 +90,7 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 
 struct supersect *new_supersects = NULL;
 
-struct supersect *new_supersect(const char *name)
+struct supersect *new_supersect(struct superbfd *sbfd, const char *name)
 {
 	struct supersect *ss;
 	for (ss = new_supersects; ss != NULL; ss = ss->next) {
@@ -99,7 +99,7 @@ struct supersect *new_supersect(const char *name)
 	}
 
 	struct supersect *new = malloc(sizeof(*new));
-	new->parent = NULL;
+	new->parent = sbfd;
 	new->name = name;
 	new->next = new_supersects;
 	new_supersects = new;

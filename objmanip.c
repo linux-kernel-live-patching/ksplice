@@ -407,7 +407,7 @@ struct supersect *make_section(struct superbfd *sbfd, const char *name)
 	if (sect != NULL)
 		return fetch_supersect(sbfd, sect);
 	else
-		return new_supersect(name);
+		return new_supersect(sbfd, name);
 }
 
 void write_reloc(struct superbfd *sbfd, struct supersect *ss, const void *addr,
