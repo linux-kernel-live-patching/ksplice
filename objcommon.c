@@ -54,6 +54,7 @@ struct superbfd *fetch_superbfd(bfd *abfd)
 	abfd->usrdata = sbfd;
 	sbfd->abfd = abfd;
 	get_syms(abfd, &sbfd->syms);
+	sbfd->new_supersects = NULL;
 	return sbfd;
 }
 
@@ -88,12 +89,10 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	return new;
 }
 
-struct supersect *new_supersects = NULL;
-
 struct supersect *new_supersect(struct superbfd *sbfd, const char *name)
 {
 	struct supersect *ss;
-	for (ss = new_supersects; ss != NULL; ss = ss->next) {
+	for (ss = sbfd->new_supersects; ss != NULL; ss = ss->next) {
 		if (strcmp(name, ss->name) == 0)
 			return ss;
 	}
@@ -101,8 +100,8 @@ struct supersect *new_supersect(struct superbfd *sbfd, const char *name)
 	struct supersect *new = malloc(sizeof(*new));
 	new->parent = sbfd;
 	new->name = name;
-	new->next = new_supersects;
-	new_supersects = new;
+	new->next = sbfd->new_supersects;
+	sbfd->new_supersects = new;
 	new->flags = SEC_ALLOC | SEC_HAS_CONTENTS | SEC_RELOC;
 
 	vec_init(&new->contents);

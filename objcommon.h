@@ -149,6 +149,7 @@ DECLARE_VEC_TYPE(asymbol *, asymbolp_vec);
 struct superbfd {
 	bfd *abfd;
 	struct asymbolp_vec syms;
+	struct supersect *new_supersects;
 };
 
 struct supersect {
@@ -170,7 +171,6 @@ struct kernel_symbol {
 
 struct superbfd *fetch_superbfd(bfd *abfd);
 struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect);
-extern struct supersect *new_supersects;
 struct supersect *new_supersect(struct superbfd *sbfd, const char *name);
 void supersect_move(struct supersect *dest_ss, struct supersect *src_ss);
 
