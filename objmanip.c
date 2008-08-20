@@ -713,8 +713,6 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 	   any output is done.  Thus, we traverse all sections multiple times.  */
 	bfd_map_over_sections(ibfd, setup_section, obfd);
 
-	assert(bfd_count_sections(obfd));
-
 	struct supersect *ss;
 	for (ss = new_supersects; ss != NULL; ss = ss->next)
 		setup_new_section(obfd, ss);
