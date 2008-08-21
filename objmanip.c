@@ -298,72 +298,40 @@ int main(int argc, char *argv[])
 
 void rm_some_exports(struct supersect *ss, struct supersect *crc_ss)
 {
-	struct void_vec orig_contents;
-	struct arelentp_vec orig_relocs;
-	vec_move(&orig_contents, &ss->contents);
-	vec_move(&orig_relocs, &ss->relocs);
+	assert(mode("export__ksymtab"));
+	if (crc_ss != NULL)
+		assert(ss->contents.size * sizeof(unsigned long) ==
+		       crc_ss->contents.size * sizeof(struct kernel_symbol));
 
-	struct void_vec orig_crc_contents;
-	struct arelentp_vec orig_crc_relocs;
-	if (crc_ss != NULL) {
-		vec_move(&orig_crc_contents, &crc_ss->contents);
-		vec_move(&orig_crc_relocs, &crc_ss->relocs);
-	}
-	void *orig_entry, *new_entry, *orig_crc_entry, *new_crc_entry;
-	arelent **relocp, **new_relocp, **crc_relocp, **new_crc_relocp;
-	long mod, crc_mod;
-	int entry_size = sizeof(struct kernel_symbol);
-	int crc_entry_size = sizeof(unsigned long);
-	int relocs_per_entry = 2;
-	int crc_relocs_per_entry = 1;
-	assert(orig_contents.size * relocs_per_entry ==
-	       orig_relocs.size * entry_size);
-	if (crc_ss != NULL) {
-		assert(orig_contents.size * crc_entry_size ==
-		       orig_crc_contents.size * entry_size);
-		assert(orig_crc_contents.size * crc_relocs_per_entry ==
-		       orig_crc_relocs.size * crc_entry_size);
-	}
-	for (orig_entry = orig_contents.data, relocp = orig_relocs.data,
-	     orig_crc_entry = orig_crc_contents.data,
-	     crc_relocp = orig_crc_relocs.data;
-	     orig_entry < orig_contents.data + orig_contents.size;
-	     orig_entry += entry_size, relocp += relocs_per_entry,
-	     orig_crc_entry += crc_entry_size,
-	     crc_relocp += crc_relocs_per_entry) {
-		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
-		if (match_varargs(sym_ptr->name)) {
-			new_entry = vec_grow(&ss->contents, entry_size);
-			memcpy(new_entry, orig_entry, entry_size);
-			struct kernel_symbol *sym =
-			    (struct kernel_symbol *)new_entry;
-			mod = ((new_entry - ss->contents.data) -
-			       (orig_entry - orig_contents.data));
-			new_relocp = vec_grow(&ss->relocs, 1);
-			*new_relocp = *relocp;
-			(*new_relocp)->address += mod;
-			/* Replace name with a mangled name */
-			write_ksplice_export(ss->parent, sym_ptr->name, modestr
-					     + strlen("export__ksymtab"));
-			write_string(ss, (const char **)&sym->name,
-				     "DISABLED_%s_%s", sym_ptr->name,
-				     addstr_all);
+	struct supersect orig_ss, orig_crc_ss;
+	supersect_move(&orig_ss, ss);
+	if (crc_ss != NULL)
+		supersect_move(&orig_crc_ss, crc_ss);
 
-			if (crc_ss != NULL) {
-				new_crc_entry = vec_grow(&crc_ss->contents,
-							 crc_entry_size);
-				memcpy(new_crc_entry, orig_crc_entry,
-				       crc_entry_size);
-				crc_mod = ((new_crc_entry -
-					    crc_ss->contents.data) -
-					   (orig_crc_entry -
-					    orig_crc_contents.data));
-				new_crc_relocp = vec_grow(&crc_ss->relocs,
-							  crc_relocs_per_entry);
-				*new_crc_relocp = *crc_relocp;
-				(*new_crc_relocp)->address += crc_mod;
-			}
-		}
+	struct kernel_symbol *orig_ksym;
+	unsigned long *orig_crc;
+	for (orig_ksym = orig_ss.contents.data,
+	     orig_crc = orig_crc_ss.contents.data;
+	     (void *)orig_ksym < orig_ss.contents.data + orig_ss.contents.size;
+	     orig_ksym++, orig_crc++) {
+		asymbol *sym;
+		read_reloc(&orig_ss, &orig_ksym->value,
+			   sizeof(orig_ksym->value), &sym);
+		if (!match_varargs(sym->name))
+			continue;
+
+		struct kernel_symbol *ksym = sect_grow(ss, 1, typeof(*ksym));
+		sect_copy(ss, &ksym->value, &orig_ss, &orig_ksym->value, 1);
+		/* Replace name with a mangled name */
+		write_ksplice_export(ss->parent, sym->name,
+				     modestr + strlen("export__ksymtab"));
+		write_string(ss, (const char **)&ksym->name,
+			     "DISABLED_%s_%s", sym->name, addstr_all);
+
+		if (crc_ss != NULL)
+			sect_copy(crc_ss,
+				  sect_grow(crc_ss, 1, typeof(*orig_crc)),
+				  &orig_crc_ss, orig_crc, 1);
 	}
 }
 
