@@ -113,6 +113,14 @@ struct supersect *new_supersect(struct superbfd *sbfd, const char *name)
 	return new;
 }
 
+void supersect_move(struct supersect *dest_ss, struct supersect *src_ss)
+{
+	*dest_ss = *src_ss;
+	vec_init(&src_ss->contents);
+	vec_init(&src_ss->relocs);
+	vec_init(&src_ss->new_relocs);
+}
+
 void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment)
 {
 	if (ss->alignment < ffs(alignment) - 1)
