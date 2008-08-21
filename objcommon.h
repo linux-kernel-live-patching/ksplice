@@ -177,6 +177,11 @@ struct supersect *new_supersect(struct superbfd *sbfd, const char *name);
 	((type *)sect_do_grow(ss, n, sizeof(type), __alignof__(type)))
 void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment);
 
+#define sect_copy(dest_ss, dest, src_ss, src, n)			\
+	sect_do_copy(dest_ss, dest, src_ss, src, (n) * sizeof(*(src)))
+void sect_do_copy(struct supersect *dest_ss, void *dest,
+		  struct supersect *src_ss, const void *src, size_t n);
+
 #define starts_with(str, prefix)			\
 	(strncmp(str, prefix, strlen(prefix)) == 0)
 #define ends_with(str, suffix)						\

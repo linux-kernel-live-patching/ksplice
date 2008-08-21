@@ -123,6 +123,36 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment)
 	return out + pad;
 }
 
+static void mod_relocs(struct arelentp_vec *dest_relocs,
+		       struct arelentp_vec *src_relocs,
+		       bfd_size_type start, bfd_size_type end,
+		       bfd_size_type mod)
+{
+	arelent **relocp;
+	for (relocp = src_relocs->data;
+	     relocp < src_relocs->data + src_relocs->size; relocp++) {
+		if ((*relocp)->address >= start && (*relocp)->address < end) {
+			arelent *reloc = malloc(sizeof(*reloc));
+			assert(reloc != NULL);
+			*reloc = **relocp;
+			reloc->address += mod;
+			*vec_grow(dest_relocs, 1) = reloc;
+		}
+	}
+}
+
+void sect_do_copy(struct supersect *dest_ss, void *dest,
+		  struct supersect *src_ss, const void *src, size_t n)
+{
+	memcpy(dest, src, n);
+	bfd_size_type start = src - src_ss->contents.data;
+	bfd_size_type end = start + n;
+	bfd_size_type mod = (dest - dest_ss->contents.data) -
+	    (src - src_ss->contents.data);
+	mod_relocs(&dest_ss->relocs, &src_ss->relocs, start, end, mod);
+	mod_relocs(&dest_ss->new_relocs, &src_ss->new_relocs, start, end, mod);
+}
+
 bfd_vma addr_offset(struct supersect *ss, const void *addr)
 {
 	return (void *)addr - ss->contents.data;
