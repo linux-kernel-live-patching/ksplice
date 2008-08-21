@@ -239,8 +239,8 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 			   disassembler-friendly. */
 			int matched = 0;
 			ret = handle_reloc(pack, (unsigned long)(pre + 4),
-					   (unsigned long)(run + 4), rerun,
-					   &matched);
+					   (unsigned long)(run + 4), 4, 4,
+					   rerun, &matched);
 			if (ret != OK)
 				return ret;
 			if (matched > 0) {
@@ -318,8 +318,9 @@ static abort_t compare_operands(struct module_pack *pack,
 		return OK;
 
 	ret = handle_reloc(pack, (unsigned long)(pre + pre_off),
-				(unsigned long)(run + run_off),
-				rerun, &matched);
+			   (unsigned long)(run + run_off),
+			   ud_operand_len(pre_op), ud_operand_len(run_op),
+			   rerun, &matched);
 	if (ret != OK) {
 		if (rerun)
 			ksdebug(pack, 3, KERN_DEBUG "Matching failure at "
