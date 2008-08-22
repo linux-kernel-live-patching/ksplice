@@ -735,8 +735,7 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 {
 	struct supersect *ss = osection->userdata;
 
-	if (!want_section(osection) || (ss->flags & SEC_GROUP) != 0 ||
-	    ss->contents.size == 0)
+	if ((ss->flags & SEC_GROUP) != 0 || ss->contents.size == 0)
 		return;
 
 	arelent **relocp;
