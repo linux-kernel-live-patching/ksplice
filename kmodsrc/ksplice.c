@@ -895,14 +895,20 @@ static int check_each_task(struct update_bundle *bundle)
 {
 	const struct task_struct *g, *p;
 	int status = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
+/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
 	read_lock(&tasklist_lock);
+#endif /* LINUX_VERSION_CODE */
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
 		if (check_task(bundle, p, 0) < 0)
 			status = check_task(bundle, p, 1);
 	}
 	while_each_thread(g, p);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
+/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
 	read_unlock(&tasklist_lock);
+#endif /* LINUX_VERSION_CODE */
 	return status;
 }
 
