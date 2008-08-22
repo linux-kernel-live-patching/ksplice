@@ -1259,7 +1259,7 @@ static int activate_helper(struct module_pack *pack)
 				   pack->helper_relocs_end, 1) != 0)
 		return -1;
 
-	finished = kcalloc(record_count, 1, GFP_KERNEL);
+	finished = kcalloc(record_count, sizeof(char), GFP_KERNEL);
 	if (finished == NULL) {
 		printk(KERN_ERR "ksplice: out of memory\n");
 		return -ENOMEM;
