@@ -2425,7 +2425,7 @@ static int debug;
 module_param(debug, int, 0600);
 MODULE_PARM_DESC(debug, "Debug level");
 
-struct module_pack ksplice_pack = {
+static struct module_pack ksplice_pack = {
 	.name = "ksplice_" STR(KSPLICE_KID),
 	.kid = "init_" STR(KSPLICE_KID),
 	.target_name = NULL,
