@@ -1131,10 +1131,9 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	int ret;
 	const char *str = "ksplice_";
 	char *buf;
-	bundle = kmalloc(sizeof(struct update_bundle), GFP_KERNEL);
+	bundle = kcalloc(1, sizeof(struct update_bundle), GFP_KERNEL);
 	if (bundle == NULL)
 		return NULL;
-	memset(bundle, 0, sizeof(struct update_bundle));
 	buf = kmalloc(strlen(kid) + strlen(str) + 1, GFP_KERNEL);
 	if (buf == NULL) {
 		printk(KERN_ERR "ksplice: out of memory\n");
