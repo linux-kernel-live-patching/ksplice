@@ -813,11 +813,11 @@ static int __apply_patches(void *bundleptr)
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		if (try_module_get(pack->primary) != 1) {
-			struct module_pack *p;
-			list_for_each_entry(p, &bundle->packs, list) {
-				if (p == pack)
+			struct module_pack *pack1;
+			list_for_each_entry(pack1, &bundle->packs, list) {
+				if (pack1 == pack)
 					break;
-				module_put(p->primary);
+				module_put(pack1->primary);
 			}
 			return -ENODEV;
 		}
