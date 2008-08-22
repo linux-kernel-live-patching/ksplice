@@ -54,17 +54,32 @@ enum ksplice_stage_enum {
 	PREPARING, APPLIED, REVERSED
 };
 
-enum ksplice_abort_cause_enum {
-	NONE, NO_MATCH, BAD_SYSTEM_MAP, CODE_BUSY, MODULE_BUSY, UNEXPECTED,
-	FAILED_TO_FIND, ALREADY_REVERSED, MISSING_EXPORT
-};
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
+/* 5d7b32de9935c65ca8285ac6ec2382afdbb5d479 was after 2.6.8 */
+#define __bitwise__
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
+/* af4ca457eaf2d6682059c18463eb106e2ce58198 was after 2.6.14 */
+#define __bitwise__ __bitwise
+#endif
+
+typedef int __bitwise__ abort_t;
+
+#define NONE ((__force abort_t) 0)
+#define NO_MATCH ((__force abort_t) 1)
+#define BAD_SYSTEM_MAP ((__force abort_t) 2)
+#define CODE_BUSY ((__force abort_t) 3)
+#define MODULE_BUSY ((__force abort_t) 4)
+#define UNEXPECTED ((__force abort_t) 5)
+#define FAILED_TO_FIND ((__force abort_t) 6)
+#define ALREADY_REVERSED ((__force abort_t) 7)
+#define MISSING_EXPORT ((__force abort_t) 8)
 
 struct update_bundle {
 	const char *kid;
 	const char *name;
 	struct kobject kobj;
 	enum ksplice_stage_enum stage;
-	enum ksplice_abort_cause_enum abort_cause;
+	abort_t abort_cause;
 	int debug;
 #ifdef CONFIG_DEBUG_FS
 	struct debugfs_blob_wrapper debug_blob;
