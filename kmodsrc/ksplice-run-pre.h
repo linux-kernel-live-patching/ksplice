@@ -196,7 +196,7 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 			matched = handle_myst_reloc(pack, (unsigned long)pre,
 						    (unsigned long)run, rerun);
 			if (matched < 0) {
-				ksdebug(pack, 3, KERN_DEBUG "Matching failure"
+				ksdebug(pack, 3, KERN_DEBUG "Matching failure "
 					"at offset %lx\n", (unsigned long)pre -
 					pre_addr);
 				return 1;
