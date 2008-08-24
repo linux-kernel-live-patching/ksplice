@@ -461,6 +461,10 @@ static void add_to_bundle(struct module_pack *pack,
 			  struct update_bundle *bundle);
 static int ksplice_sysfs_init(struct update_bundle *bundle);
 
+#ifndef KSPLICE_STANDALONE
+static struct kobject *ksplice_kobj;
+#endif /* !KSPLICE_STANDALONE */
+
 struct ksplice_attribute {
 	struct attribute attr;
 	ssize_t (*show)(struct update_bundle *bundle, char *buf);
@@ -1193,11 +1197,15 @@ static int ksplice_sysfs_init(struct update_bundle *bundle)
 	memset(&bundle->kobj, 0, sizeof(bundle->kobj));
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 /* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
+#ifndef KSPLICE_STANDALONE
 	ret = kobject_init_and_add(&bundle->kobj, &ksplice_ktype,
-				   &THIS_MODULE->mkobj.kobj, "%s",
-				   bundle->name);
+				   ksplice_kobj, "%s", bundle->kid);
+#else /* KSPLICE_STANDALONE */
+	ret = kobject_init_and_add(&bundle->kobj, &ksplice_ktype,
+				   &THIS_MODULE->mkobj.kobj, "ksplice");
+#endif /* KSPLICE_STANDALONE */
 #else /* LINUX_VERSION_CODE < */
-	ret = kobject_set_name(&bundle->kobj, "%s", bundle->name);
+	ret = kobject_set_name(&bundle->kobj, "%s", "ksplice");
 	if (ret != 0)
 		return ret;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
@@ -2461,6 +2469,10 @@ static int init_ksplice(void)
 				   ksplice_init_relocs_end, 1);
 	if (pack->bundle->abort_cause == OK)
 		bootstrapped = 1;
+#else /* !KSPLICE_STANDALONE */
+	ksplice_kobj = kobject_create_and_add("ksplice", kernel_kobj);
+	if (ksplice_kobj == NULL)
+		return -ENOMEM;
 #endif /* KSPLICE_STANDALONE */
 	return 0;
 }

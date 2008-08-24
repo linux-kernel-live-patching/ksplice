@@ -74,14 +74,14 @@ sub view_list {
 		next unless my ($mid) = m/^ksplice_(\S*)\s/;
 		$module = "ksplice_$mid";
 		($kid = $mid) =~ s/[-_].*$//;
-		next unless (-e "/sys/module/$module/$module/stage");
-		open STAGE, '<', "/sys/module/$module/$module/stage" or next;
+		next unless (-e "/sys/module/$module/ksplice/stage");
+		open STAGE, '<', "/sys/module/$module/ksplice/stage" or next;
 		print "$kid\n" if(<STAGE> eq "applied\n");
 		close STAGE;
 	}
-	if (-e "/sys/module/ksplice") {
-		chdir("/sys/module/ksplice");
-		foreach $update (glob("ksplice_*")) {
+	if (-e "/sys/kernel/ksplice") {
+		chdir("/sys/kernel/ksplice");
+		foreach $update (glob("*")) {
 			($kid = $update) =~ s/^ksplice_//;
 			print "$kid\n" if(get_stage($kid) eq "applied");
 		}

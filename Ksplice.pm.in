@@ -96,11 +96,11 @@ sub get_sysfs {
 		die "/sys not mounted?\n";
 	}
 	my $update = "ksplice_$kid";
-	if (-d "/sys/module/ksplice/$update") {
-		return "/sys/module/ksplice/$update";
+	if (-d "/sys/kernel/ksplice/$kid") {
+		return "/sys/kernel/ksplice/$kid";
 	}
-	if (-d "/sys/module/$update/$update") {
-		return "/sys/module/$update/$update";
+	if (-d "/sys/module/$update/ksplice") {
+		return "/sys/module/$update/ksplice";
 	}
 	return undef;
 }
