@@ -537,6 +537,8 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	write_string(kpatch_ss, &kpatch->oldstr, "%s%s%s",
 		     symname, addstr_all, addstr_sect_pre);
 	kpatch->oldaddr = 0;
+	kpatch->saved = NULL;
+	kpatch->trampoline = NULL;
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
 }
 

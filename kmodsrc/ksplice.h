@@ -25,7 +25,9 @@ struct ksplice_patch {
 	const char *oldstr;
 	unsigned long oldaddr;
 	unsigned long repladdr;
-	char saved[5];
+	char *saved;
+	char *trampoline;
+	unsigned int size;
 };
 
 struct ksplice_export {

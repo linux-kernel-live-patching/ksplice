@@ -233,12 +233,6 @@ static inline void print_abort(struct module_pack *pack, const char *str)
 	ksdebug(pack, 0, KERN_ERR "ksplice: Aborted. (%s)\n", str);
 }
 
-#ifdef KSPLICE_STANDALONE
-#include "ksplice-run-pre.h"
-#else /* !KSPLICE_STANDALONE */
-#include <asm/ksplice-run-pre.h>
-#endif /* KSPLICE_STANDALONE */
-
 static LIST_HEAD(update_bundles);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
@@ -435,6 +429,14 @@ static const struct kernel_symbol *__find_symbol(const char *name,
 						 const char **export_type,
 						 _Bool gplok, _Bool warn);
 #endif /* KSPLICE_STANDALONE */
+static void insert_trampoline(struct ksplice_patch *p);
+static void remove_trampoline(const struct ksplice_patch *p);
+static void free_trampolines(struct update_bundle *bundle);
+static abort_t prepare_trampolines(struct update_bundle *bundle);
+/* Architecture-specific functions defined in ksplice-run-pre.h */
+static abort_t create_trampoline(struct ksplice_patch *p);
+static unsigned long follow_trampolines(struct module_pack *pack,
+					unsigned long addr);
 
 static abort_t add_dependency_on_address(struct module_pack *pack,
 					 unsigned long addr);
@@ -460,6 +462,12 @@ static void cleanup_ksplice_bundle(struct update_bundle *bundle);
 static void add_to_bundle(struct module_pack *pack,
 			  struct update_bundle *bundle);
 static int ksplice_sysfs_init(struct update_bundle *bundle);
+
+#ifdef KSPLICE_STANDALONE
+#include "ksplice-run-pre.h"
+#else /* !KSPLICE_STANDALONE */
+#include <asm/ksplice-run-pre.h>
+#endif /* KSPLICE_STANDALONE */
 
 #ifndef KSPLICE_STANDALONE
 static struct kobject *ksplice_kobj;
@@ -622,8 +630,12 @@ void cleanup_ksplice_module(struct module_pack *pack)
 {
 	if (pack->bundle == NULL)
 		return;
-	if (pack->bundle->stage != APPLIED)
+	if (pack->bundle->stage != APPLIED) {
+		struct ksplice_patch *p;
+		for (p = pack->patches; p < pack->patches_end; p++)
+			kfree(p->saved);
 		unregister_ksplice_module(pack);
+	}
 }
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
@@ -712,10 +724,70 @@ static abort_t process_exports(struct module_pack *pack)
 	return OK;
 }
 
+static abort_t prepare_trampolines(struct update_bundle *bundle)
+{
+	struct module_pack *pack;
+	struct ksplice_patch *p;
+	abort_t ret;
+
+	list_for_each_entry(pack, &bundle->packs, list) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			ret = create_trampoline(p);
+			if (ret != OK) {
+				free_trampolines(bundle);
+				return ret;
+			}
+			kfree(p->saved);
+			p->saved = kmalloc(p->size, GFP_KERNEL);
+			if (p->saved == NULL) {
+				free_trampolines(bundle);
+				return OUT_OF_MEMORY;
+			}
+		}
+	}
+	return OK;
+}
+
+static void free_trampolines(struct update_bundle *bundle)
+{
+	struct module_pack *pack;
+	struct ksplice_patch *p;
+
+	list_for_each_entry(pack, &bundle->packs, list) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			kfree(p->trampoline);
+			p->trampoline = NULL;
+		}
+	}
+}
+
+static void insert_trampoline(struct ksplice_patch *p)
+{
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	memcpy((void *)p->saved, (void *)p->oldaddr, p->size);
+	memcpy((void *)p->oldaddr, (void *)p->trampoline, p->size);
+	flush_icache_range(p->oldaddr, p->oldaddr + p->size);
+	set_fs(old_fs);
+}
+
+static void remove_trampoline(const struct ksplice_patch *p)
+{
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	memcpy((void *)p->oldaddr, (void *)p->saved, p->size);
+	flush_icache_range(p->oldaddr, p->oldaddr + p->size);
+	set_fs(old_fs);
+}
+
 static abort_t apply_patches(struct update_bundle *bundle)
 {
 	int i;
 	abort_t ret;
+
+	ret = prepare_trampolines(bundle);
+	if (ret != OK)
+		return ret;
 
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(bundle);
@@ -734,6 +806,8 @@ static abort_t apply_patches(struct update_bundle *bundle)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
+	free_trampolines(bundle);
+
 	if (ret == OK) {
 		struct module_pack *pack;
 		const struct ksplice_size *s;
@@ -820,7 +894,6 @@ static int __apply_patches(void *bundleptr)
 	struct module_pack *pack;
 	struct ksplice_patch *p;
 	struct ksplice_export *export;
-	mm_segment_t old_fs;
 	abort_t ret;
 
 	if (bundle->stage == APPLIED)
@@ -853,18 +926,10 @@ static int __apply_patches(void *bundleptr)
 			export->sym->name = export->new_name;
 	}
 
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
 	list_for_each_entry(pack, &bundle->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			memcpy((void *)p->saved, (void *)p->oldaddr, 5);
-			*((u8 *)p->oldaddr) = 0xE9;
-			*((u32 *)(p->oldaddr + 1)) =
-			    p->repladdr - (p->oldaddr + 5);
-			flush_icache_range(p->oldaddr, p->oldaddr + 5);
-		}
+		for (p = pack->patches; p < pack->patches_end; p++)
+			insert_trampoline(p);
 	}
-	set_fs(old_fs);
 	return (__force int)OK;
 }
 
@@ -874,7 +939,6 @@ static int __reverse_patches(void *bundleptr)
 	struct module_pack *pack;
 	const struct ksplice_patch *p;
 	struct ksplice_export *export;
-	mm_segment_t old_fs;
 	abort_t ret;
 
 	if (bundle->stage != APPLIED)
@@ -903,15 +967,10 @@ static int __reverse_patches(void *bundleptr)
 			export->sym->name = export->saved_name;
 	}
 
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
 	list_for_each_entry(pack, &bundle->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			memcpy((void *)p->oldaddr, (void *)p->saved, 5);
-			flush_icache_range(p->oldaddr, p->oldaddr + 5);
-		}
+		for (p = pack->patches; p < pack->patches_end; p++)
+			remove_trampoline(p);
 	}
-	set_fs(old_fs);
 	return (__force int)OK;
 }
 

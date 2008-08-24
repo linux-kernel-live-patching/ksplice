@@ -143,8 +143,6 @@ static void print_bytes(struct module_pack *pack,
 			const unsigned char *pre, int prec);
 static int jumplen(const unsigned char *addr);
 static int jumpsize(const unsigned char *addr);
-static unsigned long follow_trampolines(struct module_pack *pack,
-					unsigned long addr);
 static int match_jump_types(const unsigned char *run, const unsigned char *pre);
 static int canonicalize_jump(const unsigned char *addr);
 
@@ -158,8 +156,7 @@ static abort_t run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 	if (size == 0)
 		return NO_MATCH;
 
-	if (size >= 5)
-		run_addr = follow_trampolines(pack, run_addr);
+	run_addr = follow_trampolines(pack, run_addr);
 
 	run = (const unsigned char *)run_addr;
 	pre = (const unsigned char *)pre_addr;
@@ -333,7 +330,7 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr)
 {
 	if (virtual_address_mapped(addr) &&
-	    virtual_address_mapped(addr + 4) &&
+	    virtual_address_mapped(addr + 5 - 1) &&
 	    *((const unsigned char *)addr) == 0xE9) {
 		/* Remember to add the length of the e9 */
 		unsigned long new_addr = addr + 5 + *(int32_t *)(addr + 1);
@@ -347,4 +344,15 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 		}
 	}
 	return addr;
+}
+
+static abort_t create_trampoline(struct ksplice_patch *p)
+{
+	p->trampoline = kmalloc(5, GFP_KERNEL);
+	if (p->trampoline == NULL)
+		return OUT_OF_MEMORY;
+	p->trampoline[0] = 0xE9;
+	*(u32 *)(&p->trampoline[1]) = p->repladdr - (p->oldaddr + 5);
+	p->size = 5;
+	return OK;
 }
