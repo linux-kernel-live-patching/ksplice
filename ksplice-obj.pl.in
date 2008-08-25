@@ -71,7 +71,7 @@ sub do_diff {
 	foreach (@export) {
 		my @symtab = split(' ');
 		next unless(@symtab);
-		runsuc("objmanip", "$obj.KSPLICE_primary", "export$symtab[0]", $tag, @symtab);
+		runsuc("objmanip", "$obj.KSPLICE_primary", "export$symtab[0]", $ENV{KSPLICE_KID}, @symtab);
 	}
 	runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
 	runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");

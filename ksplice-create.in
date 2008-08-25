@@ -90,6 +90,7 @@ $ENV{KSPLICE_CONFIG_DIR} = $orig_config_dir;
 my @chars = ('a'..'z', 0..9);
 $kid = join '', map { $chars[int(rand(36))] } 0..7 if(!defined $kid);
 my $ksplice = "ksplice-$kid";
+$ENV{KSPLICE_KID} = $kid;
 
 # Some versions of Fedora have System.map files whose symbol addresses disagree
 # with the running kernel by a constant address offset.  Here, Ksplice notes the
