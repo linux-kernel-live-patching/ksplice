@@ -54,10 +54,10 @@ sub do_diff {
 		return empty_diff($out);
 	}
 
-	my ($bits, $sections, $entrysyms, $newsyms, $delsyms, @export) = split("\n", runsuc("objdiff", $obj_old, $obj));
+	my ($bits, $sections, $entrysyms, $newgsyms, $newsyms, $delsyms, @export) = split("\n", runsuc("objdiff", $obj_old, $obj));
 	die if ($bits ne '32' && $bits ne '64');
-	return empty_diff($out) unless($sections || $entrysyms || $newsyms ||
-				       $delsyms || $export[0]);
+	return empty_diff($out) unless($sections || $entrysyms || $newgsyms ||
+				       $newsyms || $delsyms || $export[0]);
 
 	copy($obj, "$obj.KSPLICE_primary");
 	copy($obj_old, "$obj.KSPLICE_helper");
@@ -75,9 +75,10 @@ sub do_diff {
 	}
 	runsuc("objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post", split(/\s/, $sections));
 	runsuc("objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
-	if ($newsyms) {
-		runsuc("objmanip", "$obj.KSPLICE_primary", "globalize-new", split(/\s/, $newsyms));
+	if ($newgsyms) {
+		runsuc("objmanip", "$obj.KSPLICE_primary", "globalize-new", split(/\s/, $newgsyms));
 	}
+	runsuc("objmanip", "$obj.KSPLICE_primary", "rmrelocs", split(/\s/, $newsyms || ''));
 	runsuc("objmanip", "$obj.KSPLICE_primary", "sizelist", "____${tag}", "_post");
 	runsuc("objmanip", "$obj.KSPLICE_helper", "sizelist", "____${tag}", "_pre", split(/\s/, $delsyms || ''));
 
@@ -126,6 +127,11 @@ sub do_combine {
 	rename "$out.tmp", $out;
 }
 
+sub do_finalize {
+	my ($obj) = @_;
+	runsuc("objmanip", "$obj", "finalize");
+}
+
 sub do_rmsyms {
 	my ($obj, @rmsyms) = @_;
 	my $relocs = runsuc("objmanip", $obj, "rmsyms", @rmsyms);
@@ -146,6 +152,7 @@ my %handlers = (
 	'snap' => \&do_snap,
 	'diff' => \&do_diff,
 	'combine' => \&do_combine,
+	'finalize' => \&do_finalize,
 	'rmsyms' => \&do_rmsyms,
 	'system_map_lookup' => \&do_system_map_lookup,
 );

@@ -72,6 +72,8 @@ int main(int argc, char *argv[])
 	printf("\n");
 	compare_symbols(oldsbfd, newsbfd, BSF_GLOBAL);
 	printf("\n");
+	compare_symbols(oldsbfd, newsbfd, ~0);
+	printf("\n");
 	compare_symbols(newsbfd, oldsbfd, BSF_FUNCTION);
 	compare_exported_symbols(oldsbfd, newsbfd, "");
 	compare_exported_symbols(newsbfd, oldsbfd, "del_");

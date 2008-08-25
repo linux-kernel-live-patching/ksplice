@@ -221,7 +221,8 @@ int main(int argc, char *argv[])
 		varargs_count = argc - 3;
 	}
 
-	if (mode("keep") || mode("sizelist") || mode("rmsyms"))
+	if (mode("keep") || mode("sizelist") || mode("rmsyms") ||
+	    mode("rmrelocs"))
 		load_system_map();
 
 	if (mode("keep")) {
@@ -349,11 +350,20 @@ void rm_some_relocs(struct supersect *ss)
 		if (mode("rmsyms") && match_varargs(sym_ptr->name))
 			rm_reloc = 1;
 
-		if (mode("keep"))
+		if (mode("keep") || mode("rmrelocs"))
 			rm_reloc = 1;
 
 		if (mode("keep-primary") && want_section(sym_ptr->section))
 			rm_reloc = 0;
+
+		if (mode("rmrelocs") &&
+		    (match_varargs(sym_ptr->name) ||
+		     bfd_is_und_section(sym_ptr->section) ||
+		     (sym_ptr->flags & BSF_FUNCTION) == 0))
+			rm_reloc = 0;
+
+		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
+			rm_reloc = 1;
 
 		if (rm_reloc)
 			write_ksplice_reloc(ss, *relocp);

@@ -34,7 +34,9 @@ KSPLICE = ksplice-$(KSPLICE_MID)
 KSPLICE_CORE = ksplice-$(KSPLICE_KID)
 
 quiet_cmd_ksplice-collect = COLLECT $@
-cmd_ksplice-collect = ld --script=$(src)/ld-script -r -o $@ $<
+cmd_ksplice-collect = \
+	$(ksplice-script) finalize $< && \
+	ld --script=$(src)/ld-script -r -o $@ $<
 
 ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
 	"-DKSPLICE_MID=$(KSPLICE_MID)" \
