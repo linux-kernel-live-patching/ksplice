@@ -31,7 +31,9 @@ CFLAGS_KERNEL += -ffunction-sections -fdata-sections
 CFLAGS_MODULE += -ffunction-sections -fdata-sections
 ksplice-deps += $(MODVERDIR)/vmlinux.mod.KSPLICE
 ksplice-dirs += $(addprefix _ksplice_,$(vmlinux-dirs))
+ifdef ksplice-mode-snap
 ksplice-before += prepare0 prepare scripts
+endif
 
 ksplice-vmlinux-objs = $(filter-out $(head-y),$(if $(vmlinux-all),$(vmlinux-all),$(vmlinux-objs)))
 vmlinux.o.KSPLICE: ksplice-link-deps = $(ksplice-vmlinux-objs:=.KSPLICE)
