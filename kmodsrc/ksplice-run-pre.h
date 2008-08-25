@@ -148,14 +148,15 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 static int match_jump_types(const unsigned char *run, const unsigned char *pre);
 static int canonicalize_jump(const unsigned char *addr);
 
-static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
-		       unsigned long pre_addr, unsigned int size, int rerun)
+static abort_t run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
+			   unsigned long pre_addr, unsigned int size, int rerun)
 {
 	int runc, prec, matched;
 	const unsigned char *run, *pre;
+	abort_t ret;
 
 	if (size == 0)
-		return 1;
+		return NO_MATCH;
 
 	if (size >= 5)
 		run_addr = follow_trampolines(pack, run_addr);
@@ -166,14 +167,14 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 	while (run < (const unsigned char *)run_addr + size &&
 	       pre < (const unsigned char *)pre_addr + size) {
 		if (!virtual_address_mapped((unsigned long)run))
-			return 1;
+			return NO_MATCH;
 
-		matched = handle_myst_reloc(pack, (unsigned long)pre,
-					    (unsigned long)run, rerun);
-		if (matched < 0) {
+		ret = handle_myst_reloc(pack, (unsigned long)pre,
+					(unsigned long)run, rerun, &matched);
+		if (ret != OK) {
 			ksdebug(pack, 3, KERN_DEBUG "Matching failure at "
 				"offset %lx\n", (unsigned long)pre - pre_addr);
-			return 1;
+			return ret;
 		}
 		if (matched > 0) {
 			if (rerun)
@@ -187,19 +188,20 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 			int len = jumplen(run);
 			if (jumpsize(run) != jumpsize(pre) ||
 			    (jumpsize(run) == 2 && pre[1] != run[1]))
-				return 1;
+				return NO_MATCH;
 			if (rerun)
 				print_bytes(pack, run, jumpsize(run), pre,
 					    jumpsize(pre));
 			run += jumpsize(run);
 			pre += jumpsize(pre);
-			matched = handle_myst_reloc(pack, (unsigned long)pre,
-						    (unsigned long)run, rerun);
-			if (matched < 0) {
+			ret = handle_myst_reloc(pack, (unsigned long)pre,
+						(unsigned long)run, rerun,
+						&matched);
+			if (ret != OK) {
 				ksdebug(pack, 3, KERN_DEBUG "Matching failure "
 					"at offset %lx\n", (unsigned long)pre -
 					pre_addr);
-				return 1;
+				return NO_MATCH;
 			}
 			if (matched > 0) {
 				if (rerun)
@@ -252,9 +254,9 @@ static int run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 				pre_addr);
 			print_bytes(pack, run + 1, 2, pre + 1, 2);
 		}
-		return 1;
+		return NO_MATCH;
 	}
-	return 0;
+	return OK;
 }
 
 static int jumplen(const unsigned char *addr)
