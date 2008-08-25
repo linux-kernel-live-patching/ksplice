@@ -64,7 +64,7 @@ enum ksplice_stage_enum {
 
 typedef int __bitwise__ abort_t;
 
-#define NONE ((__force abort_t) 0)
+#define OK ((__force abort_t) 0)
 #define NO_MATCH ((__force abort_t) 1)
 #define BAD_SYSTEM_MAP ((__force abort_t) 2)
 #define CODE_BUSY ((__force abort_t) 3)
@@ -518,8 +518,8 @@ static ssize_t stage_show(struct update_bundle *bundle, char *buf)
 static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 {
 	switch (bundle->abort_cause) {
-	case NONE:
-		return snprintf(buf, PAGE_SIZE, "none\n");
+	case OK:
+		return snprintf(buf, PAGE_SIZE, "ok\n");
 	case NO_MATCH:
 		return snprintf(buf, PAGE_SIZE, "no_match\n");
 	case BAD_SYSTEM_MAP:
@@ -706,7 +706,7 @@ static int apply_patches(struct update_bundle *bundle)
 {
 	int i, ret;
 
-	bundle->abort_cause = NONE;
+	bundle->abort_cause = OK;
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(bundle);
 		bust_spinlocks(1);
@@ -772,7 +772,7 @@ static void reverse_patches(struct update_bundle *bundle)
 	_ksdebug(bundle, 0, KERN_INFO "ksplice: Preparing to reverse %s\n",
 		 bundle->kid);
 
-	bundle->abort_cause = NONE;
+	bundle->abort_cause = OK;
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(bundle);
 		clear_list(&bundle->conflicts, struct conflict, list);
@@ -1180,7 +1180,7 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	}
 	list_add(&bundle->list, &update_bundles);
 	bundle->stage = PREPARING;
-	bundle->abort_cause = NONE;
+	bundle->abort_cause = OK;
 	INIT_LIST_HEAD(&bundle->conflicts);
 	return bundle;
 }

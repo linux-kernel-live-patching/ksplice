@@ -177,7 +177,7 @@ ksplice-apply does not understand.  This is probably the result of
 using a version of ksplice-apply that is older than the version of the
 Ksplice kernel module source.
 END
-		"none" => <<'END',
+		"ok" => <<'END',
 Ksplice has aborted the upgrade for unknown reasons.
 END
 	);
