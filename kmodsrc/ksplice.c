@@ -814,7 +814,7 @@ static int __apply_patches(void *bundleptr)
 {
 	struct update_bundle *bundle = bundleptr;
 	struct module_pack *pack;
-	const struct ksplice_patch *p;
+	struct ksplice_patch *p;
 	struct ksplice_export *export;
 	mm_segment_t old_fs;
 	abort_t ret;
