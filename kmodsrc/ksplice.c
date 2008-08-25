@@ -983,11 +983,9 @@ static abort_t check_stack(struct update_bundle *bundle, struct conflict *conf,
 
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
-		if (__kernel_text_address(addr)) {
-			ret = check_address_for_conflict(bundle, conf, addr);
-			if (ret != OK)
-				status = ret;
-		}
+		ret = check_address_for_conflict(bundle, conf, addr);
+		if (ret != OK)
+			status = ret;
 	}
 	return status;
 }
