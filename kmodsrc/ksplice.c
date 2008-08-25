@@ -1082,9 +1082,9 @@ static int register_ksplice_module(struct module_pack *pack)
 		ret = -ENOMEM;
 		goto out;
 	}
-	if (ksplice_sysfs_init(bundle) < 0) {
+	ret = ksplice_sysfs_init(bundle);
+	if (ret != 0) {
 		cleanup_ksplice_bundle(bundle);
-		ret = -ENOMEM;
 		goto out;
 	}
 	add_to_bundle(pack, bundle);
@@ -1182,7 +1182,7 @@ static int ksplice_sysfs_init(struct update_bundle *bundle)
 #else /* LINUX_VERSION_CODE < */
 	ret = kobject_set_name(&bundle->kobj, "%s", bundle->name);
 	if (ret != 0)
-		return -1;
+		return ret;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
 /* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
 	bundle->kobj.parent = &THIS_MODULE->mkobj.kobj;
@@ -1193,7 +1193,7 @@ static int ksplice_sysfs_init(struct update_bundle *bundle)
 	ret = kobject_register(&bundle->kobj);
 #endif /* LINUX_VERSION_CODE */
 	if (ret != 0)
-		return -ENOMEM;
+		return ret;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
 /* 312c004d36ce6c739512bac83b452f4c20ab1f62 was after 2.6.14 */
 	kobject_uevent(&bundle->kobj, KOBJ_ADD);
