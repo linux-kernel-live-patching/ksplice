@@ -69,10 +69,11 @@ typedef int __bitwise__ abort_t;
 #define BAD_SYSTEM_MAP ((__force abort_t) 2)
 #define CODE_BUSY ((__force abort_t) 3)
 #define MODULE_BUSY ((__force abort_t) 4)
-#define UNEXPECTED ((__force abort_t) 5)
+#define OUT_OF_MEMORY ((__force abort_t) 5)
 #define FAILED_TO_FIND ((__force abort_t) 6)
 #define ALREADY_REVERSED ((__force abort_t) 7)
 #define MISSING_EXPORT ((__force abort_t) 8)
+#define UNEXPECTED ((__force abort_t) 9)
 
 struct update_bundle {
 	const char *kid;
@@ -529,6 +530,8 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 		return snprintf(buf, PAGE_SIZE, "code_busy\n");
 	case MODULE_BUSY:
 		return snprintf(buf, PAGE_SIZE, "module_busy\n");
+	case OUT_OF_MEMORY:
+		return snprintf(buf, PAGE_SIZE, "out_of_memory\n");
 	case FAILED_TO_FIND:
 		return snprintf(buf, PAGE_SIZE, "failed_to_find\n");
 	case ALREADY_REVERSED:
@@ -736,7 +739,7 @@ static abort_t apply_patches(struct update_bundle *bundle)
 			     s < pack->primary_sizes_end; s++) {
 				rec = kmalloc(sizeof(*rec), GFP_KERNEL);
 				if (rec == NULL)
-					return UNEXPECTED;
+					return OUT_OF_MEMORY;
 				rec->addr = s->thismod_addr;
 				rec->size = s->size;
 				rec->care = 1;
@@ -938,11 +941,11 @@ static abort_t check_task(struct update_bundle *bundle,
 	if (save_conflicts == 1) {
 		conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
 		if (conf == NULL)
-			return UNEXPECTED;
+			return OUT_OF_MEMORY;
 		conf->process_name = kstrdup(t->comm, GFP_ATOMIC);
 		if (conf->process_name == NULL) {
 			kfree(conf);
-			return UNEXPECTED;
+			return OUT_OF_MEMORY;
 		}
 		conf->pid = t->pid;
 		INIT_LIST_HEAD(&conf->stack);
@@ -996,7 +999,7 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 	if (conf != NULL) {
 		frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
 		if (frame == NULL)
-			return UNEXPECTED;
+			return OUT_OF_MEMORY;
 		frame->addr = addr;
 		frame->has_conflict = 0;
 		frame->symbol_name = NULL;
@@ -1287,10 +1290,8 @@ static abort_t activate_helper(struct module_pack *pack)
 		return ret;
 
 	finished = kcalloc(record_count, sizeof(char), GFP_KERNEL);
-	if (finished == NULL) {
-		printk(KERN_ERR "ksplice: out of memory\n");
-		return UNEXPECTED;
-	}
+	if (finished == NULL)
+		return OUT_OF_MEMORY;
 
 start:
 	for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
@@ -1425,10 +1426,8 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		"\n", s->name, run_addr);
 
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
-	if (rec == NULL) {
-		printk(KERN_ERR "ksplice: out of memory\n");
-		return UNEXPECTED;
-	}
+	if (rec == NULL)
+		return OUT_OF_MEMORY;
 	/* It is safe for addr to point to the beginning of a patched function,
 	   because that location will be overwritten with a trampoline. */
 	if ((s->flags & KSPLICE_SIZE_DELETED) == 0) {
@@ -1445,7 +1444,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 
 	nv = find_nameval(pack, s->name, 1);
 	if (nv == NULL)
-		return UNEXPECTED;
+		return OUT_OF_MEMORY;
 	nv->val = run_addr;
 	nv->status = VAL;
 
@@ -1617,15 +1616,13 @@ skip_using_system_map:
 			" to run-pre\n", r->sym_name, r->blank_offset);
 
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
-		if (map == NULL) {
-			printk(KERN_ERR "ksplice: out of memory\n");
-			return UNEXPECTED;
-		}
+		if (map == NULL)
+			return OUT_OF_MEMORY;
 		map->addr = r->blank_addr;
 		map->nameval = find_nameval(pack, r->sym_name, 1);
 		if (map->nameval == NULL) {
 			kfree(map);
-			return UNEXPECTED;
+			return OUT_OF_MEMORY;
 		}
 		map->pcrel = r->pcrel;
 		map->addend = r->addend;
@@ -1649,15 +1646,13 @@ skip_using_system_map:
 	if (r->pcrel && pre) {
 #endif /* KSPLICE_STANDALONE */
 		map = kmalloc(sizeof(*map), GFP_KERNEL);
-		if (map == NULL) {
-			printk(KERN_ERR "ksplice: out of memory\n");
-			return UNEXPECTED;
-		}
+		if (map == NULL)
+			return OUT_OF_MEMORY;
 		map->addr = r->blank_addr;
 		map->nameval = find_nameval(pack, "ksplice_zero", 1);
 		if (map->nameval == NULL) {
 			kfree(map);
-			return UNEXPECTED;
+			return OUT_OF_MEMORY;
 		}
 		map->nameval->val = 0;
 		map->nameval->status = VAL;
@@ -2000,8 +1995,6 @@ static abort_t other_module_lookup(const char *name, struct list_head *vals,
 	struct accumulate_struct acc = { name, vals };
 	const struct module *m;
 
-	if (acc.desired_name == NULL)
-		return UNEXPECTED;
 	list_for_each_entry(m, &modules, list) {
 		if (starts_with(m->name, ksplice_name) ||
 		    ends_with(m->name, "_helper"))
@@ -2205,8 +2198,6 @@ static int module_on_each_symbol(const struct module *mod,
 static abort_t kernel_lookup(const char *name, struct list_head *vals)
 {
 	struct accumulate_struct acc = { name, vals };
-	if (acc.desired_name == NULL)
-		return UNEXPECTED;
 	return (__force abort_t)
 	    kallsyms_on_each_symbol(accumulate_matching_names, &acc);
 }
@@ -2221,10 +2212,8 @@ static abort_t add_candidate_val(struct list_head *vals, unsigned long val)
 			return OK;
 	}
 	new = kmalloc(sizeof(*new), GFP_KERNEL);
-	if (new == NULL) {
-		printk(KERN_ERR "ksplice: out of memory\n");
-		return UNEXPECTED;
-	}
+	if (new == NULL)
+		return OUT_OF_MEMORY;
 	new->val = val;
 	list_add(&new->list, vals);
 	return OK;
@@ -2403,7 +2392,7 @@ static abort_t init_debug_buf(struct update_bundle *bundle)
 	    debugfs_create_blob(bundle->name, S_IFREG | S_IRUSR, NULL,
 				&bundle->debug_blob);
 	if (bundle->debugfs_dentry == NULL)
-		return UNEXPECTED;
+		return OUT_OF_MEMORY;
 	return OK;
 }
 

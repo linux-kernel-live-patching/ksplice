@@ -88,6 +88,9 @@ Ksplice has aborted the undo operation because it appears that the Ksplice
 update that you are trying to unload is in use by another module.  You can
 find out what module is using the Ksplice update using the lsmod command.
 END
+		"out_of_memory" => <<'END',
+Ksplice has aborted the undo operation because the kernel ran out of memory.
+END
 		"UNKNOWN" => <<'END',
 The Ksplice kernel interface has returned an error string that
 ksplice-undo does not understand.  This is probably the result of

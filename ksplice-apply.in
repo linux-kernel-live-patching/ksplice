@@ -171,6 +171,9 @@ END
 Ksplice was unable to find some of the structures needed to make the
 adjustments to the kernel's exported symbols made by the patch.
 END
+		"out_of_memory" => <<'END',
+Ksplice has aborted the upgrade because the kernel ran out of memory.
+END
 		"UNKNOWN" => <<'END',
 The Ksplice kernel interface has returned an error string that
 ksplice-apply does not understand.  This is probably the result of
