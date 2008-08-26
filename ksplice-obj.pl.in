@@ -54,8 +54,7 @@ sub do_diff {
 		return empty_diff($out);
 	}
 
-	my ($bits, $sections, $entrysyms, $newgsyms, $newsyms, $delsyms, @export) = split("\n", runsuc("objdiff", $obj_old, $obj));
-	die if ($bits ne '32' && $bits ne '64');
+	my ($sections, $entrysyms, $newgsyms, $newsyms, $delsyms, @export) = split("\n", runsuc("objdiff", $obj_old, $obj));
 	return empty_diff($out) unless($sections || $entrysyms || $newgsyms ||
 				       $newsyms || $delsyms || $export[0]);
 
@@ -85,7 +84,7 @@ sub do_diff {
 	runsuc("objmanip", "$obj.KSPLICE_primary", "patchlist", "____${tag}", "_pre", "_post", split(/\s/, $entrysyms));
 
 	open OUT, '>', "$out.tmp";
-	print OUT "$bits\n";
+	print OUT "1\n";
 	close OUT;
 	rename "$out.tmp", $out;
 }
@@ -93,22 +92,13 @@ sub do_diff {
 sub do_combine {
 	my ($out, @ins) = @_;
 	my @objs;
-	my $outbits = undef;
 	foreach my $in (@ins) {
 		next if (!-s $in);
 		my ($obj) = $in =~ /^(.*)\.KSPLICE$/ or die;
 		push @objs, $obj;
-
-		open IN, '<', $in;
-
-		chomp(my $bits = <IN>);
-		die if (defined $outbits && $outbits ne $bits);
-		$outbits = $bits;
-
-		close IN;
 	}
 
-	return empty_diff($out) unless (defined $outbits);
+	return empty_diff($out) unless (@objs);
 
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
 	if (@objs == 1) {
@@ -122,7 +112,7 @@ sub do_combine {
 	}
 
 	open OUT, '>', "$out.tmp";
-	print OUT "$outbits\n";
+	print OUT "1\n";
 	close OUT;
 	rename "$out.tmp", $out;
 }

@@ -65,7 +65,6 @@ int main(int argc, char *argv[])
 	struct superbfd *oldsbfd = fetch_superbfd(oldbfd);
 	struct superbfd *newsbfd = fetch_superbfd(newbfd);
 
-	printf("%d\n", bfd_arch_bits_per_address(oldbfd));
 	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_section_name);
 	printf("\n");
 	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_entry_symbols);
