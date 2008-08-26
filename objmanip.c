@@ -212,16 +212,17 @@ int main(int argc, char *argv[])
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
 	modestr = argv[2];
-	if (mode("keep") || mode("sizelist") || mode("patchlist")) {
-		addstr_all = argv[3];
-	} else if (mode("export")) {
+	if (mode("keep")) {
 		kid = argv[3];
+		addstr_all = argv[4];
+	} else if (mode("sizelist") || mode("patchlist")) {
+		addstr_all = argv[3];
 	} else if (mode("rmsyms")) {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
 	}
 
-	if (mode("export") || mode("keep") || mode("globalize-new") ||
+	if (mode("keep") || mode("globalize-new") ||
 	    mode("rmrelocs") || mode("sizelist") || mode("patchlist")) {
 		read_str_set(&sections);
 		read_str_set(&entrysyms);
@@ -277,22 +278,7 @@ int main(int argc, char *argv[])
 			write_ksplice_patch(isbfd, *symname);
 	}
 
-	asection *p;
-	for (p = ibfd->sections; p != NULL; p = p->next) {
-		struct supersect *ss = fetch_supersect(isbfd, p);
-		if (is_special(p) || starts_with(p->name, ".ksplice"))
-			continue;
-		if (want_section(p) || mode("rmsyms"))
-			rm_some_relocs(ss);
-	}
-
-	const struct specsect *ss;
-	if (mode("keep")) {
-		for (ss = special_sections; ss != end_special_sections; ss++)
-			rm_from_special(isbfd, ss);
-	}
-
-	if (mode("export")) {
+	if (mode("keep-primary")) {
 		const struct export_desc *ed;
 		for (ed = exports.data; ed < exports.data + exports.size;
 		     ed++) {
@@ -309,6 +295,21 @@ int main(int argc, char *argv[])
 				rm_some_exports(isbfd, ed);
 			}
 		}
+	}
+
+	asection *p;
+	for (p = ibfd->sections; p != NULL; p = p->next) {
+		struct supersect *ss = fetch_supersect(isbfd, p);
+		if (is_special(p) || starts_with(p->name, ".ksplice"))
+			continue;
+		if (want_section(p) || mode("rmsyms"))
+			rm_some_relocs(ss);
+	}
+
+	const struct specsect *ss;
+	if (mode("keep")) {
+		for (ss = special_sections; ss != end_special_sections; ss++)
+			rm_from_special(isbfd, ss);
 	}
 
 	copy_object(ibfd, obfd);
