@@ -7,6 +7,7 @@ use File::Path;
 use File::Spec::Functions qw(tmpdir);
 use File::Temp qw(tempfile tempdir);
 use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
+use IPC::Open2;
 use IPC::Open3;
 use Pod::Usage;
 use Text::ParseWords;
@@ -18,7 +19,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	Verbose GetOptions pod2usage shellwords
 	$datadir $libexecdir $version_str
-	runval runval_raw runstr runstr_err runsuc unpack_update
+	runval runval_raw runstr runstr_err runsuc runsuc_in unpack_update
 	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
 	get_debug_output display_conflicts
 	abs_path getcwd basename dirname tmpdir
@@ -80,6 +81,22 @@ sub runsuc {
 		die "Failed during: $libexecdir/ksplice-$cmd @args";
 	}
 	return $output;
+}
+
+sub runsuc_in {
+	my ($in, $cmd, @args) = @_;
+	my @cmd = ("$libexecdir/ksplice-$cmd", @args);
+	print "+ @cmd <<'EOF'\n${in}EOF\n" if($Verbose::level >= 1);
+	local (*READ, *WRITE);
+	my $pid = open2(\*READ, \*WRITE, @cmd);
+	print WRITE $in;
+	close(WRITE);
+	waitpid($pid, 0);
+	if($? != 0) {
+		die "Failed during: $libexecdir/ksplice-$cmd @args";
+	}
+	local $/;
+	return <READ>;
 }
 
 sub unpack_update {

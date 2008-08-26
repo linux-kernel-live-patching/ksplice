@@ -103,6 +103,8 @@
 #include <stdio.h>
 #include <limits.h>
 
+DECLARE_VEC_TYPE(const char *, str_vec);
+
 struct wsect {
 	asection *sect;
 	struct wsect *next;
@@ -112,6 +114,12 @@ struct specsect {
 	const char *sectname;
 	int entry_size;
 };
+
+struct export_desc {
+	const char *sectname;
+	struct str_vec names;
+};
+DECLARE_VEC_TYPE(struct export_desc, export_desc_vec);
 
 void rm_some_relocs(struct supersect *ss);
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
@@ -132,17 +140,22 @@ static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
 void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms);
 int match_varargs(const char *str);
+void read_str_set(struct str_vec *strs);
+int str_in_set(const char *str, const struct str_vec *strs);
 int want_section(asection *sect);
 const struct specsect *is_special(asection *sect);
 struct supersect *make_section(struct superbfd *sbfd, const char *name);
 void __attribute__((format(printf, 3, 4)))
 write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
-void rm_some_exports(struct supersect *ss, struct supersect *crc_ss);
+void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed);
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
-			  const char *export_type);
+			  const char *export_type, int del);
 
 char **varargs;
 int varargs_count;
+struct str_vec sections, entrysyms, newgsyms, newsyms, delsyms;
+struct export_desc_vec exports;
+
 const char *modestr, *addstr_all = "", *addstr_sect_pre = "", *addstr_sect = "";
 
 struct wsect *wanted_sections = NULL;
@@ -181,7 +194,6 @@ void load_system_map()
 
 int main(int argc, char *argv[])
 {
-	char *export_name;
 	char *debug_name;
 	assert(asprintf(&debug_name, "%s.pre%s", argv[1], argv[2]) >= 0);
 	rename(argv[1], debug_name);
@@ -203,22 +215,36 @@ int main(int argc, char *argv[])
 	if (mode("keep") || mode("sizelist")) {
 		addstr_all = argv[3];
 		addstr_sect = argv[4];
-		varargs = &argv[5];
-		varargs_count = argc - 5;
 	} else if (mode("patchlist")) {
 		addstr_all = argv[3];
 		addstr_sect_pre = argv[4];
 		addstr_sect = argv[5];
-		varargs = &argv[6];
-		varargs_count = argc - 6;
 	} else if (mode("export")) {
 		addstr_all = argv[3];
-		export_name = argv[4];
-		varargs = &argv[5];
-		varargs_count = argc - 5;
-	} else {
+	} else if (mode("rmsyms")) {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
+	}
+
+	if (mode("export") || mode("keep") || mode("globalize-new") ||
+	    mode("rmrelocs") || mode("sizelist") || mode("patchlist")) {
+		read_str_set(&sections);
+		read_str_set(&entrysyms);
+		read_str_set(&newgsyms);
+		read_str_set(&newsyms);
+		read_str_set(&delsyms);
+		vec_init(&exports);
+		/* https://bugzilla.redhat.com/show_bug.cgi?id=431832 */
+		while (ungetc(getc(stdin), stdin) != EOF) {
+			char *sectname;
+			int ret = scanf("%as", &sectname);
+			if (ret == EOF)
+				break;
+			assert(ret == 1);
+			struct export_desc *ed = vec_grow(&exports, 1);
+			ed->sectname = sectname;
+			read_str_set(&ed->names);
+		}
 	}
 
 	if (mode("keep") || mode("sizelist") || mode("rmsyms") ||
@@ -250,9 +276,9 @@ int main(int argc, char *argv[])
 	}
 
 	if (mode("patchlist")) {
-		char **symname;
-		for (symname = varargs; symname < varargs + varargs_count;
-		     symname++)
+		const char **symname;
+		for (symname = entrysyms.data;
+		     symname < entrysyms.data + entrysyms.size; symname++)
 			write_ksplice_patch(isbfd, *symname);
 	}
 
@@ -271,28 +297,23 @@ int main(int argc, char *argv[])
 			rm_from_special(isbfd, ss);
 	}
 
-	if (mode("exportdel")) {
-		char **symname;
-		assert(mode("exportdel___ksymtab"));
-		for (symname = varargs; symname < varargs + varargs_count;
-		     symname++)
-			write_ksplice_export(isbfd, *symname,
-					     modestr +
-					     strlen("exportdel___ksymtab"));
-	} else if (mode("export")) {
-		assert(starts_with(export_name, "__ksymtab"));
-		asection *sym_sect = bfd_get_section_by_name(ibfd, export_name);
-		assert(sym_sect != NULL);
-		char *export_crc_name;
-		assert(asprintf(&export_crc_name, "__kcrctab%s", export_name +
-				strlen("__ksymtab")) >= 0);
-		asection *crc_sect = bfd_get_section_by_name(ibfd,
-							     export_crc_name);
-		struct supersect *sym_ss, *crc_ss = NULL;
-		sym_ss = fetch_supersect(isbfd, sym_sect);
-		if (crc_sect != NULL)
-			crc_ss = fetch_supersect(isbfd, crc_sect);
-		rm_some_exports(sym_ss, crc_ss);
+	if (mode("export")) {
+		const struct export_desc *ed;
+		for (ed = exports.data; ed < exports.data + exports.size;
+		     ed++) {
+			if (starts_with(ed->sectname, "del___ksymtab")) {
+				const char *export_type =
+				    ed->sectname + strlen("del___ksymtab");
+				const char **symname;
+				for (symname = ed->names.data;
+				     symname < ed->names.data + ed->names.size;
+				     symname++)
+					write_ksplice_export(isbfd, *symname,
+							     export_type, 1);
+			} else {
+				rm_some_exports(isbfd, ed);
+			}
+		}
 	}
 
 	copy_object(ibfd, obfd);
@@ -301,9 +322,21 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-void rm_some_exports(struct supersect *ss, struct supersect *crc_ss)
+void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed)
 {
-	assert(mode("export__ksymtab"));
+	assert(starts_with(ed->sectname, "__ksymtab"));
+	const char *export_type = ed->sectname + strlen("__ksymtab");
+	asection *sym_sect = bfd_get_section_by_name(isbfd->abfd, ed->sectname);
+	assert(sym_sect != NULL);
+	char *export_crc_name;
+	assert(asprintf(&export_crc_name, "__kcrctab%s", export_type) >= 0);
+	asection *crc_sect = bfd_get_section_by_name(isbfd->abfd,
+						     export_crc_name);
+	struct supersect *ss, *crc_ss = NULL;
+	ss = fetch_supersect(isbfd, sym_sect);
+	if (crc_sect != NULL)
+		crc_ss = fetch_supersect(isbfd, crc_sect);
+
 	if (crc_ss != NULL)
 		assert(ss->contents.size * sizeof(unsigned long) ==
 		       crc_ss->contents.size * sizeof(struct kernel_symbol));
@@ -322,14 +355,13 @@ void rm_some_exports(struct supersect *ss, struct supersect *crc_ss)
 		asymbol *sym;
 		read_reloc(&orig_ss, &orig_ksym->value,
 			   sizeof(orig_ksym->value), &sym);
-		if (!match_varargs(sym->name))
+		if (!str_in_set(sym->name, &ed->names))
 			continue;
 
 		struct kernel_symbol *ksym = sect_grow(ss, 1, typeof(*ksym));
 		sect_copy(ss, &ksym->value, &orig_ss, &orig_ksym->value, 1);
 		/* Replace name with a mangled name */
-		write_ksplice_export(ss->parent, sym->name,
-				     modestr + strlen("export__ksymtab"));
+		write_ksplice_export(ss->parent, sym->name, export_type, 0);
 		write_string(ss, (const char **)&ksym->name,
 			     "DISABLED_%s_%s", sym->name, addstr_all);
 
@@ -361,7 +393,7 @@ void rm_some_relocs(struct supersect *ss)
 			rm_reloc = 0;
 
 		if (mode("rmrelocs") &&
-		    (match_varargs(sym_ptr->name) ||
+		    (str_in_set(sym_ptr->name, &newsyms) ||
 		     bfd_is_und_section(sym_ptr->section) ||
 		     (sym_ptr->flags & BSF_FUNCTION) == 0))
 			rm_reloc = 0;
@@ -527,7 +559,8 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 		     sym->name, addstr_all, addstr_sect);
 	ksize->size = symsize;
 	ksize->flags = 0;
-	if (match_varargs(sym->name) && (sym->flags & BSF_FUNCTION))
+	if (mode("sizelist-helper") &&
+	    str_in_set(sym->name, &delsyms) && (sym->flags & BSF_FUNCTION))
 		ksize->flags |= KSPLICE_SIZE_DELETED;
 	if (starts_with(sym->section->name, ".rodata"))
 		ksize->flags |= KSPLICE_SIZE_RODATA;
@@ -559,14 +592,14 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
-			  const char *export_type)
+			  const char *export_type, int del)
 {
 	struct supersect *export_ss = make_section(sbfd, ".ksplice_exports");
 	struct ksplice_export *export = sect_grow(export_ss, 1,
 						  struct ksplice_export);
 
 	write_string(export_ss, &export->type, "%s", export_type);
-	if (mode("exportdel")) {
+	if (del) {
 		write_string(export_ss, &export->name, "%s", symname);
 		write_string(export_ss, &export->new_name,
 			     "DISABLED_%s_%s", symname, addstr_all);
@@ -834,7 +867,7 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0)
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
-		if (mode("globalize-new") && match_varargs(sym->name))
+		if (mode("globalize-new") && str_in_set(sym->name, &newgsyms))
 			sym->flags = (sym->flags & ~BSF_LOCAL) | BSF_GLOBAL;
 
 		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
@@ -879,6 +912,32 @@ int match_varargs(const char *str)
 	return 0;
 }
 
+void read_str_set(struct str_vec *strs)
+{
+	char *buf = NULL;
+	size_t n = 0;
+	assert(getline(&buf, &n, stdin) >= 0);
+	vec_init(strs);
+	char *saveptr;
+	while (1) {
+		char *str = strtok_r(buf, " \n", &saveptr);
+		buf = NULL;
+		if (str == NULL)
+			break;
+		*vec_grow(strs, 1) = str;
+	}
+}
+
+int str_in_set(const char *str, const struct str_vec *strs)
+{
+	const char **strp;
+	for (strp = strs->data; strp < strs->data + strs->size; strp++) {
+		if (strcmp(str, *strp) == 0)
+			return 1;
+	}
+	return 0;
+}
+
 int want_section(asection *sect)
 {
 	static const char *static_want[] = {
@@ -908,7 +967,7 @@ int want_section(asection *sect)
 		return 1;
 	if (mode("keep-primary") && starts_with(sect->name, "__kcrctab"))
 		return 1;
-	if (match_varargs(sect->name))
+	if (mode("keep-primary") && str_in_set(sect->name, &sections))
 		return 1;
 
 	int i;
