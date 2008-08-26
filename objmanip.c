@@ -751,6 +751,7 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	write_ksplice_symbol(ksize_ss, &ksize->symbol, sym,
 			     mode("keep-primary") ? "(post)" : "");
 	ksize->size = symsize;
+	ksize->extended_size = bfd_get_section_size(sym->section);
 	ksize->flags = 0;
 	if (mode("keep-helper") &&
 	    str_in_set(sym->name, &delsyms) && (sym->flags & BSF_FUNCTION))
