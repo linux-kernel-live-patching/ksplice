@@ -2475,16 +2475,12 @@ static int __ksdebug(struct update_bundle *bundle, const char *fmt, ...)
 	new_size = bundle->debug_blob.size + size == 0 ? 0 :
 	    max(PAGE_SIZE, roundup_pow_of_two(bundle->debug_blob.size + size));
 	if (new_size > old_size) {
-		char *tmp = bundle->debug_blob.data;
-		bundle->debug_blob.data = vmalloc(new_size);
-		if (bundle->debug_blob.data != NULL) {
-			memcpy(bundle->debug_blob.data, tmp,
-			       bundle->debug_blob.size);
-			vfree(tmp);
-		} else {
-			vfree(tmp);
+		char *buf = vmalloc(new_size);
+		if (buf == NULL)
 			return -ENOMEM;
-		}
+		memcpy(buf, bundle->debug_blob.data, bundle->debug_blob.size);
+		vfree(bundle->debug_blob.data);
+		bundle->debug_blob.data = buf;
 	}
 	va_start(args, fmt);
 	bundle->debug_blob.size += vsnprintf(bundle->debug_blob.data +
