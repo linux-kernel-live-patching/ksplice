@@ -156,7 +156,7 @@ int varargs_count;
 struct str_vec sections, entrysyms, newgsyms, newsyms, delsyms;
 struct export_desc_vec exports;
 
-const char *modestr, *addstr_all = "";
+const char *modestr, *addstr_all = "", *kid;
 
 struct wsect *wanted_sections = NULL;
 
@@ -212,9 +212,10 @@ int main(int argc, char *argv[])
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
 	modestr = argv[2];
-	if (mode("keep") || mode("sizelist") || mode("patchlist") ||
-	    mode("export")) {
+	if (mode("keep") || mode("sizelist") || mode("patchlist")) {
 		addstr_all = argv[3];
+	} else if (mode("export")) {
+		kid = argv[3];
 	} else if (mode("rmsyms")) {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
@@ -357,7 +358,7 @@ void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed)
 		/* Replace name with a mangled name */
 		write_ksplice_export(ss->parent, sym->name, export_type, 0);
 		write_string(ss, (const char **)&ksym->name,
-			     "DISABLED_%s_%s", sym->name, addstr_all);
+			     "DISABLED_%s_%s", sym->name, kid);
 
 		if (crc_ss != NULL)
 			sect_copy(crc_ss,
@@ -596,11 +597,11 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 	if (del) {
 		write_string(export_ss, &export->name, "%s", symname);
 		write_string(export_ss, &export->new_name,
-			     "DISABLED_%s_%s", symname, addstr_all);
+			     "DISABLED_%s_%s", symname, kid);
 	} else {
 		write_string(export_ss, &export->new_name, "%s", symname);
 		write_string(export_ss, &export->name, "DISABLED_%s_%s",
-			     symname, addstr_all);
+			     symname, kid);
 	}
 }
 
