@@ -12,7 +12,7 @@ use Pod::Usage;
 use Text::ParseWords;
 use strict;
 use warnings;
-use Verbose qw(:2 copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir);
+use Verbose qw(:2 copy rename move utime chdir mkdir mkpath unlink rmtree tempfile tempdir);
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
@@ -22,7 +22,7 @@ our @EXPORT = qw(
 	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
 	get_debug_output display_conflicts
 	abs_path getcwd basename dirname tmpdir
-	copy rename move chdir mkdir mkpath unlink rmtree tempfile tempdir
+	copy rename move utime chdir mkdir mkpath unlink rmtree tempfile tempdir
 );
 
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);

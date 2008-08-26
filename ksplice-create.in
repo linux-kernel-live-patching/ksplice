@@ -140,6 +140,7 @@ revert_orig();
 
 if(!$skip_prebuild) {
 	copy("$orig_config_dir/.config", "$linuxtree/.config");
+	utime((stat("$orig_config_dir/.config"))[8, 9], "$linuxtree/.config");
 	my @snap_flags = ("KSPLICE_MODE=snap");
 	if(-e "include/config/kernel.release") {
 		push(@snap_flags, "-o", "include/config/kernel.release");
