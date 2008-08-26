@@ -1162,7 +1162,6 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 		return NULL;
 	buf = kmalloc(strlen(kid) + strlen(str) + 1, GFP_KERNEL);
 	if (buf == NULL) {
-		printk(KERN_ERR "ksplice: out of memory\n");
 		kfree(bundle);
 		return NULL;
 	}
@@ -1170,7 +1169,6 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 	bundle->name = buf;
 	bundle->kid = kstrdup(kid, GFP_KERNEL);
 	if (bundle->kid == NULL) {
-		printk(KERN_ERR "ksplice: out of memory\n");
 		kfree(bundle->name);
 		kfree(bundle);
 		return NULL;
@@ -2242,10 +2240,8 @@ static struct reloc_nameval *find_nameval(struct module_pack *pack,
 		return NULL;
 
 	new = kmalloc(sizeof(*new), GFP_KERNEL);
-	if (new == NULL) {
-		printk(KERN_ERR "ksplice: out of memory\n");
+	if (new == NULL)
 		return NULL;
-	}
 	new->name = name;
 	new->val = 0;
 	new->status = NOVAL;
@@ -2333,10 +2329,8 @@ static char *dup_wolabel(const char *sym_name)
 	entire_strlen = strlen(sym_name);
 	new_strlen = entire_strlen - label_strlen;
 	newstr = kmalloc(new_strlen + 1, GFP_KERNEL);
-	if (newstr == NULL) {
-		printk(KERN_ERR "ksplice: out of memory\n");
+	if (newstr == NULL)
 		return NULL;
-	}
 	memcpy(newstr, sym_name, new_strlen);
 	newstr[new_strlen] = 0;
 	return newstr;
@@ -2423,7 +2417,6 @@ static int __ksdebug(struct update_bundle *bundle, const char *fmt, ...)
 			       bundle->debug_blob.size);
 			vfree(tmp);
 		} else {
-			printk(KERN_ERR "ksplice: out of memory\n");
 			vfree(tmp);
 			return -ENOMEM;
 		}
