@@ -156,7 +156,7 @@ int varargs_count;
 struct str_vec sections, entrysyms, newgsyms, newsyms, delsyms;
 struct export_desc_vec exports;
 
-const char *modestr, *addstr_all = "", *addstr_sect_pre = "", *addstr_sect = "";
+const char *modestr, *addstr_all = "";
 
 struct wsect *wanted_sections = NULL;
 
@@ -212,14 +212,8 @@ int main(int argc, char *argv[])
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
 	modestr = argv[2];
-	if (mode("keep") || mode("sizelist")) {
-		addstr_all = argv[3];
-		addstr_sect = argv[4];
-	} else if (mode("patchlist")) {
-		addstr_all = argv[3];
-		addstr_sect_pre = argv[4];
-		addstr_sect = argv[5];
-	} else if (mode("export")) {
+	if (mode("keep") || mode("sizelist") || mode("patchlist") ||
+	    mode("export")) {
 		addstr_all = argv[3];
 	} else if (mode("rmsyms")) {
 		varargs = &argv[3];
@@ -555,8 +549,8 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
 					       struct ksplice_size);
 
-	write_string(ksize_ss, &ksize->name, "%s%s%s",
-		     sym->name, addstr_all, addstr_sect);
+	write_string(ksize_ss, &ksize->name, "%s%s%s", sym->name, addstr_all,
+		     mode("sizelist-primary") ? "_post" : "_pre");
 	ksize->size = symsize;
 	ksize->flags = 0;
 	if (mode("sizelist-helper") &&
@@ -583,8 +577,8 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	}
 	assert(symp < sbfd->syms.data + sbfd->syms.size);
 
-	write_string(kpatch_ss, &kpatch->oldstr, "%s%s%s",
-		     symname, addstr_all, addstr_sect_pre);
+	write_string(kpatch_ss, &kpatch->oldstr, "%s%s_pre",
+		     symname, addstr_all);
 	kpatch->oldaddr = 0;
 	kpatch->saved = NULL;
 	kpatch->trampoline = NULL;

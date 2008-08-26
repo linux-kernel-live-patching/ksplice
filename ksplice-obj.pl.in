@@ -67,13 +67,13 @@ sub do_diff {
 	close OBJ_OLD;
 
 	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "export", $ENV{KSPLICE_KID});
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}", "_post");
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}", "_pre");
+	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "keep-primary", "____${tag}");
+	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "keep-helper", "____${tag}");
 	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "globalize-new");
 	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "rmrelocs");
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "sizelist-primary", "____${tag}", "_post");
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "sizelist-helper", "____${tag}", "_pre");
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "patchlist", "____${tag}", "_pre", "_post");
+	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "sizelist-primary", "____${tag}");
+	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "sizelist-helper", "____${tag}");
+	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "patchlist", "____${tag}");
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
