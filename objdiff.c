@@ -129,14 +129,12 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 		if (old_exports != NULL) {
 			for (old = old_exports->data; old < old_exports->data +
 			     old_exports->size; old++) {
-				if (strcmp(new->name, old->name) != 0)
-					continue;
-				if (strcmp(new->sect->name,
-					   old->sect->name) != 0)
-					/* Export type changed! */
-					DIE;
-				found = 1;
-				break;
+				if (strcmp(new->name, old->name) == 0 &&
+				    strcmp(new->sect->name, old->sect->name)
+				    == 0) {
+					found = 1;
+					break;
+				}
 			}
 		}
 		/* last_sect can go away once we make objdiff | objmanip */
