@@ -1798,6 +1798,10 @@ skip_using_system_map:
 		else
 			val = sym_addr + r->addend;
 
+		ret1 = create_nameval(pack, r->sym_name, sym_addr, VAL);
+		if (ret1 != OK)
+			return ret1;
+
 		switch (r->size) {
 		case 1:
 			*(int8_t *)r->blank_addr =
