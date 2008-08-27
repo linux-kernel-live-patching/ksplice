@@ -1551,6 +1551,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, "\n");
 		return ret;
 	} else if (ret != OK) {
+		set_temp_myst_relocs(pack, NOVAL);
 		return ret;
 	}
 
