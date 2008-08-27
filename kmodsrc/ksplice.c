@@ -385,7 +385,8 @@ static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
 
 #ifdef KSPLICE_STANDALONE
 static abort_t brute_search_all(struct module_pack *pack,
-				const struct ksplice_size *s);
+				const struct ksplice_size *s,
+				struct list_head *vals);
 #endif /* KSPLICE_STANDALONE */
 
 static abort_t add_candidate_val(struct list_head *vals, unsigned long val);
@@ -452,7 +453,8 @@ static abort_t activate_helper(struct module_pack *pack);
 static abort_t search_for_match(struct module_pack *pack,
 				const struct ksplice_size *s);
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
-			unsigned long run_addr, unsigned long pre_addr);
+			unsigned long run_addr, unsigned long pre_addr,
+			int final);
 static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 				  unsigned long run_addr,
 				  unsigned long pre_addr, unsigned int size,
@@ -1419,7 +1421,7 @@ static abort_t search_for_match(struct module_pack *pack,
 	abort_t ret;
 	unsigned long run_addr;
 	LIST_HEAD(vals);
-	struct candidate_val *v;
+	struct candidate_val *v, *n;
 
 	for (i = 0; i < s->num_sym_addrs; i++) {
 		ret = add_candidate_val(&vals, s->sym_addrs[i]);
@@ -1434,24 +1436,51 @@ static abort_t search_for_match(struct module_pack *pack,
 	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: starting sect search "
 		"for %s\n", s->name);
 
-	list_for_each_entry(v, &vals, list) {
+	list_for_each_entry_safe(v, n, &vals, list) {
 		run_addr = v->val;
 
 		yield();
-		ret = try_addr(pack, s, run_addr, s->thismod_addr);
-		if (ret != NO_MATCH) {
+		ret = try_addr(pack, s, run_addr, s->thismod_addr, 0);
+		if (ret == NO_MATCH) {
+			list_del(&v->list);
+			kfree(v);
+		} else if (ret != OK) {
 			release_vals(&vals);
 			return ret;
 		}
 	}
-	release_vals(&vals);
 
 #ifdef KSPLICE_STANDALONE
-	ret = brute_search_all(pack, s);
-	if (ret != NO_MATCH)
-		return ret;
+	if (list_empty(&vals)) {
+		ret = brute_search_all(pack, s, &vals);
+		if (ret != OK)
+			return ret;
+	}
 #endif /* KSPLICE_STANDALONE */
 
+	if (singular(&vals)) {
+		run_addr = list_entry(vals.next, struct candidate_val,
+				      list)->val;
+		ret = try_addr(pack, s, run_addr, s->thismod_addr, 1);
+		release_vals(&vals);
+		return ret;
+	} else if (!list_empty(&vals)) {
+		struct candidate_val *val;
+		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: multiple "
+			"candidates for sect %s:\n", s->name);
+		i = 0;
+		list_for_each_entry(val, &vals, list) {
+			i++;
+			ksdebug(pack, 3, KERN_DEBUG "%lx\n", val->val);
+			if (i > 5) {
+				ksdebug(pack, 3, KERN_DEBUG "...\n");
+				break;
+			}
+		}
+		release_vals(&vals);
+		return NO_MATCH;
+	}
+	release_vals(&vals);
 	return NO_MATCH;
 }
 
@@ -1508,7 +1537,8 @@ static struct module *module_data_address(unsigned long addr)
 }
 
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
-			unsigned long run_addr, unsigned long pre_addr)
+			unsigned long run_addr, unsigned long pre_addr,
+			int final)
 {
 	struct safety_record *rec;
 	abort_t ret;
@@ -1554,6 +1584,12 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	} else if (ret != OK) {
 		set_temp_myst_relocs(pack, NOVAL);
 		return ret;
+	} else if (!final) {
+		set_temp_myst_relocs(pack, NOVAL);
+
+		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: candidate "
+			"for sect %s=%" ADDR "\n", s->name, run_addr);
+		return OK;
 	}
 
 	set_temp_myst_relocs(pack, VAL);
@@ -2156,7 +2192,8 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 #ifdef KSPLICE_STANDALONE
 static abort_t brute_search(struct module_pack *pack,
 			    const struct ksplice_size *s,
-			    const void *start, unsigned long len)
+			    const void *start, unsigned long len,
+			    struct list_head *vals)
 {
 	unsigned long addr;
 	char run, pre;
@@ -2176,21 +2213,26 @@ static abort_t brute_search(struct module_pack *pack,
 		if (run != pre)
 			continue;
 
-		ret = try_addr(pack, s, addr, s->thismod_addr);
-		if (ret != NO_MATCH)
+		ret = try_addr(pack, s, addr, s->thismod_addr, 0);
+		if (ret == OK) {
+			ret = add_candidate_val(vals, addr);
+			if (ret != OK)
+				return ret;
+		} else if (ret != NO_MATCH) {
 			return ret;
+		}
 	}
 
-	return NO_MATCH;
+	return OK;
 }
 
 static abort_t brute_search_all(struct module_pack *pack,
-				const struct ksplice_size *s)
+				const struct ksplice_size *s,
+				struct list_head *vals)
 {
 	struct module *m;
-	abort_t ret = NO_MATCH;
+	abort_t ret = OK;
 	int saved_debug;
-	const char *where = NULL;
 
 	ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: searching for %s\n",
 		s->name);
@@ -2201,26 +2243,17 @@ static abort_t brute_search_all(struct module_pack *pack,
 		if (starts_with(m->name, pack->name) ||
 		    ends_with(m->name, "_helper"))
 			continue;
-		if (brute_search(pack, s, m->module_core, m->core_size) == OK ||
-		    brute_search(pack, s, m->module_init, m->init_size) == OK) {
-			ret = OK;
-			where = m->name;
+		ret = brute_search(pack, s, m->module_core, m->core_size, vals);
+		if (ret != OK)
 			break;
-		}
+		ret = brute_search(pack, s, m->module_init, m->init_size, vals);
+		if (ret != OK)
+			break;
 	}
-
-	if (ret == NO_MATCH) {
-		if (brute_search(pack, s, (const void *)init_mm.start_code,
-				 init_mm.end_code - init_mm.start_code) == OK) {
-			ret = OK;
-			where = "vmlinux";
-		}
-	}
-
-	pack->bundle->debug = saved_debug;
 	if (ret == OK)
-		ksdebug(pack, 2, KERN_DEBUG "ksplice: brute_search: found %s "
-			"in %s\n", s->name, where);
+		ret = brute_search(pack, s, (const void *)init_mm.start_code,
+				   init_mm.end_code - init_mm.start_code, vals);
+	pack->bundle->debug = saved_debug;
 
 	return ret;
 }
