@@ -222,8 +222,7 @@ int main(int argc, char *argv[])
 		varargs_count = argc - 3;
 	}
 
-	if (mode("keep") ||
-	    mode("rmrelocs") || mode("sizelist") || mode("patchlist")) {
+	if (mode("keep") || mode("sizelist") || mode("patchlist")) {
 		read_str_set(&sections);
 		read_str_set(&entrysyms);
 		read_str_set(&newgsyms);
@@ -243,8 +242,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (mode("keep") || mode("sizelist") || mode("rmsyms") ||
-	    mode("rmrelocs"))
+	if (mode("keep") || mode("sizelist") || mode("rmsyms"))
 		load_system_map();
 
 	if (mode("keep")) {
@@ -382,13 +380,10 @@ void rm_some_relocs(struct supersect *ss)
 		if (mode("rmsyms") && match_varargs(sym_ptr->name))
 			rm_reloc = 1;
 
-		if (mode("keep") || mode("rmrelocs"))
+		if (mode("keep"))
 			rm_reloc = 1;
 
-		if (mode("keep-primary") && want_section(sym_ptr->section))
-			rm_reloc = 0;
-
-		if (mode("rmrelocs") &&
+		if (mode("keep-primary") && want_section(sym_ptr->section) &&
 		    (str_in_set(sym_ptr->name, &newsyms) ||
 		     bfd_is_und_section(sym_ptr->section) ||
 		     (sym_ptr->flags & BSF_FUNCTION) == 0))
