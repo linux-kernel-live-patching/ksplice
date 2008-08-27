@@ -2605,6 +2605,8 @@ static void cleanup_ksplice(void)
 {
 #ifdef KSPLICE_STANDALONE
 	cleanup_ksplice_bundle(ksplice_pack.bundle);
+#else /* !KSPLICE_STANDALONE */
+	kobject_put(ksplice_kobj);
 #endif /* KSPLICE_STANDALONE */
 }
 
