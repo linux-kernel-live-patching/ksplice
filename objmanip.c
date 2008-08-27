@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
 		varargs_count = argc - 3;
 	}
 
-	if (mode("keep") || mode("globalize-new") ||
+	if (mode("keep") ||
 	    mode("rmrelocs") || mode("sizelist") || mode("patchlist")) {
 		read_str_set(&sections);
 		read_str_set(&entrysyms);
@@ -860,11 +860,9 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 
 		int keep;
 
-		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0)
+		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
+		    !(mode("keep-primary") && str_in_set(sym->name, &newgsyms)))
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
-
-		if (mode("globalize-new") && str_in_set(sym->name, &newgsyms))
-			sym->flags = (sym->flags & ~BSF_LOCAL) | BSF_GLOBAL;
 
 		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
 		    || ((sym->flags & BSF_SECTION_SYM) != 0
