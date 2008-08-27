@@ -153,7 +153,7 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 
 char **varargs;
 int varargs_count;
-struct str_vec sections, entrysyms, newgsyms, newsyms, delsyms;
+struct str_vec sections, entrysyms, newsyms, delsyms;
 struct export_desc_vec exports;
 
 const char *modestr, *addstr_all = "", *kid;
@@ -223,7 +223,6 @@ int main(int argc, char *argv[])
 	if (mode("keep")) {
 		read_str_set(&sections);
 		read_str_set(&entrysyms);
-		read_str_set(&newgsyms);
 		read_str_set(&newsyms);
 		read_str_set(&delsyms);
 		vec_init(&exports);
@@ -854,7 +853,7 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		int keep;
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
-		    !(mode("keep-primary") && str_in_set(sym->name, &newgsyms)))
+		    !(mode("keep-primary") && str_in_set(sym->name, &newsyms)))
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
 		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */

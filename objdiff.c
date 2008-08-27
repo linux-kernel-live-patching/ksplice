@@ -69,8 +69,6 @@ int main(int argc, char *argv[])
 	printf("\n");
 	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_entry_symbols);
 	printf("\n");
-	compare_symbols(oldsbfd, newsbfd, BSF_GLOBAL);
-	printf("\n");
 	compare_symbols(oldsbfd, newsbfd, ~0);
 	printf("\n");
 	compare_symbols(newsbfd, oldsbfd, BSF_FUNCTION);
