@@ -1557,6 +1557,10 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return NO_MATCH;
 	}
 
+	ret = create_nameval(pack, s->name, run_addr, TEMP);
+	if (ret != OK)
+		return ret;
+
 	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
 		ret = rodata_run_pre_cmp(pack, run_addr, pre_addr, s->size, 0);
 	else
@@ -1613,8 +1617,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	}
 	rec->name = s->name;
 	list_add(&rec->list, &pack->safety_records);
-
-	return create_nameval(pack, s->name, run_addr, VAL);
+	return OK;
 }
 
 static abort_t handle_myst_reloc(struct module_pack *pack,

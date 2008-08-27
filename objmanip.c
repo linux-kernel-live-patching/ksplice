@@ -544,7 +544,7 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 					       struct ksplice_size);
 
 	write_string(ksize_ss, &ksize->name, "%s%s%s", sym->name, addstr_all,
-		     mode("keep-primary") ? "_post" : "_pre");
+		     mode("keep-primary") ? "_post" : "");
 	ksize->size = symsize;
 	ksize->flags = 0;
 	if (mode("keep-helper") &&
@@ -571,8 +571,7 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	}
 	assert(symp < sbfd->syms.data + sbfd->syms.size);
 
-	write_string(kpatch_ss, &kpatch->oldstr, "%s%s_pre",
-		     symname, addstr_all);
+	write_string(kpatch_ss, &kpatch->oldstr, "%s%s", symname, addstr_all);
 	kpatch->oldaddr = 0;
 	kpatch->saved = NULL;
 	kpatch->trampoline = NULL;
