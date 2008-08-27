@@ -1384,6 +1384,10 @@ static abort_t search_for_match(struct module_pack *pack,
 				      list)->val;
 		ret = try_addr(pack, s, run_addr, 1);
 		release_vals(&vals);
+		if (ret != OK)
+			ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: "
+				"Final run failed for sect %s:\n",
+				s->symbol->label);
 		return ret;
 	} else if (!list_empty(&vals)) {
 		struct candidate_val *val;
