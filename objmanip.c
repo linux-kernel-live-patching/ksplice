@@ -215,14 +215,14 @@ int main(int argc, char *argv[])
 	if (mode("keep")) {
 		kid = argv[3];
 		addstr_all = argv[4];
-	} else if (mode("sizelist") || mode("patchlist")) {
+	} else if (mode("patchlist")) {
 		addstr_all = argv[3];
 	} else if (mode("rmsyms")) {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
 	}
 
-	if (mode("keep") || mode("sizelist") || mode("patchlist")) {
+	if (mode("keep") || mode("patchlist")) {
 		read_str_set(&sections);
 		read_str_set(&entrysyms);
 		read_str_set(&newgsyms);
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (mode("keep") || mode("sizelist") || mode("rmsyms"))
+	if (mode("keep") || mode("rmsyms"))
 		load_system_map();
 
 	if (mode("keep")) {
@@ -257,9 +257,11 @@ int main(int argc, char *argv[])
 
 	asymbol **symp;
 	for (symp = isbfd->syms.data;
-	     mode("sizelist") && symp < isbfd->syms.data + isbfd->syms.size;
+	     mode("keep") && symp < isbfd->syms.data + isbfd->syms.size;
 	     symp++) {
 		asymbol *sym = *symp;
+		if (!want_section(sym->section))
+			continue;
 		if ((sym->flags & BSF_FUNCTION)
 		    && sym->value == 0 && !(sym->flags & BSF_WEAK))
 			write_ksplice_size(isbfd, symp);
@@ -547,10 +549,10 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 					       struct ksplice_size);
 
 	write_string(ksize_ss, &ksize->name, "%s%s%s", sym->name, addstr_all,
-		     mode("sizelist-primary") ? "_post" : "_pre");
+		     mode("keep-primary") ? "_post" : "_pre");
 	ksize->size = symsize;
 	ksize->flags = 0;
-	if (mode("sizelist-helper") &&
+	if (mode("keep-helper") &&
 	    str_in_set(sym->name, &delsyms) && (sym->flags & BSF_FUNCTION))
 		ksize->flags |= KSPLICE_SIZE_DELETED;
 	if (starts_with(sym->section->name, ".rodata"))

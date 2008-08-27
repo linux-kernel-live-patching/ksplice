@@ -68,8 +68,6 @@ sub do_diff {
 
 	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "keep-primary", $ENV{KSPLICE_KID}, "____${tag}");
 	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "keep-helper", $ENV{KSPLICE_KID}, "____${tag}");
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "sizelist-primary", "____${tag}");
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "sizelist-helper", "____${tag}");
 	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "patchlist", "____${tag}");
 
 	open OUT, '>', "$out.tmp";
