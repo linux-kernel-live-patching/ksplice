@@ -215,14 +215,12 @@ int main(int argc, char *argv[])
 	if (mode("keep")) {
 		kid = argv[3];
 		addstr_all = argv[4];
-	} else if (mode("patchlist")) {
-		addstr_all = argv[3];
 	} else if (mode("rmsyms")) {
 		varargs = &argv[3];
 		varargs_count = argc - 3;
 	}
 
-	if (mode("keep") || mode("patchlist")) {
+	if (mode("keep")) {
 		read_str_set(&sections);
 		read_str_set(&entrysyms);
 		read_str_set(&newgsyms);
@@ -271,14 +269,12 @@ int main(int argc, char *argv[])
 			write_ksplice_size(isbfd, symp);
 	}
 
-	if (mode("patchlist")) {
+	if (mode("keep-primary")) {
 		const char **symname;
 		for (symname = entrysyms.data;
 		     symname < entrysyms.data + entrysyms.size; symname++)
 			write_ksplice_patch(isbfd, *symname);
-	}
 
-	if (mode("keep-primary")) {
 		const struct export_desc *ed;
 		for (ed = exports.data; ed < exports.data + exports.size;
 		     ed++) {
