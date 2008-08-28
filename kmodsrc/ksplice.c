@@ -443,7 +443,7 @@ static void cleanup_conflicts(struct update_bundle *bundle);
 static void print_conflicts(struct update_bundle *bundle);
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
-/* Architecture-specific functions defined in ksplice-run-pre.h */
+/* Architecture-specific functions defined in ARCH/ksplice-arch.c */
 static abort_t create_trampoline(struct ksplice_patch *p);
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr);
@@ -497,10 +497,10 @@ static void add_to_bundle(struct module_pack *pack,
 			  struct update_bundle *bundle);
 static int ksplice_sysfs_init(struct update_bundle *bundle);
 
-#ifdef KSPLICE_STANDALONE
-#include "ksplice-run-pre.h"
+#if defined KSPLICE_STANDALONE
+#include "x86/ksplice-arch.c"
 #else /* !KSPLICE_STANDALONE */
-#include <asm/ksplice-run-pre.h>
+#include "ksplice-arch.c"
 #endif /* KSPLICE_STANDALONE */
 
 #ifndef KSPLICE_STANDALONE
