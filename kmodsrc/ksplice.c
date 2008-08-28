@@ -2006,6 +2006,10 @@ static abort_t compute_address(struct module_pack *pack, const char *sym_name,
 	if (starts_with(sym_name, ".rodata"))
 		return OK;
 
+	for (i = 0; prefix[i] != NULL; i++) {
+		if (starts_with(sym_name, prefix[i]))
+			sym_name += strlen(prefix[i]);
+	}
 	name = dup_wolabel(sym_name);
 	ret = exported_symbol_lookup(name, vals);
 #ifdef CONFIG_KALLSYMS
@@ -2018,15 +2022,6 @@ static abort_t compute_address(struct module_pack *pack, const char *sym_name,
 	if (ret != OK)
 		return ret;
 
-	for (i = 0; prefix[i] != NULL; i++) {
-		if (starts_with(sym_name, prefix[i])) {
-			ret = compute_address(pack,
-					      sym_name + strlen(prefix[i]),
-					      vals, pre);
-			if (ret != OK)
-				return ret;
-		}
-	}
 	return OK;
 }
 
@@ -2397,14 +2392,8 @@ static struct reloc_nameval *find_nameval(struct module_pack *pack,
 					  const char *name)
 {
 	struct reloc_nameval *nv;
-	const char *newname;
-	if (starts_with(name, ".text."))
-		name += 6;
 	list_for_each_entry(nv, &pack->reloc_namevals, list) {
-		newname = nv->name;
-		if (starts_with(newname, ".text."))
-			newname += 6;
-		if (strcmp(newname, name) == 0)
+		if (strcmp(nv->name, name) == 0)
 			return nv;
 	}
 	return NULL;
@@ -2420,8 +2409,6 @@ static abort_t create_nameval(struct module_pack *pack, const char *name,
 	nv = kmalloc(sizeof(*nv), GFP_KERNEL);
 	if (nv == NULL)
 		return OUT_OF_MEMORY;
-	if (starts_with(name, ".text."))
-		name += 6;
 	nv->name = name;
 	nv->val = val;
 	nv->status = status;

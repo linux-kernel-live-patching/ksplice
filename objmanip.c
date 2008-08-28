@@ -150,6 +150,7 @@ write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
 void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed);
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 			  const char *export_type, int del);
+const char *compute_prefix(asymbol *sym);
 
 char **varargs;
 int varargs_count;
@@ -543,7 +544,8 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
 					       struct ksplice_size);
 
-	write_string(ksize_ss, &ksize->name, "%s%s%s", sym->name, addstr_all,
+	write_string(ksize_ss, &ksize->name, "%s%s%s%s", compute_prefix(sym),
+		     sym->name, addstr_all,
 		     mode("keep-primary") ? "_post" : "");
 	ksize->size = symsize;
 	ksize->flags = 0;
@@ -571,7 +573,8 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	}
 	assert(symp < sbfd->syms.data + sbfd->syms.size);
 
-	write_string(kpatch_ss, &kpatch->oldstr, "%s%s", symname, addstr_all);
+	write_string(kpatch_ss, &kpatch->oldstr, "%s%s%s",
+		     compute_prefix(*symp), symname, addstr_all);
 	kpatch->oldaddr = 0;
 	kpatch->saved = NULL;
 	kpatch->trampoline = NULL;
@@ -971,4 +974,21 @@ const struct specsect *is_special(asection *sect)
 			return ss;
 	}
 	return NULL;
+}
+
+const char *compute_prefix(asymbol *sym)
+{
+	if (starts_with(sym->section->name, ".text.") &&
+	    !starts_with(sym->name, ".text."))
+		return ".text.";
+	if (starts_with(sym->section->name, ".bss.") &&
+	    !starts_with(sym->name, ".bss."))
+		return ".bss.";
+	if (starts_with(sym->section->name, ".data.") &&
+	    !starts_with(sym->name, ".data."))
+		return ".data.";
+	if (starts_with(sym->section->name, ".rodata.") &&
+	    !starts_with(sym->name, ".rodata."))
+		return ".rodata.";
+	return "";
 }
