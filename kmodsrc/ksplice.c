@@ -1987,23 +1987,20 @@ static abort_t compute_address(struct module_pack *pack, const char *sym_name,
 	int i;
 	abort_t ret;
 	const char *prefix[] = { ".text.", ".bss.", ".data.", NULL };
+	struct reloc_nameval *nv;
 	char *name;
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return OK;
 #endif /* KSPLICE_STANDALONE */
 
-	if (!pre) {
-		struct reloc_nameval *nv = find_nameval(pack, sym_name);
-		if (nv != NULL) {
-			release_vals(vals);
-			ret = add_candidate_val(vals, nv->val);
-			if (ret != OK)
-				return ret;
+	nv = find_nameval(pack, sym_name);
+	if (nv != NULL) {
+		release_vals(vals);
+		if (!pre)
 			ksdebug(pack, 1, KERN_DEBUG "ksplice: using detected "
 				"sym %s=%" ADDR "\n", sym_name, nv->val);
-			return OK;
-		}
+		return add_candidate_val(vals, nv->val);
 	}
 
 	if (starts_with(sym_name, ".rodata"))
