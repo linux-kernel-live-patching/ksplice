@@ -73,7 +73,8 @@ typedef int __bitwise__ abort_t;
 #define FAILED_TO_FIND ((__force abort_t) 6)
 #define ALREADY_REVERSED ((__force abort_t) 7)
 #define MISSING_EXPORT ((__force abort_t) 8)
-#define UNEXPECTED ((__force abort_t) 9)
+#define UNEXPECTED_RUNNING_TASK ((__force abort_t) 9)
+#define UNEXPECTED ((__force abort_t) 10)
 
 struct update_bundle {
 	const char *kid;
@@ -558,6 +559,8 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 		return snprintf(buf, PAGE_SIZE, "already_reversed\n");
 	case MISSING_EXPORT:
 		return snprintf(buf, PAGE_SIZE, "missing_export\n");
+	case UNEXPECTED_RUNNING_TASK:
+		return snprintf(buf, PAGE_SIZE, "unexpected_running_task\n");
 	case UNEXPECTED:
 		return snprintf(buf, PAGE_SIZE, "unexpected\n");
 	}
@@ -1035,7 +1038,7 @@ static abort_t check_task(struct update_bundle *bundle,
 		if (status == OK)
 			status = ret;
 	} else if (!is_stop_machine(t)) {
-		status = UNEXPECTED;
+		status = UNEXPECTED_RUNNING_TASK;
 	}
 	return status;
 }

@@ -171,6 +171,11 @@ END
 Ksplice was unable to find some of the structures needed to make the
 adjustments to the kernel's exported symbols made by the patch.
 END
+		"unexpected_running_task" => <<'END',
+Ksplice has aborted the upgrade because a task was running while it
+was attempting to check that the code changed by the update was not
+busy.
+END
 		"out_of_memory" => <<'END',
 Ksplice has aborted the upgrade because the kernel ran out of memory.
 END

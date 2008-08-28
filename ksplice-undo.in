@@ -91,6 +91,11 @@ END
 		"out_of_memory" => <<'END',
 Ksplice has aborted the undo operation because the kernel ran out of memory.
 END
+		"unexpected_running_task" => <<'END',
+Ksplice has aborted the upgrade because a task was running while it
+was attempting to check that the code changed by the update was not
+busy.
+END
 		"UNKNOWN" => <<'END',
 The Ksplice kernel interface has returned an error string that
 ksplice-undo does not understand.  This is probably the result of
