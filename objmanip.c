@@ -150,7 +150,6 @@ write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
 void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed);
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 			  const char *export_type, int del);
-const char *compute_prefix(asymbol *sym);
 
 char **varargs;
 int varargs_count;
@@ -484,13 +483,12 @@ void write_ksplice_symbol(struct supersect *ss,
 
 	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
 		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
-		write_string(ksymbol_ss, &ksymbol->label, "%s%s%s",
-			     compute_prefix(sym), sym->name, addstr_sect);
+		write_string(ksymbol_ss, &ksymbol->label, "%s%s", sym->name,
+			     addstr_sect);
 	} else if (bfd_is_const_section(sym->section)) {
 		ksymbol->name = NULL;
-		write_string(ksymbol_ss, &ksymbol->label, "%s%s%s%s",
-			     compute_prefix(sym), sym->name, addstr_all,
-			     addstr_sect);
+		write_string(ksymbol_ss, &ksymbol->label, "%s%s%s",
+			     sym->name, addstr_all, addstr_sect);
 	} else {
 		const struct asymbolp_vec *syms = &ss->parent->syms;
 		asymbol **gsymp;
@@ -505,12 +503,10 @@ void write_ksplice_symbol(struct supersect *ss,
 				     gsym->name);
 			if ((gsym->flags & BSF_GLOBAL) != 0)
 				write_string(ksymbol_ss, &ksymbol->label,
-					     "%s%s%s", compute_prefix(gsym),
-					     gsym->name, addstr_sect);
+					     "%s%s", gsym->name, addstr_sect);
 			else
 				write_string(ksymbol_ss, &ksymbol->label,
-					     "%s%s%s%s", compute_prefix(gsym),
-					     gsym->name, addstr_all,
+					     "%s%s%s", gsym->name, addstr_all,
 					     addstr_sect);
 			break;
 		}
@@ -1024,21 +1020,4 @@ const struct specsect *is_special(asection *sect)
 			return ss;
 	}
 	return NULL;
-}
-
-const char *compute_prefix(asymbol *sym)
-{
-	if (starts_with(sym->section->name, ".text.") &&
-	    !starts_with(sym->name, ".text."))
-		return ".text.";
-	if (starts_with(sym->section->name, ".bss.") &&
-	    !starts_with(sym->name, ".bss."))
-		return ".bss.";
-	if (starts_with(sym->section->name, ".data.") &&
-	    !starts_with(sym->name, ".data."))
-		return ".data.";
-	if (starts_with(sym->section->name, ".rodata.") &&
-	    !starts_with(sym->name, ".rodata."))
-		return ".rodata.";
-	return "";
 }
