@@ -372,9 +372,10 @@ static abort_t kernel_lookup(const char *name, struct list_head *vals);
 static abort_t other_module_lookup(const char *name, struct list_head *vals,
 				   const char *ksplice_name);
 #ifdef KSPLICE_STANDALONE
-static int module_on_each_symbol(const struct module *mod,
-				 int (*fn)(void *, const char *, unsigned long),
-				 void *data);
+static int module_kallsyms_on_each_symbol(const struct module *mod,
+					  int (*fn)(void *, const char *,
+						    unsigned long),
+					  void *data);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 						    char *result);
@@ -2172,7 +2173,8 @@ static abort_t other_module_lookup(const char *name, struct list_head *vals,
 		    ends_with(m->name, "_helper"))
 			continue;
 		ret = (__force abort_t)
-		    module_on_each_symbol(m, accumulate_matching_names, &acc);
+		    module_kallsyms_on_each_symbol(m, accumulate_matching_names,
+						   &acc);
 		if (ret != OK)
 			break;
 	}
@@ -2346,9 +2348,10 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 }
 #endif /* LINUX_VERSION_CODE */
 
-static int module_on_each_symbol(const struct module *mod,
-				 int (*fn)(void *, const char *, unsigned long),
-				 void *data)
+static int module_kallsyms_on_each_symbol(const struct module *mod,
+					  int (*fn)(void *, const char *,
+						    unsigned long),
+					  void *data)
 {
 	unsigned int i;
 	int ret;
@@ -2368,7 +2371,7 @@ static abort_t kernel_lookup(const char *name, struct list_head *vals)
 {
 	struct accumulate_struct acc = { name, vals };
 	return (__force abort_t)
-	    kallsyms_on_each_symbol(accumulate_matching_names, &acc);
+	    kernel_kallsyms_on_each_symbol(accumulate_matching_names, &acc);
 }
 #endif /* KSPLICE_STANDALONE */
 
