@@ -221,13 +221,11 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 	for (i = 0; i < old_ss->relocs.size; i++) {
 		struct supersect *ro_old_ss, *ro_new_ss;
 
-		asection *ro_oldp =
-		    (*old_ss->relocs.data[i]->sym_ptr_ptr)->section;
-		asection *ro_newp =
-		    (*new_ss->relocs.data[i]->sym_ptr_ptr)->section;
+		asymbol *old_sym = *old_ss->relocs.data[i]->sym_ptr_ptr;
+		asymbol *new_sym = *new_ss->relocs.data[i]->sym_ptr_ptr;
 
-		ro_old_ss = fetch_supersect(oldsbfd, ro_oldp);
-		ro_new_ss = fetch_supersect(newsbfd, ro_newp);
+		ro_old_ss = fetch_supersect(oldsbfd, old_sym->section);
+		ro_new_ss = fetch_supersect(newsbfd, new_sym->section);
 
 		if (!starts_with(ro_old_ss->name, ".rodata"))
 			continue;
@@ -235,12 +233,10 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
 			return -1;
 
-		bfd_vma old_offset = get_reloc_offset(old_ss,
-						      old_ss->relocs.data[i],
-						      1);
-		bfd_vma new_offset = get_reloc_offset(new_ss,
-						      new_ss->relocs.data[i],
-						      1);
+		bfd_vma old_offset =
+		    get_reloc_offset(old_ss, old_ss->relocs.data[i], 1);
+		bfd_vma new_offset =
+		    get_reloc_offset(new_ss, new_ss->relocs.data[i], 1);
 
 		if (starts_with(ro_old_ss->name, ".rodata.str")) {
 			if (strcmp
