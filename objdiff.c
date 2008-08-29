@@ -240,8 +240,10 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 
 		if (starts_with(ro_old_ss->name, ".rodata.str")) {
 			if (strcmp
-			    (ro_old_ss->contents.data + old_offset,
-			     ro_new_ss->contents.data + new_offset) != 0)
+			    (ro_old_ss->contents.data + old_sym->value +
+			     old_offset,
+			     ro_new_ss->contents.data + new_sym->value +
+			     new_offset) != 0)
 				return -1;
 			continue;
 		}
