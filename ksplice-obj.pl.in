@@ -54,7 +54,7 @@ sub do_diff {
 	}
 
 	my $objdiff = runsuc("objdiff", $obj_old, $obj);
-	return empty_diff($out) if($objdiff eq '');
+	return empty_diff($out) if($objdiff !~ m/\S/);
 
 	copy($obj, "$obj.KSPLICE_primary");
 	copy($obj_old, "$obj.KSPLICE_helper");
