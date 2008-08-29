@@ -697,11 +697,16 @@ static abort_t activate_primary(struct module_pack *pack)
 	if (ret != OK)
 		return ret;
 
-	list_for_each_entry(rec, &pack->safety_records, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			if (p->oldaddr == rec->addr)
+	for (p = pack->patches; p < pack->patches_end; p++) {
+		int found = 0;
+		list_for_each_entry(rec, &pack->safety_records, list) {
+			if (strcmp(rec->name, p->symbol->label) == 0) {
 				rec->care = 1;
+				found = 1;
+			}
 		}
+		if (found == 0)
+			return UNEXPECTED;
 	}
 	return OK;
 }
