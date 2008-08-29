@@ -348,9 +348,6 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 
 static abort_t create_trampoline(struct ksplice_patch *p)
 {
-	p->trampoline = kmalloc(5, GFP_KERNEL);
-	if (p->trampoline == NULL)
-		return OUT_OF_MEMORY;
 	p->trampoline[0] = 0xE9;
 	*(u32 *)(&p->trampoline[1]) = p->repladdr - (p->oldaddr + 5);
 	p->size = 5;

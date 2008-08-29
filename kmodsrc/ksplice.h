@@ -25,12 +25,14 @@ struct ksplice_size {
 #define KSPLICE_SIZE_DELETED 0x00000001
 #define KSPLICE_SIZE_RODATA 0x00000002
 
+#define MAX_TRAMPOLINE_SIZE 5
+
 struct ksplice_patch {
 	const struct ksplice_symbol *symbol;
 	unsigned long oldaddr;
 	unsigned long repladdr;
-	char *saved;
-	char *trampoline;
+	char saved[MAX_TRAMPOLINE_SIZE];
+	char trampoline[MAX_TRAMPOLINE_SIZE];
 	unsigned int size;
 };
 

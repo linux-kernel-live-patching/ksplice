@@ -439,8 +439,6 @@ static void cleanup_conflicts(struct update_bundle *bundle);
 static void print_conflicts(struct update_bundle *bundle);
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
-static void free_trampolines(struct update_bundle *bundle);
-static abort_t prepare_trampolines(struct update_bundle *bundle);
 /* Architecture-specific functions defined in ksplice-run-pre.h */
 static abort_t create_trampoline(struct ksplice_patch *p);
 static unsigned long follow_trampolines(struct module_pack *pack,
@@ -664,12 +662,8 @@ void cleanup_ksplice_module(struct module_pack *pack)
 {
 	if (pack->bundle == NULL)
 		return;
-	if (pack->bundle->stage != APPLIED) {
-		struct ksplice_patch *p;
-		for (p = pack->patches; p < pack->patches_end; p++)
-			kfree(p->saved);
+	if (pack->bundle->stage != APPLIED)
 		unregister_ksplice_module(pack);
-	}
 }
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
@@ -737,46 +731,10 @@ static abort_t process_exports(struct module_pack *pack)
 	return OK;
 }
 
-static abort_t prepare_trampolines(struct update_bundle *bundle)
-{
-	struct module_pack *pack;
-	struct ksplice_patch *p;
-	abort_t ret;
-
-	list_for_each_entry(pack, &bundle->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			ret = create_trampoline(p);
-			if (ret != OK) {
-				free_trampolines(bundle);
-				return ret;
-			}
-			kfree(p->saved);
-			p->saved = kmalloc(p->size, GFP_KERNEL);
-			if (p->saved == NULL) {
-				free_trampolines(bundle);
-				return OUT_OF_MEMORY;
-			}
-		}
-	}
-	return OK;
-}
-
-static void free_trampolines(struct update_bundle *bundle)
-{
-	struct module_pack *pack;
-	struct ksplice_patch *p;
-
-	list_for_each_entry(pack, &bundle->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			kfree(p->trampoline);
-			p->trampoline = NULL;
-		}
-	}
-}
-
 static void insert_trampoline(struct ksplice_patch *p)
 {
 	mm_segment_t old_fs = get_fs();
+	create_trampoline(p);
 	set_fs(KERNEL_DS);
 	memcpy((void *)p->saved, (void *)p->oldaddr, p->size);
 	memcpy((void *)p->oldaddr, (void *)p->trampoline, p->size);
@@ -797,10 +755,6 @@ static abort_t apply_patches(struct update_bundle *bundle)
 {
 	int i;
 	abort_t ret;
-
-	ret = prepare_trampolines(bundle);
-	if (ret != OK)
-		return ret;
 
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(bundle);
@@ -823,7 +777,6 @@ static abort_t apply_patches(struct update_bundle *bundle)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	free_trampolines(bundle);
 
 	if (ret == OK) {
 		struct module_pack *pack;

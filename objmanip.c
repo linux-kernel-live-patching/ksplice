@@ -772,8 +772,6 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	write_ksplice_symbol(kpatch_ss, &kpatch->symbol, *symp, "");
 	write_ksplice_reloc(kpatch_ss, create_reloc(kpatch_ss, &kpatch->oldaddr,
 						    symp, 0));
-	kpatch->saved = NULL;
-	kpatch->trampoline = NULL;
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
 }
 
