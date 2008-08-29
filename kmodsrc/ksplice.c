@@ -325,7 +325,7 @@ extern const struct ksplice_reloc ksplice_init_relocs[],
 /* Obtained via System.map */
 extern struct list_head modules;
 extern struct mutex module_mutex;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18) && defined(CONFIG_UNUSED_SYMBOLS)
 /* f71d20e961474dde77e6558396efb93d6ac80a4b was after 2.6.17 */
 #define KSPLICE_KSYMTAB_UNUSED_SUPPORT 1
 #endif /* LINUX_VERSION_CODE */
@@ -432,11 +432,10 @@ static int is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update_bundle *bundle);
 static void print_conflicts(struct update_bundle *bundle);
 #ifdef KSPLICE_STANDALONE
-static const struct kernel_symbol *__find_symbol(const char *name,
-						 struct module **owner,
-						 const unsigned long **crc,
-						 const char **export_type,
-						 bool gplok, bool warn);
+static const struct kernel_symbol *find_symbol(const char *name,
+					       struct module **owner,
+					       const unsigned long **crc,
+					       bool gplok, bool warn);
 #endif /* KSPLICE_STANDALONE */
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
@@ -719,12 +718,14 @@ static abort_t process_exports(struct module_pack *pack)
 	const char *export_type;
 
 	for (export = pack->exports; export < pack->exports_end; export++) {
-		sym = __find_symbol(export->name, &m, NULL, &export_type, 1, 0);
+		sym = find_symbol(export->name, &m, NULL, 1, 0);
 		if (sym == NULL) {
 			ksdebug(pack, 0, "Could not find kernel_symbol struct"
 				"for %s (%s)\n", export->name, export->type);
 			return MISSING_EXPORT;
 		}
+		/* Do we actually want the following check? */
+		export_type = export->type;
 		if (strcmp(export_type, export->type) != 0) {
 			ksdebug(pack, 0, "Nonmatching export type for %s "
 				"(%s/%s)\n", export->name, export->type,
@@ -2039,126 +2040,185 @@ static abort_t compute_address(struct module_pack *pack,
 static abort_t exported_symbol_lookup(const char *name, struct list_head *vals)
 {
 	const struct kernel_symbol *sym;
-	sym = __find_symbol(name, NULL, NULL, NULL, 1, 0);
+	sym = find_symbol(name, NULL, NULL, 1, 0);
 	if (sym == NULL)
 		return OK;
 	return add_candidate_val(vals, sym->value);
 }
 
 #ifdef KSPLICE_STANDALONE
-/* lookup symbol in given range of kernel_symbols */
-static const struct kernel_symbol *lookup_symbol(const char *name,
-						 const struct kernel_symbol *start,
-						 const struct kernel_symbol *stop)
-{
-	const struct kernel_symbol *ks = start;
-	for (; ks < stop; ks++)
-		if (strcmp(ks->name, name) == 0)
-			return ks;
-	return NULL;
-}
-
-struct symsearch {
-	const struct kernel_symbol *start, *stop;
-	const unsigned long *crcs;
-	const char *export_type;
-};
-
 #ifndef CONFIG_MODVERSIONS
 #define symversion(base, idx) NULL
 #else
 #define symversion(base, idx) ((base != NULL) ? ((base) + (idx)) : NULL)
 #endif
 
-/* Modified version of search_symarrays from kernel/module.c */
-static const struct kernel_symbol *search_symarrays(const struct symsearch *arr,
-						    unsigned int num,
-						    const char *name,
-						    const char **export_type,
-						    bool gplok,
-						    bool warn,
-						    const unsigned long **crc)
+struct symsearch {
+	const struct kernel_symbol *start, *stop;
+	const unsigned long *crcs;
+	enum {
+		NOT_GPL_ONLY,
+		GPL_ONLY,
+		WILL_BE_GPL_ONLY,
+	} licence;
+	bool unused;
+};
+
+static bool each_symbol_in_section(const struct symsearch *arr,
+				   unsigned int arrsize,
+				   struct module *owner,
+				   bool (*fn)(const struct symsearch *syms,
+					      struct module *owner,
+					      unsigned int symnum, void *data),
+				   void *data)
 {
-	unsigned int i;
-	const struct kernel_symbol *ks;
+	unsigned int i, j;
 
-	for (i = 0; i < num; i++) {
-		ks = lookup_symbol(name, arr[i].start, arr[i].stop);
-		if (!ks)
-			continue;
-
-		if (crc)
-			*crc = symversion(arr[i].crcs, ks - arr[i].start);
-		if (export_type)
-			*export_type = arr[i].export_type;
-		return ks;
+	for (j = 0; j < arrsize; j++) {
+		for (i = 0; i < arr[j].stop - arr[j].start; i++)
+			if (fn(&arr[j], owner, i, data))
+				return 1;
 	}
-	return NULL;
+
+	return 0;
 }
 
-/* Modified version of kernel/module.c's find_symbol */
-static const struct kernel_symbol *__find_symbol(const char *name,
-						 struct module **owner,
-						 const unsigned long **crc,
-						 const char **export_type,
-						 bool gplok, bool warn)
+/* Returns true as soon as fn returns true, otherwise 0. */
+static bool each_symbol(bool (*fn)(const struct symsearch *arr,
+				   struct module *owner,
+				   unsigned int symnum, void *data),
+			void *data)
 {
 	struct module *mod;
-	const struct kernel_symbol *ks;
-
 	const struct symsearch arr[] = {
-		{ __start___ksymtab, __stop___ksymtab, __start___kcrctab, "" },
+		{ __start___ksymtab, __stop___ksymtab, __start___kcrctab,
+		  NOT_GPL_ONLY, 0 },
 		{ __start___ksymtab_gpl, __stop___ksymtab_gpl,
-		  __start___kcrctab_gpl, "_gpl" },
+		  __start___kcrctab_gpl,
+		  GPL_ONLY, 0 },
 #ifdef KSPLICE_KSYMTAB_FUTURE_SUPPORT
 		{ __start___ksymtab_gpl_future, __stop___ksymtab_gpl_future,
-		  __start___kcrctab_gpl_future, "_gpl_future" },
+		  __start___kcrctab_gpl_future,
+		  WILL_BE_GPL_ONLY, 0 },
 #endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
 #ifdef KSPLICE_KSYMTAB_UNUSED_SUPPORT
 		{ __start___ksymtab_unused, __stop___ksymtab_unused,
-		  __start___kcrctab_unused, "_unused" },
+		  __start___kcrctab_unused,
+		  NOT_GPL_ONLY, 1 },
 		{ __start___ksymtab_unused_gpl, __stop___ksymtab_unused_gpl,
-		  __start___kcrctab_unused_gpl, "_unused_gpl" },
+		  __start___kcrctab_unused_gpl,
+		  GPL_ONLY, 1 },
 #endif /* KSPLICE_KSYMTAB_UNUSED_SUPPORT */
 	};
 
-	/* Core kernel first. */
-	ks = search_symarrays(arr, ARRAY_SIZE(arr), name, export_type, gplok,
-			      warn, crc);
-	if (ks) {
-		if (owner)
-			*owner = NULL;
-		return ks;
-	}
+	if (each_symbol_in_section(arr, ARRAY_SIZE(arr), NULL, fn, data))
+		return 1;
 
-	/* Now try modules. */
 	list_for_each_entry(mod, &modules, list) {
-		struct symsearch arr[] = {
-			{ mod->syms, mod->syms + mod->num_syms, mod->crcs, "" },
+		struct symsearch module_arr[] = {
+			{ mod->syms, mod->syms + mod->num_syms, mod->crcs,
+			  NOT_GPL_ONLY, 0 },
 			{ mod->gpl_syms, mod->gpl_syms + mod->num_gpl_syms,
-			  mod->gpl_crcs, "_gpl" },
+			  mod->gpl_crcs,
+			  GPL_ONLY, 0 },
 #ifdef KSPLICE_KSYMTAB_FUTURE_SUPPORT
 			{ mod->gpl_future_syms,
 			  mod->gpl_future_syms + mod->num_gpl_future_syms,
-			  mod->gpl_future_crcs, "_gpl_future" },
+			  mod->gpl_future_crcs,
+			  WILL_BE_GPL_ONLY, 0 },
 #endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
 #ifdef KSPLICE_KSYMTAB_UNUSED_SUPPORT
 			{ mod->unused_syms,
 			  mod->unused_syms + mod->num_unused_syms,
-			  mod->unused_crcs, "_unused" },
+			  mod->unused_crcs,
+			  NOT_GPL_ONLY, 1 },
 			{ mod->unused_gpl_syms,
 			  mod->unused_gpl_syms + mod->num_unused_gpl_syms,
-			  mod->unused_gpl_crcs, "_unused_gpl" },
+			  mod->unused_gpl_crcs,
+			  GPL_ONLY, 1 },
 #endif /* KSPLICE_KSYMTAB_UNUSED_SUPPORT */
 		};
 
-		ks = search_symarrays(arr, ARRAY_SIZE(arr),
-				      name, export_type, gplok, warn, crc);
-		if (ks) {
-			if (owner)
-				*owner = mod;
-			return ks;
+		if (each_symbol_in_section(module_arr, ARRAY_SIZE(module_arr),
+					   mod, fn, data))
+			return 1;
+	}
+	return 0;
+}
+
+struct find_symbol_arg {
+	/* Input */
+	const char *name;
+	bool gplok;
+	bool warn;
+
+	/* Output */
+	struct module *owner;
+	const unsigned long *crc;
+	const struct kernel_symbol *sym;
+};
+
+static bool find_symbol_in_section(const struct symsearch *syms,
+				   struct module *owner,
+				   unsigned int symnum, void *data)
+{
+	struct find_symbol_arg *fsa = data;
+
+	if (strcmp(syms->start[symnum].name, fsa->name) != 0)
+		return 0;
+
+	if (!fsa->gplok) {
+		if (syms->licence == GPL_ONLY)
+			return 0;
+		if (syms->licence == WILL_BE_GPL_ONLY && fsa->warn) {
+			printk(KERN_WARNING "Symbol %s is being used "
+			       "by a non-GPL module, which will not "
+			       "be allowed in the future\n", fsa->name);
+			printk(KERN_WARNING "Please see the file "
+			       "Documentation/feature-removal-schedule.txt "
+			       "in the kernel source tree for more details.\n");
 		}
+	}
+
+#ifdef CONFIG_UNUSED_SYMBOLS
+	if (syms->unused && fsa->warn) {
+		printk(KERN_WARNING "Symbol %s is marked as UNUSED, "
+		       "however this module is using it.\n", fsa->name);
+		printk(KERN_WARNING
+		       "This symbol will go away in the future.\n");
+		printk(KERN_WARNING
+		       "Please evalute if this is the right api to use and if "
+		       "it really is, submit a report the linux kernel "
+		       "mailinglist together with submitting your code for "
+		       "inclusion.\n");
+	}
+#endif
+
+	fsa->owner = owner;
+	fsa->crc = symversion(syms->crcs, symnum);
+	fsa->sym = &syms->start[symnum];
+	return 1;
+}
+
+/* Find a symbol and return it, along with, (optional) crc and
+ * (optional) module which owns it */
+static const struct kernel_symbol *find_symbol(const char *name,
+					       struct module **owner,
+					       const unsigned long **crc,
+					       bool gplok, bool warn)
+{
+	struct find_symbol_arg fsa;
+
+	fsa.name = name;
+	fsa.gplok = gplok;
+	fsa.warn = warn;
+
+	if (each_symbol(find_symbol_in_section, &fsa)) {
+		if (owner)
+			*owner = fsa.owner;
+		if (crc)
+			*crc = fsa.crc;
+		return fsa.sym;
 	}
 
 	return NULL;
