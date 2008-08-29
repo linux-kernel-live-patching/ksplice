@@ -238,6 +238,16 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 		bfd_vma new_offset =
 		    get_reloc_offset(new_ss, new_ss->relocs.data[i], 1);
 
+		if (old_offset >= ro_old_ss->contents.size ||
+		    new_offset >= ro_new_ss->contents.size) {
+			fprintf(stderr, "Ignoring out-of-range relocation from "
+				"%s+%lx to %s+%lx/%s+%lx\n", old_ss->name,
+				(unsigned long)old_ss->relocs.data[i]->address,
+				ro_old_ss->name, (unsigned long)old_offset,
+				ro_new_ss->name, (unsigned long)new_offset);
+			continue;
+		}
+
 		if (starts_with(ro_old_ss->name, ".rodata.str")) {
 			if (strcmp
 			    (ro_old_ss->contents.data + old_sym->value +
