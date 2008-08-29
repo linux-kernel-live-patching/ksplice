@@ -1041,6 +1041,9 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    !(mode("keep-primary") && str_in_set(sym->name, &newsyms)))
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
+		if (mode("finalize") && (sym->flags & BSF_GLOBAL) != 0)
+			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
+
 		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
 		    || ((sym->flags & BSF_SECTION_SYM) != 0
 			&& ((*(sym->section)->symbol_ptr_ptr)->flags
