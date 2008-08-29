@@ -809,7 +809,9 @@ static abort_t apply_patches(struct update_bundle *bundle)
 
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(bundle);
+#ifdef KSPLICE_STANDALONE
 		bust_spinlocks(1);
+#endif /* KSPLICE_STANDALONE */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 		ret = (__force abort_t)stop_machine(__apply_patches, bundle,
 						    NULL);
@@ -818,7 +820,9 @@ static abort_t apply_patches(struct update_bundle *bundle)
 		ret = (__force abort_t)stop_machine_run(__apply_patches, bundle,
 							NR_CPUS);
 #endif /* LINUX_VERSION_CODE */
+#ifdef KSPLICE_STANDALONE
 		bust_spinlocks(0);
+#endif /* KSPLICE_STANDALONE */
 		if (ret != CODE_BUSY)
 			break;
 		set_current_state(TASK_INTERRUPTIBLE);
@@ -875,7 +879,9 @@ static abort_t reverse_patches(struct update_bundle *bundle)
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(bundle);
 		clear_list(&bundle->conflicts, struct conflict, list);
+#ifdef KSPLICE_STANDALONE
 		bust_spinlocks(1);
+#endif /* KSPLICE_STANDALONE */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 		ret = (__force abort_t)stop_machine(__reverse_patches, bundle,
 						    NULL);
@@ -884,7 +890,9 @@ static abort_t reverse_patches(struct update_bundle *bundle)
 		ret = (__force abort_t)stop_machine_run(__reverse_patches,
 							bundle, NR_CPUS);
 #endif /* LINUX_VERSION_CODE */
+#ifdef KSPLICE_STANDALONE
 		bust_spinlocks(0);
+#endif /* KSPLICE_STANDALONE */
 		if (ret != CODE_BUSY)
 			break;
 		set_current_state(TASK_INTERRUPTIBLE);
