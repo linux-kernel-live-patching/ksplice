@@ -384,8 +384,8 @@ struct accumulate_struct {
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val);
 static abort_t kernel_lookup(const char *name, struct list_head *vals);
-static abort_t other_module_lookup(const char *name, struct list_head *vals,
-				   const char *ksplice_name);
+static abort_t other_module_lookup(struct module_pack *pack, const char *name,
+				   struct list_head *vals);
 #ifdef KSPLICE_STANDALONE
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
@@ -2060,7 +2060,7 @@ static abort_t compute_address(struct module_pack *pack,
 	if (ret == OK)
 		ret = kernel_lookup(ksym->name, vals);
 	if (ret == OK)
-		ret = other_module_lookup(ksym->name, vals, pack->name);
+		ret = other_module_lookup(pack, ksym->name, vals);
 #endif /* CONFIG_KALLSYMS */
 	if (ret != OK)
 		return ret;
@@ -2257,16 +2257,17 @@ static const struct kernel_symbol *find_symbol(const char *name,
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 #ifdef CONFIG_KALLSYMS
-static abort_t other_module_lookup(const char *name, struct list_head *vals,
-				   const char *ksplice_name)
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+static abort_t other_module_lookup(struct module_pack *pack, const char *name,
+				   struct list_head *vals)
 {
 	abort_t ret = OK;
 	struct accumulate_struct acc = { name, vals };
 	const struct module *m;
 
 	list_for_each_entry(m, &modules, list) {
-		if (starts_with(m->name, ksplice_name) ||
-		    ends_with(m->name, "_helper"))
+		if (starts_with(m->name, pack->name) ||
+		    !ends_with(m->name, pack->target_name))
 			continue;
 		ret = (__force abort_t)
 		    module_kallsyms_on_each_symbol(m, accumulate_matching_names,
@@ -2274,9 +2275,35 @@ static abort_t other_module_lookup(const char *name, struct list_head *vals,
 		if (ret != OK)
 			break;
 	}
-
 	return ret;
 }
+#else /* !KSPLICE_NO_KERNEL_SUPPORT */
+static abort_t other_module_lookup(struct module_pack *pack, const char *name,
+				   struct list_head *vals)
+{
+	struct accumulate_struct acc = { name, vals };
+	struct ksplice_module_list_entry *entry;
+	abort_t ret;
+
+	list_for_each_entry(entry, &ksplice_module_list, list) {
+		if (entry->target != pack->target ||
+		    entry->primary == pack->primary)
+			continue;
+		ret = (__force abort_t)
+		    module_kallsyms_on_each_symbol(entry->primary,
+						   accumulate_matching_names,
+						   &acc);
+		if (ret != OK)
+			return ret;
+	}
+	if (pack->target == NULL)
+		return OK;
+	ret = (__force abort_t)
+	    module_kallsyms_on_each_symbol(pack->target,
+					   accumulate_matching_names, &acc);
+	return ret;
+}
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val)
