@@ -134,13 +134,13 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 				}
 			}
 		}
-		/* last_sect can go away once we make objdiff | objmanip */
-		if (last_sect != new->sect) {
-			last_sect = new->sect;
-			printf("\n%s%s", addstr, new->sect->name);
-		}
-		if (found == 0)
+		if (found == 0) {
+			if (last_sect != new->sect) {
+				last_sect = new->sect;
+				printf("\n%s%s", addstr, new->sect->name);
+			}
 			printf(" %s", new->name);
+		}
 	}
 }
 

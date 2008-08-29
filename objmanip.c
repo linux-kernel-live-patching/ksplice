@@ -244,6 +244,28 @@ int main(int argc, char *argv[])
 			(int)(c == NULL ? strlen(argv[1]) : c - argv[1]),
 			argv[1]) >= 0);
 
+	if (mode("keep-primary")) {
+		/* Create export_desc structures for all export sections */
+		asection *sect;
+		for (sect = isbfd->abfd->sections; sect != NULL;
+		     sect = sect->next) {
+			struct export_desc *ed;
+			if (!starts_with(sect->name, "__ksymtab") ||
+			    ends_with(sect->name, "_strings"))
+				continue;
+			for (ed = exports.data;
+			     ed < exports.data + exports.size; ed++) {
+				if (strcmp(ed->sectname, sect->name) == 0)
+					break;
+			}
+			if (ed < exports.data + exports.size)
+				continue;
+			ed = vec_grow(&exports, 1);
+			ed->sectname = sect->name;
+			vec_init(&ed->names);
+		}
+	}
+
 	if (mode("keep") || mode("rmsyms"))
 		load_system_map();
 
