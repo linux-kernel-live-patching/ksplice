@@ -1731,11 +1731,11 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 
 		ret = create_nameval(pack, map->name, expected, TEMP);
 		if (ret == NO_MATCH && !rerun) {
-			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
+			ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"Nameval address %" ADDR "(%d) does not match "
 				"expected %" ADDR " for %s!\n", nv->val,
 				nv->status, expected, map->name);
-			ksdebug(pack, 0, KERN_DEBUG "ksplice_h: run-pre reloc: "
+			ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"run_reloc: %" ADDR " %" ADDR " %" ADDR "\n",
 				run_reloc_addr, run_reloc_val, map->addend);
 			return ret;
