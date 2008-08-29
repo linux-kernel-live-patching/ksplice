@@ -819,6 +819,7 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 	if (want_section(sect))
 		return;
 	if (!starts_with(sect->name, ".text")
+	    && !starts_with(sect->name, ".exit.text")
 	    && !starts_with(sect->name, ".rodata"))
 		return;
 
@@ -1136,6 +1137,9 @@ int want_section(asection *sect)
 	if (starts_with(sect->name, ".ksplice"))
 		return 1;
 	if (mode("keep-helper") && starts_with(sect->name, ".text"))
+		return 1;
+	if (mode("keep-helper") && starts_with(sect->name, ".exit.text")
+	    && bfd_get_section_by_name(sect->owner, ".exitcall.exit") == NULL)
 		return 1;
 	if (mode("keep-primary") && starts_with(sect->name, "__ksymtab"))
 		return 1;
