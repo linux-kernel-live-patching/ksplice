@@ -445,6 +445,7 @@ static abort_t add_dependency_on_address(struct module_pack *pack,
 					 unsigned long addr);
 static abort_t add_patch_dependencies(struct module_pack *pack);
 #ifdef KSPLICE_STANDALONE
+static struct module *find_module(const char *name);
 static int use_module(struct module *a, struct module *b);
 #endif /* KSPLICE_STANDALONE */
 
@@ -1137,10 +1138,22 @@ static void print_conflicts(struct update_bundle *bundle)
 	}
 }
 
+#ifdef KSPLICE_STANDALONE
+static struct module *find_module(const char *name)
+{
+	struct module *mod;
+
+	list_for_each_entry(mod, &modules, list) {
+		if (strcmp(mod->name, name) == 0)
+			return mod;
+	}
+	return NULL;
+}
+#endif /* KSPLICE_STANDALONE */
+
 static int register_ksplice_module(struct module_pack *pack)
 {
 	struct update_bundle *bundle;
-	struct module *m;
 	int ret = 0;
 
 	INIT_LIST_HEAD(&pack->reloc_addrmaps);
@@ -1150,10 +1163,7 @@ static int register_ksplice_module(struct module_pack *pack)
 	mutex_lock(&module_mutex);
 	pack->target = NULL;
 	if (pack->target_name != NULL) {
-		list_for_each_entry(m, &modules, list) {
-			if (strcmp(pack->target_name, m->name) == 0)
-				pack->target = m;
-		}
+		pack->target = find_module(pack->target_name);
 		if (pack->target == NULL || !module_is_live(pack->target)) {
 			ret = -ENODEV;
 			goto out;
