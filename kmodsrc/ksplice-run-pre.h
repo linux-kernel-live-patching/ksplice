@@ -335,7 +335,7 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 		/* Remember to add the length of the e9 */
 		unsigned long new_addr = addr + 5 + *(int32_t *)(addr + 1);
 		/* Confirm that it is a jump into a ksplice module */
-		struct module *m = module_text_address(new_addr);
+		struct module *m = __module_text_address(new_addr);
 		if (m != NULL && m != pack->target &&
 		    strncmp(m->name, "ksplice", strlen("ksplice")) == 0) {
 			ksdebug(pack, 3, KERN_DEBUG "ksplice: Following "

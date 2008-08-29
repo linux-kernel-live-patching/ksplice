@@ -1525,7 +1525,8 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 	return OK;
 }
 
-static struct module *module_data_address(unsigned long addr)
+#ifdef KSPLICE_STANDALONE
+static struct module *__module_data_address(unsigned long addr)
 {
 	struct module *mod;
 
@@ -1537,6 +1538,7 @@ static struct module *module_data_address(unsigned long addr)
 	}
 	return NULL;
 }
+#endif /* KSPLICE_STANDLONE */
 
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, unsigned long pre_addr,
@@ -1547,9 +1549,9 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	const struct module *run_module;
 
 	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
-		run_module = module_data_address(run_addr);
+		run_module = __module_data_address(run_addr);
 	else
-		run_module = module_text_address(run_addr);
+		run_module = __module_text_address(run_addr);
 	if (run_module != pack->target) {
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ignoring "
 			"address %" ADDR " in other module %s for sect %s\n",
@@ -1896,7 +1898,8 @@ skip_using_system_map:
 static abort_t add_dependency_on_address(struct module_pack *pack,
 					 unsigned long addr)
 {
-	struct module *m = module_text_address(follow_trampolines(pack, addr));
+	struct module *m =
+	    __module_text_address(follow_trampolines(pack, addr));
 	if (m == NULL || starts_with(m->name, pack->name) ||
 	    ends_with(m->name, "_helper"))
 		return OK;
