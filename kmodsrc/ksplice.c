@@ -377,6 +377,7 @@ static int ends_with(const char *str, const char *suffix);
 /* primary */
 static abort_t activate_primary(struct module_pack *pack);
 static abort_t process_exports(struct module_pack *pack);
+static abort_t found_all_patches(struct module_pack *pack);
 static int __apply_patches(void *bundle);
 static int __reverse_patches(void *bundle);
 static abort_t check_each_task(struct update_bundle *bundle);
@@ -636,8 +637,6 @@ EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
 static abort_t activate_primary(struct module_pack *pack)
 {
-	const struct ksplice_patch *p;
-	struct safety_record *rec;
 	abort_t ret;
 	ret = process_primary_relocs(pack, pack->primary_relocs,
 				     pack->primary_relocs_end);
@@ -651,6 +650,18 @@ static abort_t activate_primary(struct module_pack *pack)
 	ret = add_patch_dependencies(pack);
 	if (ret != OK)
 		return ret;
+
+	ret = found_all_patches(pack);
+	if (ret != OK)
+		return ret;
+
+	return OK;
+}
+
+static abort_t found_all_patches(struct module_pack *pack)
+{
+	const struct ksplice_patch *p;
+	struct safety_record *rec;
 
 	/* Check every patch has a safety_record */
 	for (p = pack->patches; p < pack->patches_end; p++) {
@@ -669,7 +680,6 @@ static abort_t activate_primary(struct module_pack *pack)
 			return UNEXPECTED;
 		}
 	}
-
 	return OK;
 }
 
@@ -1293,13 +1303,17 @@ static abort_t activate_helper(struct module_pack *pack)
 	const struct ksplice_size *s;
 	abort_t ret;
 	char *finished;
-	int i, remaining = pack->helper_sizes_end - pack->helper_sizes;
-	bool progress;
+	int i, remaining = 0;
+	bool progress, consider_data_sections = false;
 
 	finished = kcalloc(pack->helper_sizes_end - pack->helper_sizes,
 			   sizeof(char), GFP_KERNEL);
 	if (finished == NULL)
 		return OUT_OF_MEMORY;
+	for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
+		if ((s->flags & KSPLICE_SIZE_DATA) == 0)
+			remaining++;
+	}
 
 	while (remaining > 0) {
 		progress = false;
@@ -1307,10 +1321,14 @@ static abort_t activate_helper(struct module_pack *pack)
 			i = s - pack->helper_sizes;
 			if (finished[i])
 				continue;
+			if (!consider_data_sections &&
+			    (s->flags & KSPLICE_SIZE_DATA) != 0)
+				continue;
 			ret = search_for_match(pack, s);
 			if (ret == OK) {
 				finished[i] = 1;
-				remaining--;
+				if ((s->flags & KSPLICE_SIZE_DATA) == 0)
+					remaining--;
 				progress = true;
 			} else if (ret != NO_MATCH) {
 				kfree(finished);
@@ -1320,6 +1338,17 @@ static abort_t activate_helper(struct module_pack *pack)
 
 		if (progress)
 			continue;
+
+		if (!consider_data_sections && found_all_patches(pack) == OK) {
+			ksdebug(pack, 0, KERN_DEBUG "Considering run-pre "
+				"matching .data symbols\n");
+			consider_data_sections = true;
+			continue;
+		}
+		if (!consider_data_sections)
+			ksdebug(pack, 0, KERN_DEBUG "Could not find all "
+				"patches; not considering run-pre matching "
+				".data symbols\n");
 
 		for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
 			i = s - pack->helper_sizes;
@@ -1373,7 +1402,7 @@ static abort_t search_for_match(struct module_pack *pack,
 	}
 
 #ifdef KSPLICE_STANDALONE
-	if (list_empty(&vals)) {
+	if (list_empty(&vals) && (s->flags & KSPLICE_SIZE_DATA) == 0) {
 		ret = brute_search_all(pack, s, &vals);
 		if (ret != OK)
 			return ret;
@@ -1489,7 +1518,7 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 			}
 		}
 
-		if (*run != *pre) {
+		if (*run != *pre && (s->flags & KSPLICE_SIZE_DATA) == 0) {
 			if (!rerun)
 				ksdebug(pack, 3, "sect does not match after "
 					"%lx/%lx bytes\n",
@@ -1535,7 +1564,8 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	unsigned long run_size;
 	const struct module *run_module;
 
-	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
+	if ((s->flags & KSPLICE_SIZE_RODATA) != 0 ||
+	    (s->flags & KSPLICE_SIZE_DATA) != 0)
 		run_module = __module_data_address(run_addr);
 	else
 		run_module = __module_text_address(run_addr);

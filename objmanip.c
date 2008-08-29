@@ -199,6 +199,20 @@ void load_system_map()
 	fclose(fp);
 }
 
+int needed_data_section(struct superbfd *sbfd, asection *isection)
+{
+	struct supersect *ss = fetch_supersect(sbfd, isection);
+	if (starts_with(isection->name, ".rodata."))
+		return 1;
+	if (starts_with(isection->name, ".data.")) {
+		/* Ignore .data.percpu sections */
+		if (starts_with(isection->name, ".data.percpu"))
+			return 0;
+		return ss->relocs.size != 0;
+	}
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	char *debug_name;
@@ -292,12 +306,13 @@ int main(int argc, char *argv[])
 		asymbol *sym = *symp;
 		if (!want_section(sym->section))
 			continue;
-		if ((sym->flags & BSF_FUNCTION)
-		    && sym->value == 0 && !(sym->flags & BSF_WEAK))
+		if ((sym->flags & BSF_WEAK) != 0)
+			continue;
+		if ((sym->flags & BSF_DEBUGGING) != 0)
+			continue;
+		if ((sym->flags & BSF_FUNCTION) && sym->value == 0)
 			write_ksplice_size(isbfd, symp);
-		if (starts_with(sym->section->name, ".rodata") &&
-		    (sym->flags & BSF_DEBUGGING) == 0 &&
-		    sym->value == 0 && (sym->flags & BSF_WEAK) == 0)
+		if (sym->value == 0 && needed_data_section(isbfd, sym->section))
 			write_ksplice_size(isbfd, symp);
 	}
 
@@ -758,6 +773,8 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 		ksize->flags |= KSPLICE_SIZE_DELETED;
 	if (starts_with(sym->section->name, ".rodata"))
 		ksize->flags |= KSPLICE_SIZE_RODATA;
+	if (starts_with(sym->section->name, ".data"))
+		ksize->flags |= KSPLICE_SIZE_DATA;
 	if (starts_with(sym->section->name, ".text") ||
 	    starts_with(sym->section->name, ".exit.text"))
 		ksize->flags |= KSPLICE_SIZE_TEXT;

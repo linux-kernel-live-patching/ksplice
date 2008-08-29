@@ -99,6 +99,8 @@ void show_ksplice_size_flags(const struct ksplice_size *ksize)
 		printf(" rodata");
 	if (ksize->flags & KSPLICE_SIZE_TEXT)
 		printf(" text");
+	if (ksize->flags & KSPLICE_SIZE_DATA)
+		printf(" data");
 	printf("\n");
 }
 
