@@ -858,7 +858,8 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 		return;
 	if (!starts_with(sect->name, ".text")
 	    && !starts_with(sect->name, ".exit.text")
-	    && !starts_with(sect->name, ".rodata"))
+	    && !starts_with(sect->name, ".rodata")
+	    && !(starts_with(sect->name, ".data") && mode("keep-helper")))
 		return;
 
 	bfd_map_over_sections(abfd, check_for_ref_to_section, sect);
