@@ -862,6 +862,23 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 	    && !(starts_with(sect->name, ".data") && mode("keep-helper")))
 		return;
 
+	if (mode("keep-helper")) {
+		struct superbfd *sbfd = fetch_superbfd(abfd);
+		asymbol **symp;
+		for (symp = sbfd->syms.data;
+		     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
+			asymbol *sym = *symp;
+			if (sym->section == sect &&
+			    (sym->flags & BSF_GLOBAL) != 0) {
+				struct wsect *w = malloc(sizeof(*w));
+				w->sect = sect;
+				w->next = wanted_sections;
+				wanted_sections = w;
+				return;
+			}
+		}
+	}
+
 	bfd_map_over_sections(abfd, check_for_ref_to_section, sect);
 }
 
