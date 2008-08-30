@@ -622,38 +622,40 @@ void write_ksplice_symbol(struct supersect *ss,
 	} else {
 		const struct asymbolp_vec *syms = &ss->parent->syms;
 		asymbol **gsymp;
+		asymbol *gsym = NULL;
 		for (gsymp = syms->data; gsymp < syms->data + syms->size;
 		     gsymp++) {
-			asymbol *gsym = *gsymp;
-			if ((gsym->flags & BSF_DEBUGGING) != 0 ||
-			    sym->section != gsym->section ||
-			    sym->value != gsym->value)
+			asymbol *gsymtemp = *gsymp;
+			if ((gsymtemp->flags & BSF_DEBUGGING) != 0 ||
+			    sym->section != gsymtemp->section ||
+			    sym->value != gsymtemp->value)
 				continue;
+			if (gsym == NULL || (gsymtemp->flags & BSF_GLOBAL) != 0)
+				gsym = gsymtemp;
+		}
+
+		if (gsym == NULL)
+			ksymbol->name = NULL;
+		else
 			write_string(ksymbol_ss, &ksymbol->name, "%s",
 				     gsym->name);
-			if ((gsym->flags & BSF_GLOBAL) != 0)
-				write_string(ksymbol_ss, &ksymbol->label,
-					     "%s%s", gsym->name, addstr_sect);
-			else if (static_local_symbol(ss->parent, gsym))
-				write_string(ksymbol_ss, &ksymbol->label,
-					     "%s+%lx%s%s",
-					     static_local_symbol(ss->parent,
-								 gsym),
-					     (unsigned long)sym->value,
-					     addstr_all, addstr_sect);
-			else
-				write_string(ksymbol_ss, &ksymbol->label,
-					     "%s%s%s", gsym->name, addstr_all,
-					     addstr_sect);
-			break;
-		}
-		if (gsymp == syms->data + syms->size) {
-			ksymbol->name = NULL;
-			write_string(ksymbol_ss, &ksymbol->label,
-				     "%s+%lx%s%s", sym->section->name,
+
+		if (gsym == NULL)
+			write_string(ksymbol_ss, &ksymbol->label, "%s+%lx%s%s",
+				     sym->section->name,
 				     (unsigned long)sym->value, addstr_all,
 				     addstr_sect);
-		}
+		else if ((gsym->flags & BSF_GLOBAL) != 0)
+			write_string(ksymbol_ss, &ksymbol->label, "%s%s",
+				     gsym->name, addstr_sect);
+		else if (static_local_symbol(ss->parent, gsym))
+			write_string(ksymbol_ss, &ksymbol->label, "%s+%lx%s%s",
+				     static_local_symbol(ss->parent, gsym),
+				     (unsigned long)sym->value,
+				     addstr_all, addstr_sect);
+		else
+			write_string(ksymbol_ss, &ksymbol->label, "%s%s%s",
+				     gsym->name, addstr_all, addstr_sect);
 	}
 
 	write_system_map_array(ss->parent, ksymbol_ss, &ksymbol->candidates,
