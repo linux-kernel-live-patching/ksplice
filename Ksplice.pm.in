@@ -171,7 +171,7 @@ sub get_debug_output {
 		while($dmesg =~ /ksplice: Preparing to reverse/) {
 			$dmesg = $';
 		}
-		$debug = $dmesg;
+		$debug = '';
 		write_file($debugfs_out, $dmesg);
 	}
 	runval_raw(qw(umount), $debugfsdir);
