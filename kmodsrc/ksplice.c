@@ -394,6 +394,8 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 #endif /* KSPLICE_STANDALONE */
 #endif /* CONFIG_KALLSYMS */
 static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
+static abort_t new_export_lookup(struct update_bundle *bundle,
+				 const char *name, struct list_head *vals);
 
 #ifdef KSPLICE_STANDALONE
 static abort_t brute_search_all(struct module_pack *pack,
@@ -2058,6 +2060,8 @@ static abort_t compute_address(struct module_pack *pack,
 #endif
 
 	ret = exported_symbol_lookup(ksym->name, vals);
+	if (ret == OK && !pre)
+		ret = new_export_lookup(pack->bundle, ksym->name, vals);
 #ifdef CONFIG_KALLSYMS
 	if (ret == OK)
 		ret = kernel_lookup(ksym->name, vals);
@@ -2067,6 +2071,24 @@ static abort_t compute_address(struct module_pack *pack,
 	if (ret != OK)
 		return ret;
 
+	return OK;
+}
+
+static abort_t new_export_lookup(struct update_bundle *bundle,
+				 const char *name, struct list_head *vals)
+{
+	struct module_pack *pack;
+	struct ksplice_export *exp;
+	list_for_each_entry(pack, &bundle->packs, list) {
+		for (exp = pack->exports; exp < pack->exports_end; exp++) {
+			if (strcmp(exp->new_name, name) == 0 &&
+			    exp->sym != NULL &&
+			    contains_canary(pack,
+					    (unsigned long)&exp->sym->value,
+					    sizeof(unsigned long), -1) == 0)
+				return add_candidate_val(vals, exp->sym->value);
+		}
+	}
 	return OK;
 }
 
