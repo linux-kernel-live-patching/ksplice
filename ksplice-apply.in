@@ -177,6 +177,9 @@ END
 		"out_of_memory" => <<'END',
 Ksplice has aborted the upgrade because the kernel ran out of memory.
 END
+		"unexpected" => <<'END',
+Ksplice has aborted because of an unexpected error.
+END
 		"UNKNOWN" => <<'END',
 The Ksplice kernel interface has returned an error string that
 ksplice-apply does not understand.  This is probably the result of

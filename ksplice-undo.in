@@ -96,6 +96,9 @@ Ksplice has aborted the upgrade because a task was running while it
 was attempting to check that the code changed by the update was not
 busy.
 END
+		"unexpected" => <<'END',
+Ksplice has aborted because of an unexpected error.
+END
 		"UNKNOWN" => <<'END',
 The Ksplice kernel interface has returned an error string that
 ksplice-undo does not understand.  This is probably the result of
