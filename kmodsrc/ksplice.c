@@ -2047,6 +2047,16 @@ static abort_t compute_address(struct module_pack *pack,
 	if (starts_with(ksym->label, ".rodata"))
 		return OK;
 
+#ifdef CONFIG_MODULE_UNLOAD
+	if (strcmp(ksym->label, "cleanup_module") == 0 && pack->target != NULL
+	    && pack->target->exit != NULL) {
+		ret = add_candidate_val(vals,
+					(unsigned long)pack->target->exit);
+		if (ret != OK)
+			return ret;
+	}
+#endif
+
 	ret = exported_symbol_lookup(ksym->name, vals);
 #ifdef CONFIG_KALLSYMS
 	if (ret == OK)
