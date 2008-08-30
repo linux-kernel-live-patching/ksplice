@@ -426,7 +426,7 @@ static int __apply_patches(void *bundle);
 static int __reverse_patches(void *bundle);
 static abort_t check_each_task(struct update_bundle *bundle);
 static abort_t check_task(struct update_bundle *bundle,
-			  const struct task_struct *t, int save_conflicts);
+			  const struct task_struct *t);
 static abort_t check_stack(struct update_bundle *bundle, struct conflict *conf,
 			   const struct thread_info *tinfo,
 			   const unsigned long *stack);
@@ -1021,15 +1021,16 @@ static int __reverse_patches(void *bundleptr)
 static abort_t check_each_task(struct update_bundle *bundle)
 {
 	const struct task_struct *g, *p;
-	abort_t ret = OK;
+	abort_t result, ret = OK;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
 /* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
 	read_lock(&tasklist_lock);
 #endif /* LINUX_VERSION_CODE */
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		if (check_task(bundle, p, 0) != OK)
-			ret = check_task(bundle, p, 1);
+		result = check_task(bundle, p);
+		if (result != OK)
+			ret = result;
 	}
 	while_each_thread(g, p);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
@@ -1040,24 +1041,20 @@ static abort_t check_each_task(struct update_bundle *bundle)
 }
 
 static abort_t check_task(struct update_bundle *bundle,
-			  const struct task_struct *t, int save_conflicts)
+			  const struct task_struct *t)
 {
 	abort_t status, ret;
-	struct conflict *conf = NULL;
-
-	if (save_conflicts == 1) {
-		conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
-		if (conf == NULL)
-			return OUT_OF_MEMORY;
-		conf->process_name = kstrdup(t->comm, GFP_ATOMIC);
-		if (conf->process_name == NULL) {
-			kfree(conf);
-			return OUT_OF_MEMORY;
-		}
-		conf->pid = t->pid;
-		INIT_LIST_HEAD(&conf->stack);
-		list_add(&conf->list, &bundle->conflicts);
+	struct conflict *conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
+	if (conf == NULL)
+		return OUT_OF_MEMORY;
+	conf->process_name = kstrdup(t->comm, GFP_ATOMIC);
+	if (conf->process_name == NULL) {
+		kfree(conf);
+		return OUT_OF_MEMORY;
 	}
+	conf->pid = t->pid;
+	INIT_LIST_HEAD(&conf->stack);
+	list_add(&conf->list, &bundle->conflicts);
 
 	status = check_address_for_conflict(bundle, conf, KSPLICE_IP(t));
 	if (t == current) {
@@ -1099,25 +1096,20 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 {
 	const struct safety_record *rec;
 	struct module_pack *pack;
-	struct ksplice_frame *frame = NULL;
+	struct ksplice_frame *frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
+	if (frame == NULL)
+		return OUT_OF_MEMORY;
+	frame->addr = addr;
+	frame->has_conflict = 0;
+	frame->symbol_name = NULL;
+	list_add(&frame->list, &conf->stack);
 
-	if (conf != NULL) {
-		frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
-		if (frame == NULL)
-			return OUT_OF_MEMORY;
-		frame->addr = addr;
-		frame->has_conflict = 0;
-		frame->symbol_name = NULL;
-		list_add(&frame->list, &conf->stack);
-	}
 	list_for_each_entry(pack, &bundle->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (rec->care == 1 && addr >= rec->addr
 			    && addr < rec->addr + rec->size) {
-				if (frame != NULL) {
-					frame->symbol_name = rec->name;
-					frame->has_conflict = 1;
-				}
+				frame->symbol_name = rec->name;
+				frame->has_conflict = 1;
 				return CODE_BUSY;
 			}
 		}
