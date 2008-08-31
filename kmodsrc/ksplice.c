@@ -121,7 +121,7 @@ struct debugfs_blob_wrapper {
 
 struct reloc_nameval {
 	struct list_head list;
-	const char *name;
+	const char *label;
 	unsigned long val;
 	enum { NOVAL, TEMP, VAL } status;
 };
@@ -182,8 +182,8 @@ static inline int virtual_address_mapped(unsigned long addr)
 #endif /* LINUX_VERSION_CODE */
 
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
-					  const char *name);
-static abort_t create_nameval(struct module_pack *pack, const char *name,
+					  const char *label);
+static abort_t create_nameval(struct module_pack *pack, const char *label,
 			      unsigned long val, int status);
 static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
 					  unsigned long addr);
@@ -2554,27 +2554,27 @@ static void release_vals(struct list_head *vals)
 }
 
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
-					  const char *name)
+					  const char *label)
 {
 	struct reloc_nameval *nv;
 	list_for_each_entry(nv, &pack->reloc_namevals, list) {
-		if (strcmp(nv->name, name) == 0)
+		if (strcmp(nv->label, label) == 0)
 			return nv;
 	}
 	return NULL;
 }
 
-static abort_t create_nameval(struct module_pack *pack, const char *name,
+static abort_t create_nameval(struct module_pack *pack, const char *label,
 			      unsigned long val, int status)
 {
-	struct reloc_nameval *nv = find_nameval(pack, name);
+	struct reloc_nameval *nv = find_nameval(pack, label);
 	if (nv != NULL)
 		return nv->val == val ? OK : NO_MATCH;
 
 	nv = kmalloc(sizeof(*nv), GFP_KERNEL);
 	if (nv == NULL)
 		return OUT_OF_MEMORY;
-	nv->name = name;
+	nv->label = label;
 	nv->val = val;
 	nv->status = status;
 	list_add(&nv->list, &pack->reloc_namevals);
