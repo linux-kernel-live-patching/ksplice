@@ -387,10 +387,6 @@ static abort_t kernel_lookup(const char *name, struct list_head *vals);
 static abort_t other_module_lookup(const char *name, struct list_head *vals,
 				   const char *ksplice_name);
 #ifdef KSPLICE_STANDALONE
-static int module_kallsyms_on_each_symbol(const struct module *mod,
-					  int (*fn)(void *, const char *,
-						    unsigned long),
-					  void *data);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 						    char *result);
@@ -441,12 +437,6 @@ static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 static int is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update_bundle *bundle);
 static void print_conflicts(struct update_bundle *bundle);
-#ifdef KSPLICE_STANDALONE
-static const struct kernel_symbol *find_symbol(const char *name,
-					       struct module **owner,
-					       const unsigned long **crc,
-					       bool gplok, bool warn);
-#endif /* KSPLICE_STANDALONE */
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
 static void free_trampolines(struct update_bundle *bundle);
@@ -459,10 +449,28 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 static abort_t add_dependency_on_address(struct module_pack *pack,
 					 unsigned long addr);
 static abort_t add_patch_dependencies(struct module_pack *pack);
-#ifdef KSPLICE_STANDALONE
+
+#if defined(KSPLICE_STANDALONE) && \
+    !defined(CONFIG_KSPLICE) && !defined(CONFIG_KSPLICE_MODULE)
+#define KSPLICE_NO_KERNEL_SUPPORT 1
+#endif /* KSPLICE_STANDALONE && !CONFIG_KSPLICE && !CONFIG_KSPLICE_MODULE */
+
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+/* Functions defined here that will be exported in later kernels */
+#ifdef CONFIG_KALLSYMS
+static int module_kallsyms_on_each_symbol(const struct module *mod,
+					  int (*fn)(void *, const char *,
+						    unsigned long),
+					  void *data);
+#endif /* CONFIG_KALLSYMS */
 static struct module *find_module(const char *name);
 static int use_module(struct module *a, struct module *b);
-#endif /* KSPLICE_STANDALONE */
+static const struct kernel_symbol *find_symbol(const char *name,
+					       struct module **owner,
+					       const unsigned long **crc,
+					       bool gplok, bool warn);
+static struct module *__module_data_address(unsigned long addr);
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* helper */
 static abort_t activate_helper(struct module_pack *pack);
@@ -1163,7 +1171,7 @@ static void print_conflicts(struct update_bundle *bundle)
 	}
 }
 
-#ifdef KSPLICE_STANDALONE
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
 static struct module *find_module(const char *name)
 {
 	struct module *mod;
@@ -1174,7 +1182,7 @@ static struct module *find_module(const char *name)
 	}
 	return NULL;
 }
-#endif /* KSPLICE_STANDALONE */
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static int register_ksplice_module(struct module_pack *pack)
 {
@@ -1564,7 +1572,7 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 	return OK;
 }
 
-#ifdef KSPLICE_STANDALONE
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
 static struct module *__module_data_address(unsigned long addr)
 {
 	struct module *mod;
@@ -1577,7 +1585,7 @@ static struct module *__module_data_address(unsigned long addr)
 	}
 	return NULL;
 }
-#endif /* KSPLICE_STANDLONE */
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, unsigned long pre_addr,
@@ -1959,7 +1967,7 @@ static abort_t add_patch_dependencies(struct module_pack *pack)
 	return 0;
 }
 
-#ifdef KSPLICE_STANDALONE
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
 #ifdef CONFIG_MODULE_UNLOAD
 struct module_use {
 	struct list_head list;
@@ -2020,7 +2028,7 @@ static int use_module(struct module *a, struct module *b)
 	return 1;
 }
 #endif /* CONFIG_MODULE_UNLOAD */
-#endif /* KSPLICE_STANDALONE */
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static abort_t compute_address(struct module_pack *pack,
 			       const struct ksplice_symbol *ksym,
@@ -2068,7 +2076,7 @@ static abort_t exported_symbol_lookup(const char *name, struct list_head *vals)
 	return add_candidate_val(vals, sym->value);
 }
 
-#ifdef KSPLICE_STANDALONE
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
 #ifndef CONFIG_MODVERSIONS
 #define symversion(base, idx) NULL
 #else
@@ -2245,7 +2253,7 @@ static const struct kernel_symbol *find_symbol(const char *name,
 
 	return NULL;
 }
-#endif /* KSPLICE_STANDALONE */
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 #ifdef CONFIG_KALLSYMS
 static abort_t other_module_lookup(const char *name, struct list_head *vals,
@@ -2435,6 +2443,7 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 }
 #endif /* LINUX_VERSION_CODE */
 
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
 static int module_kallsyms_on_each_symbol(const struct module *mod,
 					  int (*fn)(void *, const char *,
 						    unsigned long),
@@ -2451,6 +2460,7 @@ static int module_kallsyms_on_each_symbol(const struct module *mod,
 	}
 	return 0;
 }
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 #endif /* CONFIG_KALLSYMS */
 #else /* !KSPLICE_STANDALONE */
 
