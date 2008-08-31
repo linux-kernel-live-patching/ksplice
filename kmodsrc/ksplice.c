@@ -107,7 +107,7 @@ struct conflict {
 struct ksplice_frame {
 	unsigned long addr;
 	int has_conflict;
-	const char *symbol_name;
+	const char *label;
 	struct list_head list;
 };
 
@@ -603,7 +603,7 @@ static ssize_t conflict_show(struct update_bundle *bundle, char *buf)
 			if (!frame->has_conflict)
 				continue;
 			used += snprintf(buf + used, PAGE_SIZE - used, " %s",
-					 frame->symbol_name);
+					 frame->label);
 		}
 		used += snprintf(buf + used, PAGE_SIZE - used, "\n");
 	}
@@ -1106,13 +1106,13 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 		return OUT_OF_MEMORY;
 	frame->addr = addr;
 	frame->has_conflict = 0;
-	frame->symbol_name = NULL;
+	frame->label = NULL;
 	list_add(&frame->list, &conf->stack);
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (addr >= rec->addr && addr < rec->addr + rec->size) {
-				frame->symbol_name = rec->label;
+				frame->label = rec->label;
 				frame->has_conflict = 1;
 				return CODE_BUSY;
 			}
