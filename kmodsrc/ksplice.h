@@ -70,6 +70,15 @@ struct ksplice_export {
 #define cleanup_ksplice_module KSPLICE_KID_UNIQ(cleanup_ksplice_module)
 #endif
 
+struct ksplice_module_list_entry {
+	struct module *target;
+	struct module *primary;
+	struct list_head list;
+};
+
+/* List of all ksplice modules and the module they patch */
+extern struct list_head ksplice_module_list;
+
 struct module_pack {
 	const char *name;
 	const char *kid;
@@ -78,6 +87,7 @@ struct module_pack {
 	struct module *target;
 	unsigned long map_printk;
 	struct module *primary;
+	struct ksplice_module_list_entry module_list_entry;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
 	const struct ksplice_size *primary_sizes, *primary_sizes_end;
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;

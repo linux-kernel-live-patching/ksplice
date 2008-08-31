@@ -242,6 +242,16 @@ static inline void print_abort(struct module_pack *pack, const char *str)
 }
 
 static LIST_HEAD(update_bundles);
+#ifdef KSPLICE_STANDALONE
+#if defined(CONFIG_KSPLICE) || defined(CONFIG_KSPLICE_MODULE)
+extern struct list_head ksplice_module_list;
+#else /* !CONFIG_KSPLICE */
+LIST_HEAD(ksplice_module_list);
+#endif /* CONFIG_KSPLICE */
+#else /* !KSPLICE_STANDALONE */
+LIST_HEAD(ksplice_module_list);
+EXPORT_SYMBOL_GPL(ksplice_module_list);
+#endif /* KSPLICE_STANDALONE */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* Old kernels do not have kcalloc
@@ -1217,6 +1227,7 @@ static void unregister_ksplice_module(struct module_pack *pack)
 	if (pack->bundle->stage != APPLIED) {
 		mutex_lock(&module_mutex);
 		list_del(&pack->list);
+		list_del(&pack->module_list_entry.list);
 		mutex_unlock(&module_mutex);
 		if (list_empty(&pack->bundle->packs))
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
@@ -1234,6 +1245,9 @@ static void add_to_bundle(struct module_pack *pack,
 {
 	pack->bundle = bundle;
 	list_add(&pack->list, &bundle->packs);
+	list_add(&pack->module_list_entry.list, &ksplice_module_list);
+	pack->module_list_entry.target = pack->target;
+	pack->module_list_entry.primary = pack->primary;
 }
 
 static void cleanup_ksplice_bundle(struct update_bundle *bundle)
