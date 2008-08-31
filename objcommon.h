@@ -201,3 +201,4 @@ char *str_pointer(struct supersect *ss, void *const *addr);
 #define read_num(ss, addr) ((typeof(*(addr))) \
 			    read_reloc(ss, addr, sizeof(*(addr)), NULL))
 
+const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym);
