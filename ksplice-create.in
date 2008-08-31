@@ -22,7 +22,7 @@ use Ksplice;
 
 my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
 my $standalone;
-my ($help, $wantversion, $prebuild, $skip_prebuild, $apply, $patch_opt) = (0, 0, 0, 0, 0, "-p1");
+my ($help, $wantversion, $prebuild, $skip_prebuild, $patch_opt) = (0, 0, 0, 0, "-p1");
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
 	"verbose|v:+" => \$Verbose::level,
@@ -34,7 +34,6 @@ GetOptions("help|?" => \$help,
 	"skip-prebuild" => \$skip_prebuild,
 	"jobs|j:i" => \$jobs,
 	"config=s" => \$orig_config_dir,
-	"apply" => \$apply,
 	"patch-opt=s@" => \$patch_opt) or pod2usage(1);
 
 if($wantversion) {
@@ -219,12 +218,6 @@ runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
 copy("$ksplice.tar.gz", "$origdir/$ksplice.tar.gz");
 
 print "Ksplice update tarball written to $ksplice.tar.gz\n";
-
-if($apply) {
-	print "Now running ksplice-apply to apply update...\n";
-	exec("ksplice-apply", $ksplice) || die;
-}
-
 exit(0);
 
 =head1 NAME
@@ -316,11 +309,6 @@ multiple -v options increases the verbosity.  The maximum is 2.
 Specifies the number of jobs to run simultaneously while performing kernel
 builds.  B<ksplice-create> also honors the environment variable
 CONCURRENCY_LEVEL.
-
-=item B<--apply>
-
-Immediately applies the generated update to the running kernel by invoking
-B<ksplice-apply>.
 
 =item B<--patch-opt=>I<OPTIONS>
 
