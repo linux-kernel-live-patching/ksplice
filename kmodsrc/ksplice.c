@@ -134,6 +134,7 @@ struct reloc_addrmap {
 	long addend;
 	int size;
 	long dst_mask;
+	unsigned int rightshift;
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
@@ -1645,6 +1646,8 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		return UNEXPECTED;
 	}
 
+	run_reloc_val <<= map->rightshift;
+
 	if (!rerun) {
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%"
 			ADDR " p_a=%" ADDR ": ", run_addr, pre_addr);
@@ -1783,6 +1786,7 @@ skip_using_system_map:
 		map->addend = r->addend;
 		map->size = r->size;
 		map->dst_mask = r->dst_mask;
+		map->rightshift = r->rightshift;
 		list_add(&map->list, &pack->reloc_addrmaps);
 		return OK;
 	}
@@ -1813,6 +1817,7 @@ skip_using_system_map:
 		map->addend = sym_addr + r->addend;
 		map->size = r->size;
 		map->dst_mask = r->dst_mask;
+		map->rightshift = r->rightshift;
 		list_add(&map->list, &pack->reloc_addrmaps);
 
 	} else {
