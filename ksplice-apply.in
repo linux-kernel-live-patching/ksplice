@@ -52,6 +52,7 @@ if(update_loaded($kid)) {
 	die "Reversed Ksplice module $update already loaded!" if ($stage eq "reversed");
 }
 
+runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 if (-e "ksplice-$kid.ko") {
 	if (runstr("lsmod") =~ m/^ksplice_$kid\s+/) {
 		die "Ksplice core module ksplice_$kid already loaded.";
@@ -59,9 +60,6 @@ if (-e "ksplice-$kid.ko") {
 	if (!load_module("ksplice-$kid.ko", "debug=$debug")) {
 		die "Error loading Ksplice core for update $kid";
 	}
-}
-else {
-	runstr_err(qw(modprobe -q ksplice)) eq "" || die;
 }
 
 foreach my $helper (glob('ksplice-*-helper.ko')) {
