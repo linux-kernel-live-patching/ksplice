@@ -196,7 +196,6 @@ struct safety_record {
 	const char *name;
 	unsigned long addr;
 	unsigned int size;
-	int care;
 };
 
 struct candidate_val {
@@ -697,17 +696,17 @@ static abort_t activate_primary(struct module_pack *pack)
 	if (ret != OK)
 		return ret;
 
+	/* Check every patch has a safety_record */
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		int found = 0;
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (strcmp(rec->name, p->symbol->label) == 0) {
-				rec->care = 1;
+			if (strcmp(rec->name, p->symbol->label) == 0)
 				found = 1;
-			}
 		}
-		if (found == 0)
+		if (!found)
 			return UNEXPECTED;
 	}
+
 	return OK;
 }
 
@@ -867,7 +866,6 @@ static abort_t apply_patches(struct update_bundle *bundle)
 					return OUT_OF_MEMORY;
 				rec->addr = s->thismod_addr;
 				rec->size = s->size;
-				rec->care = 1;
 				rec->name = s->symbol->label;
 				list_add(&rec->list, &pack->safety_records);
 			}
@@ -1113,8 +1111,7 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (rec->care == 1 && addr >= rec->addr
-			    && addr < rec->addr + rec->size) {
+			if (addr >= rec->addr && addr < rec->addr + rec->size) {
 				frame->symbol_name = rec->name;
 				frame->has_conflict = 1;
 				return CODE_BUSY;
@@ -1592,6 +1589,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			int final)
 {
 	struct safety_record *rec;
+	struct ksplice_patch *p;
 	abort_t ret;
 	const struct module *run_module;
 
@@ -1651,6 +1649,13 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect %s=%" ADDR
 		"\n", s->symbol->label, run_addr);
 
+	for (p = pack->patches; p < pack->patches_end; p++) {
+		if (strcmp(s->symbol->label, p->symbol->label) == 0)
+			break;
+	}
+	if (p >= pack->patches_end && (s->flags & KSPLICE_SIZE_DELETED) == 0)
+		return OK;
+
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
 	if (rec == NULL)
 		return OUT_OF_MEMORY;
@@ -1664,7 +1669,6 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		rec->addr = run_addr;
 		rec->size = s->size;
 	}
-	rec->care = (s->flags & KSPLICE_SIZE_DELETED) != 0;
 	rec->name = s->symbol->label;
 	list_add(&rec->list, &pack->safety_records);
 	return OK;
