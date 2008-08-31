@@ -700,6 +700,9 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	kreloc->size = bfd_get_reloc_size(howto);
 	kreloc->dst_mask = howto->dst_mask;
 	kreloc->rightshift = howto->rightshift;
+	kreloc->signed_addend =
+	    (howto->complain_on_overflow == complain_overflow_signed) ||
+	    (howto->complain_on_overflow == complain_overflow_bitfield);
 }
 
 #define CANARY(x, canary) ((x & ~howto->dst_mask) | (canary & howto->dst_mask))

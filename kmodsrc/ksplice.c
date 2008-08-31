@@ -135,6 +135,7 @@ struct reloc_addrmap {
 	int size;
 	long dst_mask;
 	unsigned int rightshift;
+	int signed_addend;
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
@@ -1646,6 +1647,10 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		return UNEXPECTED;
 	}
 
+	if (map->signed_addend)
+		run_reloc_val |=
+		    -(run_reloc_val & (map->dst_mask & ~(map->dst_mask >> 1)));
+
 	run_reloc_val <<= map->rightshift;
 
 	if (!rerun) {
@@ -1787,6 +1792,7 @@ skip_using_system_map:
 		map->size = r->size;
 		map->dst_mask = r->dst_mask;
 		map->rightshift = r->rightshift;
+		map->signed_addend = r->signed_addend;
 		list_add(&map->list, &pack->reloc_addrmaps);
 		return OK;
 	}
@@ -1818,6 +1824,7 @@ skip_using_system_map:
 		map->size = r->size;
 		map->dst_mask = r->dst_mask;
 		map->rightshift = r->rightshift;
+		map->signed_addend = r->signed_addend;
 		list_add(&map->list, &pack->reloc_addrmaps);
 
 	} else {

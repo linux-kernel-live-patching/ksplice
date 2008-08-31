@@ -14,6 +14,7 @@ struct ksplice_reloc {
 	int size;
 	long dst_mask;
 	unsigned int rightshift;
+	int signed_addend;
 };
 
 struct ksplice_size {
