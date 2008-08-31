@@ -193,7 +193,7 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 
 struct safety_record {
 	struct list_head list;
-	const char *name;
+	const char *label;
 	unsigned long addr;
 	unsigned int size;
 };
@@ -700,7 +700,7 @@ static abort_t activate_primary(struct module_pack *pack)
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		int found = 0;
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (strcmp(rec->name, p->symbol->label) == 0)
+			if (strcmp(rec->label, p->symbol->label) == 0)
 				found = 1;
 		}
 		if (!found)
@@ -866,7 +866,7 @@ static abort_t apply_patches(struct update_bundle *bundle)
 					return OUT_OF_MEMORY;
 				rec->addr = s->thismod_addr;
 				rec->size = s->size;
-				rec->name = s->symbol->label;
+				rec->label = s->symbol->label;
 				list_add(&rec->list, &pack->safety_records);
 			}
 		}
@@ -1112,7 +1112,7 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 	list_for_each_entry(pack, &bundle->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (addr >= rec->addr && addr < rec->addr + rec->size) {
-				frame->symbol_name = rec->name;
+				frame->symbol_name = rec->label;
 				frame->has_conflict = 1;
 				return CODE_BUSY;
 			}
@@ -1669,7 +1669,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		rec->addr = run_addr;
 		rec->size = s->size;
 	}
-	rec->name = s->symbol->label;
+	rec->label = s->symbol->label;
 	list_add(&rec->list, &pack->safety_records);
 	return OK;
 }
