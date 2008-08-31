@@ -129,7 +129,7 @@ struct reloc_nameval {
 struct reloc_addrmap {
 	struct list_head list;
 	unsigned long addr;
-	const char *name;
+	const char *label;
 	int pcrel;
 	long addend;
 	int size;
@@ -1689,7 +1689,7 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		*matched = 0;
 		return OK;
 	}
-	nv = find_nameval(pack, map->name);
+	nv = find_nameval(pack, map->label);
 
 	offset = (int)(pre_addr - map->addr);
 	run_reloc_addr = run_addr - offset;
@@ -1718,11 +1718,11 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%"
 			ADDR " p_a=%" ADDR ": ", run_addr, pre_addr);
 		ksdebug(pack, 3, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
-			map->name, nv != NULL ? nv->val : 0, map->addend,
+			map->label, nv != NULL ? nv->val : 0, map->addend,
 			run_reloc_val);
 	}
 
-	if (!starts_with(map->name, ".rodata.str")) {
+	if (!starts_with(map->label, ".rodata.str")) {
 		if (contains_canary(pack, run_reloc_addr, map->size,
 				    map->dst_mask) != 0)
 			return UNEXPECTED;
@@ -1731,12 +1731,12 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		if (map->pcrel)
 			expected += run_reloc_addr;
 
-		ret = create_nameval(pack, map->name, expected, TEMP);
+		ret = create_nameval(pack, map->label, expected, TEMP);
 		if (ret == NO_MATCH && !rerun) {
 			ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"Nameval address %" ADDR "(%d) does not match "
 				"expected %" ADDR " for %s!\n", nv->val,
-				nv->status, expected, map->name);
+				nv->status, expected, map->label);
 			ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"run_reloc: %" ADDR " %" ADDR " %" ADDR "\n",
 				run_reloc_addr, run_reloc_val, map->addend);
@@ -1847,7 +1847,7 @@ skip_using_system_map:
 		if (map == NULL)
 			return OUT_OF_MEMORY;
 		map->addr = r->blank_addr;
-		map->name = r->symbol->label;
+		map->label = r->symbol->label;
 		map->pcrel = r->pcrel;
 		map->addend = r->addend;
 		map->size = r->size;
@@ -1877,7 +1877,7 @@ skip_using_system_map:
 		if (map == NULL)
 			return OUT_OF_MEMORY;
 		map->addr = r->blank_addr;
-		map->name = "ksplice_zero";
+		map->label = "ksplice_zero";
 		map->pcrel = r->pcrel;
 		map->addend = sym_addr + r->addend;
 		map->size = r->size;
