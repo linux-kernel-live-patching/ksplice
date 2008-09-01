@@ -1888,10 +1888,13 @@ static abort_t process_reloc(struct module_pack *pack,
 		map->rightshift = r->rightshift;
 		map->signed_addend = r->signed_addend;
 		list_add(&map->list, &pack->reloc_addrmaps);
+#ifdef KSPLICE_STANDALONE
+	} else if (run_pre_reloc) {
+#else /* !KSPLICE_STANDALONE */
+	} else if (pre) {
+#endif /* KSPLICE_STANDALONE */
+		return create_addrmap(pack, r);
 	} else {
-		ret1 = create_nameval(pack, r->symbol->label, sym_addr, VAL);
-		if (ret1 != OK)
-			return ret1;
 		ret1 = apply_ksplice_reloc(pack, r, sym_addr);
 		if (ret1 != OK)
 			return ret1;
