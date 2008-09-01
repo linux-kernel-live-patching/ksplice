@@ -379,6 +379,9 @@ static abort_t process_reloc(struct module_pack *pack,
 static abort_t apply_ksplice_reloc(struct module_pack *pack,
 				   const struct ksplice_reloc *r,
 				   unsigned long sym_addr);
+static abort_t add_system_map_candidates(struct module_pack *pack,
+					 const struct ksplice_symbol *symbol,
+					 struct list_head *vals);
 static abort_t compute_address(struct module_pack *pack,
 			       const struct ksplice_symbol *ksym,
 			       struct list_head *vals, int pre);
@@ -1407,12 +1410,11 @@ static abort_t search_for_match(struct module_pack *pack,
 	LIST_HEAD(vals);
 	struct candidate_val *v, *n;
 
-	for (i = 0; i < s->symbol->nr_candidates; i++) {
-		ret = add_candidate_val(&vals, s->symbol->candidates[i]);
-		if (ret != OK)
-			return ret;
+	ret = add_system_map_candidates(pack, s->symbol, &vals);
+	if (ret != OK) {
+		release_vals(&vals);
+		return ret;
 	}
-
 	ret = compute_address(pack, s->symbol, &vals, 1);
 	if (ret != OK)
 		return ret;
@@ -1791,9 +1793,8 @@ static abort_t process_ksplice_relocs(struct module_pack *pack,
 static abort_t process_reloc(struct module_pack *pack,
 			     const struct ksplice_reloc *r, int pre)
 {
-	int i, ret;
+	int ret;
 	abort_t ret1;
-	long off;
 	unsigned long sym_addr;
 	struct reloc_addrmap *map;
 	LIST_HEAD(vals);
@@ -1803,40 +1804,23 @@ static abort_t process_reloc(struct module_pack *pack,
 	const int run_pre_reloc = pre && bootstrapped;
 #endif /* KSPLICE_STANDALONE */
 
-#ifndef CONFIG_KALLSYMS
 #ifdef KSPLICE_STANDALONE
-	if (bootstrapped)
-		goto skip_using_system_map;
-#else /* !KSPLICE_STANDALONE */
-	goto skip_using_system_map;
-#endif /* KSPLICE_STANDALONE */
-#endif /* !CONFIG_KALLSYMS */
-
-	/* Some Fedora kernel releases have System.map files whose symbol
-	 * addresses disagree with the running kernel by a constant address
-	 * offset because of the CONFIG_PHYSICAL_START and CONFIG_PHYSICAL_ALIGN
-	 * values used to compile these kernels.  This constant address offset
-	 * is always a multiple of 0x100000.
-	 *
-	 * If we observe an offset that is NOT a multiple of 0x100000, then the
-	 * user provided us with an incorrect System.map file, and we should
-	 * abort.
-	 * If we observe an offset that is a multiple of 0x100000, then we can
-	 * adjust the System.map address values accordingly and proceed.
-	 */
-	off = (unsigned long)printk - pack->map_printk;
-	if (off & 0xfffff) {
-		print_abort(pack, "System.map does not match kernel");
-		return BAD_SYSTEM_MAP;
-	}
-	for (i = 0; i < r->symbol->nr_candidates; i++) {
-		ret1 = add_candidate_val(&vals, r->symbol->candidates[i] + off);
-		if (ret1 != OK)
+	if (!bootstrapped) {
+		ret1 = add_system_map_candidates(pack, r->symbol, &vals);
+		if (ret1 != OK) {
+			release_vals(&vals);
 			return ret1;
+		}
 	}
-#ifndef CONFIG_KALLSYMS
-skip_using_system_map:
-#endif /* !CONFIG_KALLSYMS */
+#else /* !KSPLICE_STANDALONE */
+#ifdef CONFIG_KALLSYMS
+	ret1 = add_system_map_candidates(pack, r->symbol, &vals);
+	if (ret1 != OK) {
+		release_vals(&vals);
+		return ret1;
+	}
+#endif /* CONFIG_KALLSYMS */
+#endif /* KSPLICE_STANDALONE */
 
 	ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
 	if (ret < 0) {
@@ -1928,6 +1912,39 @@ skip_using_system_map:
 	default:
 		print_abort(pack, "Invalid relocation size");
 		return UNEXPECTED;
+	}
+	return OK;
+}
+
+static abort_t add_system_map_candidates(struct module_pack *pack,
+					 const struct ksplice_symbol *symbol,
+					 struct list_head *vals)
+{
+	abort_t ret;
+	long off;
+	int i;
+
+	/* Some Fedora kernel releases have System.map files whose symbol
+	 * addresses disagree with the running kernel by a constant address
+	 * offset because of the CONFIG_PHYSICAL_START and CONFIG_PHYSICAL_ALIGN
+	 * values used to compile these kernels.  This constant address offset
+	 * is always a multiple of 0x100000.
+	 *
+	 * If we observe an offset that is NOT a multiple of 0x100000, then the
+	 * user provided us with an incorrect System.map file, and we should
+	 * abort.
+	 * If we observe an offset that is a multiple of 0x100000, then we can
+	 * adjust the System.map address values accordingly and proceed.
+	 */
+	off = (unsigned long)printk - pack->map_printk;
+	if (off & 0xfffff) {
+		print_abort(pack, "System.map does not match kernel");
+		return BAD_SYSTEM_MAP;
+	}
+	for (i = 0; i < symbol->nr_candidates; i++) {
+		ret = add_candidate_val(vals, symbol->candidates[i] + off);
+		if (ret != OK)
+			return ret;
 	}
 	return OK;
 }
