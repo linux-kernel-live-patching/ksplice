@@ -191,6 +191,8 @@ static abort_t create_nameval(struct module_pack *pack, const char *label,
 			      unsigned long val, int status);
 static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
 					  unsigned long addr);
+static abort_t create_addrmap(struct module_pack *pack,
+			      const struct ksplice_reloc *r);
 static abort_t handle_myst_reloc(struct module_pack *pack,
 				 unsigned long pre_addr, unsigned long run_addr,
 				 int rerun, int *matched);
@@ -1866,19 +1868,7 @@ skip_using_system_map:
 		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: deferred %s:%" ADDR
 			" to run-pre\n", r->symbol->label, r->blank_offset);
 
-		map = kmalloc(sizeof(*map), GFP_KERNEL);
-		if (map == NULL)
-			return OUT_OF_MEMORY;
-		map->addr = r->blank_addr;
-		map->label = r->symbol->label;
-		map->pcrel = r->pcrel;
-		map->addend = r->addend;
-		map->size = r->size;
-		map->dst_mask = r->dst_mask;
-		map->rightshift = r->rightshift;
-		map->signed_addend = r->signed_addend;
-		list_add(&map->list, &pack->reloc_addrmaps);
-		return OK;
+		return create_addrmap(pack, r);
 	}
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
@@ -1910,7 +1900,6 @@ skip_using_system_map:
 		map->rightshift = r->rightshift;
 		map->signed_addend = r->signed_addend;
 		list_add(&map->list, &pack->reloc_addrmaps);
-
 	} else {
 		ret1 = create_nameval(pack, r->symbol->label, sym_addr, VAL);
 		if (ret1 != OK)
@@ -2588,6 +2577,24 @@ static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
 			return map;
 	}
 	return NULL;
+}
+
+static abort_t create_addrmap(struct module_pack *pack,
+			      const struct ksplice_reloc *r)
+{
+	struct reloc_addrmap *map = kmalloc(sizeof(*map), GFP_KERNEL);
+	if (map == NULL)
+		return OUT_OF_MEMORY;
+	map->addr = r->blank_addr;
+	map->label = r->symbol->label;
+	map->pcrel = r->pcrel;
+	map->addend = r->addend;
+	map->size = r->size;
+	map->dst_mask = r->dst_mask;
+	map->rightshift = r->rightshift;
+	map->signed_addend = r->signed_addend;
+	list_add(&map->list, &pack->reloc_addrmaps);
+	return OK;
 }
 
 static void set_temp_myst_relocs(struct module_pack *pack, int status_val)
