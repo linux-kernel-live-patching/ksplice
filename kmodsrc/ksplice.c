@@ -1510,9 +1510,10 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 	abort_t ret;
 	const unsigned char *pre = (const unsigned char *)pre_addr;
 	const unsigned char *run = (const unsigned char *)run_addr;
-	if (rerun)
-		print_bytes(pack, run, size, pre, size);
 	for (off = 0; off < size; off++) {
+		if (rerun)
+			print_bytes(pack, run + off, 1, pre + off, 1);
+
 		if (!virtual_address_mapped((unsigned long)run + off)) {
 			if (!rerun)
 				ksdebug(pack, 3, "rodata unmapped after "
@@ -1534,6 +1535,12 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 			if (!rerun)
 				ksdebug(pack, 3, "rodata does not match after "
 					"%u/%u bytes\n", off, size);
+			if (rerun) {
+				ksdebug(pack, 0, "[p_o=%lx] ! ",
+					(unsigned long)off);
+				print_bytes(pack, run + off + 1, 2,
+					    pre + off + 1, 2);
+			}
 			return NO_MATCH;
 		}
 	}
