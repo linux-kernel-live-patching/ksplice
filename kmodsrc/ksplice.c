@@ -374,6 +374,9 @@ static abort_t process_ksplice_relocs(struct module_pack *pack,
 				      int pre);
 static abort_t process_reloc(struct module_pack *pack,
 			     const struct ksplice_reloc *r, int pre);
+static abort_t apply_ksplice_reloc(struct module_pack *pack,
+				   const struct ksplice_reloc *r,
+				   unsigned long sym_addr);
 static abort_t compute_address(struct module_pack *pack,
 			       const struct ksplice_symbol *ksym,
 			       struct list_head *vals, int pre);
@@ -1734,6 +1737,41 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 	return OK;
 }
 
+static abort_t apply_ksplice_reloc(struct module_pack *pack,
+				   const struct ksplice_reloc *r,
+				   unsigned long sym_addr)
+{
+	unsigned long val = sym_addr + r->addend;
+	if (r->pcrel)
+		val -= r->blank_addr;
+	switch (r->size) {
+	case 1:
+		*(int8_t *)r->blank_addr =
+		    (*(int8_t *)r->blank_addr & ~(int8_t)r->dst_mask)
+		    | ((val >> r->rightshift) & (int8_t)r->dst_mask);
+		break;
+	case 2:
+		*(int16_t *)r->blank_addr =
+		    (*(int16_t *)r->blank_addr & ~(int16_t)r->dst_mask)
+		    | ((val >> r->rightshift) & (int16_t)r->dst_mask);
+		break;
+	case 4:
+		*(int32_t *)r->blank_addr =
+		    (*(int32_t *)r->blank_addr & ~(int32_t)r->dst_mask)
+		    | ((val >> r->rightshift) & (int32_t)r->dst_mask);
+		break;
+	case 8:
+		*(int64_t *)r->blank_addr =
+		    (*(int64_t *)r->blank_addr & ~r->dst_mask) |
+		    ((val >> r->rightshift) & r->dst_mask);
+		break;
+	default:
+		print_abort(pack, "Invalid relocation size");
+		return UNEXPECTED;
+	}
+	return OK;
+}
+
 static abort_t process_ksplice_relocs(struct module_pack *pack,
 				      const struct ksplice_reloc *relocs,
 				      const struct ksplice_reloc *relocs_end,
@@ -1874,41 +1912,12 @@ skip_using_system_map:
 		list_add(&map->list, &pack->reloc_addrmaps);
 
 	} else {
-		unsigned long val;
-		if (r->pcrel)
-			val = sym_addr + r->addend - r->blank_addr;
-		else
-			val = sym_addr + r->addend;
-
 		ret1 = create_nameval(pack, r->symbol->label, sym_addr, VAL);
 		if (ret1 != OK)
 			return ret1;
-
-		switch (r->size) {
-		case 1:
-			*(int8_t *)r->blank_addr =
-			    (*(int8_t *)r->blank_addr & ~(int8_t)r->dst_mask)
-			    | ((val >> r->rightshift) & (int8_t)r->dst_mask);
-			break;
-		case 2:
-			*(int16_t *)r->blank_addr =
-			    (*(int16_t *)r->blank_addr & ~(int16_t)r->dst_mask)
-			    | ((val >> r->rightshift) & (int16_t)r->dst_mask);
-			break;
-		case 4:
-			*(int32_t *)r->blank_addr =
-			    (*(int32_t *)r->blank_addr & ~(int32_t)r->dst_mask)
-			    | ((val >> r->rightshift) & (int32_t)r->dst_mask);
-			break;
-		case 8:
-			*(int64_t *)r->blank_addr =
-			    (*(int64_t *)r->blank_addr & ~r->dst_mask) |
-			    ((val >> r->rightshift) & r->dst_mask);
-			break;
-		default:
-			print_abort(pack, "Invalid relocation size");
-			return UNEXPECTED;
-		}
+		ret1 = apply_ksplice_reloc(pack, r, sym_addr);
+		if (ret1 != OK)
+			return ret1;
 	}
 
 	ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: %s:%" ADDR " ",
