@@ -421,7 +421,6 @@ static int ends_with(const char *str, const char *suffix);
 
 /* primary */
 static abort_t activate_primary(struct module_pack *pack);
-static abort_t resolve_patch_symbols(struct module_pack *pack);
 static abort_t process_exports(struct module_pack *pack);
 static int __apply_patches(void *bundle);
 static int __reverse_patches(void *bundle);
@@ -684,10 +683,6 @@ static abort_t activate_primary(struct module_pack *pack)
 	if (ret != OK)
 		return ret;
 
-	ret = resolve_patch_symbols(pack);
-	if (ret != OK)
-		return ret;
-
 	ret = process_exports(pack);
 	if (ret != OK)
 		return ret;
@@ -705,30 +700,6 @@ static abort_t activate_primary(struct module_pack *pack)
 		}
 		if (!found)
 			return UNEXPECTED;
-	}
-
-	return OK;
-}
-
-static abort_t resolve_patch_symbols(struct module_pack *pack)
-{
-	struct ksplice_patch *p;
-	abort_t ret;
-	LIST_HEAD(vals);
-
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		ret = compute_address(pack, p->symbol, &vals, 0);
-		if (ret != OK)
-			return ret;
-
-		if (!singular(&vals)) {
-			release_vals(&vals);
-			failed_to_find(pack, p->symbol->label);
-			return FAILED_TO_FIND;
-		}
-		p->oldaddr =
-		    list_entry(vals.next, struct candidate_val, list)->val;
-		release_vals(&vals);
 	}
 
 	return OK;

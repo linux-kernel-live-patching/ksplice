@@ -150,6 +150,10 @@ write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
 void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed);
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 			  const char *export_type, int del);
+void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
+		 bfd_vma offset);
+arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
+		      bfd_vma offset);
 
 char **varargs;
 int varargs_count;
@@ -432,8 +436,8 @@ struct supersect *make_section(struct superbfd *sbfd, const char *name)
 		return new_supersect(sbfd, name);
 }
 
-void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
-		 bfd_vma offset)
+arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
+		      bfd_vma offset)
 {
 	bfd_reloc_code_real_type code;
 	switch (bfd_arch_bits_per_address(ss->parent->abfd)) {
@@ -452,7 +456,13 @@ void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 	reloc->address = addr - ss->contents.data;
 	reloc->howto = bfd_reloc_type_lookup(ss->parent->abfd, code);
 	reloc->addend = offset;
-	*vec_grow(&ss->new_relocs, 1) = reloc;
+	return reloc;
+}
+
+void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
+		 bfd_vma offset)
+{
+	*vec_grow(&ss->new_relocs, 1) = create_reloc(ss, addr, symp, offset);
 }
 
 void write_string(struct supersect *ss, const char **addr, const char *fmt, ...)
@@ -760,7 +770,8 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	assert(symp < sbfd->syms.data + sbfd->syms.size);
 
 	write_ksplice_symbol(kpatch_ss, &kpatch->symbol, *symp, "");
-	kpatch->oldaddr = 0;
+	write_ksplice_reloc(kpatch_ss, create_reloc(kpatch_ss, &kpatch->oldaddr,
+						    symp, 0));
 	kpatch->saved = NULL;
 	kpatch->trampoline = NULL;
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
