@@ -229,16 +229,23 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 		ro_old_ss = fetch_supersect(oldsbfd, old_sym->section);
 		ro_new_ss = fetch_supersect(newsbfd, new_sym->section);
 
-		if (!starts_with(ro_old_ss->name, ".rodata"))
-			continue;
-
-		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
-			return -1;
-
 		bfd_vma old_offset =
 		    get_reloc_offset(old_ss, old_ss->relocs.data[i], 1);
 		bfd_vma new_offset =
 		    get_reloc_offset(new_ss, new_ss->relocs.data[i], 1);
+
+		if (!starts_with(ro_old_ss->name, ".rodata")) {
+			/* for non-rodata, we just compare that the two
+			   relocations are to the same offset within the same
+			   section. */
+			if (old_sym->value + old_offset !=
+			    new_sym->value + new_offset)
+				return -1;
+			continue;
+		}
+
+		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
+			return -1;
 
 		if (old_offset >= ro_old_ss->contents.size ||
 		    new_offset >= ro_new_ss->contents.size) {
