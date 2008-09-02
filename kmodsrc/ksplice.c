@@ -1795,8 +1795,8 @@ static abort_t process_ksplice_relocs(struct module_pack *pack,
 static abort_t process_reloc(struct module_pack *pack,
 			     const struct ksplice_reloc *r, int pre)
 {
-	int ret;
-	abort_t ret1;
+	abort_t ret;
+	int canary_ret;
 	unsigned long sym_addr;
 	LIST_HEAD(vals);
 
@@ -1805,84 +1805,59 @@ static abort_t process_reloc(struct module_pack *pack,
 	const int run_pre_reloc = pre && bootstrapped;
 #endif /* KSPLICE_STANDALONE */
 
+	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
+	if (canary_ret < 0)
+		return UNEXPECTED;
+	if (canary_ret == 0) {
+		ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%"
+			ADDR " (altinstr)\n", (pre ? "_h" : ""),
+			r->symbol->label, r->blank_offset);
+		return OK;
+	}
+
+#ifdef KSPLICE_STANDALONE
+	if (run_pre_reloc) {
+#else /* !KSPLICE_STANDALONE */
+	if (pre) {
+#endif /* KSPLICE_STANDALONE */
+		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: deferred %s:%" ADDR
+			" to run-pre\n", r->symbol->label, r->blank_offset);
+		return create_addrmap(pack, r);
+	}
+
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped) {
-		ret1 = add_system_map_candidates(pack, r->symbol, &vals);
-		if (ret1 != OK) {
+		ret = add_system_map_candidates(pack, r->symbol, &vals);
+		if (ret != OK) {
 			release_vals(&vals);
-			return ret1;
+			return ret;
 		}
 	}
 #else /* !KSPLICE_STANDALONE */
 #ifdef CONFIG_KALLSYMS
-	ret1 = add_system_map_candidates(pack, r->symbol, &vals);
-	if (ret1 != OK) {
+	ret = add_system_map_candidates(pack, r->symbol, &vals);
+	if (ret != OK) {
 		release_vals(&vals);
-		return ret1;
+		return ret;
 	}
 #endif /* CONFIG_KALLSYMS */
 #endif /* KSPLICE_STANDALONE */
-
-	ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
-	if (ret < 0) {
+	ret = compute_address(pack, r->symbol, &vals, pre);
+	if (ret != OK) {
 		release_vals(&vals);
-		return UNEXPECTED;
-	}
-	if (ret == 0) {
-		ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%"
-			ADDR " (altinstr)\n", (pre ? "_h" : ""),
-			r->symbol->label, r->blank_offset);
-		release_vals(&vals);
-		return OK;
-	}
-
-	ret1 = compute_address(pack, r->symbol, &vals, pre);
-	if (ret1 != OK) {
-		release_vals(&vals);
-		return ret1;
+		return ret;
 	}
 	if (!singular(&vals)) {
 		release_vals(&vals);
-#ifdef KSPLICE_STANDALONE
-		if (!run_pre_reloc) {
-#else /* !KSPLICE_STANDALONE */
-		if (!pre) {
-#endif /* KSPLICE_STANDALONE */
-			failed_to_find(pack, r->symbol->label);
-			return FAILED_TO_FIND;
-		}
-
-		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: deferred %s:%" ADDR
-			" to run-pre\n", r->symbol->label, r->blank_offset);
-
-		return create_addrmap(pack, r);
+		failed_to_find(pack, r->symbol->label);
+		return FAILED_TO_FIND;
 	}
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
 
-	if (!pre) {
-		ret1 = add_dependency_on_address(pack, sym_addr);
-		if (ret1 != OK)
-			return ret1;
-	}
-
-#ifdef KSPLICE_STANDALONE
-	if (r->pcrel && run_pre_reloc) {
-#else /* !KSPLICE_STANDALONE */
-	if (r->pcrel && pre) {
-#endif /* KSPLICE_STANDALONE */
-		return create_addrmap(pack, r);
-#ifdef KSPLICE_STANDALONE
-	} else if (run_pre_reloc) {
-#else /* !KSPLICE_STANDALONE */
-	} else if (pre) {
-#endif /* KSPLICE_STANDALONE */
-		return create_addrmap(pack, r);
-	} else {
-		ret1 = apply_ksplice_reloc(pack, r, sym_addr);
-		if (ret1 != OK)
-			return ret1;
-	}
+	ret = apply_ksplice_reloc(pack, r, sym_addr);
+	if (ret != OK)
+		return ret;
 
 	ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: %s:%" ADDR " ",
 		(pre ? "_h" : ""), r->symbol->label, r->blank_offset);
@@ -1904,7 +1879,11 @@ static abort_t process_reloc(struct module_pack *pack,
 		print_abort(pack, "Invalid relocation size");
 		return UNEXPECTED;
 	}
-	return OK;
+#ifdef KSPLICE_STANDALONE
+	if (!bootstrapped)
+		return OK;
+#endif /* KSPLICE_STANDALONE */
+	return add_dependency_on_address(pack, sym_addr);
 }
 
 static abort_t add_system_map_candidates(struct module_pack *pack,
