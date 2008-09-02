@@ -1416,8 +1416,10 @@ static abort_t search_for_match(struct module_pack *pack,
 		return ret;
 	}
 	ret = compute_address(pack, s->symbol, &vals, 1);
-	if (ret != OK)
+	if (ret != OK) {
+		release_vals(&vals);
 		return ret;
+	}
 
 	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: starting sect search "
 		"for %s\n", s->symbol->label);
@@ -1836,8 +1838,10 @@ static abort_t process_reloc(struct module_pack *pack,
 	}
 
 	ret1 = compute_address(pack, r->symbol, &vals, pre);
-	if (ret1 != OK)
+	if (ret1 != OK) {
+		release_vals(&vals);
 		return ret1;
+	}
 	if (!singular(&vals)) {
 		release_vals(&vals);
 #ifdef KSPLICE_STANDALONE
