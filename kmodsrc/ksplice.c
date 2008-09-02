@@ -44,6 +44,11 @@
 #include <linux/ksplice.h>
 #endif /* KSPLICE_STANDALONE */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+/* 6e21828743247270d09a86756a0c11702500dbfb was after 2.6.18 */
+typedef _Bool bool;
+#endif /* LINUX_VERSION_CODE */
+
 #if BITS_PER_LONG == 32
 #define ADDR "08lx"
 #elif BITS_PER_LONG == 64
@@ -431,7 +436,7 @@ static const struct kernel_symbol *__find_symbol(const char *name,
 						 struct module **owner,
 						 const unsigned long **crc,
 						 const char **export_type,
-						 _Bool gplok, _Bool warn);
+						 bool gplok, bool warn);
 #endif /* KSPLICE_STANDALONE */
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
@@ -2070,8 +2075,8 @@ static const struct kernel_symbol *search_symarrays(const struct symsearch *arr,
 						    unsigned int num,
 						    const char *name,
 						    const char **export_type,
-						    _Bool gplok,
-						    _Bool warn,
+						    bool gplok,
+						    bool warn,
 						    const unsigned long **crc)
 {
 	unsigned int i;
@@ -2096,7 +2101,7 @@ static const struct kernel_symbol *__find_symbol(const char *name,
 						 struct module **owner,
 						 const unsigned long **crc,
 						 const char **export_type,
-						 _Bool gplok, _Bool warn)
+						 bool gplok, bool warn)
 {
 	struct module *mod;
 	const struct kernel_symbol *ks;
