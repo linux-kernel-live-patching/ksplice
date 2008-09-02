@@ -1800,11 +1800,6 @@ static abort_t process_reloc(struct module_pack *pack,
 	unsigned long sym_addr;
 	LIST_HEAD(vals);
 
-#ifdef KSPLICE_STANDALONE
-	/* run_pre_reloc: will this reloc be used for run-pre matching? */
-	const int run_pre_reloc = pre && bootstrapped;
-#endif /* KSPLICE_STANDALONE */
-
 	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
 	if (canary_ret < 0)
 		return UNEXPECTED;
@@ -1816,7 +1811,7 @@ static abort_t process_reloc(struct module_pack *pack,
 	}
 
 #ifdef KSPLICE_STANDALONE
-	if (run_pre_reloc) {
+	if (pre && bootstrapped) {
 #else /* !KSPLICE_STANDALONE */
 	if (pre) {
 #endif /* KSPLICE_STANDALONE */
