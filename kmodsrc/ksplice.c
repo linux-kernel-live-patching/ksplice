@@ -377,7 +377,7 @@ static abort_t add_system_map_candidates(struct module_pack *pack,
 					 struct list_head *vals);
 static abort_t compute_address(struct module_pack *pack,
 			       const struct ksplice_symbol *ksym,
-			       struct list_head *vals, int pre);
+			       struct list_head *vals);
 
 struct accumulate_struct {
 	const char *desired_name;
@@ -1408,7 +1408,7 @@ static abort_t search_for_match(struct module_pack *pack,
 		release_vals(&vals);
 		return ret;
 	}
-	ret = compute_address(pack, s->symbol, &vals, 1);
+	ret = compute_address(pack, s->symbol, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
 		return ret;
@@ -1831,7 +1831,7 @@ static abort_t process_reloc(struct module_pack *pack,
 	}
 #endif /* CONFIG_KALLSYMS */
 #endif /* KSPLICE_STANDALONE */
-	ret = compute_address(pack, r->symbol, &vals, pre);
+	ret = compute_address(pack, r->symbol, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
 		return ret;
@@ -1998,7 +1998,7 @@ static int use_module(struct module *a, struct module *b)
 
 static abort_t compute_address(struct module_pack *pack,
 			       const struct ksplice_symbol *ksym,
-			       struct list_head *vals, int pre)
+			       struct list_head *vals)
 {
 	abort_t ret;
 	struct reloc_nameval *nv;
@@ -2011,9 +2011,8 @@ static abort_t compute_address(struct module_pack *pack,
 	nv = find_nameval(pack, ksym->label);
 	if (nv != NULL) {
 		release_vals(vals);
-		if (!pre)
-			ksdebug(pack, 1, KERN_DEBUG "ksplice: using detected "
-				"sym %s=%" ADDR "\n", ksym->label, nv->val);
+		ksdebug(pack, 1, KERN_DEBUG "ksplice: using detected "
+			"sym %s=%" ADDR "\n", ksym->label, nv->val);
 		return add_candidate_val(vals, nv->val);
 	}
 
@@ -2031,7 +2030,7 @@ static abort_t compute_address(struct module_pack *pack,
 #endif
 
 	ret = exported_symbol_lookup(ksym->name, vals);
-	if (ret == OK && !pre)
+	if (ret == OK)
 		ret = new_export_lookup(pack->bundle, ksym->name, vals);
 #ifdef CONFIG_KALLSYMS
 	if (ret == OK)
