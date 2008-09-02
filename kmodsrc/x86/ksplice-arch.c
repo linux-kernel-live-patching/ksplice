@@ -1,5 +1,6 @@
 #include <linux/kernel.h>
 
+#ifndef FUNCTION_SECTIONS
 static const char jumps[256] = {
 	[0x0f] = 4,		/* je */
 	[0x70] = 1,		/* jo */
@@ -304,6 +305,8 @@ static int match_nop(const unsigned char *addr)
 	}
 	return 0;
 }
+
+#endif /* !FUNCTION_SECTIONS */
 
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr)

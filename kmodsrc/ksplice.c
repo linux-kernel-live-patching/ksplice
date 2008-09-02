@@ -1496,7 +1496,7 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 
 		if (!virtual_address_mapped((unsigned long)run + off)) {
 			if (!rerun)
-				ksdebug(pack, 3, "rodata unmapped after "
+				ksdebug(pack, 3, "sect unmapped after "
 					"%u/%u bytes\n", off, size);
 			return NO_MATCH;
 		}
@@ -1504,7 +1504,7 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 					rerun, &matched);
 		if (ret != OK) {
 			if (!rerun)
-				ksdebug(pack, 3, "reloc in rodata section does "
+				ksdebug(pack, 3, "reloc in sect does "
 					"not match after %u/%u bytes\n", off,
 					size);
 			return ret;
@@ -1525,7 +1525,7 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 
 		if (run[off] != pre[off]) {
 			if (!rerun)
-				ksdebug(pack, 3, "rodata does not match after "
+				ksdebug(pack, 3, "sect does not match after "
 					"%u/%u bytes\n", off, size);
 			if (rerun) {
 				ksdebug(pack, 0, "[p_o=%lx] ! ",
@@ -1580,10 +1580,14 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	if (ret != OK)
 		return ret;
 
+#ifdef FUNCTION_SECTIONS
+	ret = rodata_run_pre_cmp(pack, run_addr, pre_addr, s->size, 0);
+#else
 	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
 		ret = rodata_run_pre_cmp(pack, run_addr, pre_addr, s->size, 0);
 	else
 		ret = run_pre_cmp(pack, run_addr, pre_addr, s->size, 0);
+#endif
 	if (ret == NO_MATCH) {
 		set_temp_myst_relocs(pack, NOVAL);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: %s sect %s "
@@ -1594,12 +1598,17 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			run_addr, pre_addr, s->size);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
 		if (pack->bundle->debug >= 1) {
+#ifdef FUNCTION_SECTIONS
+			ret = rodata_run_pre_cmp(pack, run_addr,
+						 pre_addr, s->size, 1);
+#else
 			if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
 				ret = rodata_run_pre_cmp(pack, run_addr,
 							 pre_addr, s->size, 1);
 			else
 				ret = run_pre_cmp(pack, run_addr, pre_addr,
 						  s->size, 1);
+#endif
 			set_temp_myst_relocs(pack, NOVAL);
 		}
 		ksdebug(pack, 1, "\n");
