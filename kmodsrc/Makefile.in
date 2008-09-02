@@ -40,7 +40,7 @@ cmd_ksplice-collect = \
 
 ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
 	"-DKSPLICE_MID=$(KSPLICE_MID)" \
-	$(addprefix -DKSPLICE_TARGET=,$(filter-out vmlinux,$(target))) \
+	$(addprefix -DKSPLICE_TARGET=,$(target)) \
 	"-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\""
 
 ksplice-primary-objs = primary-$(target).o collect-primary-$(mod).o

@@ -1194,8 +1194,9 @@ static int register_ksplice_module(struct module_pack *pack)
 	INIT_LIST_HEAD(&pack->safety_records);
 
 	mutex_lock(&module_mutex);
-	pack->target = NULL;
-	if (pack->target_name != NULL) {
+	if (strcmp(pack->target_name, "vmlinux") == 0) {
+		pack->target = NULL;
+	} else {
 		pack->target = find_module(pack->target_name);
 		if (pack->target == NULL || !module_is_live(pack->target)) {
 			ret = -ENODEV;

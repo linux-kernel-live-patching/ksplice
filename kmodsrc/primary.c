@@ -32,11 +32,7 @@ extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 struct module_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_MID),
 	.kid = STR(KSPLICE_KID),
-#ifdef KSPLICE_TARGET
 	.target_name = STR(KSPLICE_TARGET),
-#else
-	.target_name = NULL,
-#endif
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
 	.primary_relocs = ksplice_relocs,
