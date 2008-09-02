@@ -130,14 +130,7 @@ struct reloc_nameval {
 
 struct reloc_addrmap {
 	struct list_head list;
-	unsigned long addr;
-	const char *label;
-	int pcrel;
-	long addend;
-	int size;
-	long dst_mask;
-	unsigned int rightshift;
-	int signed_addend;
+	const struct ksplice_reloc *reloc;
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
@@ -1667,6 +1660,7 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 				 int rerun, int *matched)
 {
 	struct reloc_nameval *nv;
+	const struct ksplice_reloc *r;
 	unsigned long run_reloc_addr;
 	long run_reloc_val, expected;
 	int offset;
@@ -1677,69 +1671,69 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 		*matched = 0;
 		return OK;
 	}
-	nv = find_nameval(pack, map->label);
+	r = map->reloc;
+	nv = find_nameval(pack, r->symbol->label);
 
-	offset = (int)(pre_addr - map->addr);
+	offset = (int)(pre_addr - r->blank_addr);
 	run_reloc_addr = run_addr - offset;
-	switch (map->size) {
+	switch (r->size) {
 	case 1:
-		run_reloc_val =
-		    *(int8_t *)run_reloc_addr & (int8_t)map->dst_mask;
+		run_reloc_val = *(int8_t *)run_reloc_addr & (int8_t)r->dst_mask;
 		break;
 	case 2:
 		run_reloc_val =
-		    *(int16_t *)run_reloc_addr & (int16_t)map->dst_mask;
+		    *(int16_t *)run_reloc_addr & (int16_t)r->dst_mask;
 		break;
 	case 4:
 		run_reloc_val =
-		    *(int32_t *)run_reloc_addr & (int32_t)map->dst_mask;
+		    *(int32_t *)run_reloc_addr & (int32_t)r->dst_mask;
 		break;
 	case 8:
-		run_reloc_val = *(int64_t *)run_reloc_addr & map->dst_mask;
+		run_reloc_val = *(int64_t *)run_reloc_addr & r->dst_mask;
 		break;
 	default:
 		print_abort(pack, "Invalid relocation size");
 		return UNEXPECTED;
 	}
 
-	if (map->signed_addend)
+	if (r->signed_addend)
 		run_reloc_val |=
-		    -(run_reloc_val & (map->dst_mask & ~(map->dst_mask >> 1)));
+		    -(run_reloc_val & (r->dst_mask & ~(r->dst_mask >> 1)));
 
-	run_reloc_val <<= map->rightshift;
+	run_reloc_val <<= r->rightshift;
 
 	if (!rerun) {
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%"
 			ADDR " p_a=%" ADDR ": ", run_addr, pre_addr);
 		ksdebug(pack, 3, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
-			map->label, nv != NULL ? nv->val : 0, map->addend,
+			r->symbol->label, nv != NULL ? nv->val : 0, r->addend,
 			run_reloc_val);
 	}
 
-	if (!starts_with(map->label, ".rodata.str")) {
-		if (contains_canary(pack, run_reloc_addr, map->size,
-				    map->dst_mask) != 0)
+	if (!starts_with(r->symbol->label, ".rodata.str")) {
+		if (contains_canary(pack, run_reloc_addr, r->size,
+				    r->dst_mask) != 0)
 			return UNEXPECTED;
 
-		expected = run_reloc_val - map->addend;
-		if (map->pcrel)
+		expected = run_reloc_val - r->addend;
+		if (r->pcrel)
 			expected += run_reloc_addr;
 
-		ret = create_nameval(pack, map->label, expected, TEMP);
+		ret = create_nameval(pack, r->symbol->label, expected, TEMP);
 		if (ret == NO_MATCH && !rerun) {
 			ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"Nameval address %" ADDR "(%d) does not match "
 				"expected %" ADDR " for %s!\n", nv->val,
-				nv->status, expected, map->label);
+				nv->status, expected, r->symbol->label);
 			ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"run_reloc: %" ADDR " %" ADDR " %" ADDR "\n",
-				run_reloc_addr, run_reloc_val, map->addend);
+				run_reloc_addr, run_reloc_val, r->addend);
 			return ret;
 		} else if (ret != OK) {
 			return ret;
 		}
 	}
-	*matched = map->size - offset;
+	*matched = r->size - offset;
 	return OK;
 }
 
@@ -2555,7 +2549,8 @@ static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
 {
 	struct reloc_addrmap *map;
 	list_for_each_entry(map, &pack->reloc_addrmaps, list) {
-		if (addr >= map->addr && addr < map->addr + map->size)
+		if (addr >= map->reloc->blank_addr &&
+		    addr < map->reloc->blank_addr + map->reloc->size)
 			return map;
 	}
 	return NULL;
@@ -2567,14 +2562,7 @@ static abort_t create_addrmap(struct module_pack *pack,
 	struct reloc_addrmap *map = kmalloc(sizeof(*map), GFP_KERNEL);
 	if (map == NULL)
 		return OUT_OF_MEMORY;
-	map->addr = r->blank_addr;
-	map->label = r->symbol->label;
-	map->pcrel = r->pcrel;
-	map->addend = r->addend;
-	map->size = r->size;
-	map->dst_mask = r->dst_mask;
-	map->rightshift = r->rightshift;
-	map->signed_addend = r->signed_addend;
+	map->reloc = r;
 	list_add(&map->list, &pack->reloc_addrmaps);
 	return OK;
 }
