@@ -1798,7 +1798,6 @@ static abort_t process_reloc(struct module_pack *pack,
 	int ret;
 	abort_t ret1;
 	unsigned long sym_addr;
-	struct reloc_addrmap *map;
 	LIST_HEAD(vals);
 
 #ifdef KSPLICE_STANDALONE
@@ -1872,22 +1871,7 @@ static abort_t process_reloc(struct module_pack *pack,
 #else /* !KSPLICE_STANDALONE */
 	if (r->pcrel && pre) {
 #endif /* KSPLICE_STANDALONE */
-		ret1 = create_nameval(pack, "ksplice_zero", 0, VAL);
-		if (ret1 != OK)
-			return ret1;
-
-		map = kmalloc(sizeof(*map), GFP_KERNEL);
-		if (map == NULL)
-			return OUT_OF_MEMORY;
-		map->addr = r->blank_addr;
-		map->label = "ksplice_zero";
-		map->pcrel = r->pcrel;
-		map->addend = sym_addr + r->addend;
-		map->size = r->size;
-		map->dst_mask = r->dst_mask;
-		map->rightshift = r->rightshift;
-		map->signed_addend = r->signed_addend;
-		list_add(&map->list, &pack->reloc_addrmaps);
+		return create_addrmap(pack, r);
 #ifdef KSPLICE_STANDALONE
 	} else if (run_pre_reloc) {
 #else /* !KSPLICE_STANDALONE */
