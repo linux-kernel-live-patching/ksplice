@@ -353,3 +353,21 @@ static abort_t create_trampoline(struct ksplice_patch *p)
 	p->size = 5;
 	return OK;
 }
+
+static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre_addr,
+			       unsigned long run_addr, int *matched)
+{
+	int32_t *run = (int32_t *)(run_addr + 1);
+	int32_t *pre = (int32_t *)(pre_addr + 1);
+	*matched = 0;
+
+	if (!virtual_address_mapped(run_addr + 5) ||
+	    !virtual_address_mapped(pre_addr + 5))
+		return OK;
+
+	if ((*(uint8_t *)run_addr == 0xe8 && *(uint8_t *)pre_addr == 0xe8) ||
+	    (*(uint8_t *)run_addr == 0xe9 && *(uint8_t *)pre_addr == 0xe9))
+		if ((unsigned long)run + *run == (unsigned long)pre + *pre)
+			*matched = 5;
+	return OK;
+}

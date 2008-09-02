@@ -447,6 +447,8 @@ static void remove_trampoline(const struct ksplice_patch *p);
 static abort_t create_trampoline(struct ksplice_patch *p);
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr);
+static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre,
+			       unsigned long run, int *matched);
 
 static abort_t add_dependency_on_address(struct module_pack *pack,
 					 unsigned long addr);
@@ -1488,7 +1490,19 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 		}
 		if (matched != 0) {
 			off += matched - 1;
-		} else if (run[off] != pre[off]) {
+			continue;
+		}
+
+		ret = handle_paravirt(pack, pre_addr + off, run_addr + off,
+				      &matched);
+		if (ret != OK)
+			return ret;
+		if (matched != 0) {
+			off += matched - 1;
+			continue;
+		}
+
+		if (run[off] != pre[off]) {
 			if (!rerun)
 				ksdebug(pack, 3, "rodata does not match after "
 					"%u/%u bytes\n", off, size);
