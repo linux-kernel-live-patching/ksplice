@@ -46,7 +46,9 @@
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
 /* 6e21828743247270d09a86756a0c11702500dbfb was after 2.6.18 */
-typedef _Bool bool;
+#define bool _Bool
+#define false 0
+#define true 1
 #endif /* LINUX_VERSION_CODE */
 
 #if BITS_PER_LONG == 32
@@ -709,7 +711,7 @@ static abort_t process_exports(struct module_pack *pack)
 	const char *export_type;
 
 	for (export = pack->exports; export < pack->exports_end; export++) {
-		sym = find_symbol(export->name, &m, NULL, 1, 0);
+		sym = find_symbol(export->name, &m, NULL, true, false);
 		if (sym == NULL) {
 			ksdebug(pack, 0, "Could not find kernel_symbol struct"
 				"for %s (%s)\n", export->name, export->type);
@@ -2046,7 +2048,7 @@ static abort_t new_export_lookup(struct update_bundle *bundle,
 static abort_t exported_symbol_lookup(const char *name, struct list_head *vals)
 {
 	const struct kernel_symbol *sym;
-	sym = find_symbol(name, NULL, NULL, 1, 0);
+	sym = find_symbol(name, NULL, NULL, true, false);
 	if (sym == NULL)
 		return OK;
 	return add_candidate_val(vals, sym->value);
@@ -2083,13 +2085,13 @@ static bool each_symbol_in_section(const struct symsearch *arr,
 	for (j = 0; j < arrsize; j++) {
 		for (i = 0; i < arr[j].stop - arr[j].start; i++)
 			if (fn(&arr[j], owner, i, data))
-				return 1;
+				return true;
 	}
 
-	return 0;
+	return false;
 }
 
-/* Returns true as soon as fn returns true, otherwise 0. */
+/* Returns true as soon as fn returns true, otherwise false. */
 static bool each_symbol(bool (*fn)(const struct symsearch *arr,
 				   struct module *owner,
 				   unsigned int symnum, void *data),
@@ -2098,22 +2100,22 @@ static bool each_symbol(bool (*fn)(const struct symsearch *arr,
 	struct module *mod;
 	const struct symsearch arr[] = {
 		{ __start___ksymtab, __stop___ksymtab, __start___kcrctab,
-		  NOT_GPL_ONLY, 0 },
+		  NOT_GPL_ONLY, false },
 		{ __start___ksymtab_gpl, __stop___ksymtab_gpl,
 		  __start___kcrctab_gpl,
-		  GPL_ONLY, 0 },
+		  GPL_ONLY, false },
 #ifdef KSPLICE_KSYMTAB_FUTURE_SUPPORT
 		{ __start___ksymtab_gpl_future, __stop___ksymtab_gpl_future,
 		  __start___kcrctab_gpl_future,
-		  WILL_BE_GPL_ONLY, 0 },
+		  WILL_BE_GPL_ONLY, false },
 #endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
 #ifdef KSPLICE_KSYMTAB_UNUSED_SUPPORT
 		{ __start___ksymtab_unused, __stop___ksymtab_unused,
 		  __start___kcrctab_unused,
-		  NOT_GPL_ONLY, 1 },
+		  NOT_GPL_ONLY, true },
 		{ __start___ksymtab_unused_gpl, __stop___ksymtab_unused_gpl,
 		  __start___kcrctab_unused_gpl,
-		  GPL_ONLY, 1 },
+		  GPL_ONLY, true },
 #endif /* KSPLICE_KSYMTAB_UNUSED_SUPPORT */
 	};
 
@@ -2123,33 +2125,33 @@ static bool each_symbol(bool (*fn)(const struct symsearch *arr,
 	list_for_each_entry(mod, &modules, list) {
 		struct symsearch module_arr[] = {
 			{ mod->syms, mod->syms + mod->num_syms, mod->crcs,
-			  NOT_GPL_ONLY, 0 },
+			  NOT_GPL_ONLY, false },
 			{ mod->gpl_syms, mod->gpl_syms + mod->num_gpl_syms,
 			  mod->gpl_crcs,
-			  GPL_ONLY, 0 },
+			  GPL_ONLY, false },
 #ifdef KSPLICE_KSYMTAB_FUTURE_SUPPORT
 			{ mod->gpl_future_syms,
 			  mod->gpl_future_syms + mod->num_gpl_future_syms,
 			  mod->gpl_future_crcs,
-			  WILL_BE_GPL_ONLY, 0 },
+			  WILL_BE_GPL_ONLY, false },
 #endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
 #ifdef KSPLICE_KSYMTAB_UNUSED_SUPPORT
 			{ mod->unused_syms,
 			  mod->unused_syms + mod->num_unused_syms,
 			  mod->unused_crcs,
-			  NOT_GPL_ONLY, 1 },
+			  NOT_GPL_ONLY, true },
 			{ mod->unused_gpl_syms,
 			  mod->unused_gpl_syms + mod->num_unused_gpl_syms,
 			  mod->unused_gpl_crcs,
-			  GPL_ONLY, 1 },
+			  GPL_ONLY, true },
 #endif /* KSPLICE_KSYMTAB_UNUSED_SUPPORT */
 		};
 
 		if (each_symbol_in_section(module_arr, ARRAY_SIZE(module_arr),
 					   mod, fn, data))
-			return 1;
+			return true;
 	}
-	return 0;
+	return false;
 }
 
 struct find_symbol_arg {
@@ -2171,11 +2173,11 @@ static bool find_symbol_in_section(const struct symsearch *syms,
 	struct find_symbol_arg *fsa = data;
 
 	if (strcmp(syms->start[symnum].name, fsa->name) != 0)
-		return 0;
+		return false;
 
 	if (!fsa->gplok) {
 		if (syms->licence == GPL_ONLY)
-			return 0;
+			return false;
 		if (syms->licence == WILL_BE_GPL_ONLY && fsa->warn) {
 			printk(KERN_WARNING "Symbol %s is being used "
 			       "by a non-GPL module, which will not "
@@ -2203,7 +2205,7 @@ static bool find_symbol_in_section(const struct symsearch *syms,
 	fsa->owner = owner;
 	fsa->crc = symversion(syms->crcs, symnum);
 	fsa->sym = &syms->start[symnum];
-	return 1;
+	return true;
 }
 
 /* Find a symbol and return it, along with, (optional) crc and
