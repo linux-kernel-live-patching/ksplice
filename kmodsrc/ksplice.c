@@ -483,6 +483,9 @@ static abort_t search_for_match(struct module_pack *pack,
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, unsigned long pre_addr,
 			int final);
+static void print_bytes(struct module_pack *pack,
+			const unsigned char *run, int runc,
+			const unsigned char *pre, int prec);
 static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 				  unsigned long run_addr,
 				  unsigned long pre_addr, unsigned int size,
@@ -1458,6 +1461,24 @@ static abort_t search_for_match(struct module_pack *pack,
 	}
 	release_vals(&vals);
 	return NO_MATCH;
+}
+
+static void print_bytes(struct module_pack *pack,
+			const unsigned char *run, int runc,
+			const unsigned char *pre, int prec)
+{
+	int o;
+	int matched = min(runc, prec);
+	for (o = 0; o < matched; o++) {
+		if (run[o] == pre[o])
+			ksdebug(pack, 0, "%02x ", run[o]);
+		else
+			ksdebug(pack, 0, "%02x/%02x ", run[o], pre[o]);
+	}
+	for (o = matched; o < runc; o++)
+		ksdebug(pack, 0, "%02x/ ", run[o]);
+	for (o = matched; o < prec; o++)
+		ksdebug(pack, 0, "/%02x ", pre[o]);
 }
 
 static abort_t rodata_run_pre_cmp(struct module_pack *pack,

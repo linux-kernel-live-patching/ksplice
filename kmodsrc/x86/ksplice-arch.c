@@ -138,9 +138,6 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 /* *INDENT-ON* */
 
 static int match_nop(const unsigned char *addr);
-static void print_bytes(struct module_pack *pack,
-			const unsigned char *run, int runc,
-			const unsigned char *pre, int prec);
 static int jumplen(const unsigned char *addr);
 static int jumpsize(const unsigned char *addr);
 static int match_jump_types(const unsigned char *run, const unsigned char *pre);
@@ -306,24 +303,6 @@ static int match_nop(const unsigned char *addr)
 			return j;
 	}
 	return 0;
-}
-
-static void print_bytes(struct module_pack *pack,
-			const unsigned char *run, int runc,
-			const unsigned char *pre, int prec)
-{
-	int o;
-	int matched = min(runc, prec);
-	for (o = 0; o < matched; o++) {
-		if (run[o] == pre[o])
-			ksdebug(pack, 0, "%02x ", run[o]);
-		else
-			ksdebug(pack, 0, "%02x/%02x ", run[o], pre[o]);
-	}
-	for (o = matched; o < runc; o++)
-		ksdebug(pack, 0, "%02x/ ", run[o]);
-	for (o = matched; o < prec; o++)
-		ksdebug(pack, 0, "/%02x ", pre[o]);
 }
 
 static unsigned long follow_trampolines(struct module_pack *pack,
