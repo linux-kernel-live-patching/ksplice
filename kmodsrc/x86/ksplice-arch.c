@@ -145,9 +145,9 @@ static uint8_t ud_prefix_len(struct ud *ud);
 static long jump_lval(struct ud_operand *operand);
 static int next_run_byte(struct ud *ud);
 
-static abort_t run_pre_cmp(struct module_pack *pack,
-			   const struct ksplice_size *s,
-			   unsigned long run_addr, int rerun)
+static abort_t arch_run_pre_cmp(struct module_pack *pack,
+				const struct ksplice_size *s,
+				unsigned long run_addr, int rerun)
 {
 	int runc, prec;
 	int i;
@@ -350,8 +350,8 @@ static abort_t compare_operands(struct module_pack *pack,
 			if (rerun)
 				ksdebug(pack, 3, "[ ");
 			/* jump into .text.lock subsection */
-			ret = run_pre_cmp(pack, &smplocks_size, run_target,
-					  rerun);
+			ret = arch_run_pre_cmp(pack, &smplocks_size, run_target,
+					       rerun);
 			if (rerun)
 				ksdebug(pack, 3, "] ");
 			if (ret != OK) {

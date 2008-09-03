@@ -432,12 +432,18 @@ static abort_t search_for_match(struct module_pack *pack,
 				const struct ksplice_size *s);
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, int final);
+static abort_t run_pre_cmp(struct module_pack *pack,
+			   const struct ksplice_size *s,
+			   unsigned long run_addr, int rerun);
+#ifndef FUNCTION_SECTIONS
+/* defined in $ARCH/ksplice-arch.c */
+static abort_t arch_run_pre_cmp(struct module_pack *pack,
+				const struct ksplice_size *s,
+				unsigned long run_addr, int rerun);
+#endif /* FUNCTION_SECTIONS */
 static void print_bytes(struct module_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec);
-static abort_t rodata_run_pre_cmp(struct module_pack *pack,
-				  const struct ksplice_size *s,
-				  unsigned long run_addr, int rerun);
 
 static abort_t reverse_patches(struct update_bundle *bundle);
 static abort_t apply_patches(struct update_bundle *bundle);
@@ -1427,9 +1433,9 @@ static void print_bytes(struct module_pack *pack,
 		ksdebug(pack, 0, "/%02x ", pre[o]);
 }
 
-static abort_t rodata_run_pre_cmp(struct module_pack *pack,
-				  const struct ksplice_size *s,
-				  unsigned long run_addr, int rerun)
+static abort_t run_pre_cmp(struct module_pack *pack,
+			   const struct ksplice_size *s,
+			   unsigned long run_addr, int rerun)
 {
 	int matched = 0;
 	abort_t ret;
@@ -1542,10 +1548,10 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return ret;
 
 #ifdef FUNCTION_SECTIONS
-	ret = rodata_run_pre_cmp(pack, s, run_addr, 0);
+	ret = run_pre_cmp(pack, s, run_addr, 0);
 #else
-	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
-		ret = rodata_run_pre_cmp(pack, s, run_addr, 0);
+	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
+		ret = arch_run_pre_cmp(pack, s, run_addr, 0);
 	else
 		ret = run_pre_cmp(pack, s, run_addr, 0);
 #endif
@@ -1560,10 +1566,10 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
 		if (pack->bundle->debug >= 1) {
 #ifdef FUNCTION_SECTIONS
-			ret = rodata_run_pre_cmp(pack, s, run_addr, 1);
+			ret = run_pre_cmp(pack, s, run_addr, 1);
 #else
-			if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
-				ret = rodata_run_pre_cmp(pack, s, run_addr, 1);
+			if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
+				ret = arch_run_pre_cmp(pack, s, run_addr, 1);
 			else
 				ret = run_pre_cmp(pack, s, run_addr, 1);
 #endif
