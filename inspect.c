@@ -97,6 +97,8 @@ void show_ksplice_size_flags(const struct ksplice_size *ksize)
 		printf(" deleted");
 	if (ksize->flags & KSPLICE_SIZE_RODATA)
 		printf(" rodata");
+	if (ksize->flags & KSPLICE_SIZE_TEXT)
+		printf(" text");
 	printf("\n");
 }
 

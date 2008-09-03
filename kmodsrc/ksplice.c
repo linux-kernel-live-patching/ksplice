@@ -1642,8 +1642,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return OUT_OF_MEMORY;
 	/* It is safe for addr to point to the beginning of a patched function,
 	   because that location will be overwritten with a trampoline. */
-	if ((s->flags & KSPLICE_SIZE_DELETED) == 0 &&
-	    (s->flags & KSPLICE_SIZE_RODATA) == 0) {
+	if ((s->flags & KSPLICE_SIZE_TEXT) != 0) {
 		rec->addr = run_addr + 1;
 		rec->size = s->size - 1;
 	} else {

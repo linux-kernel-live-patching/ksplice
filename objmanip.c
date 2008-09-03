@@ -755,6 +755,10 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 		ksize->flags |= KSPLICE_SIZE_DELETED;
 	if (starts_with(sym->section->name, ".rodata"))
 		ksize->flags |= KSPLICE_SIZE_RODATA;
+	if (starts_with(sym->section->name, ".text") ||
+	    starts_with(sym->section->name, ".exit.text"))
+		ksize->flags |= KSPLICE_SIZE_TEXT;
+	assert(ksize->flags != 0);
 	write_reloc(ksize_ss, &ksize->thismod_addr, symp, 0);
 }
 

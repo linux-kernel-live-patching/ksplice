@@ -23,8 +23,9 @@ struct ksplice_size {
 	unsigned long thismod_addr;
 	unsigned int flags;
 };
-#define KSPLICE_SIZE_DELETED 0x00000001
+#define KSPLICE_SIZE_TEXT 0x00000001
 #define KSPLICE_SIZE_RODATA 0x00000002
+#define KSPLICE_SIZE_DELETED 0x00000010
 
 #define MAX_TRAMPOLINE_SIZE 5
 
