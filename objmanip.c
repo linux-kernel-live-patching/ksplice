@@ -747,7 +747,7 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 					       struct ksplice_size);
 
 	write_ksplice_symbol(ksize_ss, &ksize->symbol, sym,
-			     mode("keep-primary") ? "_post" : "");
+			     mode("keep-primary") ? "(post)" : "");
 	ksize->size = symsize;
 	ksize->flags = 0;
 	if (mode("keep-helper") &&
