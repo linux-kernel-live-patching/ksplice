@@ -1229,11 +1229,11 @@ static int ksplice_sysfs_init(struct update_bundle *bundle)
 	int ret = 0;
 	memset(&bundle->kobj, 0, sizeof(bundle->kobj));
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
-/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
 #ifndef KSPLICE_STANDALONE
 	ret = kobject_init_and_add(&bundle->kobj, &ksplice_ktype,
 				   ksplice_kobj, "%s", bundle->kid);
 #else /* KSPLICE_STANDALONE */
+/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
 	ret = kobject_init_and_add(&bundle->kobj, &ksplice_ktype,
 				   &THIS_MODULE->mkobj.kobj, "ksplice");
 #endif /* KSPLICE_STANDALONE */
@@ -1242,9 +1242,9 @@ static int ksplice_sysfs_init(struct update_bundle *bundle)
 	if (ret != 0)
 		return ret;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
-/* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
 	bundle->kobj.parent = &THIS_MODULE->mkobj.kobj;
 #else /* LINUX_VERSION_CODE < */
+/* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
 	bundle->kobj.parent = &THIS_MODULE->mkobj->kobj;
 #endif /* LINUX_VERSION_CODE */
 	bundle->kobj.ktype = &ksplice_ktype;
@@ -1253,9 +1253,9 @@ static int ksplice_sysfs_init(struct update_bundle *bundle)
 	if (ret != 0)
 		return ret;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
-/* 312c004d36ce6c739512bac83b452f4c20ab1f62 was after 2.6.14 */
 	kobject_uevent(&bundle->kobj, KOBJ_ADD);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+/* 312c004d36ce6c739512bac83b452f4c20ab1f62 was after 2.6.14 */
 /* 12025235884570ba7f02a6f427f973ac6be7ec54 was after 2.6.9 */
 	kobject_uevent(&bundle->kobj, KOBJ_ADD, NULL);
 #endif /* LINUX_VERSION_CODE */
