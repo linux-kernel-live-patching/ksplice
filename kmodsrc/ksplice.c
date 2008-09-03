@@ -128,11 +128,6 @@ struct reloc_nameval {
 	enum { NOVAL, TEMP, VAL } status;
 };
 
-struct reloc_addrmap {
-	struct list_head list;
-	const struct ksplice_reloc *reloc;
-};
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 static inline int virtual_address_mapped(unsigned long addr)
 {
@@ -182,10 +177,8 @@ static struct reloc_nameval *find_nameval(struct module_pack *pack,
 					  const char *label);
 static abort_t create_nameval(struct module_pack *pack, const char *label,
 			      unsigned long val, int status);
-static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
-					  unsigned long addr);
-static abort_t create_addrmap(struct module_pack *pack,
-			      const struct ksplice_reloc *r);
+static const struct ksplice_reloc *lookup_reloc(struct module_pack *pack,
+						unsigned long addr);
 static abort_t handle_myst_reloc(struct module_pack *pack,
 				 unsigned long pre_addr, unsigned long run_addr,
 				 int rerun, int *matched);
@@ -363,12 +356,11 @@ extern const unsigned long __start___kcrctab_gpl_future[];
 
 #endif /* KSPLICE_STANDALONE */
 
-static abort_t process_ksplice_relocs(struct module_pack *pack,
+static abort_t process_primary_relocs(struct module_pack *pack,
 				      const struct ksplice_reloc *relocs,
-				      const struct ksplice_reloc *relocs_end,
-				      int pre);
-static abort_t process_reloc(struct module_pack *pack,
-			     const struct ksplice_reloc *r, int pre);
+				      const struct ksplice_reloc *relocs_end);
+static abort_t process_primary_reloc(struct module_pack *pack,
+				     const struct ksplice_reloc *r);
 static abort_t apply_ksplice_reloc(struct module_pack *pack,
 				   const struct ksplice_reloc *r,
 				   unsigned long sym_addr);
@@ -680,8 +672,8 @@ static abort_t activate_primary(struct module_pack *pack)
 	const struct ksplice_patch *p;
 	struct safety_record *rec;
 	abort_t ret;
-	ret = process_ksplice_relocs(pack, pack->primary_relocs,
-				     pack->primary_relocs_end, 0);
+	ret = process_primary_relocs(pack, pack->primary_relocs,
+				     pack->primary_relocs_end);
 	if (ret != OK)
 		return ret;
 
@@ -1117,7 +1109,6 @@ static int register_ksplice_module(struct module_pack *pack)
 	struct update_bundle *bundle;
 	int ret = 0;
 
-	INIT_LIST_HEAD(&pack->reloc_addrmaps);
 	INIT_LIST_HEAD(&pack->reloc_namevals);
 	INIT_LIST_HEAD(&pack->safety_records);
 
@@ -1314,7 +1305,6 @@ static abort_t apply_update(struct update_bundle *bundle)
 out:
 	list_for_each_entry(pack, &bundle->packs, list) {
 		clear_list(&pack->reloc_namevals, struct reloc_nameval, list);
-		clear_list(&pack->reloc_addrmaps, struct reloc_addrmap, list);
 		if (bundle->stage == PREPARING)
 			clear_list(&pack->safety_records, struct safety_record,
 				   list);
@@ -1332,11 +1322,6 @@ static abort_t activate_helper(struct module_pack *pack)
 	char *finished;
 	int numfinished, oldfinished = 0;
 	int restart_count = 0;
-
-	ret = process_ksplice_relocs(pack, pack->helper_relocs,
-				      pack->helper_relocs_end, 1);
-	if (ret != OK)
-		return ret;
 
 	finished = kcalloc(record_count, sizeof(char), GFP_KERNEL);
 	if (finished == NULL)
@@ -1665,18 +1650,25 @@ static abort_t handle_myst_reloc(struct module_pack *pack,
 				 int rerun, int *matched)
 {
 	struct reloc_nameval *nv;
-	const struct ksplice_reloc *r;
 	unsigned long run_reloc_addr;
 	long run_reloc_val, expected;
-	int offset;
+	int offset, canary_ret;
 	abort_t ret;
-
-	struct reloc_addrmap *map = find_addrmap(pack, pre_addr);
-	if (map == NULL) {
+	const struct ksplice_reloc *r = lookup_reloc(pack, pre_addr);
+	if (r == NULL) {
 		*matched = 0;
 		return OK;
 	}
-	r = map->reloc;
+
+	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
+	if (canary_ret < 0)
+		return UNEXPECTED;
+	if (canary_ret == 0) {
+		ksdebug(pack, 4, KERN_DEBUG "ksplice_h: reloc: skipped %s:%"
+			ADDR " (altinstr)\n", r->symbol->label,
+			r->blank_offset);
+		return OK;
+	}
 	nv = find_nameval(pack, r->symbol->label);
 
 	offset = (int)(pre_addr - r->blank_addr);
@@ -1777,22 +1769,21 @@ static abort_t apply_ksplice_reloc(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t process_ksplice_relocs(struct module_pack *pack,
+static abort_t process_primary_relocs(struct module_pack *pack,
 				      const struct ksplice_reloc *relocs,
-				      const struct ksplice_reloc *relocs_end,
-				      int pre)
+				      const struct ksplice_reloc *relocs_end)
 {
 	const struct ksplice_reloc *r;
 	for (r = relocs; r < relocs_end; r++) {
-		abort_t ret = process_reloc(pack, r, pre);
+		abort_t ret = process_primary_reloc(pack, r);
 		if (ret != OK)
 			return ret;
 	}
 	return OK;
 }
 
-static abort_t process_reloc(struct module_pack *pack,
-			     const struct ksplice_reloc *r, int pre)
+static abort_t process_primary_reloc(struct module_pack *pack,
+				     const struct ksplice_reloc *r)
 {
 	abort_t ret;
 	int canary_ret;
@@ -1803,20 +1794,10 @@ static abort_t process_reloc(struct module_pack *pack,
 	if (canary_ret < 0)
 		return UNEXPECTED;
 	if (canary_ret == 0) {
-		ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: skipped %s:%"
-			ADDR " (altinstr)\n", (pre ? "_h" : ""),
-			r->symbol->label, r->blank_offset);
+		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: skipped %s:%"
+			ADDR " (altinstr)\n", r->symbol->label,
+			r->blank_offset);
 		return OK;
-	}
-
-#ifdef KSPLICE_STANDALONE
-	if (pre && bootstrapped) {
-#else /* !KSPLICE_STANDALONE */
-	if (pre) {
-#endif /* KSPLICE_STANDALONE */
-		ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: deferred %s:%" ADDR
-			" to run-pre\n", r->symbol->label, r->blank_offset);
-		return create_addrmap(pack, r);
 	}
 
 #ifdef KSPLICE_STANDALONE
@@ -1853,8 +1834,8 @@ static abort_t process_reloc(struct module_pack *pack,
 	if (ret != OK)
 		return ret;
 
-	ksdebug(pack, 4, KERN_DEBUG "ksplice%s: reloc: %s:%" ADDR " ",
-		(pre ? "_h" : ""), r->symbol->label, r->blank_offset);
+	ksdebug(pack, 4, KERN_DEBUG "ksplice: reloc: %s:%" ADDR " ",
+		r->symbol->label, r->blank_offset);
 	ksdebug(pack, 4, "(S=%" ADDR " A=%" ADDR " ", sym_addr, r->addend);
 	switch (r->size) {
 	case 1:
@@ -2548,27 +2529,15 @@ static abort_t create_nameval(struct module_pack *pack, const char *label,
 	return OK;
 }
 
-static struct reloc_addrmap *find_addrmap(struct module_pack *pack,
-					  unsigned long addr)
+static const struct ksplice_reloc *lookup_reloc(struct module_pack *pack,
+						unsigned long addr)
 {
-	struct reloc_addrmap *map;
-	list_for_each_entry(map, &pack->reloc_addrmaps, list) {
-		if (addr >= map->reloc->blank_addr &&
-		    addr < map->reloc->blank_addr + map->reloc->size)
-			return map;
+	const struct ksplice_reloc *r;
+	for (r = pack->helper_relocs; r < pack->helper_relocs_end; r++) {
+		if (addr >= r->blank_addr && addr < r->blank_addr + r->size)
+			return r;
 	}
 	return NULL;
-}
-
-static abort_t create_addrmap(struct module_pack *pack,
-			      const struct ksplice_reloc *r)
-{
-	struct reloc_addrmap *map = kmalloc(sizeof(*map), GFP_KERNEL);
-	if (map == NULL)
-		return OUT_OF_MEMORY;
-	map->reloc = r;
-	list_add(&map->list, &pack->reloc_addrmaps);
-	return OK;
 }
 
 static void set_temp_myst_relocs(struct module_pack *pack, int status_val)
@@ -2721,7 +2690,6 @@ static struct module_pack ksplice_pack = {
 	.target = NULL,
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
-	.reloc_addrmaps = LIST_HEAD_INIT(ksplice_pack.reloc_addrmaps),
 	.reloc_namevals = LIST_HEAD_INIT(ksplice_pack.reloc_namevals),
 };
 #endif /* KSPLICE_STANDALONE */
@@ -2736,8 +2704,8 @@ static int init_ksplice(void)
 	add_to_bundle(pack, pack->bundle);
 	pack->bundle->debug = debug;
 	pack->bundle->abort_cause =
-	    process_ksplice_relocs(pack, ksplice_init_relocs,
-				   ksplice_init_relocs_end, 1);
+	    process_primary_relocs(pack, ksplice_init_relocs,
+				   ksplice_init_relocs_end);
 	if (pack->bundle->abort_cause == OK)
 		bootstrapped = 1;
 #else /* !KSPLICE_STANDALONE */
