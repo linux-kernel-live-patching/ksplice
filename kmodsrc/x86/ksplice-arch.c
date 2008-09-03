@@ -166,8 +166,8 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 		if (!virtual_address_mapped((unsigned long)run))
 			return NO_MATCH;
 
-		ret = handle_myst_reloc(pack, (unsigned long)pre,
-					(unsigned long)run, rerun, &matched);
+		ret = handle_reloc(pack, (unsigned long)pre, (unsigned long)run,
+				   rerun, &matched);
 		if (ret != OK) {
 			ksdebug(pack, 3, KERN_DEBUG "Matching failure at "
 				"offset %lx\n", (unsigned long)pre - pre_addr);
@@ -191,9 +191,8 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 					    jumpsize(pre));
 			run += jumpsize(run);
 			pre += jumpsize(pre);
-			ret = handle_myst_reloc(pack, (unsigned long)pre,
-						(unsigned long)run, rerun,
-						&matched);
+			ret = handle_reloc(pack, (unsigned long)pre,
+					   (unsigned long)run, rerun, &matched);
 			if (ret != OK) {
 				ksdebug(pack, 3, KERN_DEBUG "Matching failure "
 					"at offset %lx\n", (unsigned long)pre -

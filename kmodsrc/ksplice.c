@@ -179,9 +179,8 @@ static abort_t create_nameval(struct module_pack *pack, const char *label,
 			      unsigned long val, int status);
 static const struct ksplice_reloc *lookup_reloc(struct module_pack *pack,
 						unsigned long addr);
-static abort_t handle_myst_reloc(struct module_pack *pack,
-				 unsigned long pre_addr, unsigned long run_addr,
-				 int rerun, int *matched);
+static abort_t handle_reloc(struct module_pack *pack, unsigned long pre_addr,
+			    unsigned long run_addr, int rerun, int *matched);
 
 struct safety_record {
 	struct list_head list;
@@ -1491,8 +1490,8 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 					(unsigned long)pre - pre_addr, s->size);
 			return NO_MATCH;
 		}
-		ret = handle_myst_reloc(pack, (unsigned long)pre,
-					(unsigned long)run, rerun, &matched);
+		ret = handle_reloc(pack, (unsigned long)pre, (unsigned long)run,
+				   rerun, &matched);
 		if (ret != OK) {
 			if (!rerun)
 				ksdebug(pack, 3, "reloc in sect does "
@@ -1645,9 +1644,8 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	return OK;
 }
 
-static abort_t handle_myst_reloc(struct module_pack *pack,
-				 unsigned long pre_addr, unsigned long run_addr,
-				 int rerun, int *matched)
+static abort_t handle_reloc(struct module_pack *pack, unsigned long pre_addr,
+			    unsigned long run_addr, int rerun, int *matched)
 {
 	struct reloc_nameval *nv;
 	unsigned long run_reloc_addr;
