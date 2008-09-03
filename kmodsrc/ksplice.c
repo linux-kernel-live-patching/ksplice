@@ -1480,9 +1480,6 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 	pre = (const unsigned char *)pre_addr;
 	run = (const unsigned char *)run_addr;
 	while (pre < (const unsigned char *)pre_addr + s->size) {
-		if (rerun)
-			print_bytes(pack, run, 1, pre, 1);
-
 		if (!virtual_address_mapped((unsigned long)run)) {
 			if (!rerun)
 				ksdebug(pack, 3, "sect unmapped after "
@@ -1500,6 +1497,7 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 			return ret;
 		}
 		if (matched != 0) {
+			print_bytes(pack, run, matched, pre, matched);
 			pre += matched;
 			run += matched;
 			continue;
@@ -1511,6 +1509,9 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 			if (ret != OK)
 				return ret;
 			if (matched != 0) {
+				if (rerun)
+					print_bytes(pack, run, matched, pre,
+						    matched);
 				pre += matched;
 				run += matched;
 				continue;
@@ -1523,12 +1524,15 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 					"%lx/%lx bytes\n",
 					(unsigned long)pre - pre_addr, s->size);
 			if (rerun) {
+				print_bytes(pack, run, 1, pre, 1);
 				ksdebug(pack, 0, "[p_o=%lx] ! ",
 					(unsigned long)pre - pre_addr);
 				print_bytes(pack, run + 1, 2, pre + 1, 2);
 			}
 			return NO_MATCH;
 		}
+		if (rerun)
+			print_bytes(pack, run, 1, pre, 1);
 		pre++;
 		run++;
 	}
