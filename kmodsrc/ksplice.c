@@ -482,8 +482,7 @@ static abort_t activate_helper(struct module_pack *pack);
 static abort_t search_for_match(struct module_pack *pack,
 				const struct ksplice_size *s);
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
-			unsigned long run_addr, unsigned long pre_addr,
-			int final);
+			unsigned long run_addr, int final);
 static void print_bytes(struct module_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec);
@@ -1421,7 +1420,7 @@ static abort_t search_for_match(struct module_pack *pack,
 		run_addr = v->val;
 
 		yield();
-		ret = try_addr(pack, s, run_addr, s->thismod_addr, 0);
+		ret = try_addr(pack, s, run_addr, 0);
 		if (ret == NO_MATCH) {
 			list_del(&v->list);
 			kfree(v);
@@ -1442,7 +1441,7 @@ static abort_t search_for_match(struct module_pack *pack,
 	if (singular(&vals)) {
 		run_addr = list_entry(vals.next, struct candidate_val,
 				      list)->val;
-		ret = try_addr(pack, s, run_addr, s->thismod_addr, 1);
+		ret = try_addr(pack, s, run_addr, 1);
 		release_vals(&vals);
 		return ret;
 	} else if (!list_empty(&vals)) {
@@ -1557,13 +1556,13 @@ static struct module *__module_data_address(unsigned long addr)
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
-			unsigned long run_addr, unsigned long pre_addr,
-			int final)
+			unsigned long run_addr, int final)
 {
 	struct safety_record *rec;
 	struct ksplice_patch *p;
 	abort_t ret;
 	const struct module *run_module;
+	unsigned long pre_addr = s->thismod_addr;
 
 	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
 		run_module = __module_data_address(run_addr);
@@ -2334,7 +2333,7 @@ static abort_t brute_search(struct module_pack *pack,
 		if (run != pre)
 			continue;
 
-		ret = try_addr(pack, s, addr, s->thismod_addr, 0);
+		ret = try_addr(pack, s, addr, 0);
 		if (ret == OK) {
 			ret = add_candidate_val(vals, addr);
 			if (ret != OK)
