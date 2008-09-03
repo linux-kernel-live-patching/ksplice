@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
-# Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+# Copyright (C) 2007-2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+# Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
+#                     Tim Abbott <tabbott@mit.edu>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.
@@ -337,7 +339,9 @@ L<ksplice-apply(8)>, L<ksplice-view(8)>, L<ksplice-undo(8)>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>.
+Copyright (C) 2007-2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
+                    Tim Abbott <tabbott@mit.edu>
 
 This is free software and documentation.  You can redistribute and/or modify it
 under the terms of the GNU General Public License, version 2.

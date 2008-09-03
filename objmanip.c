@@ -1,7 +1,9 @@
 /*  This file is based in part on objcopy.c from GNU Binutils v2.17.
  *
  *  Copyright (C) 1991-2006  Free Software Foundation, Inc.
- *  Copyright (C) 2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+ *  Copyright (C) 2007-2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+ *  Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
+ *                      Tim Abbott <tabbott@mit.edu>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License, version 2.
