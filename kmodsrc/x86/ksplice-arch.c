@@ -144,14 +144,16 @@ static int jumpsize(const unsigned char *addr);
 static int match_jump_types(const unsigned char *run, const unsigned char *pre);
 static int canonicalize_jump(const unsigned char *addr);
 
-static abort_t run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
-			   unsigned long pre_addr, unsigned int size, int rerun)
+static abort_t run_pre_cmp(struct module_pack *pack,
+			   const struct ksplice_size *s, unsigned long run_addr,
+			   int rerun)
 {
 	int runc, prec, matched;
 	const unsigned char *run, *pre;
 	abort_t ret;
+	unsigned long pre_addr = s->thismod_addr;
 
-	if (size == 0)
+	if (s->size == 0)
 		return NO_MATCH;
 
 	run_addr = follow_trampolines(pack, run_addr);
@@ -159,8 +161,8 @@ static abort_t run_pre_cmp(struct module_pack *pack, unsigned long run_addr,
 	run = (const unsigned char *)run_addr;
 	pre = (const unsigned char *)pre_addr;
 
-	while (run < (const unsigned char *)run_addr + size &&
-	       pre < (const unsigned char *)pre_addr + size) {
+	while (run < (const unsigned char *)run_addr + s->size &&
+	       pre < (const unsigned char *)pre_addr + s->size) {
 		if (!virtual_address_mapped((unsigned long)run))
 			return NO_MATCH;
 
