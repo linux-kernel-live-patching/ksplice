@@ -1488,8 +1488,13 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 	int matched;
 	abort_t ret;
 	unsigned long off, pre_addr = s->thismod_addr;
-	const unsigned char *pre = (const unsigned char *)pre_addr;
-	const unsigned char *run = (const unsigned char *)run_addr;
+	const unsigned char *pre, *run;
+
+	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
+		run_addr = follow_trampolines(pack, run_addr);
+
+	pre = (const unsigned char *)pre_addr;
+	run = (const unsigned char *)run_addr;
 	for (off = 0; off < s->size; off++) {
 		if (rerun)
 			print_bytes(pack, run + off, 1, pre + off, 1);
@@ -1514,13 +1519,15 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 			continue;
 		}
 
-		ret = handle_paravirt(pack, pre_addr + off, run_addr + off,
-				      &matched);
-		if (ret != OK)
-			return ret;
-		if (matched != 0) {
-			off += matched - 1;
-			continue;
+		if ((s->flags & KSPLICE_SIZE_TEXT) != 0) {
+			ret = handle_paravirt(pack, pre_addr + off,
+					      run_addr + off, &matched);
+			if (ret != OK)
+				return ret;
+			if (matched != 0) {
+				off += matched - 1;
+				continue;
+			}
 		}
 
 		if (run[off] != pre[off]) {
