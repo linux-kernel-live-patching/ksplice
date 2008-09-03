@@ -1485,9 +1485,9 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 				  const struct ksplice_size *s,
 				  unsigned long run_addr, int rerun)
 {
-	int matched;
+	int matched = 0;
 	abort_t ret;
-	unsigned long off, pre_addr = s->thismod_addr;
+	unsigned long pre_addr = s->thismod_addr;
 	const unsigned char *pre, *run;
 
 	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
@@ -1495,52 +1495,58 @@ static abort_t rodata_run_pre_cmp(struct module_pack *pack,
 
 	pre = (const unsigned char *)pre_addr;
 	run = (const unsigned char *)run_addr;
-	for (off = 0; off < s->size; off++) {
+	while (pre < (const unsigned char *)pre_addr + s->size) {
 		if (rerun)
-			print_bytes(pack, run + off, 1, pre + off, 1);
+			print_bytes(pack, run, 1, pre, 1);
 
-		if (!virtual_address_mapped((unsigned long)run + off)) {
+		if (!virtual_address_mapped((unsigned long)run)) {
 			if (!rerun)
 				ksdebug(pack, 3, "sect unmapped after "
-					"%lx/%lx bytes\n", off, s->size);
+					"%lx/%lx bytes\n",
+					(unsigned long)pre - pre_addr, s->size);
 			return NO_MATCH;
 		}
-		ret = handle_myst_reloc(pack, pre_addr + off, run_addr + off,
-					rerun, &matched);
+		ret = handle_myst_reloc(pack, (unsigned long)pre,
+					(unsigned long)run, rerun, &matched);
 		if (ret != OK) {
 			if (!rerun)
 				ksdebug(pack, 3, "reloc in sect does "
-					"not match after %lx/%lx bytes\n", off,
-					s->size);
+					"not match after %lx/%lx bytes\n",
+					(unsigned long)pre - pre_addr, s->size);
 			return ret;
 		}
 		if (matched != 0) {
-			off += matched - 1;
+			pre += matched;
+			run += matched;
 			continue;
 		}
 
 		if ((s->flags & KSPLICE_SIZE_TEXT) != 0) {
-			ret = handle_paravirt(pack, pre_addr + off,
-					      run_addr + off, &matched);
+			ret = handle_paravirt(pack, (unsigned long)pre,
+					      (unsigned long)run, &matched);
 			if (ret != OK)
 				return ret;
 			if (matched != 0) {
-				off += matched - 1;
+				pre += matched;
+				run += matched;
 				continue;
 			}
 		}
 
-		if (run[off] != pre[off]) {
+		if (*run != *pre) {
 			if (!rerun)
 				ksdebug(pack, 3, "sect does not match after "
-					"%lx/%lx bytes\n", off, s->size);
+					"%lx/%lx bytes\n",
+					(unsigned long)pre - pre_addr, s->size);
 			if (rerun) {
-				ksdebug(pack, 0, "[p_o=%lx] ! ", off);
-				print_bytes(pack, run + off + 1, 2,
-					    pre + off + 1, 2);
+				ksdebug(pack, 0, "[p_o=%lx] ! ",
+					(unsigned long)pre - pre_addr);
+				print_bytes(pack, run + 1, 2, pre + 1, 2);
 			}
 			return NO_MATCH;
 		}
+		pre++;
+		run++;
 	}
 	return OK;
 }
