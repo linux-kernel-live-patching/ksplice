@@ -32,7 +32,7 @@ struct ksplice_size {
 #define MAX_TRAMPOLINE_SIZE 5
 
 struct ksplice_patch {
-	const struct ksplice_symbol *symbol;
+	const char *label;
 	unsigned long oldaddr;
 	unsigned long repladdr;
 	char saved[MAX_TRAMPOLINE_SIZE];

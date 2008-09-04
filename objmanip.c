@@ -689,7 +689,8 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
 	}
 	assert(symp < sbfd->syms.data + sbfd->syms.size);
 
-	write_ksplice_symbol(kpatch_ss, &kpatch->symbol, *symp, "");
+	write_string(kpatch_ss, &kpatch->label, "%s",
+		     symbol_label(sbfd, *symp));
 	write_ksplice_reloc(kpatch_ss, create_reloc(kpatch_ss, &kpatch->oldaddr,
 						    symp, 0));
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);

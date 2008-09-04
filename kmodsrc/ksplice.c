@@ -677,7 +677,7 @@ static abort_t found_all_patches(struct module_pack *pack)
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		int found = 0;
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (strcmp(rec->label, p->symbol->label) == 0) {
+			if (strcmp(rec->label, p->label) == 0) {
 				found = 1;
 				break;
 			}
@@ -688,7 +688,7 @@ static abort_t found_all_patches(struct module_pack *pack)
 			return UNEXPECTED;
 		if (rec->size < p->size) {
 			ksdebug(pack, 0, KERN_DEBUG "Symbol %s is too short "
-				"for trampoline\n", p->symbol->label);
+				"for trampoline\n", p->label);
 			return UNEXPECTED;
 		}
 	}
@@ -1651,7 +1651,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		"\n", s->symbol->label, run_addr);
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
-		if (strcmp(s->symbol->label, p->symbol->label) == 0)
+		if (strcmp(s->symbol->label, p->label) == 0)
 			break;
 	}
 	if (p >= pack->patches_end && (s->flags & KSPLICE_SIZE_DELETED) == 0)
