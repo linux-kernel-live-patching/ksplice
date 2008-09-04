@@ -576,19 +576,7 @@ void write_ksplice_symbol(struct supersect *ss,
 		write_string(ksymbol_ss, &ksymbol->label, "%s%s%s",
 			     sym->name, addstr_all, addstr_sect);
 	} else {
-		const struct asymbolp_vec *syms = &ss->parent->syms;
-		asymbol **gsymp;
-		asymbol *gsym = NULL;
-		for (gsymp = syms->data; gsymp < syms->data + syms->size;
-		     gsymp++) {
-			asymbol *gsymtemp = *gsymp;
-			if ((gsymtemp->flags & BSF_DEBUGGING) != 0 ||
-			    sym->section != gsymtemp->section ||
-			    sym->value != gsymtemp->value)
-				continue;
-			if (gsym == NULL || (gsymtemp->flags & BSF_GLOBAL) != 0)
-				gsym = gsymtemp;
-		}
+		asymbol *gsym = canonical_symbol(ss->parent, sym);
 
 		if (gsym == NULL)
 			ksymbol->name = NULL;

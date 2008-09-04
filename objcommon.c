@@ -308,6 +308,25 @@ static const char *find_caller(struct supersect *ss, asymbol *sym)
 	}
 }
 
+asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
+{
+	asymbol **csymp;
+	asymbol *csym = NULL;
+	for (csymp = sbfd->syms.data; csymp < sbfd->syms.data + sbfd->syms.size;
+	     csymp++) {
+		asymbol *csymtemp = *csymp;
+		if ((csymtemp->flags & BSF_DEBUGGING) != 0 ||
+		    sym->section != csymtemp->section ||
+		    sym->value != csymtemp->value)
+			continue;
+		if ((csymtemp->flags & BSF_GLOBAL) != 0)
+			return csymtemp;
+		if (csym == NULL)
+			csym = csymtemp;
+	}
+	return csym;
+}
+
 const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
 {
 	struct supersect *ss = fetch_supersect(sbfd, sym->section);
