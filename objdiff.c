@@ -157,6 +157,9 @@ void compare_symbols(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 		if (((*old)->flags & flags) == 0 ||
 		    ((*old)->flags & BSF_DEBUGGING) != 0)
 			continue;
+		if (((*old)->flags & BSF_FUNCTION) == 0 &&
+		    ((*old)->flags & BSF_OBJECT) == 0)
+			continue;
 		tmp = symbol_hash_lookup(&old_hash, (*old)->name, TRUE);
 		if (*tmp != NULL) {
 			fprintf(stderr, "Two global symbols named %s!\n",
@@ -169,6 +172,9 @@ void compare_symbols(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 		 newsbfd->syms.size; new++) {
 		if (((*new)->flags & flags) == 0 ||
 		    ((*new)->flags & BSF_DEBUGGING) != 0)
+			continue;
+		if (((*new)->flags & BSF_FUNCTION) == 0 &&
+		    ((*new)->flags & BSF_OBJECT) == 0)
 			continue;
 		tmp = symbol_hash_lookup(&old_hash, (*new)->name, FALSE);
 		if (tmp == NULL)
@@ -289,6 +295,10 @@ void print_newbfd_entry_symbols(struct supersect *ss)
 		if (sym_ss != ss || sym->name[0] == '\0' ||
 		    starts_with(sym->name, ".text"))
 			continue;
+		if ((sym->flags & BSF_FUNCTION) == 0 &&
+		    (sym->flags & BSF_OBJECT) == 0)
+			continue;
+
 		if (sym->value != 0) {
 			fprintf(stderr,
 				"Symbol %s [%x] has nonzero value %lx\n",
