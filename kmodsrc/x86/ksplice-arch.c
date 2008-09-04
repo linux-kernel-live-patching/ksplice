@@ -147,7 +147,8 @@ static int next_run_byte(struct ud *ud);
 
 static abort_t arch_run_pre_cmp(struct module_pack *pack,
 				const struct ksplice_size *s,
-				unsigned long run_addr, int rerun)
+				unsigned long run_addr,
+				unsigned long *run_size, int rerun)
 {
 	int runc, prec;
 	int i;
@@ -193,17 +194,7 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 		}
 		if (ud_disassemble(&pre_ud) == 0) {
 			/* Ran out of pre bytes to match; we're done! */
-			const struct ksplice_patch *p;
-			int bytes_matched = (unsigned long)run - run_addr;
-			if (bytes_matched >= 5)
-				return OK;
-			for (p = pack->patches; p < pack->patches_end; p++) {
-				if (p->oldaddr == run_addr) {
-					print_abort(pack, "Function too short "
-						    "for trampoline");
-					return NO_MATCH;
-				}
-			}
+			*run_size = (unsigned long)run - run_addr;
 			return OK;
 		}
 		if (ud_disassemble(&run_ud) == 0)
@@ -338,6 +329,7 @@ static abort_t compare_operands(struct module_pack *pack,
 		    ud_insn_len(run_ud) + jump_lval(run_op);
 		if (pre_target >= pre_addr + s->size &&
 		    pre_target < pre_addr + s->extended_size) {
+			unsigned long smp_run_size;
 			struct ksplice_size smplocks_size = {
 				.symbol = NULL,
 				.size = 1000000,
@@ -352,7 +344,7 @@ static abort_t compare_operands(struct module_pack *pack,
 				ksdebug(pack, 3, "[ ");
 			/* jump into .text.lock subsection */
 			ret = arch_run_pre_cmp(pack, &smplocks_size, run_target,
-					       rerun);
+					       &smp_run_size, rerun);
 			if (rerun)
 				ksdebug(pack, 3, "] ");
 			if (ret != OK) {

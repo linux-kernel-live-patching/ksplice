@@ -435,12 +435,14 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, int final);
 static abort_t run_pre_cmp(struct module_pack *pack,
 			   const struct ksplice_size *s,
-			   unsigned long run_addr, int rerun);
+			   unsigned long run_addr, unsigned long *run_size,
+			   int rerun);
 #ifndef FUNCTION_SECTIONS
 /* defined in $ARCH/ksplice-arch.c */
 static abort_t arch_run_pre_cmp(struct module_pack *pack,
 				const struct ksplice_size *s,
-				unsigned long run_addr, int rerun);
+				unsigned long run_addr,
+				unsigned long *run_size, int rerun);
 #endif /* FUNCTION_SECTIONS */
 static void print_bytes(struct module_pack *pack,
 			const unsigned char *run, int runc,
@@ -1436,7 +1438,8 @@ static void print_bytes(struct module_pack *pack,
 
 static abort_t run_pre_cmp(struct module_pack *pack,
 			   const struct ksplice_size *s,
-			   unsigned long run_addr, int rerun)
+			   unsigned long run_addr, unsigned long *run_size,
+			   int rerun)
 {
 	int matched = 0;
 	abort_t ret;
@@ -1505,6 +1508,7 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 		pre++;
 		run++;
 	}
+	*run_size = (unsigned long)run - run_addr;
 	return OK;
 }
 
@@ -1529,6 +1533,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	struct safety_record *rec;
 	struct ksplice_patch *p;
 	abort_t ret;
+	unsigned long run_size;
 	const struct module *run_module;
 
 	if ((s->flags & KSPLICE_SIZE_RODATA) != 0)
@@ -1549,12 +1554,12 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return ret;
 
 #ifdef FUNCTION_SECTIONS
-	ret = run_pre_cmp(pack, s, run_addr, 0);
+	ret = run_pre_cmp(pack, s, run_addr, &run_size, 0);
 #else
 	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
-		ret = arch_run_pre_cmp(pack, s, run_addr, 0);
+		ret = arch_run_pre_cmp(pack, s, run_addr, &run_size, 0);
 	else
-		ret = run_pre_cmp(pack, s, run_addr, 0);
+		ret = run_pre_cmp(pack, s, run_addr, &run_size, 0);
 #endif
 	if (ret == NO_MATCH) {
 		set_temp_myst_relocs(pack, NOVAL);
@@ -1567,12 +1572,14 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
 		if (pack->bundle->debug >= 1) {
 #ifdef FUNCTION_SECTIONS
-			ret = run_pre_cmp(pack, s, run_addr, 1);
+			ret = run_pre_cmp(pack, s, run_addr, &run_size, 1);
 #else
 			if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
-				ret = arch_run_pre_cmp(pack, s, run_addr, 1);
+				ret = arch_run_pre_cmp(pack, s, run_addr,
+						       &run_size, 1);
 			else
-				ret = run_pre_cmp(pack, s, run_addr, 1);
+				ret = run_pre_cmp(pack, s, run_addr, &run_size,
+						  1);
 #endif
 			set_temp_myst_relocs(pack, NOVAL);
 		}
@@ -1583,7 +1590,6 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return ret;
 	} else if (!final) {
 		set_temp_myst_relocs(pack, NOVAL);
-
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: candidate "
 			"for sect %s=%" ADDR "\n", s->symbol->label, run_addr);
 		return OK;
@@ -1606,11 +1612,15 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	/* It is safe for addr to point to the beginning of a patched function,
 	   because that location will be overwritten with a trampoline. */
 	if ((s->flags & KSPLICE_SIZE_TEXT) != 0) {
+		if (run_size < MAX_TRAMPOLINE_SIZE) {
+			print_abort(pack, "Function too short for trampoline");
+			return UNEXPECTED;
+		}
 		rec->addr = run_addr + 1;
-		rec->size = s->size - 1;
+		rec->size = run_size - 1;
 	} else {
 		rec->addr = run_addr;
-		rec->size = s->size;
+		rec->size = run_size;
 	}
 	rec->label = s->symbol->label;
 	list_add(&rec->list, &pack->safety_records);
