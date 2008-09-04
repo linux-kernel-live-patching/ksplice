@@ -197,6 +197,7 @@ sub display_conflicts {
 	my @conflicts = split('\n', $conflicts);
 	foreach my $conflict (@conflicts) {
 		my ($name, $pid, @symbols) = split(' ', $conflict);
+		next if (!@symbols);
 		print "Process $name(pid $pid) is using the following symbols changed by update $kid:\n";
 		foreach my $symbol (@symbols) {
 			print "  $symbol\n";
