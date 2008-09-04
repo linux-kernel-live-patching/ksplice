@@ -67,10 +67,11 @@ unless($failed == 0) {
 	print STDERR "Error undoing Ksplice update $kid:\n";
 	print $debugout;
 	my $abort_cause = get_abort_cause($kid);
-	if ($abort_cause eq 'code_busy') {
-		display_conflicts($kid);
-	}
+	my $conflicts = get_conflicts($kid);
 	print_error($abort_cause);
+	if ($abort_cause eq 'code_busy') {
+		print $conflicts;
+	}
 	print("Debugging output saved to $debugout\n");
 	die;
 }
