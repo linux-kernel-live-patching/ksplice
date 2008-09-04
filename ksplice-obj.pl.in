@@ -84,9 +84,9 @@ sub do_combine {
 		copy "$objs[0].KSPLICE_primary", "$obj.KSPLICE_primary";
 		copy "$objs[0].KSPLICE_helper", "$obj.KSPLICE_helper";
 	} else {
-		system("ld", "-r", "-o",
+		system(shellwords($ENV{LD}), "-r", "-o",
 		       map { "$_.KSPLICE_primary" } ($obj, @objs));
-		system("ld", "-r", "-o",
+		system(shellwords($ENV{LD}), "-r", "-o",
 		       map { "$_.KSPLICE_helper" } ($obj, @objs));
 	}
 
