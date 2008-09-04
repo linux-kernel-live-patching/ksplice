@@ -456,10 +456,12 @@ static void add_to_bundle(struct module_pack *pack,
 			  struct update_bundle *bundle);
 static int ksplice_sysfs_init(struct update_bundle *bundle);
 
-#if defined KSPLICE_STANDALONE
-#include "x86/ksplice-arch.c"
-#else /* !KSPLICE_STANDALONE */
+#ifndef KSPLICE_STANDALONE
 #include "ksplice-arch.c"
+#elif defined CONFIG_X86
+#include "x86/ksplice-arch.c"
+#elif defined CONFIG_ARM
+#include "arm/ksplice-arch.c"
 #endif /* KSPLICE_STANDALONE */
 
 #ifndef KSPLICE_STANDALONE

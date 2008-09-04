@@ -69,6 +69,7 @@ install: default $(addprefix install-,$(objutils))
 	install -m644 -D $(srcdir)/kmodsrc/ksplice.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.c
 	install -m644 -D $(srcdir)/kmodsrc/ksplice.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.h
 	install -m644 -D $(srcdir)/kmodsrc/x86/ksplice-arch.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/x86/ksplice-arch.c
+	install -m644 -D $(srcdir)/kmodsrc/arm/ksplice-arch.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/arm/ksplice-arch.c
 	install -m644 -D $(srcdir)/kmodsrc/helper.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.c
 	install -m644 -D $(srcdir)/kmodsrc/primary.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/primary.c
 	install -m644 -D $(srcdir)/kmodsrc/Makefile $(DESTDIR)$(datadir)/ksplice/kmodsrc/Makefile
