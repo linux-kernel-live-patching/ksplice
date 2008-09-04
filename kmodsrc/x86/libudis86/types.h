@@ -178,6 +178,7 @@ struct ud
   uint8_t 		inp_cache[256];
   uint8_t		inp_sess[64];
   struct ud_itab_entry * itab_entry;
+  void*			userdata;
 };
 
 /* -----------------------------------------------------------------------------
