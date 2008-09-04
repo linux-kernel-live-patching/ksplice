@@ -130,51 +130,6 @@ struct reloc_nameval {
 	enum { NOVAL, TEMP, VAL } status;
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
-static inline int virtual_address_mapped(unsigned long addr)
-{
-	unsigned int level;
-	pte_t *pte = lookup_address(addr, &level);
-	return pte == NULL ? 0 : pte_present(*pte);
-}
-#else /* LINUX_VERSION_CODE < */
-/* f0646e43acb18f0e00b00085dc88bc3f403e7930 was after 2.6.24 */
-static inline int virtual_address_mapped(unsigned long addr)
-{
-	pgd_t *pgd = pgd_offset_k(addr);
-#ifdef pud_page
-	pud_t *pud;
-#endif /* pud_page */
-	pmd_t *pmd;
-	pte_t *pte;
-
-	if (!pgd_present(*pgd))
-		return 0;
-
-#ifdef pud_page
-	pud = pud_offset(pgd, addr);
-	if (!pud_present(*pud))
-		return 0;
-
-	pmd = pmd_offset(pud, addr);
-#else /* pud_page */
-	pmd = pmd_offset(pgd, addr);
-#endif /* pud_page */
-
-	if (!pmd_present(*pmd))
-		return 0;
-
-	if (pmd_large(*pmd))
-		return 1;
-
-	pte = pte_offset_kernel(pmd, addr);
-	if (!pte_present(*pte))
-		return 0;
-
-	return 1;
-}
-#endif /* LINUX_VERSION_CODE */
-
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
 					  const char *label);
 static abort_t create_nameval(struct module_pack *pack, const char *label,
@@ -443,6 +398,7 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr);
 static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
+static int virtual_address_mapped(unsigned long addr);
 
 static abort_t add_dependency_on_address(struct module_pack *pack,
 					 unsigned long addr);
