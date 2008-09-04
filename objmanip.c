@@ -561,18 +561,10 @@ void write_ksplice_symbol(struct supersect *ss,
 	struct ksplice_symbol *ksymbol = sect_grow(ksymbol_ss, 1,
 						   struct ksplice_symbol);
 
-	const char *filename = ss->parent->abfd->filename;
-	char *c = strstr(filename, ".KSPLICE");
-	int flen = (c == NULL ? strlen(filename) : c - filename);
-
 	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
 		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
-		write_string(ksymbol_ss, &ksymbol->label, "%s%s", sym->name,
-			     addstr_sect);
 	} else if (bfd_is_const_section(sym->section)) {
 		ksymbol->name = NULL;
-		write_string(ksymbol_ss, &ksymbol->label, "%s<%.*s>%s",
-			     sym->name, flen, filename, addstr_sect);
 	} else {
 		asymbol *gsym = canonical_symbol(ss->parent, sym);
 
@@ -581,26 +573,10 @@ void write_ksplice_symbol(struct supersect *ss,
 		else
 			write_string(ksymbol_ss, &ksymbol->name, "%s",
 				     gsym->name);
-
-		if (gsym == NULL)
-			write_string(ksymbol_ss, &ksymbol->label,
-				     "%s+%lx<%.*s>%s",
-				     sym->section->name,
-				     (unsigned long)sym->value,
-				     flen, filename, addstr_sect);
-		else if ((gsym->flags & BSF_GLOBAL) != 0)
-			write_string(ksymbol_ss, &ksymbol->label, "%s%s",
-				     gsym->name, addstr_sect);
-		else if (static_local_symbol(ss->parent, gsym))
-			write_string(ksymbol_ss, &ksymbol->label,
-				     "%s+%lx<%.*s>%s",
-				     static_local_symbol(ss->parent, gsym),
-				     (unsigned long)sym->value,
-				     flen, filename, addstr_sect);
-		else
-			write_string(ksymbol_ss, &ksymbol->label, "%s<%.*s>%s",
-				     gsym->name, flen, filename, addstr_sect);
 	}
+
+	write_string(ksymbol_ss, &ksymbol->label, "%s%s",
+		     symbol_label(ss->parent, sym), addstr_sect);
 
 	write_system_map_array(ss->parent, ksymbol_ss, &ksymbol->candidates,
 			       &ksymbol->nr_candidates, sym);

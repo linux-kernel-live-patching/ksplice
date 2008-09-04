@@ -327,7 +327,7 @@ asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
 	return csym;
 }
 
-const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
+static const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
 {
 	struct supersect *ss = fetch_supersect(sbfd, sym->section);
 	if ((sym->flags & BSF_LOCAL) == 0 || (sym->flags & BSF_OBJECT) == 0)
@@ -346,3 +346,40 @@ const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
 				find_caller(ss, sym)) >= 0);
 	return mangled_name;
 }
+
+char *symbol_label(struct superbfd *sbfd, asymbol *sym)
+{
+	const char *filename = sbfd->abfd->filename;
+	char *c = strstr(filename, ".KSPLICE");
+	int flen = (c == NULL ? strlen(filename) : c - filename);
+
+	char *label;
+	if (bfd_is_und_section(sym->section) ||
+	    (sym->flags & BSF_GLOBAL) != 0) {
+		label = strdup(sym->name);
+	} else if (bfd_is_const_section(sym->section)) {
+		assert(asprintf(&label, "%s<%.*s>",
+				sym->name, flen, filename) >= 0);
+	} else {
+		asymbol *gsym = canonical_symbol(sbfd, sym);
+
+		if (gsym == NULL)
+			assert(asprintf(&label, "%s+%lx<%.*s>",
+					sym->section->name,
+					(unsigned long)sym->value,
+					flen, filename) >= 0);
+		else if ((gsym->flags & BSF_GLOBAL) != 0)
+			label = strdup(gsym->name);
+		else if (static_local_symbol(sbfd, gsym))
+			assert(asprintf(&label, "%s+%lx<%.*s>",
+					static_local_symbol(sbfd, gsym),
+					(unsigned long)sym->value,
+					flen, filename) >= 0);
+		else
+			assert(asprintf(&label, "%s<%.*s>",
+					gsym->name, flen, filename) >= 0);
+	}
+
+	return label;
+}
+
