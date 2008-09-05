@@ -130,6 +130,17 @@ struct reloc_nameval {
 	enum { NOVAL, TEMP, VAL } status;
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+static int virtual_address_mapped(unsigned long addr)
+{
+	char retval;
+	return probe_kernel_address(addr, retval) != -EFAULT;
+}
+#else /* LINUX_VERSION_CODE < */
+/* 2fff0a48416af891dce38fd425246e337831e0bb was after 2.6.19 */
+static int virtual_address_mapped(unsigned long addr);
+#endif /* LINUX_VERSION_CODE */
+
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
 					  const char *label);
 static abort_t create_nameval(struct module_pack *pack, const char *label,
