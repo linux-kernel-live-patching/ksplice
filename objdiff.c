@@ -247,17 +247,11 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
 			return -1;
 
-		if (old_offset >= ro_old_ss->contents.size ||
-		    new_offset >= ro_new_ss->contents.size) {
-			fprintf(stderr, "Ignoring out-of-range relocation from "
-				"%s+%lx to %s+%lx/%s+%lx\n", old_ss->name,
-				(unsigned long)old_ss->relocs.data[i]->address,
-				ro_old_ss->name, (unsigned long)old_offset,
-				ro_new_ss->name, (unsigned long)new_offset);
-			continue;
-		}
-
-		if (starts_with(ro_old_ss->name, ".rodata.str")) {
+		if (starts_with(ro_old_ss->name, ".rodata.str") &&
+		    /* check it's not an out-of-range relocation to a string;
+		       we'll just compare entire sections for them */
+		    !(old_offset >= ro_old_ss->contents.size ||
+		      new_offset >= ro_new_ss->contents.size)) {
 			if (strcmp
 			    (ro_old_ss->contents.data + old_sym->value +
 			     old_offset,
