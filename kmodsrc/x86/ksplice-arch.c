@@ -153,7 +153,8 @@ static abort_t compare_operands(struct module_pack *pack,
 				unsigned long run_addr,
 				const unsigned char *run,
 				const unsigned char *pre, struct ud *run_ud,
-				struct ud *pre_ud, int opnum, int rerun);
+				struct ud *pre_ud, int opnum,
+				enum run_pre_mode mode);
 static int match_nop(const unsigned char *addr);
 static uint8_t ud_operand_len(struct ud_operand *operand);
 static uint8_t ud_prefix_len(struct ud *ud);
@@ -163,7 +164,7 @@ static int next_run_byte(struct ud *ud);
 static abort_t arch_run_pre_cmp(struct module_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long run_addr,
-				unsigned long *run_size, int rerun)
+				unsigned long *run_size, enum run_pre_mode mode)
 {
 	int runc, prec;
 	int i;
@@ -199,7 +200,7 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 		runc = match_nop(run);
 		prec = match_nop(pre);
 		if (runc > 0 || prec > 0) {
-			if (rerun)
+			if (mode == RUN_PRE_DEBUG)
 				print_bytes(pack, run, runc, pre, prec);
 			ud_input_skip(&run_ud, runc);
 			ud_input_skip(&pre_ud, prec);
@@ -215,14 +216,14 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 		if (ud_disassemble(&run_ud) == 0)
 			return NO_MATCH;
 
-		if (rerun)
+		if (mode == RUN_PRE_DEBUG) {
 			ksdebug(pack, 0, "| ");
-		if (rerun)
 			print_bytes(pack, run, ud_insn_len(&run_ud),
 				    pre, ud_insn_len(&pre_ud));
+		}
 
 		if (run_ud.mnemonic != pre_ud.mnemonic) {
-			if (rerun)
+			if (mode == RUN_PRE_DEBUG)
 				ksdebug(pack, 3, "mnemonic mismatch: %s %s\n",
 					ud_lookup_mnemonic(run_ud.mnemonic),
 					ud_lookup_mnemonic(pre_ud.mnemonic));
@@ -246,7 +247,7 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 			const struct ksplice_reloc *r;
 			ret = lookup_reloc(pack, (unsigned long)(pre + 4), &r);
 			if (ret == NO_MATCH) {
-				if (!rerun)
+				if (mode == RUN_PRE_INITIAL)
 					ksdebug(pack, 0, KERN_DEBUG
 						"Unrecognized ud2\n");
 				return ret;
@@ -254,11 +255,11 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 			if (ret != OK)
 				return ret;
 			ret = handle_reloc(pack, r, (unsigned long)(run + 4),
-					   rerun);
+					   mode);
 			if (ret != OK)
 				return ret;
 			/* If there's a relocation, then it's a BUG? */
-			if (rerun) {
+			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(pack, 0, "[BUG?: ");
 				print_bytes(pack, run + 2, 6, pre + 2, 6);
 				ksdebug(pack, 0, "] ");
@@ -273,7 +274,7 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 
 		for (i = 0; i < ARRAY_SIZE(run_ud.operand); i++) {
 			ret = compare_operands(pack, s, run_addr, run, pre,
-					       &run_ud, &pre_ud, i, rerun);
+					       &run_ud, &pre_ud, i, mode);
 			if (ret != OK)
 				return ret;
 		}
@@ -288,7 +289,8 @@ static abort_t compare_operands(struct module_pack *pack,
 				unsigned long run_addr,
 				const unsigned char *run,
 				const unsigned char *pre, struct ud *run_ud,
-				struct ud *pre_ud, int opnum, int rerun)
+				struct ud *pre_ud, int opnum,
+				enum run_pre_mode mode)
 {
 	abort_t ret;
 	int i;
@@ -304,19 +306,19 @@ static abort_t compare_operands(struct module_pack *pack,
 	}
 
 	if (run_op->type != pre_op->type) {
-		if (rerun)
+		if (mode == RUN_PRE_DEBUG)
 			ksdebug(pack, 3, "type mismatch: %d %d\n", run_op->type,
 				pre_op->type);
 		return NO_MATCH;
 	}
 	if (run_op->base != pre_op->base) {
-		if (rerun)
+		if (mode == RUN_PRE_DEBUG)
 			ksdebug(pack, 3, "base mismatch: %d %d\n", run_op->base,
 				pre_op->base);
 		return NO_MATCH;
 	}
 	if (run_op->index != pre_op->index) {
-		if (rerun)
+		if (mode == RUN_PRE_DEBUG)
 			ksdebug(pack, 3, "index mismatch: %d %d\n",
 				run_op->index, pre_op->index);
 		return NO_MATCH;
@@ -350,9 +352,9 @@ static abort_t compare_operands(struct module_pack *pack,
 		run_reloc.addend += (ud_operand_len(pre_op) -
 				     ud_operand_len(run_op));
 		ret = handle_reloc(pack, &run_reloc,
-				   (unsigned long)(run + run_off), rerun);
+				   (unsigned long)(run + run_off), mode);
 		if (ret != OK) {
-			if (rerun)
+			if (mode == RUN_PRE_DEBUG)
 				ksdebug(pack, 3, KERN_DEBUG "Matching failure "
 					"at offset %lx\n",
 					(unsigned long)pre - pre_addr);
@@ -379,18 +381,18 @@ static abort_t compare_operands(struct module_pack *pack,
 				.flags = KSPLICE_SIZE_TEXT,
 				.thismod_addr = pre_target,
 			};
-			if (rerun)
+			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(pack, 3, "Locks section %lx %lx: ",
 					run_target, pre_target);
-			if (rerun)
 				ksdebug(pack, 3, "[ ");
+			}
 			/* jump into .text.lock subsection */
 			ret = arch_run_pre_cmp(pack, &smplocks_size, run_target,
-					       &smp_run_size, rerun);
-			if (rerun)
+					       &smp_run_size, mode);
+			if (mode == RUN_PRE_DEBUG)
 				ksdebug(pack, 3, "] ");
 			if (ret != OK) {
-				if (!rerun)
+				if (mode == RUN_PRE_INITIAL)
 					ksdebug(pack, 3, KERN_DEBUG
 						"Locks section mismatch: %lx "
 						"%lx\n", run_target,
@@ -410,7 +412,7 @@ static abort_t compare_operands(struct module_pack *pack,
 			   We should ideally check it's to a corresponding place */
 			return OK;
 		} else {
-			if (rerun) {
+			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(pack, 3, "<--Different operands!\n");
 				ksdebug(pack, 3, KERN_DEBUG
 					"%lx %lx %lx %lx %x %lx %lx %lx\n",
@@ -426,7 +428,7 @@ static abort_t compare_operands(struct module_pack *pack,
 			  ud_operand_len(run_op)) == 0) {
 		return OK;
 	} else {
-		if (rerun)
+		if (mode == RUN_PRE_DEBUG)
 			ksdebug(pack, 3, "<--Different operands!\n");
 		return NO_MATCH;
 	}

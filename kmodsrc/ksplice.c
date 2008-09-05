@@ -63,6 +63,10 @@ enum ksplice_stage_enum {
 	PREPARING, APPLIED, REVERSED
 };
 
+enum run_pre_mode {
+	RUN_PRE_INITIAL, RUN_PRE_DEBUG, RUN_PRE_FINAL
+};
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* 5d7b32de9935c65ca8285ac6ec2382afdbb5d479 was after 2.6.8 */
 #define __bitwise__
@@ -163,7 +167,7 @@ static abort_t lookup_reloc(struct module_pack *pack, unsigned long addr,
 			    const struct ksplice_reloc **relocp);
 static abort_t handle_reloc(struct module_pack *pack,
 			    const struct ksplice_reloc *r,
-			    unsigned long run_addr, int rerun);
+			    unsigned long run_addr, enum run_pre_mode mode);
 
 struct safety_record {
 	struct list_head list;
@@ -445,17 +449,18 @@ static abort_t activate_helper(struct module_pack *pack,
 static abort_t search_for_match(struct module_pack *pack,
 				const struct ksplice_size *s);
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
-			unsigned long run_addr, int final);
+			unsigned long run_addr, enum run_pre_mode mode);
 static abort_t run_pre_cmp(struct module_pack *pack,
 			   const struct ksplice_size *s,
 			   unsigned long run_addr, unsigned long *run_size,
-			   int rerun);
+			   enum run_pre_mode mode);
 #ifndef FUNCTION_SECTIONS
 /* defined in $ARCH/ksplice-arch.c */
 static abort_t arch_run_pre_cmp(struct module_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long run_addr,
-				unsigned long *run_size, int rerun);
+				unsigned long *run_size,
+				enum run_pre_mode mode);
 #endif /* FUNCTION_SECTIONS */
 static void print_bytes(struct module_pack *pack,
 			const unsigned char *run, int runc,
@@ -1408,7 +1413,7 @@ static abort_t search_for_match(struct module_pack *pack,
 		run_addr = v->val;
 
 		yield();
-		ret = try_addr(pack, s, run_addr, 0);
+		ret = try_addr(pack, s, run_addr, RUN_PRE_INITIAL);
 		if (ret == NO_MATCH) {
 			list_del(&v->list);
 			kfree(v);
@@ -1421,15 +1426,31 @@ static abort_t search_for_match(struct module_pack *pack,
 #ifdef KSPLICE_STANDALONE
 	if (list_empty(&vals) && (s->flags & KSPLICE_SIZE_DATA) == 0) {
 		ret = brute_search_all(pack, s, &vals);
-		if (ret != OK)
+		if (ret != OK) {
+			release_vals(&vals);
 			return ret;
+		}
+		/* Make sure run-pre matching output is displayed if
+		   brute_search succeeds */
+		if (singular(&vals)) {
+			run_addr = list_entry(vals.next, struct candidate_val,
+					      list)->val;
+			ret = try_addr(pack, s, run_addr, RUN_PRE_INITIAL);
+			if (ret != OK) {
+				ksdebug(pack, 3, KERN_DEBUG "ksplice_h: "
+					"run-pre: Debug run failed for sect "
+					"%s:\n", s->symbol->label);
+				release_vals(&vals);
+				return ret;
+			}
+		}
 	}
 #endif /* KSPLICE_STANDALONE */
 
 	if (singular(&vals)) {
 		run_addr = list_entry(vals.next, struct candidate_val,
 				      list)->val;
-		ret = try_addr(pack, s, run_addr, 1);
+		ret = try_addr(pack, s, run_addr, RUN_PRE_FINAL);
 		release_vals(&vals);
 		if (ret != OK)
 			ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: "
@@ -1477,7 +1498,7 @@ static void print_bytes(struct module_pack *pack,
 static abort_t run_pre_cmp(struct module_pack *pack,
 			   const struct ksplice_size *s,
 			   unsigned long run_addr, unsigned long *run_size,
-			   int rerun)
+			   enum run_pre_mode mode)
 {
 	int matched = 0;
 	abort_t ret;
@@ -1494,16 +1515,16 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 	while (pre < (const unsigned char *)pre_addr + s->size) {
 		ret = lookup_reloc(pack, (unsigned long)pre, &r);
 		if (ret == OK) {
-			ret = handle_reloc(pack, r, (unsigned long)run, rerun);
+			ret = handle_reloc(pack, r, (unsigned long)run, mode);
 			if (ret != OK) {
-				if (!rerun)
+				if (mode == RUN_PRE_INITIAL)
 					ksdebug(pack, 3, "reloc in sect does "
 						"not match after %lx/%lx bytes"
 						"\n", (unsigned long)pre -
 						pre_addr, s->size);
 				return ret;
 			}
-			if (rerun)
+			if (mode == RUN_PRE_DEBUG)
 				print_bytes(pack, run, r->size, pre, r->size);
 			pre += r->size;
 			run += r->size;
@@ -1518,7 +1539,7 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 			if (ret != OK)
 				return ret;
 			if (matched != 0) {
-				if (rerun)
+				if (mode == RUN_PRE_DEBUG)
 					print_bytes(pack, run, matched, pre,
 						    matched);
 				pre += matched;
@@ -1528,7 +1549,7 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 		}
 
 		if (probe_kernel_read(&runval, (void *)run, 1) == -EFAULT) {
-			if (!rerun)
+			if (mode == RUN_PRE_INITIAL)
 				ksdebug(pack, 3, "sect unmapped after "
 					"%lx/%lx bytes\n",
 					(unsigned long)pre - pre_addr, s->size);
@@ -1536,11 +1557,11 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 		}
 
 		if (runval != *pre && (s->flags & KSPLICE_SIZE_DATA) == 0) {
-			if (!rerun)
+			if (mode == RUN_PRE_INITIAL)
 				ksdebug(pack, 3, "sect does not match after "
 					"%lx/%lx bytes\n",
 					(unsigned long)pre - pre_addr, s->size);
-			if (rerun) {
+			if (mode == RUN_PRE_DEBUG) {
 				print_bytes(pack, run, 1, pre, 1);
 				ksdebug(pack, 0, "[p_o=%lx] ! ",
 					(unsigned long)pre - pre_addr);
@@ -1548,7 +1569,7 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 			}
 			return NO_MATCH;
 		}
-		if (rerun)
+		if (mode == RUN_PRE_DEBUG)
 			print_bytes(pack, run, 1, pre, 1);
 		pre++;
 		run++;
@@ -1573,7 +1594,7 @@ static struct module *__module_data_address(unsigned long addr)
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
-			unsigned long run_addr, int final)
+			unsigned long run_addr, enum run_pre_mode mode)
 {
 	struct safety_record *rec;
 	struct ksplice_patch *p;
@@ -1600,12 +1621,12 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return ret;
 
 #ifdef FUNCTION_SECTIONS
-	ret = run_pre_cmp(pack, s, run_addr, &run_size, 0);
+	ret = run_pre_cmp(pack, s, run_addr, &run_size, mode);
 #else
 	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
-		ret = arch_run_pre_cmp(pack, s, run_addr, &run_size, 0);
+		ret = arch_run_pre_cmp(pack, s, run_addr, &run_size, mode);
 	else
-		ret = run_pre_cmp(pack, s, run_addr, &run_size, 0);
+		ret = run_pre_cmp(pack, s, run_addr, &run_size, mode);
 #endif
 	if (ret == NO_MATCH) {
 		set_temp_myst_relocs(pack, NOVAL);
@@ -1618,14 +1639,16 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
 		if (pack->bundle->debug >= 1) {
 #ifdef FUNCTION_SECTIONS
-			ret = run_pre_cmp(pack, s, run_addr, &run_size, 1);
+			ret = run_pre_cmp(pack, s, run_addr, &run_size,
+					  RUN_PRE_DEBUG);
 #else
 			if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
 				ret = arch_run_pre_cmp(pack, s, run_addr,
-						       &run_size, 1);
+						       &run_size,
+						       RUN_PRE_DEBUG);
 			else
 				ret = run_pre_cmp(pack, s, run_addr, &run_size,
-						  1);
+						  RUN_PRE_DEBUG);
 #endif
 			set_temp_myst_relocs(pack, NOVAL);
 		}
@@ -1634,7 +1657,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	} else if (ret != OK) {
 		set_temp_myst_relocs(pack, NOVAL);
 		return ret;
-	} else if (!final) {
+	} else if (mode != RUN_PRE_FINAL) {
 		set_temp_myst_relocs(pack, NOVAL);
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: candidate "
 			"for sect %s=%" ADDR "\n", s->symbol->label, run_addr);
@@ -1677,7 +1700,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 
 static abort_t handle_reloc(struct module_pack *pack,
 			    const struct ksplice_reloc *r,
-			    unsigned long run_addr, int rerun)
+			    unsigned long run_addr, enum run_pre_mode mode)
 {
 	long run_reloc_val, expected;
 	abort_t ret;
@@ -1711,7 +1734,7 @@ static abort_t handle_reloc(struct module_pack *pack,
 
 	run_reloc_val <<= r->rightshift;
 
-	if (!rerun) {
+	if (mode == RUN_PRE_INITIAL) {
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%"
 			ADDR " p_a=%" ADDR ": ", run_addr, r->blank_addr);
 		ksdebug(pack, 3, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
@@ -1728,7 +1751,7 @@ static abort_t handle_reloc(struct module_pack *pack,
 			expected += run_addr;
 
 		ret = create_nameval(pack, r->symbol->label, expected, TEMP);
-		if (ret == NO_MATCH && !rerun) {
+		if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
 			ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre reloc: "
 				"Nameval address %" ADDR "(%d) does not match "
 				"expected %" ADDR " for %s!\n", nv->val,
@@ -2335,7 +2358,7 @@ static abort_t brute_search(struct module_pack *pack,
 		if (run != pre)
 			continue;
 
-		ret = try_addr(pack, s, addr, 0);
+		ret = try_addr(pack, s, addr, RUN_PRE_INITIAL);
 		if (ret == OK) {
 			ret = add_candidate_val(vals, addr);
 			if (ret != OK)
