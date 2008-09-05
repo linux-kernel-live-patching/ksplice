@@ -57,7 +57,7 @@ sub do_diff {
 	return empty_diff($out) if($objdiff !~ m/\S/);
 
 	runsuc_in($objdiff, "objmanip", $obj, "$obj.KSPLICE_primary", "keep-primary", $ENV{KSPLICE_KID});
-	runsuc_in($objdiff, "objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper", $ENV{KSPLICE_KID});
+	runsuc("objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper", $ENV{KSPLICE_KID});
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";

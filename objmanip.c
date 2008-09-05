@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
 		varargs_count = argc - 4;
 	}
 
-	if (mode("keep")) {
+	if (mode("keep-primary")) {
 		read_str_set(&sections);
 		read_str_set(&newsects);
 		read_str_set(&delsects);
