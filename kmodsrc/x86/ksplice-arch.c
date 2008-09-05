@@ -228,14 +228,16 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 			/* ud2 means BUG().  On old i386 kernels, it is followed
 			   by 2 bytes and then a 4-byte relocation; and is not
 			   disassembler-friendly. */
-			const struct ksplice_reloc *r =
-			    lookup_reloc(pack, (unsigned long)(pre + 4));
-			if (r == NULL) {
+			const struct ksplice_reloc *r;
+			ret = lookup_reloc(pack, (unsigned long)(pre + 4), &r);
+			if (ret == NO_MATCH) {
 				if (!rerun)
 					ksdebug(pack, 0, KERN_DEBUG
 						"Unrecognized ud2\n");
-				return NO_MATCH;
+				return ret;
 			}
+			if (ret != OK)
+				return ret;
 			if (!virtual_address_mapped((unsigned long)(run + 7)))
 				return NO_MATCH;
 			ret = handle_reloc(pack, r, (unsigned long)(run + 4),
@@ -309,8 +311,8 @@ static abort_t compare_operands(struct module_pack *pack,
 	if (ud_operand_len(run_op) == 0 && ud_operand_len(pre_op) == 0)
 		return OK;
 
-	r = lookup_reloc(pack, (unsigned long)(pre + pre_off));
-	if (r != NULL) {
+	ret = lookup_reloc(pack, (unsigned long)(pre + pre_off), &r);
+	if (ret == OK) {
 		struct ksplice_reloc run_reloc = *r;
 		if (r->size != ud_operand_len(pre_op)) {
 			ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc "
@@ -345,6 +347,8 @@ static abort_t compare_operands(struct module_pack *pack,
 		}
 		/* This operand is a successfully processed relocation */
 		return OK;
+	} else if (ret != NO_MATCH) {
+		return ret;
 	}
 	if (pre_op->type == UD_OP_JIMM) {
 		/* Immediate jump without a relocation */

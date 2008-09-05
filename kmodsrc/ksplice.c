@@ -134,8 +134,8 @@ static struct reloc_nameval *find_nameval(struct module_pack *pack,
 					  const char *label);
 static abort_t create_nameval(struct module_pack *pack, const char *label,
 			      unsigned long val, int status);
-static const struct ksplice_reloc *lookup_reloc(struct module_pack *pack,
-						unsigned long addr);
+static abort_t lookup_reloc(struct module_pack *pack, unsigned long addr,
+			    const struct ksplice_reloc **relocp);
 static abort_t handle_reloc(struct module_pack *pack,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, int rerun);
@@ -1469,8 +1469,8 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 					(unsigned long)pre - pre_addr, s->size);
 			return NO_MATCH;
 		}
-		r = lookup_reloc(pack, (unsigned long)pre);
-		if (r != NULL) {
+		ret = lookup_reloc(pack, (unsigned long)pre, &r);
+		if (ret == OK) {
 			if (!virtual_address_mapped((unsigned long)run +
 						    r->size - 1))
 				return NO_MATCH;
@@ -1487,6 +1487,8 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 			pre += r->size;
 			run += r->size;
 			continue;
+		} else if (ret != NO_MATCH) {
+			return ret;
 		}
 
 		if ((s->flags & KSPLICE_SIZE_TEXT) != 0) {
@@ -2503,8 +2505,8 @@ static abort_t create_nameval(struct module_pack *pack, const char *label,
 	return OK;
 }
 
-static const struct ksplice_reloc *lookup_reloc(struct module_pack *pack,
-						unsigned long addr)
+static abort_t lookup_reloc(struct module_pack *pack, unsigned long addr,
+			    const struct ksplice_reloc **relocp)
 {
 	const struct ksplice_reloc *r;
 	int canary_ret;
@@ -2513,17 +2515,23 @@ static const struct ksplice_reloc *lookup_reloc(struct module_pack *pack,
 			canary_ret = contains_canary(pack, r->blank_addr,
 						     r->size, r->dst_mask);
 			if (canary_ret < 0)
-				return NULL;
+				return UNEXPECTED;
 			if (canary_ret == 0) {
 				ksdebug(pack, 4, KERN_DEBUG "ksplice_h: reloc: "
 					"skipped %s:%" ADDR " (altinstr)\n",
 					r->symbol->label, r->blank_offset);
-				return NULL;
+				return NO_MATCH;
 			}
-			return r;
+			if (addr != r->blank_addr) {
+				ksdebug(pack, 4, KERN_DEBUG "ksplice_h: Invalid"
+					" nonzero relocation offset\n");
+				return UNEXPECTED;
+			}
+			*relocp = r;
+			return OK;
 		}
 	}
-	return NULL;
+	return NO_MATCH;
 }
 
 static void set_temp_myst_relocs(struct module_pack *pack, int status_val)
