@@ -1291,45 +1291,36 @@ out:
 static abort_t activate_helper(struct module_pack *pack)
 {
 	const struct ksplice_size *s;
-	int i;
 	abort_t ret;
-	int record_count = pack->helper_sizes_end - pack->helper_sizes;
 	char *finished;
-	int numfinished, oldfinished = 0;
-	int restart_count = 0;
+	int i, remaining = pack->helper_sizes_end - pack->helper_sizes;
+	bool progress;
 
-	finished = kcalloc(record_count, sizeof(char), GFP_KERNEL);
+	finished = kcalloc(pack->helper_sizes_end - pack->helper_sizes,
+			   sizeof(char), GFP_KERNEL);
 	if (finished == NULL)
 		return OUT_OF_MEMORY;
 
-start:
-	for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
-		i = s - pack->helper_sizes;
-		if (s->size == 0)
-			finished[i] = 1;
-		if (finished[i])
+	while (remaining > 0) {
+		progress = false;
+		for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
+			i = s - pack->helper_sizes;
+			if (finished[i])
+				continue;
+			ret = search_for_match(pack, s);
+			if (ret == OK) {
+				finished[i] = 1;
+				remaining--;
+				progress = true;
+			} else if (ret != NO_MATCH) {
+				kfree(finished);
+				return ret;
+			}
+		}
+
+		if (progress)
 			continue;
 
-		ret = search_for_match(pack, s);
-		if (ret == OK) {
-			finished[i] = 1;
-		} else if (ret != NO_MATCH) {
-			kfree(finished);
-			return ret;
-		}
-	}
-
-	numfinished = 0;
-	for (i = 0; i < record_count; i++) {
-		if (finished[i])
-			numfinished++;
-	}
-	if (numfinished == record_count) {
-		kfree(finished);
-		return OK;
-	}
-
-	if (oldfinished == numfinished) {
 		for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
 			i = s - pack->helper_sizes;
 			if (finished[i] == 0)
@@ -1341,15 +1332,7 @@ start:
 		kfree(finished);
 		return NO_MATCH;
 	}
-	oldfinished = numfinished;
-
-	if (restart_count < 20) {
-		restart_count++;
-		goto start;
-	}
-	print_abort(pack, "run-pre: restart limit exceeded");
-	kfree(finished);
-	return NO_MATCH;
+	return OK;
 }
 
 static abort_t search_for_match(struct module_pack *pack,
