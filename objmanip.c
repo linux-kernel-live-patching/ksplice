@@ -665,10 +665,6 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	if (ksize->size == 0)	/* HACK */
 		ksize->size = ksize->extended_size;
 	ksize->flags = 0;
-	if (mode("keep-helper") &&
-	    str_in_set(label_lookup(sbfd, sym->section->symbol), &delsects) &&
-	    (sym->flags & BSF_FUNCTION))
-		ksize->flags |= KSPLICE_SIZE_DELETED;
 	if (starts_with(sym->section->name, ".rodata"))
 		ksize->flags |= KSPLICE_SIZE_RODATA;
 	if (starts_with(sym->section->name, ".data"))

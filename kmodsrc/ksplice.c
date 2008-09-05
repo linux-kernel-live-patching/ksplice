@@ -1726,11 +1726,10 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		if (strcmp(s->symbol->label, p->label) == 0)
 			break;
 	}
-	if (p >= pack->patches_end && (s->flags & KSPLICE_SIZE_DELETED) == 0)
+	if (p >= pack->patches_end)
 		return OK;
 
-	if ((s->flags & KSPLICE_SIZE_TEXT) == 0 &&
-	    (s->flags & KSPLICE_SIZE_DELETED) == 0) {
+	if ((s->flags & KSPLICE_SIZE_TEXT) == 0 && p->repladdr != 0) {
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: Error: ksplice_patch "
 			"%s is matched to a non-deleted non-text section!\n",
 			s->symbol->label);
@@ -1745,7 +1744,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	rec->label = s->symbol->label;
 	/* The beginning of a patched function is safe to
 	   because that location will be overwritten with a trampoline. */
-	rec->first_byte_safe = (s->flags & KSPLICE_SIZE_DELETED) == 0 &&
+	rec->first_byte_safe = p->repladdr != 0 &&
 	    (s->flags & KSPLICE_SIZE_TEXT) != 0;
 
 	list_add(&rec->list, &pack->safety_records);

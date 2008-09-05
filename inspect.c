@@ -93,8 +93,6 @@ void show_ksplice_relocs(struct supersect *kreloc_ss)
 void show_ksplice_size_flags(const struct ksplice_size *ksize)
 {
 	printf("flags:");
-	if (ksize->flags & KSPLICE_SIZE_DELETED)
-		printf(" deleted");
 	if (ksize->flags & KSPLICE_SIZE_RODATA)
 		printf(" rodata");
 	if (ksize->flags & KSPLICE_SIZE_TEXT)
