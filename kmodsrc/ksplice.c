@@ -145,6 +145,7 @@ struct safety_record {
 	const char *label;
 	unsigned long addr;
 	unsigned int size;
+	bool first_byte_safe;
 };
 
 struct candidate_val {
@@ -655,11 +656,18 @@ static abort_t activate_primary(struct module_pack *pack)
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		int found = 0;
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (strcmp(rec->label, p->symbol->label) == 0)
+			if (strcmp(rec->label, p->symbol->label) == 0) {
 				found = 1;
+				break;
+			}
 		}
 		if (!found)
 			return UNEXPECTED;
+		if (rec->size < p->size) {
+			ksdebug(pack, 0, KERN_DEBUG "Symbol %s is too short "
+				"for trampoline\n", p->symbol->label);
+			return UNEXPECTED;
+		}
 	}
 
 	return OK;
@@ -1001,7 +1009,8 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (addr >= rec->addr && addr < rec->addr + rec->size) {
+			if ((addr > rec->addr && addr < rec->addr + rec->size)
+			    || (addr == rec->addr && !rec->first_byte_safe)) {
 				frame->label = rec->label;
 				frame->has_conflict = 1;
 				return CODE_BUSY;
@@ -1619,20 +1628,14 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
 	if (rec == NULL)
 		return OUT_OF_MEMORY;
-	/* It is safe for addr to point to the beginning of a patched function,
-	   because that location will be overwritten with a trampoline. */
-	if ((s->flags & KSPLICE_SIZE_DELETED) == 0) {
-		if (run_size < MAX_TRAMPOLINE_SIZE) {
-			print_abort(pack, "Function too short for trampoline");
-			return UNEXPECTED;
-		}
-		rec->addr = run_addr + 1;
-		rec->size = run_size - 1;
-	} else {
-		rec->addr = run_addr;
-		rec->size = run_size;
-	}
+	rec->addr = run_addr;
+	rec->size = run_size;
 	rec->label = s->symbol->label;
+	/* The beginning of a patched function is safe to
+	   because that location will be overwritten with a trampoline. */
+	rec->first_byte_safe = (s->flags & KSPLICE_SIZE_DELETED) == 0 &&
+	    (s->flags & KSPLICE_SIZE_TEXT) != 0;
+
 	list_add(&rec->list, &pack->safety_records);
 	return OK;
 }
