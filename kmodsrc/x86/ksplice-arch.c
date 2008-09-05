@@ -236,6 +236,8 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 						"Unrecognized ud2\n");
 				return NO_MATCH;
 			}
+			if (!virtual_address_mapped((unsigned long)(run + 7)))
+				return NO_MATCH;
 			ret = handle_reloc(pack, r, (unsigned long)(run + 4),
 					   rerun);
 			if (ret != OK)

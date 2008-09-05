@@ -1471,6 +1471,9 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 		}
 		r = lookup_reloc(pack, (unsigned long)pre);
 		if (r != NULL) {
+			if (!virtual_address_mapped((unsigned long)run +
+						    r->size - 1))
+				return NO_MATCH;
 			ret = handle_reloc(pack, r, (unsigned long)run, rerun);
 			if (ret != OK) {
 				if (!rerun)
