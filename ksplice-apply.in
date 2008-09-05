@@ -112,7 +112,7 @@ copy("patch", "/var/run/ksplice/updates/$kid/patch");
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 	$helper =~ s/-/_/g;
 	$helper =~ s/\.ko$//;
-	die if (!$nounload && runval_raw("rmmod $helper") != 0);
+	runval('rmmod', $helper) if(!$nounload);
 }
 print "Done!\n";
 exit(0);
@@ -122,6 +122,7 @@ my @modules_loaded = qw();
 sub load_module {
 	my ($module, @params) = @_;
 	if (runval_raw("insmod", $module, @params) != 0) {
+		child_error();
 		return 0;
 	}
 	$module =~ s/\.ko//;
@@ -132,7 +133,7 @@ sub load_module {
 
 sub cleanup_modules {
 	foreach my $module (reverse(@modules_loaded)) {
-		die if (!$nounload && runval_raw("rmmod", $module) != 0);
+		runval("rmmod", $module) if(!$nounload);
 	}
 }
 

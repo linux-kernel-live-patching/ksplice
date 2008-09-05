@@ -19,7 +19,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	Verbose GetOptions pod2usage shellwords
 	$datadir $libexecdir $version_str
-	runval runval_raw runstr runstr_err runsuc runsuc_in unpack_update
+	child_error runval runval_raw runstr runstr_err runsuc runsuc_in unpack_update
 	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
 	get_debug_output get_conflicts
 	abs_path getcwd basename dirname tmpdir
@@ -29,9 +29,23 @@ our @EXPORT = qw(
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
 our $version_str = "Ksplice version PACKAGE_VERSION\n";
 
+sub child_error {
+	if($? == -1) {
+		print STDERR "Failed to exec child\n";
+	} elsif(($? & 127) != 0) {
+		print STDERR "Child exited with signal ", ($? & 127), ($? & 128) ? " (core dumped)\n" : "\n";
+	} elsif($? >> 8 != 0) {
+		print STDERR "Child exited with status ", $? >> 8, "\n";
+	} else {
+		return 0;
+	}
+	return 1;
+}
+
 sub runval {
 	my (@cmd) = @_;
 	if(runval_raw(@cmd) != 0) {
+		child_error();
 		die "Failed during: @cmd\n";
 	}
 }
@@ -76,7 +90,7 @@ sub runstr_err {
 sub runsuc {
 	my ($cmd, @args) = @_;
 	my $output = runstr("$libexecdir/ksplice-$cmd", @args);
-	if($? != 0) {
+	if(child_error()) {
 		print "Output: $output\n";
 		die "Failed during: $libexecdir/ksplice-$cmd @args";
 	}
@@ -92,7 +106,7 @@ sub runsuc_in {
 	print WRITE $in;
 	close(WRITE);
 	waitpid($pid, 0);
-	if($? != 0) {
+	if(child_error()) {
 		die "Failed during: $libexecdir/ksplice-$cmd @args";
 	}
 	local $/;
@@ -162,20 +176,21 @@ sub get_debug_output {
 	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX', DIR => tmpdir());
 	my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX',
 				 TMPDIR => 1, CLEANUP => 1);
-	runval_raw(qw(mount -t debugfs debugfs), $debugfsdir);
-	if (-e "$debugfsdir/$update") {
+	if (runval_raw(qw(mount -t debugfs debugfs), $debugfsdir) == 0) {
 		copy("$debugfsdir/$update", "$debugfs_out");
 		$debug = read_file("$debugfsdir/$update");
-	} else {
+		runval(qw(umount), $debugfsdir);
+	} elsif ($? >> 8 == 32) {
 		my $dmesg = runstr("dmesg | grep ksplice");
 		while($dmesg =~ /ksplice: Preparing to reverse/) {
 			$dmesg = $';
 		}
 		$debug = '';
 		write_file($debugfs_out, $dmesg);
+	} else {
+		child_error();
+		die;
 	}
-	runval_raw(qw(umount), $debugfsdir);
-	rmdir($debugfsdir);
 	return ($debugfs_out, $debug);
 }
 
