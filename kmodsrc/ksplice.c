@@ -262,23 +262,6 @@ static char *kstrdup(const char *s, typeof(GFP_KERNEL) gfp)
 #define task_thread_info(task) (task)->thread_info
 #endif /* !task_thread_info */
 
-#ifdef CONFIG_X86
-#ifdef __ASM_X86_PROCESSOR_H	/* New unified x86 */
-#define KSPLICE_IP(x) ((x)->thread.ip)
-#define KSPLICE_SP(x) ((x)->thread.sp)
-#elif defined(CONFIG_X86_64)	/* Old x86 64-bit */
-/* The IP is on the stack, so we don't need to check it separately.
- * Instead, we need to prevent Ksplice from patching thread_return.
- */
-extern const char thread_return[];
-#define KSPLICE_IP(x) ((unsigned long)thread_return)
-#define KSPLICE_SP(x) ((x)->thread.rsp)
-#else /* Old x86 32-bit */
-#define KSPLICE_IP(x) ((x)->thread.eip)
-#define KSPLICE_SP(x) ((x)->thread.esp)
-#endif /* __ASM_X86_PROCESSOR_H */
-#endif /* CONFIG_X86 */
-
 #ifdef KSPLICE_STANDALONE
 
 static int bootstrapped = 0;
