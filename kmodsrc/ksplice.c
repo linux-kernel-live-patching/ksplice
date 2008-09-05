@@ -430,7 +430,8 @@ static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* helper */
-static abort_t activate_helper(struct module_pack *pack);
+static abort_t activate_helper(struct module_pack *pack,
+			       bool consider_data_sections);
 static abort_t search_for_match(struct module_pack *pack,
 				const struct ksplice_size *s);
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
@@ -1278,13 +1279,33 @@ static abort_t apply_update(struct update_bundle *bundle)
 	list_for_each_entry(pack, &bundle->packs, list) {
 		ksdebug(pack, 0, KERN_INFO "ksplice_h: Preparing and checking "
 			"%s\n", pack->name);
-		ret = activate_helper(pack);
-		if (ret != OK)
+		ret = activate_helper(pack, false);
+		if (ret == NO_MATCH) {
+			ksdebug(pack, 1, KERN_DEBUG "ksplice: "
+				"Trying to continue without the unmatched "
+				"sections; we will find them later.\n");
+			ret = activate_primary(pack);
+			if (ret != OK) {
+				ksdebug(pack, 1, KERN_DEBUG "ksplice: "
+					"Aborted.  Unable to continue without "
+					"the unmatched sections.\n");
+				goto out;
+			}
+			ksdebug(pack, 1, KERN_DEBUG "ksplice: run-pre: "
+				"Considering .data sections to find the "
+				"unmatched sections\n");
+			ret = activate_helper(pack, true);
+			if (ret != OK)
+				goto out;
+			ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: "
+				"Found all previously unmatched sections\n");
+		} else if (ret != OK) {
 			goto out;
-
-		ret = activate_primary(pack);
-		if (ret != OK)
-			goto out;
+		} else {
+			ret = activate_primary(pack);
+			if (ret != OK)
+				goto out;
+		}
 	}
 	ret = apply_patches(bundle);
 out:
@@ -1298,13 +1319,14 @@ out:
 	return ret;
 }
 
-static abort_t activate_helper(struct module_pack *pack)
+static abort_t activate_helper(struct module_pack *pack,
+			       bool consider_data_sections)
 {
 	const struct ksplice_size *s;
 	abort_t ret;
 	char *finished;
 	int i, remaining = 0;
-	bool progress, consider_data_sections = false;
+	bool progress;
 
 	finished = kcalloc(pack->helper_sizes_end - pack->helper_sizes,
 			   sizeof(char), GFP_KERNEL);
@@ -1338,17 +1360,6 @@ static abort_t activate_helper(struct module_pack *pack)
 
 		if (progress)
 			continue;
-
-		if (!consider_data_sections && found_all_patches(pack) == OK) {
-			ksdebug(pack, 0, KERN_DEBUG "Considering run-pre "
-				"matching .data symbols\n");
-			consider_data_sections = true;
-			continue;
-		}
-		if (!consider_data_sections)
-			ksdebug(pack, 0, KERN_DEBUG "Could not find all "
-				"patches; not considering run-pre matching "
-				".data symbols\n");
 
 		for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
 			i = s - pack->helper_sizes;
@@ -1848,6 +1859,11 @@ static abort_t process_primary_reloc(struct module_pack *pack,
 	if (!bootstrapped)
 		return OK;
 #endif /* KSPLICE_STANDALONE */
+	/* Create namevals so that we can verify our choices in the second
+	   round of run-pre matching that considers data sections. */
+	ret = create_nameval(pack, r->symbol->label, sym_addr, VAL);
+	if (ret != OK)
+		return ret;
 	return add_dependency_on_address(pack, sym_addr);
 }
 
