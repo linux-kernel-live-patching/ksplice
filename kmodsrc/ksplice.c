@@ -394,7 +394,7 @@ static int ends_with(const char *str, const char *suffix);
 /* primary */
 static abort_t activate_primary(struct module_pack *pack);
 static abort_t process_exports(struct module_pack *pack);
-static abort_t found_all_patches(struct module_pack *pack);
+static abort_t process_patches(struct module_pack *pack);
 static int __apply_patches(void *bundle);
 static int __reverse_patches(void *bundle);
 static abort_t check_each_task(struct update_bundle *bundle);
@@ -656,6 +656,10 @@ static abort_t activate_primary(struct module_pack *pack)
 	if (ret != OK)
 		return ret;
 
+	ret = process_patches(pack);
+	if (ret != OK)
+		return ret;
+
 	ret = process_exports(pack);
 	if (ret != OK)
 		return ret;
@@ -664,17 +668,14 @@ static abort_t activate_primary(struct module_pack *pack)
 	if (ret != OK)
 		return ret;
 
-	ret = found_all_patches(pack);
-	if (ret != OK)
-		return ret;
-
 	return OK;
 }
 
-static abort_t found_all_patches(struct module_pack *pack)
+static abort_t process_patches(struct module_pack *pack)
 {
-	const struct ksplice_patch *p;
+	struct ksplice_patch *p;
 	struct safety_record *rec;
+	abort_t ret;
 
 	/* Check every patch has a safety_record */
 	for (p = pack->patches; p < pack->patches_end; p++) {
@@ -694,6 +695,10 @@ static abort_t found_all_patches(struct module_pack *pack)
 				"for trampoline\n", p->label);
 			return UNEXPECTED;
 		}
+
+		ret = create_trampoline(p);
+		if (ret != OK)
+			return ret;
 	}
 	return OK;
 }
@@ -733,7 +738,6 @@ static abort_t process_exports(struct module_pack *pack)
 static void insert_trampoline(struct ksplice_patch *p)
 {
 	mm_segment_t old_fs = get_fs();
-	create_trampoline(p);
 	set_fs(KERNEL_DS);
 	memcpy((void *)p->saved, (void *)p->oldaddr, p->size);
 	memcpy((void *)p->oldaddr, (void *)p->trampoline, p->size);
