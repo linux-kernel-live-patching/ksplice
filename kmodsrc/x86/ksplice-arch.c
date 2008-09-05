@@ -228,31 +228,29 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 			/* ud2 means BUG().  On old i386 kernels, it is followed
 			   by 2 bytes and then a 4-byte relocation; and is not
 			   disassembler-friendly. */
-			int matched = 0;
-			ret = handle_reloc(pack, (unsigned long)(pre + 4),
-					   (unsigned long)(run + 4), 4, 4,
-					   rerun, &matched);
-			if (ret != OK)
-				return ret;
-			if (matched > 0) {
-				/* If there's a relocation, then it's a BUG? */
-				if (rerun) {
-					ksdebug(pack, 0, "[BUG?: ");
-					print_bytes(pack, run + 2, 6, pre + 2,
-						    6);
-					ksdebug(pack, 0, "] ");
-				}
-				pre += 8;
-				run += 8;
-				ud_input_skip(&run_ud, 6);
-				ud_input_skip(&pre_ud, 6);
-				continue;
-			} else {
+			const struct ksplice_reloc *r =
+			    lookup_reloc(pack, (unsigned long)(pre + 4));
+			if (r == NULL) {
 				if (!rerun)
 					ksdebug(pack, 0, KERN_DEBUG
 						"Unrecognized ud2\n");
 				return NO_MATCH;
 			}
+			ret = handle_reloc(pack, r, (unsigned long)(run + 4),
+					   rerun);
+			if (ret != OK)
+				return ret;
+			/* If there's a relocation, then it's a BUG? */
+			if (rerun) {
+				ksdebug(pack, 0, "[BUG?: ");
+				print_bytes(pack, run + 2, 6, pre + 2, 6);
+				ksdebug(pack, 0, "] ");
+			}
+			pre += 8;
+			run += 8;
+			ud_input_skip(&run_ud, 6);
+			ud_input_skip(&pre_ud, 6);
+			continue;
 		}
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
 
@@ -276,12 +274,13 @@ static abort_t compare_operands(struct module_pack *pack,
 				struct ud *pre_ud, int opnum, int rerun)
 {
 	abort_t ret;
-	int i, matched = 0;
+	int i;
 	unsigned long pre_addr = s->thismod_addr;
 	struct ud_operand *run_op = &run_ud->operand[opnum];
 	struct ud_operand *pre_op = &pre_ud->operand[opnum];
 	uint8_t run_off = ud_prefix_len(run_ud);
 	uint8_t pre_off = ud_prefix_len(pre_ud);
+	const struct ksplice_reloc *r;
 	for (i = 0; i < opnum; i++) {
 		run_off += ud_operand_len(&run_ud->operand[i]);
 		pre_off += ud_operand_len(&pre_ud->operand[i]);
@@ -308,19 +307,43 @@ static abort_t compare_operands(struct module_pack *pack,
 	if (ud_operand_len(run_op) == 0 && ud_operand_len(pre_op) == 0)
 		return OK;
 
-	ret = handle_reloc(pack, (unsigned long)(pre + pre_off),
-			   (unsigned long)(run + run_off),
-			   ud_operand_len(pre_op), ud_operand_len(run_op),
-			   rerun, &matched);
-	if (ret != OK) {
-		if (rerun)
-			ksdebug(pack, 3, KERN_DEBUG "Matching failure at "
-				"offset %lx\n", (unsigned long)pre - pre_addr);
-		return ret;
-	}
-	if (matched != 0)
+	r = lookup_reloc(pack, (unsigned long)(pre + pre_off));
+	if (r != NULL) {
+		struct ksplice_reloc run_reloc = *r;
+		if (r->size != ud_operand_len(pre_op)) {
+			ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc "
+				"size %d differs from disassembled size %d\n",
+				r->size, ud_operand_len(pre_op));
+			return NO_MATCH;
+		}
+		if (r->size != ud_operand_len(run_op) &&
+		    (r->dst_mask != 0xffffffff || r->rightshift != 0)) {
+			/* Special features unsupported with differing reloc sizes */
+			ksdebug(pack, 4, KERN_DEBUG "ksplice_h: reloc: invalid "
+				"flags for a relocation with size changed\n");
+			ksdebug(pack, 4, KERN_DEBUG "%ld %u\n", r->dst_mask,
+				r->rightshift);
+			return UNEXPECTED;
+		}
+		/* 1-byte jumps don't have signed addends */
+		if (r->size != ud_operand_len(run_op))
+			run_reloc.signed_addend = 0;
+		/* adjust for differing relocation size */
+		run_reloc.size = ud_operand_len(run_op);
+		run_reloc.addend += (ud_operand_len(pre_op) -
+				     ud_operand_len(run_op));
+		ret = handle_reloc(pack, &run_reloc,
+				   (unsigned long)(run + run_off), rerun);
+		if (ret != OK) {
+			if (rerun)
+				ksdebug(pack, 3, KERN_DEBUG "Matching failure "
+					"at offset %lx\n",
+					(unsigned long)pre - pre_addr);
+			return ret;
+		}
 		/* This operand is a successfully processed relocation */
 		return OK;
+	}
 	if (pre_op->type == UD_OP_JIMM) {
 		/* Immediate jump without a relocation */
 		unsigned long pre_target = (unsigned long)pre +

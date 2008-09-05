@@ -136,9 +136,9 @@ static abort_t create_nameval(struct module_pack *pack, const char *label,
 			      unsigned long val, int status);
 static const struct ksplice_reloc *lookup_reloc(struct module_pack *pack,
 						unsigned long addr);
-static abort_t handle_reloc(struct module_pack *pack, unsigned long pre_addr,
-			    unsigned long run_addr, int pre_size, int run_size,
-			    int rerun, int *matched);
+static abort_t handle_reloc(struct module_pack *pack,
+			    const struct ksplice_reloc *r,
+			    unsigned long run_addr, int rerun);
 
 struct safety_record {
 	struct list_head list;
@@ -1444,6 +1444,7 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 	int matched = 0;
 	abort_t ret;
 	unsigned long pre_addr = s->thismod_addr;
+	const struct ksplice_reloc *r;
 	const unsigned char *pre, *run;
 
 	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
@@ -1459,19 +1460,20 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 					(unsigned long)pre - pre_addr, s->size);
 			return NO_MATCH;
 		}
-		ret = handle_reloc(pack, (unsigned long)pre, (unsigned long)run,
-				   -1, -1, rerun, &matched);
-		if (ret != OK) {
-			if (!rerun)
-				ksdebug(pack, 3, "reloc in sect does "
-					"not match after %lx/%lx bytes\n",
-					(unsigned long)pre - pre_addr, s->size);
-			return ret;
-		}
-		if (matched != 0) {
-			print_bytes(pack, run, matched, pre, matched);
-			pre += matched;
-			run += matched;
+		r = lookup_reloc(pack, (unsigned long)pre);
+		if (r != NULL) {
+			ret = handle_reloc(pack, r, (unsigned long)run, rerun);
+			if (ret != OK) {
+				if (!rerun)
+					ksdebug(pack, 3, "reloc in sect does "
+						"not match after %lx/%lx bytes"
+						"\n", (unsigned long)pre -
+						pre_addr, s->size);
+				return ret;
+			}
+			print_bytes(pack, run, r->size, pre, r->size);
+			pre += r->size;
+			run += r->size;
 			continue;
 		}
 
@@ -1635,56 +1637,15 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	return OK;
 }
 
-static abort_t handle_reloc(struct module_pack *pack, unsigned long pre_addr,
-			    unsigned long run_addr, int pre_size, int run_size,
-			    int rerun, int *matched)
+static abort_t handle_reloc(struct module_pack *pack,
+			    const struct ksplice_reloc *r,
+			    unsigned long run_addr, int rerun)
 {
-	struct reloc_nameval *nv;
 	long run_reloc_val, expected;
-	int canary_ret;
 	abort_t ret;
-	const struct ksplice_reloc *r = lookup_reloc(pack, pre_addr);
-	if (r == NULL) {
-		*matched = 0;
-		return OK;
-	}
-	if (pre_size == -1)
-		pre_size = r->size;
-	if (run_size == -1)
-		run_size = r->size;
-	if (r->size != pre_size) {
-		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: addrmap size "
-			"%d differs from disassembled size %d\n", r->size,
-			pre_size);
-		return NO_MATCH;
-	}
+	struct reloc_nameval *nv = find_nameval(pack, r->symbol->label);
 
-	if (r->size != run_size && (r->dst_mask != 0xffffffff ||
-				    r->rightshift != 0)) {
-		/* Special features unsupported with differing reloc sizes */
-		ksdebug(pack, 4, KERN_DEBUG "ksplice_h: reloc: invalid "
-			"reloc flags for a relocation with size changed\n");
-		ksdebug(pack, 4, KERN_DEBUG "%ld %u\n", r->dst_mask,
-			r->rightshift);
-		return UNEXPECTED;
-	}
-
-	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
-	if (canary_ret < 0)
-		return UNEXPECTED;
-	if (canary_ret == 0) {
-		ksdebug(pack, 4, KERN_DEBUG "ksplice_h: reloc: skipped %s:%"
-			ADDR " (altinstr)\n", r->symbol->label,
-			r->blank_offset);
-		return OK;
-	}
-	nv = find_nameval(pack, r->symbol->label);
-
-	if (pre_addr != r->blank_addr) {
-		print_abort(pack, "Relocation not at start of operand");
-		return NO_MATCH;
-	}
-	switch (run_size) {
+	switch (r->size) {
 	case 1:
 		run_reloc_val = *(int8_t *)run_addr & (int8_t)r->dst_mask;
 		break;
@@ -1702,7 +1663,7 @@ static abort_t handle_reloc(struct module_pack *pack, unsigned long pre_addr,
 		return UNEXPECTED;
 	}
 
-	if (r->signed_addend && r->size == run_size)
+	if (r->signed_addend)
 		run_reloc_val |=
 		    -(run_reloc_val & (r->dst_mask & ~(r->dst_mask >> 1)));
 
@@ -1710,19 +1671,17 @@ static abort_t handle_reloc(struct module_pack *pack, unsigned long pre_addr,
 
 	if (!rerun) {
 		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc at r_a=%"
-			ADDR " p_a=%" ADDR ": ", run_addr, pre_addr);
-		ksdebug(pack, 3, KERN_DEBUG "sizes r_s=%d p_s=%d ", run_size,
-			pre_size);
+			ADDR " p_a=%" ADDR ": ", run_addr, r->blank_addr);
 		ksdebug(pack, 3, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
 			r->symbol->label, nv != NULL ? nv->val : 0, r->addend,
 			run_reloc_val);
 	}
 
 	if (!starts_with(r->symbol->label, ".rodata.str")) {
-		if (contains_canary(pack, run_addr, run_size, r->dst_mask) != 0)
+		if (contains_canary(pack, run_addr, r->size, r->dst_mask) != 0)
 			return UNEXPECTED;
 
-		expected = run_reloc_val - (r->addend + pre_size - run_size);
+		expected = run_reloc_val - r->addend;
 		if (r->pcrel)
 			expected += run_addr;
 
@@ -1740,7 +1699,6 @@ static abort_t handle_reloc(struct module_pack *pack, unsigned long pre_addr,
 			return ret;
 		}
 	}
-	*matched = r->size;
 	return OK;
 }
 
@@ -2543,9 +2501,21 @@ static const struct ksplice_reloc *lookup_reloc(struct module_pack *pack,
 						unsigned long addr)
 {
 	const struct ksplice_reloc *r;
+	int canary_ret;
 	for (r = pack->helper_relocs; r < pack->helper_relocs_end; r++) {
-		if (addr >= r->blank_addr && addr < r->blank_addr + r->size)
+		if (addr >= r->blank_addr && addr < r->blank_addr + r->size) {
+			canary_ret = contains_canary(pack, r->blank_addr,
+						     r->size, r->dst_mask);
+			if (canary_ret < 0)
+				return NULL;
+			if (canary_ret == 0) {
+				ksdebug(pack, 4, KERN_DEBUG "ksplice_h: reloc: "
+					"skipped %s:%" ADDR " (altinstr)\n",
+					r->symbol->label, r->blank_offset);
+				return NULL;
+			}
 			return r;
+		}
 	}
 	return NULL;
 }
