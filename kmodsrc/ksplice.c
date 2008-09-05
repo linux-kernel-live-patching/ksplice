@@ -671,6 +671,17 @@ static abort_t activate_primary(struct module_pack *pack)
 	return OK;
 }
 
+static void __attribute__((noreturn)) ksplice_deleted(void)
+{
+	printk(KERN_CRIT "Attempted call of kernel function deleted by Ksplice "
+	       "update!\n");
+	BUG();
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
+	for (;;);
+#endif
+}
+
 static abort_t process_patches(struct module_pack *pack)
 {
 	struct ksplice_patch *p;
@@ -681,8 +692,10 @@ static abort_t process_patches(struct module_pack *pack)
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		struct reloc_nameval *nv = find_nameval(pack, p->label);
 		int found = 0;
-		if (nv == NULL)
+		if (nv == NULL) {
+			failed_to_find(pack, p->label);
 			return FAILED_TO_FIND;
+		}
 		p->oldaddr = nv->val;
 
 		list_for_each_entry(rec, &pack->safety_records, list) {
@@ -700,6 +713,9 @@ static abort_t process_patches(struct module_pack *pack)
 				"for trampoline\n", p->label);
 			return UNEXPECTED;
 		}
+
+		if (p->repladdr == 0)
+			p->repladdr = (unsigned long)ksplice_deleted;
 
 		ret = create_trampoline(p);
 		if (ret != OK)

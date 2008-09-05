@@ -128,6 +128,7 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 void write_ksplice_size(struct superbfd *sbfd, asymbol **symp);
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
+void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label);
 void rm_from_special(struct superbfd *sbfd, const struct specsect *s);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
@@ -311,6 +312,11 @@ int main(int argc, char *argv[])
 		for (sectname = sections.data;
 		     sectname < sections.data + sections.size; sectname++)
 			write_ksplice_patch(isbfd, *sectname);
+
+		const char **label;
+		for (label = delsects.data;
+		     label < delsects.data + delsects.size; label++)
+			write_ksplice_deleted_patch(isbfd, *label);
 
 		const struct export_desc *ed;
 		for (ed = exports.data; ed < exports.data + exports.size;
@@ -685,6 +691,16 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
 	write_string(kpatch_ss, &kpatch->label, "%s",
 		     label_lookup(sbfd, sect->symbol));
 	write_reloc(kpatch_ss, &kpatch->repladdr, &sect->symbol, 0);
+}
+
+void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label)
+{
+	struct supersect *kpatch_ss = make_section(sbfd, ".ksplice_patches");
+	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
+						 struct ksplice_patch);
+
+	write_string(kpatch_ss, &kpatch->label, "%s", label);
+	kpatch->repladdr = 0;
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
