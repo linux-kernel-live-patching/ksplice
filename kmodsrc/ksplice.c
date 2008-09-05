@@ -1495,7 +1495,8 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 						pre_addr, s->size);
 				return ret;
 			}
-			print_bytes(pack, run, r->size, pre, r->size);
+			if (rerun)
+				print_bytes(pack, run, r->size, pre, r->size);
 			pre += r->size;
 			run += r->size;
 			continue;
