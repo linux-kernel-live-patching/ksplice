@@ -1606,12 +1606,20 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	if (p >= pack->patches_end && (s->flags & KSPLICE_SIZE_DELETED) == 0)
 		return OK;
 
+	if ((s->flags & KSPLICE_SIZE_TEXT) == 0 &&
+	    (s->flags & KSPLICE_SIZE_DELETED) == 0) {
+		ksdebug(pack, 3, KERN_DEBUG "ksplice_h: Error: ksplice_patch "
+			"%s is matched to a non-deleted non-text section!\n",
+			s->symbol->label);
+		return UNEXPECTED;
+	}
+
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
 	if (rec == NULL)
 		return OUT_OF_MEMORY;
 	/* It is safe for addr to point to the beginning of a patched function,
 	   because that location will be overwritten with a trampoline. */
-	if ((s->flags & KSPLICE_SIZE_TEXT) != 0) {
+	if ((s->flags & KSPLICE_SIZE_DELETED) == 0) {
 		if (run_size < MAX_TRAMPOLINE_SIZE) {
 			print_abort(pack, "Function too short for trampoline");
 			return UNEXPECTED;
