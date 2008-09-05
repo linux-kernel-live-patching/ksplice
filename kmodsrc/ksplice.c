@@ -679,7 +679,12 @@ static abort_t process_patches(struct module_pack *pack)
 
 	/* Check every patch has a safety_record */
 	for (p = pack->patches; p < pack->patches_end; p++) {
+		struct reloc_nameval *nv = find_nameval(pack, p->label);
 		int found = 0;
+		if (nv == NULL)
+			return FAILED_TO_FIND;
+		p->oldaddr = nv->val;
+
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (strcmp(rec->label, p->label) == 0) {
 				found = 1;

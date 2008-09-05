@@ -684,8 +684,6 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
 
 	write_string(kpatch_ss, &kpatch->label, "%s",
 		     label_lookup(sbfd, sect->symbol));
-	write_ksplice_reloc(kpatch_ss, create_reloc(kpatch_ss, &kpatch->oldaddr,
-						    &sect->symbol, 0));
 	write_reloc(kpatch_ss, &kpatch->repladdr, &sect->symbol, 0);
 }
 
