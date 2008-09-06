@@ -253,8 +253,6 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 			}
 			if (ret != OK)
 				return ret;
-			if (!virtual_address_mapped((unsigned long)(run + 7)))
-				return NO_MATCH;
 			ret = handle_reloc(pack, r, (unsigned long)(run + 4),
 					   rerun);
 			if (ret != OK)
@@ -441,9 +439,11 @@ static int match_nop(const unsigned char *addr)
 	for (i = NUM_NOPS - 1; i >= 0; i--) {
 		nop = &nops[i];
 		for (j = 0; j < nop->len; j++) {
-			if (!virtual_address_mapped((unsigned long)&addr[j]))
+			unsigned char byte;
+			if (probe_kernel_read(&byte, (void *)&addr[j], 1) ==
+			    -EFAULT)
 				break;
-			if (addr[j] != nop->data[j])
+			if (byte != nop->data[j])
 				break;
 		}
 		if (j == nop->len)
@@ -492,12 +492,9 @@ static long jump_lval(struct ud_operand *operand)
 static int next_run_byte(struct ud *ud)
 {
 	unsigned char byte;
-	unsigned char *run_ptr = ud->userdata;
-	if (!virtual_address_mapped((unsigned long)run_ptr))
+	if (probe_kernel_read(&byte, ud->userdata, 1) == -EFAULT)
 		return UD_EOI;
-	byte = *run_ptr;
-	run_ptr++;
-	ud->userdata = run_ptr;
+	ud->userdata++;
 	return byte;
 }
 #endif /* !FUNCTION_SECTIONS */
@@ -505,11 +502,14 @@ static int next_run_byte(struct ud *ud)
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr)
 {
-	if (virtual_address_mapped(addr) &&
-	    virtual_address_mapped(addr + 5 - 1) &&
-	    *((const unsigned char *)addr) == 0xE9) {
+	unsigned char bytes[5];
+
+	if (probe_kernel_read(bytes, (void *)addr, sizeof(bytes)) == -EFAULT)
+		return addr;
+
+	if (bytes[0] == 0xE9) {
 		/* Remember to add the length of the e9 */
-		unsigned long new_addr = addr + 5 + *(int32_t *)(addr + 1);
+		unsigned long new_addr = addr + 5 + *(int32_t *)(&bytes[1]);
 		/* Confirm that it is a jump into a ksplice module */
 		struct module *m = __module_text_address(new_addr);
 		if (m != NULL && m != pack->target &&
@@ -533,17 +533,17 @@ static abort_t create_trampoline(struct ksplice_patch *p)
 static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre_addr,
 			       unsigned long run_addr, int *matched)
 {
-	int32_t *run = (int32_t *)(run_addr + 1);
-	int32_t *pre = (int32_t *)(pre_addr + 1);
+	unsigned char run[5], pre[5];
 	*matched = 0;
 
-	if (!virtual_address_mapped(run_addr + 5) ||
-	    !virtual_address_mapped(pre_addr + 5))
+	if (probe_kernel_read(&run, (void *)run_addr, sizeof(run)) == -EFAULT ||
+	    probe_kernel_read(&pre, (void *)pre_addr, sizeof(pre)) == -EFAULT)
 		return OK;
 
-	if ((*(uint8_t *)run_addr == 0xe8 && *(uint8_t *)pre_addr == 0xe8) ||
-	    (*(uint8_t *)run_addr == 0xe9 && *(uint8_t *)pre_addr == 0xe9))
-		if ((unsigned long)run + *run == (unsigned long)pre + *pre)
+	if ((run[0] == 0xe8 && pre[0] == 0xe8) ||
+	    (run[0] == 0xe9 && pre[0] == 0xe9))
+		if (run_addr + 1 + *(int32_t *)&run[1] ==
+		    pre_addr + 1 + *(int32_t *)&pre[1])
 			*matched = 5;
 	return OK;
 }

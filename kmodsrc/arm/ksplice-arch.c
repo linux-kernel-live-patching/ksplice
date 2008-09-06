@@ -24,13 +24,15 @@
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr)
 {
+	uint32_t word;
 	unsigned long new_addr;
 	struct module *m;
 
-	if (virtual_address_mapped(addr) &&
-	    virtual_address_mapped(addr + 4 - 1) &&
-	    (*(int32_t *)addr & 0xff000000) == 0xea000000) {
-		new_addr = *(int32_t *)addr & 0x00ffffff;
+	if (probe_kernel_read(&word, (void *)addr, sizeof(word)) == -EFAULT)
+		return addr;
+
+	if ((word & 0xff000000) == 0xea000000) {
+		new_addr = word & 0x00ffffff;
 		new_addr |= -(new_addr & (0x00ffffff & ~(0x00ffffff >> 1)));
 		new_addr <<= 2;
 		new_addr += addr + 8;

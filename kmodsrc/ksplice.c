@@ -130,15 +130,29 @@ struct reloc_nameval {
 	enum { NOVAL, TEMP, VAL } status;
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+/* c33fa9f5609e918824446ef9a75319d4a802f1f4 was after 2.6.25 */
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+/* 2fff0a48416af891dce38fd425246e337831e0bb was after 2.6.19 */
 static int virtual_address_mapped(unsigned long addr)
 {
 	char retval;
 	return probe_kernel_address(addr, retval) != -EFAULT;
 }
 #else /* LINUX_VERSION_CODE < */
-/* 2fff0a48416af891dce38fd425246e337831e0bb was after 2.6.19 */
 static int virtual_address_mapped(unsigned long addr);
+#endif /* LINUX_VERSION_CODE */
+
+static long probe_kernel_read(void *dst, void *src, size_t size)
+{
+	if (!virtual_address_mapped((unsigned long)src) ||
+	    !virtual_address_mapped((unsigned long)src + size))
+		return -EFAULT;
+
+	memcpy(dst, src, size);
+	return 0;
+}
 #endif /* LINUX_VERSION_CODE */
 
 static struct reloc_nameval *find_nameval(struct module_pack *pack,
@@ -395,7 +409,6 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr);
 static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
-static int virtual_address_mapped(unsigned long addr);
 
 static abort_t add_dependency_on_address(struct module_pack *pack,
 					 unsigned long addr);
@@ -1474,6 +1487,7 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 	unsigned long pre_addr = s->thismod_addr;
 	const struct ksplice_reloc *r;
 	const unsigned char *pre, *run;
+	unsigned char runval;
 
 	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
 		run_addr = follow_trampolines(pack, run_addr);
@@ -1481,18 +1495,8 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 	pre = (const unsigned char *)pre_addr;
 	run = (const unsigned char *)run_addr;
 	while (pre < (const unsigned char *)pre_addr + s->size) {
-		if (!virtual_address_mapped((unsigned long)run)) {
-			if (!rerun)
-				ksdebug(pack, 3, "sect unmapped after "
-					"%lx/%lx bytes\n",
-					(unsigned long)pre - pre_addr, s->size);
-			return NO_MATCH;
-		}
 		ret = lookup_reloc(pack, (unsigned long)pre, &r);
 		if (ret == OK) {
-			if (!virtual_address_mapped((unsigned long)run +
-						    r->size - 1))
-				return NO_MATCH;
 			ret = handle_reloc(pack, r, (unsigned long)run, rerun);
 			if (ret != OK) {
 				if (!rerun)
@@ -1526,7 +1530,15 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 			}
 		}
 
-		if (*run != *pre && (s->flags & KSPLICE_SIZE_DATA) == 0) {
+		if (probe_kernel_read(&runval, (void *)run, 1) == -EFAULT) {
+			if (!rerun)
+				ksdebug(pack, 3, "sect unmapped after "
+					"%lx/%lx bytes\n",
+					(unsigned long)pre - pre_addr, s->size);
+			return NO_MATCH;
+		}
+
+		if (runval != *pre && (s->flags & KSPLICE_SIZE_DATA) == 0) {
 			if (!rerun)
 				ksdebug(pack, 3, "sect does not match after "
 					"%lx/%lx bytes\n",
@@ -1673,19 +1685,23 @@ static abort_t handle_reloc(struct module_pack *pack,
 	long run_reloc_val, expected;
 	abort_t ret;
 	struct reloc_nameval *nv = find_nameval(pack, r->symbol->label);
+	unsigned char bytes[8];
+
+	if (probe_kernel_read(bytes, (void *)run_addr, r->size) == -EFAULT)
+		return NO_MATCH;
 
 	switch (r->size) {
 	case 1:
-		run_reloc_val = *(int8_t *)run_addr & (int8_t)r->dst_mask;
+		run_reloc_val = *(int8_t *)bytes & (int8_t)r->dst_mask;
 		break;
 	case 2:
-		run_reloc_val = *(int16_t *)run_addr & (int16_t)r->dst_mask;
+		run_reloc_val = *(int16_t *)bytes & (int16_t)r->dst_mask;
 		break;
 	case 4:
-		run_reloc_val = *(int32_t *)run_addr & (int32_t)r->dst_mask;
+		run_reloc_val = *(int32_t *)bytes & (int32_t)r->dst_mask;
 		break;
 	case 8:
-		run_reloc_val = *(int64_t *)run_addr & r->dst_mask;
+		run_reloc_val = *(int64_t *)bytes & (int64_t)r->dst_mask;
 		break;
 	default:
 		print_abort(pack, "Invalid relocation size");
@@ -2314,10 +2330,9 @@ static abort_t brute_search(struct module_pack *pack,
 		if (addr % 100000 == 0)
 			yield();
 
-		if (!virtual_address_mapped(addr))
+		if (probe_kernel_read(&run, (void *)addr, 1) == -EFAULT)
 			return OK;
 
-		run = *(const unsigned char *)(addr);
 		pre = *(const unsigned char *)(s->thismod_addr);
 
 		if (run != pre)
