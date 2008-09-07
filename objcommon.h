@@ -145,11 +145,20 @@ DECLARE_VEC_TYPE(asymbol *, asymbolp_vec);
 #define bfd_get_section_size(x) ((x)->_cooked_size)
 #endif
 
+struct label_map {
+	asymbol *csym;
+	const char *orig_label;
+	const char *label;
+	int count;
+	int index;
+};
+DECLARE_VEC_TYPE(struct label_map, label_map_vec);
 
 struct superbfd {
 	bfd *abfd;
 	struct asymbolp_vec syms;
 	struct supersect *new_supersects;
+	struct label_map_vec maps;
 };
 
 struct supersect {
@@ -203,4 +212,4 @@ char *str_pointer(struct supersect *ss, void *const *addr);
 
 asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym);
 asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
-char *symbol_label(struct superbfd *sbfd, asymbol *sym);
+const char *label_lookup(struct superbfd *sbfd, asymbol *sym);

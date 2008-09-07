@@ -571,7 +571,7 @@ void write_ksplice_symbol(struct supersect *ss,
 	}
 
 	write_string(ksymbol_ss, &ksymbol->label, "%s%s",
-		     symbol_label(ss->parent, sym), addstr_sect);
+		     label_lookup(ss->parent, sym), addstr_sect);
 
 	write_system_map_array(ss->parent, ksymbol_ss, &ksymbol->candidates,
 			       &ksymbol->nr_candidates, sym);
@@ -659,7 +659,7 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 		ksize->size = ksize->extended_size;
 	ksize->flags = 0;
 	if (mode("keep-helper") &&
-	    str_in_set(symbol_label(sbfd, sym->section->symbol), &delsects) &&
+	    str_in_set(label_lookup(sbfd, sym->section->symbol), &delsects) &&
 	    (sym->flags & BSF_FUNCTION))
 		ksize->flags |= KSPLICE_SIZE_DELETED;
 	if (starts_with(sym->section->name, ".rodata"))
@@ -682,7 +682,7 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
 	assert(sect != NULL);
 
 	write_string(kpatch_ss, &kpatch->label, "%s",
-		     symbol_label(sbfd, sect->symbol));
+		     label_lookup(sbfd, sect->symbol));
 	write_ksplice_reloc(kpatch_ss, create_reloc(kpatch_ss, &kpatch->oldaddr,
 						    &sect->symbol, 0));
 	write_reloc(kpatch_ss, &kpatch->repladdr, &sect->symbol, 0);

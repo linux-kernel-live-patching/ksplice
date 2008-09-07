@@ -159,7 +159,7 @@ void print_deleted_section_labels(struct superbfd *oldsbfd,
 	asection *sect;
 	for (sect = oldsbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		if (bfd_get_section_by_name(newsbfd->abfd, sect->name) == NULL)
-			printf("%s ", symbol_label(oldsbfd, sect->symbol));
+			printf("%s ", label_lookup(oldsbfd, sect->symbol));
 	}
 }
 
