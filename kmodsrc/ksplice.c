@@ -945,17 +945,17 @@ static int __reverse_patches(void *bundleptr)
 static abort_t check_each_task(struct update_bundle *bundle)
 {
 	const struct task_struct *g, *p;
-	abort_t result, ret = OK;
+	abort_t status = OK, ret;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
 /* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
 	read_lock(&tasklist_lock);
 #endif /* LINUX_VERSION_CODE */
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		result = check_task(bundle, p);
-		if (result != OK)
-			ret = result;
-		if (result != OK && result != CODE_BUSY)
+		ret = check_task(bundle, p);
+		if (ret != OK)
+			status = ret;
+		if (ret != OK && ret != CODE_BUSY)
 			goto out;
 	}
 	while_each_thread(g, p);
@@ -964,7 +964,7 @@ out:
 /* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
 	read_unlock(&tasklist_lock);
 #endif /* LINUX_VERSION_CODE */
-	return ret;
+	return status;
 }
 
 static abort_t check_task(struct update_bundle *bundle,
