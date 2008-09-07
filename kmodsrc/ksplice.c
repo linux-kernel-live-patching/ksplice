@@ -684,6 +684,8 @@ static abort_t found_all_patches(struct module_pack *pack)
 		}
 		if (!found)
 			return UNEXPECTED;
+		if (rec->addr != p->oldaddr)
+			return UNEXPECTED;
 		if (rec->size < p->size) {
 			ksdebug(pack, 0, KERN_DEBUG "Symbol %s is too short "
 				"for trampoline\n", p->symbol->label);
