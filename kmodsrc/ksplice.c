@@ -397,7 +397,7 @@ static int __apply_patches(void *bundle);
 static int __reverse_patches(void *bundle);
 static abort_t check_each_task(struct update_bundle *bundle);
 static abort_t check_task(struct update_bundle *bundle,
-			  const struct task_struct *t);
+			  const struct task_struct *t, int rerun);
 static abort_t check_stack(struct update_bundle *bundle, struct conflict *conf,
 			   const struct thread_info *tinfo,
 			   const unsigned long *stack);
@@ -952,9 +952,11 @@ static abort_t check_each_task(struct update_bundle *bundle)
 #endif /* LINUX_VERSION_CODE */
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		ret = check_task(bundle, p);
-		if (ret != OK)
+		ret = check_task(bundle, p, 0);
+		if (ret != OK) {
+			check_task(bundle, p, 1);
 			status = ret;
+		}
 		if (ret != OK && ret != CODE_BUSY)
 			goto out;
 	}
@@ -968,20 +970,24 @@ out:
 }
 
 static abort_t check_task(struct update_bundle *bundle,
-			  const struct task_struct *t)
+			  const struct task_struct *t, int rerun)
 {
 	abort_t status, ret;
-	struct conflict *conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
-	if (conf == NULL)
-		return OUT_OF_MEMORY;
-	conf->process_name = kstrdup(t->comm, GFP_ATOMIC);
-	if (conf->process_name == NULL) {
-		kfree(conf);
-		return OUT_OF_MEMORY;
+	struct conflict *conf = NULL;
+
+	if (rerun) {
+		conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
+		if (conf == NULL)
+			return OUT_OF_MEMORY;
+		conf->process_name = kstrdup(t->comm, GFP_ATOMIC);
+		if (conf->process_name == NULL) {
+			kfree(conf);
+			return OUT_OF_MEMORY;
+		}
+		conf->pid = t->pid;
+		INIT_LIST_HEAD(&conf->stack);
+		list_add(&conf->list, &bundle->conflicts);
 	}
-	conf->pid = t->pid;
-	INIT_LIST_HEAD(&conf->stack);
-	list_add(&conf->list, &bundle->conflicts);
 
 	status = check_address_for_conflict(bundle, conf, KSPLICE_IP(t));
 	if (t == current) {
@@ -1023,20 +1029,26 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 {
 	const struct safety_record *rec;
 	struct module_pack *pack;
-	struct conflict_frame *frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
-	if (frame == NULL)
-		return OUT_OF_MEMORY;
-	frame->addr = addr;
-	frame->has_conflict = 0;
-	frame->label = NULL;
-	list_add(&frame->list, &conf->stack);
+	struct conflict_frame *frame = NULL;
+
+	if (conf != NULL) {
+		frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
+		if (frame == NULL)
+			return OUT_OF_MEMORY;
+		frame->addr = addr;
+		frame->has_conflict = 0;
+		frame->label = NULL;
+		list_add(&frame->list, &conf->stack);
+	}
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if ((addr > rec->addr && addr < rec->addr + rec->size)
 			    || (addr == rec->addr && !rec->first_byte_safe)) {
-				frame->label = rec->label;
-				frame->has_conflict = 1;
+				if (frame != NULL) {
+					frame->label = rec->label;
+					frame->has_conflict = 1;
+				}
 				return CODE_BUSY;
 			}
 		}
