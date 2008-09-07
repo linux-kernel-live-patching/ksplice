@@ -112,7 +112,7 @@ struct conflict {
 	struct list_head list;
 };
 
-struct ksplice_frame {
+struct conflict_frame {
 	unsigned long addr;
 	int has_conflict;
 	const char *label;
@@ -576,7 +576,7 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 static ssize_t conflict_show(struct update_bundle *bundle, char *buf)
 {
 	const struct conflict *conf;
-	const struct ksplice_frame *frame;
+	const struct conflict_frame *frame;
 	int used = 0;
 	list_for_each_entry(conf, &bundle->conflicts, list) {
 		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
@@ -1022,7 +1022,7 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 {
 	const struct safety_record *rec;
 	struct module_pack *pack;
-	struct ksplice_frame *frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
+	struct conflict_frame *frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
 	if (frame == NULL)
 		return OUT_OF_MEMORY;
 	frame->addr = addr;
@@ -1067,7 +1067,7 @@ static void cleanup_conflicts(struct update_bundle *bundle)
 {
 	struct conflict *conf;
 	list_for_each_entry(conf, &bundle->conflicts, list) {
-		clear_list(&conf->stack, struct ksplice_frame, list);
+		clear_list(&conf->stack, struct conflict_frame, list);
 		kfree(conf->process_name);
 	}
 	clear_list(&bundle->conflicts, struct conflict, list);
@@ -1076,7 +1076,7 @@ static void cleanup_conflicts(struct update_bundle *bundle)
 static void print_conflicts(struct update_bundle *bundle)
 {
 	const struct conflict *conf;
-	const struct ksplice_frame *frame;
+	const struct conflict_frame *frame;
 	list_for_each_entry(conf, &bundle->conflicts, list) {
 		_ksdebug(bundle, 2, KERN_DEBUG "ksplice: stack check: pid %d "
 			 "(%s):", conf->pid, conf->process_name);
