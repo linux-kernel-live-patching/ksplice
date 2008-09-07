@@ -148,6 +148,7 @@ if(!$skip_prebuild) {
 	}
 	runval_raw(@make_ksplice, @snap_flags) == 0 or
 	    die "Aborting: Prebuild failed";
+	sleep(1);
 }
 exit(0) if($prebuild);
 
