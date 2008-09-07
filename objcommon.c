@@ -298,17 +298,11 @@ static const char *find_caller(struct supersect *ss, asymbol *sym)
 	};
 
 	bfd_map_over_sections(ss->parent->abfd, search_for_caller, &search);
-	if (search.count == 1) {
+	if (search.count == 1)
 		return search.calling_section->name;
-	} else if (search.count == 0) {
-		fprintf(stderr, "No callers found in caller search: %s\n",
-			sym->name);
+	if (search.count == 0)
 		return "*no_caller*";
-	} else {
-		fprintf(stderr, "Multiple candidates in caller search: %s: "
-			"%d\n", sym->name, search.count);
-		return "*multiple_callers*";
-	}
+	return "*multiple_callers*";
 }
 
 asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
