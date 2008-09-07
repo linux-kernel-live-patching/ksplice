@@ -35,8 +35,8 @@ KSPLICE_CORE = ksplice-$(KSPLICE_KID)
 
 quiet_cmd_ksplice-collect = COLLECT $@
 cmd_ksplice-collect = \
-	$(ksplice-script) finalize $< && \
-	$(LD) --script=$(src)/ld-script -r -o $@ $<
+	$(ksplice-script) finalize $< $<.final && \
+	$(LD) --script=$(src)/ld-script -r -o $@ $<.final
 
 ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
 	"-DKSPLICE_MID=$(KSPLICE_MID)" \
@@ -122,8 +122,8 @@ RMSYMS = \
 
 quiet_cmd_ksplice-rmsyms = RMSYMS  $@
 cmd_ksplice-rmsyms = \
-	$(ksplice-script) rmsyms $< $(RMSYMS) && \
-	$(LD) -r -o $@ $< $(src)/ksplice.lds
+	$(ksplice-script) rmsyms $< $<.rmsyms $(RMSYMS) && \
+	$(LD) -r -o $@ $<.rmsyms $(src)/ksplice.lds
 $(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o FORCE
 	$(call if_changed,ksplice-rmsyms)
 endif # KSPLICE_STANDALONE

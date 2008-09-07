@@ -214,29 +214,25 @@ int needed_data_section(struct superbfd *sbfd, asection *isection)
 
 int main(int argc, char *argv[])
 {
-	char *debug_name;
-	assert(asprintf(&debug_name, "%s.pre%s", argv[1], argv[2]) >= 0);
-	rename(argv[1], debug_name);
-
 	bfd_init();
-	bfd *ibfd = bfd_openr(debug_name, NULL);
+	bfd *ibfd = bfd_openr(argv[1], NULL);
 	assert(ibfd);
 
 	char **matching;
 	assert(bfd_check_format_matches(ibfd, bfd_object, &matching));
 
 	const char *output_target = bfd_get_target(ibfd);
-	bfd *obfd = bfd_openw(argv[1], output_target);
+	bfd *obfd = bfd_openw(argv[2], output_target);
 	assert(obfd);
 
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
-	modestr = argv[2];
+	modestr = argv[3];
 	if (mode("keep")) {
-		kid = argv[3];
+		kid = argv[4];
 	} else if (mode("rmsyms")) {
-		varargs = &argv[3];
-		varargs_count = argc - 3;
+		varargs = &argv[4];
+		varargs_count = argc - 4;
 	}
 
 	if (mode("keep")) {

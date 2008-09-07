@@ -56,11 +56,8 @@ sub do_diff {
 	my $objdiff = runsuc("objdiff", $obj_old, $obj);
 	return empty_diff($out) if($objdiff !~ m/\S/);
 
-	copy($obj, "$obj.KSPLICE_primary");
-	copy($obj_old, "$obj.KSPLICE_helper");
-
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_primary", "keep-primary", $ENV{KSPLICE_KID});
-	runsuc_in($objdiff, "objmanip", "$obj.KSPLICE_helper", "keep-helper", $ENV{KSPLICE_KID});
+	runsuc_in($objdiff, "objmanip", $obj, "$obj.KSPLICE_primary", "keep-primary", $ENV{KSPLICE_KID});
+	runsuc_in($objdiff, "objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper", $ENV{KSPLICE_KID});
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
@@ -97,13 +94,13 @@ sub do_combine {
 }
 
 sub do_finalize {
-	my ($obj) = @_;
-	runsuc("objmanip", "$obj", "finalize");
+	my ($in, $out) = @_;
+	runsuc("objmanip", $in, $out, "finalize");
 }
 
 sub do_rmsyms {
-	my ($obj, @rmsyms) = @_;
-	my $relocs = runsuc("objmanip", $obj, "rmsyms", @rmsyms);
+	my ($in, $out, @rmsyms) = @_;
+	my $relocs = runsuc("objmanip", $in, $out, "rmsyms", @rmsyms);
 }
 
 sub do_system_map_lookup {
