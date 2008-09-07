@@ -59,8 +59,8 @@
 #define ADDR "016lx"
 #endif /* BITS_PER_LONG */
 
-enum ksplice_stage_enum {
-	PREPARING, APPLIED, REVERSED
+enum stage {
+	STAGE_PREPARING, STAGE_APPLIED, STAGE_REVERSED
 };
 
 enum run_pre_mode {
@@ -93,7 +93,7 @@ struct update_bundle {
 	const char *kid;
 	const char *name;
 	struct kobject kobj;
-	enum ksplice_stage_enum stage;
+	enum stage stage;
 	abort_t abort_cause;
 	int debug;
 #ifdef CONFIG_DEBUG_FS
@@ -534,11 +534,11 @@ static void ksplice_release(struct kobject *kobj)
 static ssize_t stage_show(struct update_bundle *bundle, char *buf)
 {
 	switch (bundle->stage) {
-	case PREPARING:
+	case STAGE_PREPARING:
 		return snprintf(buf, PAGE_SIZE, "preparing\n");
-	case APPLIED:
+	case STAGE_APPLIED:
 		return snprintf(buf, PAGE_SIZE, "applied\n");
-	case REVERSED:
+	case STAGE_REVERSED:
 		return snprintf(buf, PAGE_SIZE, "reversed\n");
 	}
 	return 0;
@@ -595,10 +595,11 @@ static ssize_t conflict_show(struct update_bundle *bundle, char *buf)
 static ssize_t stage_store(struct update_bundle *bundle,
 			   const char *buf, size_t len)
 {
-	if (strncmp(buf, "applied\n", len) == 0 && bundle->stage == PREPARING)
+	if (strncmp(buf, "applied\n", len) == 0 &&
+	    bundle->stage == STAGE_PREPARING)
 		bundle->abort_cause = apply_update(bundle);
 	else if (strncmp(buf, "reversed\n", len) == 0 &&
-		 bundle->stage == APPLIED)
+		 bundle->stage == STAGE_APPLIED)
 		bundle->abort_cause = reverse_patches(bundle);
 	return len;
 }
@@ -863,10 +864,10 @@ static int __apply_patches(void *bundleptr)
 	struct ksplice_export *export;
 	abort_t ret;
 
-	if (bundle->stage == APPLIED)
+	if (bundle->stage == STAGE_APPLIED)
 		return (__force int)OK;
 
-	if (bundle->stage != PREPARING)
+	if (bundle->stage != STAGE_PREPARING)
 		return (__force int)UNEXPECTED;
 
 	ret = check_each_task(bundle);
@@ -885,7 +886,7 @@ static int __apply_patches(void *bundleptr)
 		}
 	}
 
-	bundle->stage = APPLIED;
+	bundle->stage = STAGE_APPLIED;
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		for (export = pack->exports; export < pack->exports_end;
@@ -908,7 +909,7 @@ static int __reverse_patches(void *bundleptr)
 	struct ksplice_export *export;
 	abort_t ret;
 
-	if (bundle->stage != APPLIED)
+	if (bundle->stage != STAGE_APPLIED)
 		return (__force int)OK;
 
 #ifdef CONFIG_MODULE_UNLOAD
@@ -923,7 +924,7 @@ static int __reverse_patches(void *bundleptr)
 	if (ret != OK)
 		return (__force int)ret;
 
-	bundle->stage = REVERSED;
+	bundle->stage = STAGE_REVERSED;
 
 	list_for_each_entry(pack, &bundle->packs, list)
 		module_put(pack->primary);
@@ -1122,7 +1123,7 @@ static int register_ksplice_module(struct module_pack *pack)
 	}
 	list_for_each_entry(bundle, &update_bundles, list) {
 		if (strcmp(pack->kid, bundle->kid) == 0) {
-			if (bundle->stage != PREPARING) {
+			if (bundle->stage != STAGE_PREPARING) {
 				ret = -EPERM;
 				goto out;
 			}
@@ -1151,7 +1152,7 @@ out:
 
 void cleanup_ksplice_module(struct module_pack *pack)
 {
-	if (pack->bundle == NULL || pack->bundle->stage == APPLIED)
+	if (pack->bundle == NULL || pack->bundle->stage == STAGE_APPLIED)
 		return;
 	mutex_lock(&module_mutex);
 	list_del(&pack->list);
@@ -1218,7 +1219,7 @@ static struct update_bundle *init_ksplice_bundle(const char *kid)
 		return NULL;
 	}
 	list_add(&bundle->list, &update_bundles);
-	bundle->stage = PREPARING;
+	bundle->stage = STAGE_PREPARING;
 	bundle->abort_cause = OK;
 	INIT_LIST_HEAD(&bundle->conflicts);
 	return bundle;
@@ -1324,7 +1325,7 @@ static abort_t apply_update(struct update_bundle *bundle)
 out:
 	list_for_each_entry(pack, &bundle->packs, list) {
 		clear_list(&pack->reloc_namevals, struct reloc_nameval, list);
-		if (bundle->stage == PREPARING)
+		if (bundle->stage == STAGE_PREPARING)
 			clear_list(&pack->safety_records, struct safety_record,
 				   list);
 	}
