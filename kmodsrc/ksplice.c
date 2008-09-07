@@ -401,9 +401,11 @@ static abort_t check_task(struct update_bundle *bundle,
 static abort_t check_stack(struct update_bundle *bundle, struct conflict *conf,
 			   const struct thread_info *tinfo,
 			   const unsigned long *stack);
-static abort_t check_address_for_conflict(struct update_bundle *bundle,
-					  struct conflict *conf,
-					  unsigned long addr);
+static abort_t check_address(struct update_bundle *bundle,
+			     struct conflict *conf, unsigned long addr);
+static abort_t check_record(struct conflict_frame *frame,
+			    const struct safety_record *rec,
+			    unsigned long addr);
 static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 static int is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update_bundle *bundle);
@@ -989,7 +991,7 @@ static abort_t check_task(struct update_bundle *bundle,
 		list_add(&conf->list, &bundle->conflicts);
 	}
 
-	status = check_address_for_conflict(bundle, conf, KSPLICE_IP(t));
+	status = check_address(bundle, conf, KSPLICE_IP(t));
 	if (t == current) {
 		ret = check_stack(bundle, conf, task_thread_info(t),
 				  (unsigned long *)__builtin_frame_address(0));
@@ -1016,17 +1018,17 @@ static abort_t check_stack(struct update_bundle *bundle, struct conflict *conf,
 
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
-		ret = check_address_for_conflict(bundle, conf, addr);
+		ret = check_address(bundle, conf, addr);
 		if (ret != OK)
 			status = ret;
 	}
 	return status;
 }
 
-static abort_t check_address_for_conflict(struct update_bundle *bundle,
-					  struct conflict *conf,
-					  unsigned long addr)
+static abort_t check_address(struct update_bundle *bundle,
+			     struct conflict *conf, unsigned long addr)
 {
+	abort_t status = OK, ret;
 	const struct safety_record *rec;
 	struct module_pack *pack;
 	struct conflict_frame *frame = NULL;
@@ -1043,15 +1045,24 @@ static abort_t check_address_for_conflict(struct update_bundle *bundle,
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if ((addr > rec->addr && addr < rec->addr + rec->size)
-			    || (addr == rec->addr && !rec->first_byte_safe)) {
-				if (frame != NULL) {
-					frame->label = rec->label;
-					frame->has_conflict = 1;
-				}
-				return CODE_BUSY;
-			}
+			ret = check_record(frame, rec, addr);
+			if (ret != OK)
+				status = ret;
 		}
+	}
+	return status;
+}
+
+static abort_t check_record(struct conflict_frame *frame,
+			    const struct safety_record *rec, unsigned long addr)
+{
+	if ((addr > rec->addr && addr < rec->addr + rec->size) ||
+	    (addr == rec->addr && !rec->first_byte_safe)) {
+		if (frame != NULL) {
+			frame->label = rec->label;
+			frame->has_conflict = 1;
+		}
+		return CODE_BUSY;
 	}
 	return OK;
 }
