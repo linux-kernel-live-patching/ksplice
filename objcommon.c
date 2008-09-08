@@ -300,11 +300,11 @@ static const char *find_caller(struct supersect *ss, asymbol *sym)
 	} else if (search.count == 0) {
 		fprintf(stderr, "No callers found in caller search: %s\n",
 			sym->name);
-		return "no caller";
+		return "*no_caller*";
 	} else {
 		fprintf(stderr, "Multiple candidates in caller search: %s: "
 			"%d\n", sym->name, search.count);
-		return "multiple callers";
+		return "*multiple_callers*";
 	}
 }
 
