@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
 	modestr = argv[3];
-	if (mode("keep")) {
+	if (mode("keep-primary")) {
 		kid = argv[4];
 	} else if (mode("rmsyms")) {
 		varargs = &argv[4];
