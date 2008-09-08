@@ -125,7 +125,7 @@ if(defined $diffext) {
 
 my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : ());
 @jlevel = ("-j$jobs") if(defined $jobs);
-my @make_ksplice = ("make", "-f", "$datadir/Makefile.ksplice", @jlevel, @kbuild_flags);
+my @make_ksplice = ("make", "-f", "$datadir/Makefile.ksplice", "-rR", @jlevel, @kbuild_flags);
 
 sub revert_orig() {
 	for(split(/\0/, runstr(qw(find -name *.KSPLICE*pre* -print0)))) {
@@ -200,7 +200,7 @@ if(!@modules) {
 
 revert_orig();
 
-runval("make", "-C", $kernel_headers_dir, "M=$tmpdir/kmodsrc", @jlevel, "modules", "KSPLICE_KID=$kid", "KSPLICE_MODULES=@modules", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk", @standalone_flag);
+runval("make", "-C", $kernel_headers_dir, "M=$tmpdir/kmodsrc", "-rR", @jlevel, "modules", "KSPLICE_KID=$kid", "KSPLICE_MODULES=@modules", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk", @standalone_flag);
 
 chdir($tmpdir);
 mkdir($ksplice);
