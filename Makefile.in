@@ -52,7 +52,35 @@ $(perl_man): %.8: %
 $(objutils): %: %.c objcommon.c objcommon.h kmodsrc/ksplice.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(srcdir)/objcommon.c $(LIBS) -o $@
 
-install: default $(addprefix install-,$(objutils))
+kmodsrcfiles = \
+	kmodsrc/ksplice.c \
+	kmodsrc/ksplice.h \
+	kmodsrc/x86/ksplice-arch.c \
+	kmodsrc/arm/ksplice-arch.c \
+	kmodsrc/helper.c \
+	kmodsrc/primary.c \
+	kmodsrc/Makefile \
+	kmodsrc/ld-script \
+	kmodsrc/ksplice.lds \
+	kmodsrc/x86/udis86.h \
+	kmodsrc/x86/libudis86/decode.c \
+	kmodsrc/x86/libudis86/itab.c \
+	kmodsrc/x86/libudis86/syn-att.c \
+	kmodsrc/x86/libudis86/syn-intel.c \
+	kmodsrc/x86/libudis86/input.c \
+	kmodsrc/x86/libudis86/syn.c \
+	kmodsrc/x86/libudis86/udis86.c \
+	kmodsrc/x86/libudis86/decode.h \
+	kmodsrc/x86/libudis86/input.h \
+	kmodsrc/x86/libudis86/syn.h \
+	kmodsrc/x86/libudis86/extern.h \
+	kmodsrc/x86/libudis86/itab.h \
+	kmodsrc/x86/libudis86/types.h
+
+$(addprefix install-,$(kmodsrcfiles)): install-%: %
+	install -m644 -D $< $(DESTDIR)$(datadir)/ksplice/$<
+
+install: default $(addprefix install-,$(objutils)) $(addprefix install-,$(kmodsrcfiles))
 	install -m644 -D ksplice-create.8 $(DESTDIR)$(mandir)/man8/ksplice-create.8
 	install -m644 -D ksplice-apply.8 $(DESTDIR)$(mandir)/man8/ksplice-apply.8
 	install -m644 -D ksplice-undo.8 $(DESTDIR)$(mandir)/man8/ksplice-undo.8
@@ -66,17 +94,6 @@ install: default $(addprefix install-,$(objutils))
 	install -m755 -D $(srcdir)/ksplice-obj.pl $(DESTDIR)$(datadir)/ksplice/ksplice-obj.pl
 	install -m644 -D Ksplice.pm $(DESTDIR)$(datadir)/ksplice/Ksplice.pm
 	install -m644 -D Verbose.pm $(DESTDIR)$(datadir)/ksplice/Verbose.pm
-	install -m644 -D $(srcdir)/kmodsrc/ksplice.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.c
-	install -m644 -D $(srcdir)/kmodsrc/ksplice.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.h
-	install -m644 -D $(srcdir)/kmodsrc/x86/ksplice-arch.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/x86/ksplice-arch.c
-	install -m644 -D $(srcdir)/kmodsrc/arm/ksplice-arch.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/arm/ksplice-arch.c
-	install -m644 -D $(srcdir)/kmodsrc/helper.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/helper.c
-	install -m644 -D $(srcdir)/kmodsrc/primary.c $(DESTDIR)$(datadir)/ksplice/kmodsrc/primary.c
-	install -m644 -D $(srcdir)/kmodsrc/Makefile $(DESTDIR)$(datadir)/ksplice/kmodsrc/Makefile
-	install -m644 -D $(srcdir)/kmodsrc/ld-script $(DESTDIR)$(datadir)/ksplice/kmodsrc/ld-script
-	install -m644 -D $(srcdir)/kmodsrc/ksplice.lds $(DESTDIR)$(datadir)/ksplice/kmodsrc/ksplice.lds
-	cp -a $(srcdir)/kmodsrc/x86/libudis86 $(DESTDIR)$(datadir)/ksplice/kmodsrc/x86/
-	cp -a $(srcdir)/kmodsrc/x86/udis86.h $(DESTDIR)$(datadir)/ksplice/kmodsrc/x86/
 
 clean:
 	rm -f $(perl_primary)
