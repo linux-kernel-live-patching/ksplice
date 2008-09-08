@@ -1126,6 +1126,8 @@ static int register_ksplice_module(struct module_pack *pack)
 				goto out;
 			}
 			add_to_bundle(pack, bundle);
+			list_add(&pack->module_list_entry.list,
+				 &ksplice_module_list);
 			goto out;
 		}
 	}
@@ -1140,6 +1142,7 @@ static int register_ksplice_module(struct module_pack *pack)
 		goto out;
 	}
 	add_to_bundle(pack, bundle);
+	list_add(&pack->module_list_entry.list, &ksplice_module_list);
 out:
 	mutex_unlock(&module_mutex);
 	return ret;
@@ -1170,7 +1173,6 @@ static void add_to_bundle(struct module_pack *pack,
 {
 	pack->bundle = bundle;
 	list_add(&pack->list, &bundle->packs);
-	list_add(&pack->module_list_entry.list, &ksplice_module_list);
 	pack->module_list_entry.target = pack->target;
 	pack->module_list_entry.primary = pack->primary;
 }
