@@ -240,6 +240,9 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 		bfd_vma new_offset =
 		    get_reloc_offset(new_ss, new_ss->relocs.data[i], 1);
 
+		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
+			return -1;
+
 		if (!starts_with(ro_old_ss->name, ".rodata")) {
 			/* for non-rodata, we just compare that the two
 			   relocations are to the same offset within the same
@@ -249,9 +252,6 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 				return -1;
 			continue;
 		}
-
-		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
-			return -1;
 
 		if (starts_with(ro_old_ss->name, ".rodata.str") &&
 		    /* check it's not an out-of-range relocation to a string;
