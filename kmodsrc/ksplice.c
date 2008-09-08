@@ -178,7 +178,10 @@ struct candidate_val {
 	unsigned long val;
 };
 
-#define singular(list) (!list_empty(list) && (list)->next->next == (list))
+static bool singular(struct list_head *list)
+{
+	return !list_empty(list) && list->next->next == list;
+}
 
 #ifdef CONFIG_DEBUG_FS
 static abort_t init_debug_buf(struct update_bundle *bundle);
