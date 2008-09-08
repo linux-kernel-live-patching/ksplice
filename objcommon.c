@@ -324,6 +324,13 @@ asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
 		if (ret == NULL)
 			ret = csymp;
 	}
+	if (ret != NULL)
+		return ret;
+
+	/* For section symbols of sections containing no symbols, return the
+	   section symbol that relocations are generated against */
+	if ((sym->flags & BSF_SECTION_SYM) != 0)
+		return &sym->section->symbol;
 	return ret;
 }
 
