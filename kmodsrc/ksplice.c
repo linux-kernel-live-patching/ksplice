@@ -1385,6 +1385,7 @@ static abort_t activate_helper(struct module_pack *pack,
 		kfree(finished);
 		return NO_MATCH;
 	}
+	kfree(finished);
 	return OK;
 }
 
