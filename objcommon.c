@@ -308,10 +308,10 @@ static const char *find_caller(struct supersect *ss, asymbol *sym)
 	}
 }
 
-asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
+asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
 {
 	asymbol **csymp;
-	asymbol *csym = NULL;
+	asymbol **ret = NULL;
 	for (csymp = sbfd->syms.data; csymp < sbfd->syms.data + sbfd->syms.size;
 	     csymp++) {
 		asymbol *csymtemp = *csymp;
@@ -320,11 +320,17 @@ asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
 		    sym->value != csymtemp->value)
 			continue;
 		if ((csymtemp->flags & BSF_GLOBAL) != 0)
-			return csymtemp;
-		if (csym == NULL)
-			csym = csymtemp;
+			return csymp;
+		if (ret == NULL)
+			ret = csymp;
 	}
-	return csym;
+	return ret;
+}
+
+asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
+{
+	asymbol **symp = canonical_symbolp(sbfd, sym);
+	return symp != NULL ? *symp : NULL;
 }
 
 static const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
