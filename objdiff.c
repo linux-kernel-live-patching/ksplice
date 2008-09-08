@@ -42,8 +42,6 @@ DECLARE_VEC_TYPE(struct export, export_vec);
 
 void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 			 void (*s_fn)(struct supersect *));
-void compare_symbols(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-		     flagword flags);
 struct export_vec *get_export_syms(struct superbfd *sbfd);
 void compare_exported_symbols(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd, char *addstr);
@@ -51,6 +49,9 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 	      struct superbfd *newsbfd, asection *newp);
 static void print_newbfd_section_name(struct supersect *ss);
 static void print_newbfd_entry_symbols(struct supersect *ss);
+void print_new_sections(struct superbfd *oldsbfd, struct superbfd *newsbfd);
+void print_deleted_section_labels(struct superbfd *oldsbfd,
+				  struct superbfd *newsbfd);
 
 int main(int argc, char *argv[])
 {
@@ -71,9 +72,9 @@ int main(int argc, char *argv[])
 	printf("\n");
 	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_entry_symbols);
 	printf("\n");
-	compare_symbols(oldsbfd, newsbfd, ~0);
+	print_new_sections(oldsbfd, newsbfd);
 	printf("\n");
-	compare_symbols(newsbfd, oldsbfd, BSF_FUNCTION);
+	print_deleted_section_labels(oldsbfd, newsbfd);
 	compare_exported_symbols(oldsbfd, newsbfd, "");
 	compare_exported_symbols(newsbfd, oldsbfd, "del_");
 	printf("\n");
@@ -146,41 +147,23 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 	}
 }
 
-void compare_symbols(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-		     flagword flags)
+void print_new_sections(struct superbfd *oldsbfd, struct superbfd *newsbfd)
 {
-	asymbol **old, **new, **tmp;
-	struct symbol_hash old_hash;
-	symbol_hash_init(&old_hash);
-	for (old = oldsbfd->syms.data; old < oldsbfd->syms.data +
-		 oldsbfd->syms.size; old++) {
-		if (((*old)->flags & flags) == 0 ||
-		    ((*old)->flags & BSF_DEBUGGING) != 0)
-			continue;
-		if (((*old)->flags & BSF_FUNCTION) == 0 &&
-		    ((*old)->flags & BSF_OBJECT) == 0)
-			continue;
-		tmp = symbol_hash_lookup(&old_hash, (*old)->name, TRUE);
-		if (*tmp != NULL) {
-			fprintf(stderr, "Two global symbols named %s!\n",
-				(*old)->name);
-			DIE;
-		}
-		*tmp = *old;
+	asection *sect;
+	for (sect = newsbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		if (bfd_get_section_by_name(oldsbfd->abfd, sect->name) == NULL)
+			printf("%s ", sect->name);
 	}
-	for (new = newsbfd->syms.data; new < newsbfd->syms.data +
-		 newsbfd->syms.size; new++) {
-		if (((*new)->flags & flags) == 0 ||
-		    ((*new)->flags & BSF_DEBUGGING) != 0)
-			continue;
-		if (((*new)->flags & BSF_FUNCTION) == 0 &&
-		    ((*new)->flags & BSF_OBJECT) == 0)
-			continue;
-		tmp = symbol_hash_lookup(&old_hash, (*new)->name, FALSE);
-		if (tmp == NULL)
-			printf("%s ", (*new)->name);
+}
+
+void print_deleted_section_labels(struct superbfd *oldsbfd,
+				  struct superbfd *newsbfd)
+{
+	asection *sect;
+	for (sect = oldsbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		if (bfd_get_section_by_name(newsbfd->abfd, sect->name) == NULL)
+			printf("%s ", symbol_label(oldsbfd, sect->symbol));
 	}
-	symbol_hash_free(&old_hash);
 }
 
 void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
@@ -193,11 +176,8 @@ void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 			continue;
 		new_ss = fetch_supersect(newsbfd, newp);
 		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
-		if (oldp == NULL) {
-			if (s_fn == print_newbfd_section_name)
-				s_fn(new_ss);
+		if (oldp == NULL)
 			continue;
-		}
 		old_ss = fetch_supersect(oldsbfd, oldp);
 		if (new_ss->contents.size == old_ss->contents.size &&
 		    memcmp(new_ss->contents.data, old_ss->contents.data,

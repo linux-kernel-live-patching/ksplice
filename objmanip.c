@@ -159,7 +159,7 @@ arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 
 char **varargs;
 int varargs_count;
-struct str_vec sections, entrysyms, newsyms, delsyms;
+struct str_vec sections, entrysyms, newsects, delsects;
 struct export_desc_vec exports;
 
 const char *modestr, *kid;
@@ -238,8 +238,8 @@ int main(int argc, char *argv[])
 	if (mode("keep")) {
 		read_str_set(&sections);
 		read_str_set(&entrysyms);
-		read_str_set(&newsyms);
-		read_str_set(&delsyms);
+		read_str_set(&newsects);
+		read_str_set(&delsects);
 		vec_init(&exports);
 		/* https://bugzilla.redhat.com/show_bug.cgi?id=431832 */
 		while (ungetc(getc(stdin), stdin) != EOF) {
@@ -419,7 +419,7 @@ void rm_some_relocs(struct supersect *ss)
 			rm_reloc = 1;
 
 		if (mode("keep-primary") && want_section(sym_ptr->section) &&
-		    (str_in_set(sym_ptr->name, &newsyms) ||
+		    (str_in_set(sym_ptr->section->name, &newsects) ||
 		     bfd_is_und_section(sym_ptr->section) ||
 		     (sym_ptr->flags & BSF_FUNCTION) == 0))
 			rm_reloc = 0;
@@ -658,7 +658,8 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	ksize->extended_size = bfd_get_section_size(sym->section);
 	ksize->flags = 0;
 	if (mode("keep-helper") &&
-	    str_in_set(sym->name, &delsyms) && (sym->flags & BSF_FUNCTION))
+	    str_in_set(symbol_label(sbfd, sym->section->symbol), &delsects) &&
+	    (sym->flags & BSF_FUNCTION))
 		ksize->flags |= KSPLICE_SIZE_DELETED;
 	if (starts_with(sym->section->name, ".rodata"))
 		ksize->flags |= KSPLICE_SIZE_RODATA;
@@ -990,7 +991,8 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		int keep;
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
-		    !(mode("keep-primary") && str_in_set(sym->name, &newsyms)))
+		    !(mode("keep-primary") &&
+		      str_in_set(sym->section->name, &newsects)))
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
 		if (mode("finalize") && (sym->flags & BSF_GLOBAL) != 0)
@@ -1097,6 +1099,8 @@ int want_section(asection *sect)
 	if (mode("keep-primary") && starts_with(sect->name, "__kcrctab"))
 		return 1;
 	if (mode("keep-primary") && str_in_set(sect->name, &sections))
+		return 1;
+	if (mode("keep-primary") && str_in_set(sect->name, &newsects))
 		return 1;
 
 	int i;
