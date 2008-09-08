@@ -655,6 +655,8 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 			     mode("keep-primary") ? "(post)" : "");
 	ksize->size = symsize;
 	ksize->extended_size = bfd_get_section_size(sym->section);
+	if (ksize->size == 0)	/* HACK */
+		ksize->size = ksize->extended_size;
 	ksize->flags = 0;
 	if (mode("keep-helper") &&
 	    str_in_set(symbol_label(sbfd, sym->section->symbol), &delsects) &&
