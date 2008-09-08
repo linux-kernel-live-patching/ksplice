@@ -462,7 +462,6 @@ static abort_t reverse_patches(struct update_bundle *bundle);
 static abort_t apply_patches(struct update_bundle *bundle);
 static abort_t apply_update(struct update_bundle *bundle);
 static int register_ksplice_module(struct module_pack *pack);
-static void unregister_ksplice_module(struct module_pack *pack);
 static struct update_bundle *init_ksplice_bundle(const char *kid);
 static void cleanup_ksplice_bundle(struct update_bundle *bundle);
 static void add_to_bundle(struct module_pack *pack,
@@ -635,15 +634,6 @@ static struct kobj_type ksplice_ktype = {
 	.release = ksplice_release,
 	.default_attrs = ksplice_attrs,
 };
-
-void cleanup_ksplice_module(struct module_pack *pack)
-{
-	if (pack->bundle == NULL)
-		return;
-	if (pack->bundle->stage != APPLIED)
-		unregister_ksplice_module(pack);
-}
-EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
 static abort_t activate_primary(struct module_pack *pack)
 {
@@ -1148,25 +1138,24 @@ out:
 	return ret;
 }
 
-static void unregister_ksplice_module(struct module_pack *pack)
+void cleanup_ksplice_module(struct module_pack *pack)
 {
-	if (pack->bundle == NULL)
+	if (pack->bundle == NULL || pack->bundle->stage == APPLIED)
 		return;
-	if (pack->bundle->stage != APPLIED) {
-		mutex_lock(&module_mutex);
-		list_del(&pack->list);
-		list_del(&pack->module_list_entry.list);
-		mutex_unlock(&module_mutex);
-		if (list_empty(&pack->bundle->packs))
+	mutex_lock(&module_mutex);
+	list_del(&pack->list);
+	list_del(&pack->module_list_entry.list);
+	mutex_unlock(&module_mutex);
+	if (list_empty(&pack->bundle->packs))
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
-			kobject_put(&pack->bundle->kobj);
+		kobject_put(&pack->bundle->kobj);
 #else /* LINUX_VERSION_CODE < */
 /* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
-			kobject_unregister(&pack->bundle->kobj);
+		kobject_unregister(&pack->bundle->kobj);
 #endif /* LINUX_VERSION_CODE */
-		pack->bundle = NULL;
-	}
+	pack->bundle = NULL;
 }
+EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
 static void add_to_bundle(struct module_pack *pack,
 			  struct update_bundle *bundle)
