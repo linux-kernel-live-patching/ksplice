@@ -127,7 +127,7 @@ void rm_some_relocs(struct supersect *ss);
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 void write_ksplice_size(struct superbfd *sbfd, asymbol **symp);
-void write_ksplice_patch(struct superbfd *sbfd, const char *symname);
+void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
 void rm_from_special(struct superbfd *sbfd, const struct specsect *s);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
@@ -159,7 +159,7 @@ arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 
 char **varargs;
 int varargs_count;
-struct str_vec sections, entrysyms, newsects, delsects;
+struct str_vec sections, newsects, delsects;
 struct export_desc_vec exports;
 
 const char *modestr, *kid;
@@ -237,7 +237,6 @@ int main(int argc, char *argv[])
 
 	if (mode("keep")) {
 		read_str_set(&sections);
-		read_str_set(&entrysyms);
 		read_str_set(&newsects);
 		read_str_set(&delsects);
 		vec_init(&exports);
@@ -307,10 +306,10 @@ int main(int argc, char *argv[])
 	}
 
 	if (mode("keep-primary")) {
-		const char **symname;
-		for (symname = entrysyms.data;
-		     symname < entrysyms.data + entrysyms.size; symname++)
-			write_ksplice_patch(isbfd, *symname);
+		const char **sectname;
+		for (sectname = sections.data;
+		     sectname < sections.data + sections.size; sectname++)
+			write_ksplice_patch(isbfd, *sectname);
 
 		const struct export_desc *ed;
 		for (ed = exports.data; ed < exports.data + exports.size;
@@ -672,25 +671,19 @@ void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 	write_reloc(ksize_ss, &ksize->thismod_addr, symp, 0);
 }
 
-void write_ksplice_patch(struct superbfd *sbfd, const char *symname)
+void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
 {
 	struct supersect *kpatch_ss = make_section(sbfd, ".ksplice_patches");
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
-
-	asymbol **symp;
-	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
-	     symp++) {
-		if (strcmp((*symp)->name, symname) == 0)
-			break;
-	}
-	assert(symp < sbfd->syms.data + sbfd->syms.size);
+	asection *sect = bfd_get_section_by_name(sbfd->abfd, sectname);
+	assert(sect != NULL);
 
 	write_string(kpatch_ss, &kpatch->label, "%s",
-		     symbol_label(sbfd, *symp));
+		     symbol_label(sbfd, sect->symbol));
 	write_ksplice_reloc(kpatch_ss, create_reloc(kpatch_ss, &kpatch->oldaddr,
-						    symp, 0));
-	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
+						    &sect->symbol, 0));
+	write_reloc(kpatch_ss, &kpatch->repladdr, &sect->symbol, 0);
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,

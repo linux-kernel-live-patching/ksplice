@@ -48,7 +48,6 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 	      struct superbfd *newsbfd, asection *newp);
 static void print_newbfd_section_name(struct supersect *ss);
-static void print_newbfd_entry_symbols(struct supersect *ss);
 void print_new_sections(struct superbfd *oldsbfd, struct superbfd *newsbfd);
 void print_deleted_section_labels(struct superbfd *oldsbfd,
 				  struct superbfd *newsbfd);
@@ -69,8 +68,6 @@ int main(int argc, char *argv[])
 	struct superbfd *newsbfd = fetch_superbfd(newbfd);
 
 	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_section_name);
-	printf("\n");
-	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_entry_symbols);
 	printf("\n");
 	print_new_sections(oldsbfd, newsbfd);
 	printf("\n");
@@ -261,30 +258,4 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 void print_newbfd_section_name(struct supersect *ss)
 {
 	printf("%s ", ss->name);
-}
-
-void print_newbfd_entry_symbols(struct supersect *ss)
-{
-	struct asymbolp_vec new_syms = ss->parent->syms;
-	asymbol **symp;
-	for (symp = new_syms.data; symp < new_syms.data + new_syms.size;
-	     symp++) {
-		asymbol *sym = *symp;
-		struct supersect *sym_ss = fetch_supersect(ss->parent,
-							   sym->section);
-		if (sym_ss != ss || sym->name[0] == '\0' ||
-		    starts_with(sym->name, ".text"))
-			continue;
-		if ((sym->flags & BSF_FUNCTION) == 0 &&
-		    (sym->flags & BSF_OBJECT) == 0)
-			continue;
-
-		if (sym->value != 0) {
-			fprintf(stderr,
-				"Symbol %s [%x] has nonzero value %lx\n",
-				sym->name, sym->flags, sym->value);
-			DIE;
-		}
-		printf("%s ", sym->name);
-	}
 }
