@@ -286,23 +286,23 @@ int main(int argc, char *argv[])
 			if (tmp == wanted_sections)
 				break;
 		}
-	}
 
-	asymbol **symp;
-	for (symp = isbfd->syms.data;
-	     mode("keep") && symp < isbfd->syms.data + isbfd->syms.size;
-	     symp++) {
-		asymbol *sym = *symp;
-		if (!want_section(sym->section))
-			continue;
-		if ((sym->flags & BSF_WEAK) != 0)
-			continue;
-		if ((sym->flags & BSF_DEBUGGING) != 0)
-			continue;
-		if ((sym->flags & BSF_FUNCTION) && sym->value == 0)
-			write_ksplice_size(isbfd, symp);
-		if (sym->value == 0 && needed_data_section(isbfd, sym->section))
-			write_ksplice_size(isbfd, symp);
+		asection *sect;
+		for (sect = ibfd->sections; sect != NULL; sect = sect->next) {
+			asymbol **symp = canonical_symbolp(isbfd, sect->symbol);
+			if (symp == NULL)
+				continue;
+			asymbol *sym = *symp;
+			if (!want_section(sect))
+				continue;
+			if (starts_with(sect->name, ".rodata.str"))
+				continue;
+			if ((sym->flags & BSF_WEAK) != 0)
+				continue;
+			if ((sym->flags & BSF_FUNCTION) != 0 ||
+			    needed_data_section(isbfd, sect))
+				write_ksplice_size(isbfd, symp);
+		}
 	}
 
 	if (mode("keep-primary")) {
