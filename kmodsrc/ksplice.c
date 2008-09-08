@@ -1342,7 +1342,7 @@ static abort_t activate_helper(struct module_pack *pack,
 	bool progress;
 
 	finished = kcalloc(pack->helper_sizes_end - pack->helper_sizes,
-			   sizeof(char), GFP_KERNEL);
+			   sizeof(*finished), GFP_KERNEL);
 	if (finished == NULL)
 		return OUT_OF_MEMORY;
 	for (s = pack->helper_sizes; s < pack->helper_sizes_end; s++) {
