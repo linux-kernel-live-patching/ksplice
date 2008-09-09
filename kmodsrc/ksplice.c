@@ -17,6 +17,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/version.h>
 #ifdef CONFIG_DEBUG_FS
 #include <linux/debugfs.h>
 #endif /* CONFIG_DEBUG_FS */
@@ -29,14 +30,13 @@
 #include <linux/stop_machine.h>
 #include <linux/sysfs.h>
 #include <linux/time.h>
-#include <linux/version.h>
-#include <linux/vmalloc.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
 #include <linux/uaccess.h>
 #else /* LINUX_VERSION_CODE < */
 /* linux/uaccess.h doesn't exist in kernels before 2.6.18 */
 #include <asm/uaccess.h>
 #endif /* LINUX_VERSION_CODE */
+#include <linux/vmalloc.h>
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 #include <asm/alternative.h>
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
