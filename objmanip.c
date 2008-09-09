@@ -20,80 +20,30 @@
  */
 
 /* objmanip performs various object file manipulations for Ksplice.  Its first
- * argument is always an object file, which is modified in-place during
- * objmanip's execution.  (objmanip's code is similar to objcopy from GNU
- * binutils because every manipulation that objmanip performs is essentially a
- * "copy" operation with certain changes which make the new version different
- * from the old version).  objmanip has four modes of operation:
+ * two arguments are always an input object file and an output object file.
  *
- * (1) keep mode
+ * - keep-primary: "objmanip <in.o> <out.o> keep-primary <kid>"
  *
- * This mode is the first objmanip step in processing the target object files.
+ * This mode prepares the object file to be installed as a ksplice update.
+ * It takes as input on STDIN the output of the objdiff command.  The kid
+ * argument is the ksplice id string for the ksplice update being built.
  *
- * This mode can be broken down into two submodes, called "keep-primary" (which
- * is used to prepare the primary kernel module) and "keep-helper" (which is
- * used to prepare the helper kernel module):
+ * - keep-helper: "objmanip <in.o> <out.o> keep-helper"
  *
- * (a) keep-primary: "objmanip file.o keep-primary ADDSTR sect_1 ... sect_n"
+ * This mode prepares the object file to be used for run-pre matching.  This
+ * involves replacing all ELF relocations with ksplice relocations and
+ * writing ksplice_size structures for each ELF text or data section.
  *
- * In this submode, only certain sections are kept; all other sections are
- * discarded.  Specifically, the following sections are kept: the listed
- * sections (sect_1 ... sect_n), certain sections referenced by the listed
- * sections, and certain special sections.  The sections that are kept have
- * ADDSTR added to the end of their names.
+ * - rmsyms mode: "objmanip <in.o> <out.o> rmsyms
  *
- * The sections that are kept have most of their ELF relocations removed.
- * (Relocations that point to sections that are being kept are not removed; all
- * other relocations are removed).  Information about each of the removed ELF
- * relocations is printed to STDOUT (ksplice-create will save this information
- * into Ksplice-specific ELF sections for the primary kernel module to use
- * later).
+ * In this mode, any ELF relocations involving the list of symbol names given on
+ * standard input are replaced with ksplice relocations.  This is used only
+ * for KSPLICE_STANDALONE.
  *
- * Each line of the STDOUT output represents a single place within the ELF
- * object file at which a relocation has been removed.  Each line contains the
- * following fields, separated by spaces: an ELF symbol name, the name of a
- * section previously containing a relocation pointing to that symbol, the
- * offset (within that section) of the former relocation to that symbol, a bit
- * representing whether that ELF relocation is PC-relative, and the ELF addend
- * value for that relocation.
+ * - finalize mode: "objmanip <in.o> <out.o> finalize"
  *
- * (b) keep-helper: "objmanip file.o keep-helper ADDSTR"
- *
- * In this submode, essentially all sections are kept and have ADDSTR added to
- * the end of their names.
- *
- * The sections that are kept have all of their ELF relocations removed.
- * Information about each of the removed ELF relocations is printed to STDOUT
- * (ksplice-create will save this information into Ksplice-specific ELF
- * sections for the helper kernel module to use later).
- *
- * The fields of the STDOUT output are the same as with keep-primary.
- *
- * (2) globalize mode: "objmanip file.o globalize GLOBALIZESTR"
- *
- * This mode is the second objmanip step in processing the target object files.
- * In this mode, all symbols whose names end in GLOBALIZESTR will be
- * duplicated, with the duplicate symbols differing slightly from the original
- * symbols.  The duplicate symbols will have the string "_global" added to the
- * end of their symbol names, and they will be global ELF symbols, regardless
- * of whether the corresponding original symbol was global.
- *
- * (3) sizelist mode: "objmanip file.o sizelist"
- *
- * After the target object files have been linked into a single collection
- * object file, this mode is used in order to obtain a list of all of the
- * functions in the collection object file.  Each line of the STDOUT output
- * contains an ELF section name and that section's size, as presented by BFD's
- * bfd_print_symbol function.
- *
- * (4) rmsyms mode: "objmanip file.o rmsyms sym_1 ... sym_n"
- *
- * This mode is the final objmanip step in preparing the Ksplice kernel
- * modules.  In this mode, any ELF relocations involving the listed symbols
- * (sym_1 ...  sym_n) are removed, and information about each of the removed
- * relocations is printed to STDOUT.
- *
- * The fields of the STDOUT output are the same as with keep-primary.
+ * In this mode, any ELF relocations to undefined symbols are replaced with
+ * ksplice relocations.
  */
 
 #define _GNU_SOURCE
