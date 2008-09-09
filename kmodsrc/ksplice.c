@@ -741,23 +741,15 @@ static abort_t process_exports(struct module_pack *pack)
 	struct ksplice_export *export;
 	struct module *m;
 	const struct kernel_symbol *sym;
-	const char *export_type;
 
 	for (export = pack->exports; export < pack->exports_end; export++) {
 		sym = find_symbol(export->name, &m, NULL, true, false);
 		if (sym == NULL) {
 			ksdebug(pack, 0, "Could not find kernel_symbol struct"
-				"for %s (%s)\n", export->name, export->type);
+				"for %s\n", export->name);
 			return MISSING_EXPORT;
 		}
-		/* Do we actually want the following check? */
-		export_type = export->type;
-		if (strcmp(export_type, export->type) != 0) {
-			ksdebug(pack, 0, "Nonmatching export type for %s "
-				"(%s/%s)\n", export->name, export->type,
-				export_type);
-			return MISSING_EXPORT;
-		}
+
 		/* Cast away const since we are planning to mutate the
 		 * kernel_symbol structure. */
 		export->sym = (struct kernel_symbol *)sym;

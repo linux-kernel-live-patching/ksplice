@@ -40,7 +40,6 @@ struct ksplice_patch {
 
 struct ksplice_export {
 	const char *name;
-	const char *type;
 	const char *saved_name;
 	const char *new_name;
 	struct kernel_symbol *sym;

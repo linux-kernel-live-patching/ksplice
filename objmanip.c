@@ -678,7 +678,6 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 	struct ksplice_export *export = sect_grow(export_ss, 1,
 						  struct ksplice_export);
 
-	write_string(export_ss, &export->type, "%s", export_type);
 	if (del) {
 		write_string(export_ss, &export->name, "%s", symname);
 		write_string(export_ss, &export->new_name,

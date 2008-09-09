@@ -148,11 +148,9 @@ void show_ksplice_export(struct supersect *ss,
 {
 	printf("name: %s\n"
 	       "newname: %s\n"
-	       "type: %s\n"
 	       "\n",
 	       read_string(ss, &export->name),
-	       read_string(ss, &export->new_name),
-	       read_string(ss, &export->type));
+	       read_string(ss, &export->new_name));
 }
 
 void show_ksplice_exports(struct supersect *export_ss)
