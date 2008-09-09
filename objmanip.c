@@ -632,38 +632,13 @@ void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto)
 void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
 {
 	asymbol *sym = *symp;
-
-	/* We call bfd_print_symbol in order to get access to
-	 * the size associated with the function symbol, which
-	 * is not otherwise available through the BFD API
-	 */
-	char *buf = NULL;
-	size_t bufsize = 0;
-	FILE *fp = open_memstream(&buf, &bufsize);
-	bfd_print_symbol(sbfd->abfd, fp, sym, bfd_print_symbol_all);
-	fclose(fp);
-	assert(buf != NULL);
-
-	unsigned long symsize;
-	char *symname;
-	int len;
-	assert(sscanf(buf, "%*[^\t]\t%lx %as%n", &symsize, &symname, &len) >=
-	       2);
-	assert(buf[len] == '\0');
-	assert(strcmp(symname, sym->name) == 0);
-	free(symname);
-	free(buf);
-
 	struct supersect *ksize_ss = make_section(sbfd, ".ksplice_sizes");
 	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
 					       struct ksplice_size);
 
 	write_ksplice_symbol(ksize_ss, &ksize->symbol, sym,
 			     mode("keep-primary") ? "(post)" : "");
-	ksize->size = symsize;
-	ksize->extended_size = bfd_get_section_size(sym->section);
-	if (ksize->size == 0)	/* HACK */
-		ksize->size = ksize->extended_size;
+	ksize->size = bfd_get_section_size(sym->section);
 	ksize->flags = 0;
 	if (starts_with(sym->section->name, ".rodata"))
 		ksize->flags |= KSPLICE_SIZE_RODATA;

@@ -105,10 +105,10 @@ void show_ksplice_size_flags(const struct ksplice_size *ksize)
 void show_ksplice_size(struct supersect *ss, const struct ksplice_size *ksize)
 {
 	printf("symbol: %s\n"
-	       "thismod_addr: %s  size: %lx extended_size: %lx\n",
+	       "thismod_addr: %s  size: %lx\n",
 	       str_ksplice_symbolp(ss, &ksize->symbol),
 	       str_pointer(ss, (void *const *)&ksize->thismod_addr),
-	       read_num(ss, &ksize->size), read_num(ss, &ksize->extended_size));
+	       read_num(ss, &ksize->size));
 	show_ksplice_size_flags(ksize);
 	printf("\n");
 }

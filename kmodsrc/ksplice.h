@@ -20,7 +20,6 @@ struct ksplice_reloc {
 struct ksplice_size {
 	const struct ksplice_symbol *symbol;
 	unsigned long size;
-	unsigned long extended_size;
 	unsigned long thismod_addr;
 	unsigned int flags;
 };
