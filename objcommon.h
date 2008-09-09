@@ -170,6 +170,7 @@ struct supersect {
 	struct arelentp_vec relocs;
 	struct arelentp_vec new_relocs;
 	struct supersect *next;
+	struct asymbolp_vec syms;
 	asymbol *symbol;
 };
 

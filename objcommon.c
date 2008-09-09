@@ -91,6 +91,15 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	assert(new->relocs.size >= 0);
 	vec_init(&new->new_relocs);
 
+	vec_init(&new->syms);
+	asymbol **symp;
+	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
+	     symp++) {
+		asymbol *sym = *symp;
+		if (sym->section == sect)
+			*vec_grow(&new->syms, 1) = sym;
+	}
+
 	return new;
 }
 
@@ -123,6 +132,7 @@ void supersect_move(struct supersect *dest_ss, struct supersect *src_ss)
 	vec_init(&src_ss->contents);
 	vec_init(&src_ss->relocs);
 	vec_init(&src_ss->new_relocs);
+	vec_init(&src_ss->syms);
 }
 
 void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment)
@@ -153,6 +163,24 @@ static void mod_relocs(struct arelentp_vec *dest_relocs,
 	}
 }
 
+static void mod_symbols(struct asymbolp_vec *dest_syms,
+			struct asymbolp_vec *src_syms,
+			bfd_size_type start, bfd_size_type end,
+			bfd_size_type mod)
+{
+	asymbol **symp;
+	for (symp = src_syms->data;
+	     symp < src_syms->data + src_syms->size; symp++) {
+		/* must mutate symbols in-place since there are pointers
+		   to them in relocations elsewhere */
+		asymbol *sym = *symp;
+		if (sym->value >= start && sym->value < end) {
+			sym->value += mod;
+			*vec_grow(dest_syms, 1) = sym;
+		}
+	}
+}
+
 void sect_do_copy(struct supersect *dest_ss, void *dest,
 		  struct supersect *src_ss, const void *src, size_t n)
 {
@@ -163,6 +191,7 @@ void sect_do_copy(struct supersect *dest_ss, void *dest,
 	    (src - src_ss->contents.data);
 	mod_relocs(&dest_ss->relocs, &src_ss->relocs, start, end, mod);
 	mod_relocs(&dest_ss->new_relocs, &src_ss->new_relocs, start, end, mod);
+	mod_symbols(&dest_ss->syms, &src_ss->syms, start, end, mod);
 }
 
 bfd_vma addr_offset(struct supersect *ss, const void *addr)

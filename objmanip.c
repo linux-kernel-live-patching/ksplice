@@ -142,6 +142,7 @@ void mark_symbols_used_in_relocations(bfd *abfd, asection *isection,
 static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
 void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms);
+static int deleted_specsect_symbol(bfd *abfd, asymbol *sym);
 int match_varargs(const char *str);
 void read_str_set(struct str_vec *strs);
 int str_in_set(const char *str, const struct str_vec *strs);
@@ -957,6 +958,22 @@ void ss_mark_symbols_used_in_relocations(struct supersect *ss)
 	}
 }
 
+static int deleted_specsect_symbol(bfd *abfd, asymbol *sym)
+{
+	struct superbfd *sbfd = fetch_superbfd(abfd);
+	struct supersect *ss = fetch_supersect(sbfd, sym->section);
+
+	if (bfd_is_const_section(sym->section))
+		return 0;
+
+	asymbol **symp;
+	for (symp = ss->syms.data; symp < ss->syms.data + ss->syms.size; symp++) {
+		if (sym == *symp)
+			break;
+	}
+	return symp >= ss->syms.data + ss->syms.size;
+}
+
 /* Modified function from GNU Binutils objcopy.c
  *
  * Choose which symbol entries to copy.
@@ -1002,6 +1019,9 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 			keep = !bfd_is_local_label(ibfd, sym);
 
 		if (!want_section(sym->section))
+			keep = 0;
+
+		if (deleted_specsect_symbol(ibfd, sym) == 1)
 			keep = 0;
 
 		if (mode("rmsyms") && match_varargs(sym->name))
