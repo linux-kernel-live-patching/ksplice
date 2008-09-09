@@ -704,7 +704,8 @@ static abort_t process_patches(struct module_pack *pack)
 		p->oldaddr = nv->val;
 
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (strcmp(rec->label, p->label) == 0) {
+			if (strcmp(rec->label, p->label) == 0 &&
+			    rec->addr == p->oldaddr) {
 				found = 1;
 				break;
 			}
@@ -712,11 +713,6 @@ static abort_t process_patches(struct module_pack *pack)
 		if (!found) {
 			ksdebug(pack, 0, KERN_DEBUG "No safety record for "
 				"patch %s\n", p->label);
-			return UNEXPECTED;
-		}
-		if (rec->addr != p->oldaddr) {
-			ksdebug(pack, 0, KERN_DEBUG "Wrong address for "
-				"safety record for patch %s\n", p->label);
 			return UNEXPECTED;
 		}
 		if (rec->size < p->size) {
@@ -727,6 +723,8 @@ static abort_t process_patches(struct module_pack *pack)
 
 		if (p->repladdr == 0)
 			p->repladdr = (unsigned long)ksplice_deleted;
+		else
+			rec->first_byte_safe = true;
 
 		ret = create_trampoline(p);
 		if (ret != OK)
@@ -1763,10 +1761,7 @@ static abort_t create_safety_record(struct module_pack *pack,
 	rec->addr = run_addr;
 	rec->size = run_size;
 	rec->label = s->symbol->label;
-	/* The beginning of a patched function is safe to
-	   because that location will be overwritten with a trampoline. */
-	rec->first_byte_safe = p->repladdr != 0 &&
-	    (s->flags & KSPLICE_SIZE_TEXT) != 0;
+	rec->first_byte_safe = false;
 
 	list_add(&rec->list, record_list);
 	return OK;
