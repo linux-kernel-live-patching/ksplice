@@ -129,4 +129,5 @@ if (exists $handlers{$cmd}) {
 	&$handler(@args);
 } else {
 	print "Usage: ksplice-obj.pl ", join('|', keys %handlers), " ...\n";
+	exit(1);
 };
