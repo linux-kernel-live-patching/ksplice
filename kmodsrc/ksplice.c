@@ -39,14 +39,14 @@
 #include <asm/uaccess.h>
 #endif /* LINUX_VERSION_CODE */
 #include <linux/vmalloc.h>
-#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-#include <asm/alternative.h>
-#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 #ifdef KSPLICE_STANDALONE
 #include "ksplice.h"
 #else /* !KSPLICE_STANDALONE */
 #include <linux/ksplice.h>
 #endif /* KSPLICE_STANDALONE */
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+#include <asm/alternative.h>
+#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
 /* 6e21828743247270d09a86756a0c11702500dbfb was after 2.6.18 */
