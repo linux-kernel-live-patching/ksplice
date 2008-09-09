@@ -148,6 +148,8 @@ void print_new_sections(struct superbfd *oldsbfd, struct superbfd *newsbfd)
 {
 	asection *sect;
 	for (sect = newsbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		if (!starts_with(sect->name, ".text"))
+			continue;
 		if (bfd_get_section_by_name(oldsbfd->abfd, sect->name) == NULL)
 			printf("%s ", sect->name);
 	}
@@ -158,6 +160,8 @@ void print_deleted_section_labels(struct superbfd *oldsbfd,
 {
 	asection *sect;
 	for (sect = oldsbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		if (!starts_with(sect->name, ".text"))
+			continue;
 		if (bfd_get_section_by_name(newsbfd->abfd, sect->name) == NULL)
 			printf("%s ", label_lookup(oldsbfd, sect->symbol));
 	}
