@@ -331,14 +331,14 @@ extern const unsigned long __start___kcrctab_gpl_future[];
 
 #endif /* KSPLICE_STANDALONE */
 
-static abort_t process_primary_relocs(struct module_pack *pack,
-				      const struct ksplice_reloc *relocs,
-				      const struct ksplice_reloc *relocs_end);
-static abort_t process_primary_reloc(struct module_pack *pack,
-				     const struct ksplice_reloc *r);
-static abort_t apply_ksplice_reloc(struct module_pack *pack,
-				   const struct ksplice_reloc *r,
-				   unsigned long sym_addr);
+static abort_t apply_relocs(struct module_pack *pack,
+			    const struct ksplice_reloc *relocs,
+			    const struct ksplice_reloc *relocs_end);
+static abort_t apply_reloc(struct module_pack *pack,
+			   const struct ksplice_reloc *r);
+static abort_t write_reloc_value(struct module_pack *pack,
+				 const struct ksplice_reloc *r,
+				 unsigned long sym_addr);
 static abort_t add_system_map_candidates(struct module_pack *pack,
 					 const struct ksplice_symbol *symbol,
 					 struct list_head *vals);
@@ -659,8 +659,8 @@ static struct kobj_type ksplice_ktype = {
 static abort_t activate_primary(struct module_pack *pack)
 {
 	abort_t ret;
-	ret = process_primary_relocs(pack, pack->primary_relocs,
-				     pack->primary_relocs_end);
+	ret = apply_relocs(pack, pack->primary_relocs,
+			   pack->primary_relocs_end);
 	if (ret != OK)
 		return ret;
 
@@ -1851,9 +1851,9 @@ static abort_t handle_reloc(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t apply_ksplice_reloc(struct module_pack *pack,
-				   const struct ksplice_reloc *r,
-				   unsigned long sym_addr)
+static abort_t write_reloc_value(struct module_pack *pack,
+				 const struct ksplice_reloc *r,
+				 unsigned long sym_addr)
 {
 	unsigned long val = sym_addr + r->addend;
 	if (r->pcrel)
@@ -1886,21 +1886,21 @@ static abort_t apply_ksplice_reloc(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t process_primary_relocs(struct module_pack *pack,
-				      const struct ksplice_reloc *relocs,
-				      const struct ksplice_reloc *relocs_end)
+static abort_t apply_relocs(struct module_pack *pack,
+			    const struct ksplice_reloc *relocs,
+			    const struct ksplice_reloc *relocs_end)
 {
 	const struct ksplice_reloc *r;
 	for (r = relocs; r < relocs_end; r++) {
-		abort_t ret = process_primary_reloc(pack, r);
+		abort_t ret = apply_reloc(pack, r);
 		if (ret != OK)
 			return ret;
 	}
 	return OK;
 }
 
-static abort_t process_primary_reloc(struct module_pack *pack,
-				     const struct ksplice_reloc *r)
+static abort_t apply_reloc(struct module_pack *pack,
+			   const struct ksplice_reloc *r)
 {
 	abort_t ret;
 	int canary_ret;
@@ -1947,7 +1947,7 @@ static abort_t process_primary_reloc(struct module_pack *pack,
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
 
-	ret = apply_ksplice_reloc(pack, r, sym_addr);
+	ret = write_reloc_value(pack, r, sym_addr);
 	if (ret != OK)
 		return ret;
 
@@ -2843,8 +2843,7 @@ static int init_ksplice(void)
 	add_to_bundle(pack, pack->bundle);
 	pack->bundle->debug = debug;
 	pack->bundle->abort_cause =
-	    process_primary_relocs(pack, ksplice_init_relocs,
-				   ksplice_init_relocs_end);
+	    apply_relocs(pack, ksplice_init_relocs, ksplice_init_relocs_end);
 	if (pack->bundle->abort_cause == OK)
 		bootstrapped = 1;
 #else /* !KSPLICE_STANDALONE */
