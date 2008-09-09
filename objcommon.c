@@ -484,6 +484,34 @@ const char *label_lookup(struct superbfd *sbfd, asymbol *sym)
 	return symbol_label(sbfd, sym);
 }
 
+void print_label_map(struct superbfd *sbfd)
+{
+	struct label_map *map;
+	for (map = sbfd->maps.data;
+	     map < sbfd->maps.data + sbfd->maps.size; map++) {
+		if (strcmp(map->orig_label, map->label) == 0)
+			continue;
+		printf("%s %s;", map->orig_label, map->label);
+	}
+}
+
+void label_map_set(struct superbfd *sbfd, const char *oldlabel,
+		   const char *label)
+{
+	struct label_map *map;
+	for (map = sbfd->maps.data;
+	     map < sbfd->maps.data + sbfd->maps.size; map++) {
+		if (strcmp(map->orig_label, oldlabel) == 0) {
+			if (strcmp(map->orig_label, map->label) != 0 &&
+			    strcmp(map->label, label) != 0)
+				DIE;
+			map->label = label;
+			return;
+		}
+	}
+	DIE;
+}
+
 void read_label_map(struct superbfd *sbfd)
 {
 	char *buf = NULL;

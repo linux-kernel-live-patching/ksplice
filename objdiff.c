@@ -58,8 +58,8 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd, char *addstr);
 bool relocs_equal(struct superbfd *oldsbfd, asection *oldp,
 		  struct superbfd *newsbfd, asection *newp);
-static void print_section_symbol_renames(struct superbfd *oldsbfd,
-					 struct superbfd *newsbfd);
+static void handle_section_symbol_renames(struct superbfd *oldsbfd,
+					  struct superbfd *newsbfd);
 
 int main(int argc, char *argv[])
 {
@@ -76,7 +76,9 @@ int main(int argc, char *argv[])
 	struct superbfd *oldsbfd = fetch_superbfd(oldbfd);
 	struct superbfd *newsbfd = fetch_superbfd(newbfd);
 
-	print_section_symbol_renames(oldsbfd, newsbfd);
+	handle_section_symbol_renames(oldsbfd, newsbfd);
+	print_label_map(newsbfd);
+	printf("\n");
 	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_section_name);
 	printf("\n");
 	foreach_new_section(oldsbfd, newsbfd, print_newbfd_section_name);
@@ -207,8 +209,8 @@ void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 	}
 }
 
-static void print_section_symbol_renames(struct superbfd *oldsbfd,
-					 struct superbfd *newsbfd)
+static void handle_section_symbol_renames(struct superbfd *oldsbfd,
+					  struct superbfd *newsbfd)
 {
 	asection *newp, *oldp;
 	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
@@ -226,9 +228,8 @@ static void print_section_symbol_renames(struct superbfd *oldsbfd,
 
 		if (strcmp(old_label, new_label) == 0)
 			continue;
-		printf("%s %s;", new_label, old_label);
+		label_map_set(newsbfd, new_label, old_label);
 	}
-	printf("\n");
 }
 
 /*
