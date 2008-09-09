@@ -213,3 +213,4 @@ char *str_pointer(struct supersect *ss, void *const *addr);
 asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym);
 asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
 const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
+void read_label_map(struct superbfd *sbfd);

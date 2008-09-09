@@ -51,6 +51,8 @@ static void print_newbfd_section_name(struct supersect *ss);
 void print_new_sections(struct superbfd *oldsbfd, struct superbfd *newsbfd);
 void print_deleted_section_labels(struct superbfd *oldsbfd,
 				  struct superbfd *newsbfd);
+static void print_section_symbol_renames(struct superbfd *oldsbfd,
+					 struct superbfd *newsbfd);
 
 int main(int argc, char *argv[])
 {
@@ -67,6 +69,7 @@ int main(int argc, char *argv[])
 	struct superbfd *oldsbfd = fetch_superbfd(oldbfd);
 	struct superbfd *newsbfd = fetch_superbfd(newbfd);
 
+	print_section_symbol_renames(oldsbfd, newsbfd);
 	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_section_name);
 	printf("\n");
 	print_new_sections(oldsbfd, newsbfd);
@@ -187,6 +190,30 @@ void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 			continue;
 		s_fn(new_ss);
 	}
+}
+
+static void print_section_symbol_renames(struct superbfd *oldsbfd,
+					 struct superbfd *newsbfd)
+{
+	asection *newp, *oldp;
+	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
+		if (!starts_with(newp->name, ".text") &&
+		    !starts_with(newp->name, ".data") &&
+		    !starts_with(newp->name, ".rodata") &&
+		    !starts_with(newp->name, ".bss"))
+			continue;
+		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
+		if (oldp == NULL)
+			continue;
+
+		const char *old_label = label_lookup(oldsbfd, oldp->symbol);
+		const char *new_label = label_lookup(newsbfd, newp->symbol);
+
+		if (strcmp(old_label, new_label) == 0)
+			continue;
+		printf("%s %s;", new_label, old_label);
+	}
+	printf("\n");
 }
 
 /*

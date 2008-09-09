@@ -238,6 +238,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (mode("keep-primary")) {
+		read_label_map(isbfd);
 		read_str_set(&sections);
 		read_str_set(&newsects);
 		read_str_set(&delsects);
