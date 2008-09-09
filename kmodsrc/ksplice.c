@@ -175,7 +175,7 @@ struct safety_record {
 	struct list_head list;
 	const char *label;
 	unsigned long addr;
-	unsigned int size;
+	unsigned long size;
 	bool first_byte_safe;
 };
 
