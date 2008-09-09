@@ -18,8 +18,10 @@
 
 #include <linux/module.h>
 #include <linux/version.h>
-#ifdef CONFIG_DEBUG_FS
+#if defined CONFIG_DEBUG_FS || LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
 #include <linux/debugfs.h>
+#else /* CONFIG_DEBUG_FS */
+/* a7a76cefc4b12bb6508afa4c77f11c2752cc365d was after 2.6.11 */
 #endif /* CONFIG_DEBUG_FS */
 #include <linux/errno.h>
 #include <linux/kallsyms.h>
