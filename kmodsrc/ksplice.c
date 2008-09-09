@@ -709,10 +709,16 @@ static abort_t process_patches(struct module_pack *pack)
 				break;
 			}
 		}
-		if (!found)
+		if (!found) {
+			ksdebug(pack, 0, KERN_DEBUG "No safety record for "
+				"patch %s\n", p->label);
 			return UNEXPECTED;
-		if (rec->addr != p->oldaddr)
+		}
+		if (rec->addr != p->oldaddr) {
+			ksdebug(pack, 0, KERN_DEBUG "Wrong address for "
+				"safety record for patch %s\n", p->label);
 			return UNEXPECTED;
+		}
 		if (rec->size < p->size) {
 			ksdebug(pack, 0, KERN_DEBUG "Symbol %s is too short "
 				"for trampoline\n", p->label);
