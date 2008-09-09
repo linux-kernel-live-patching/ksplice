@@ -469,6 +469,11 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 static void print_bytes(struct module_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec);
+static abort_t create_safety_record(struct module_pack *pack,
+				    const struct ksplice_size *s,
+				    struct list_head *record_list,
+				    unsigned long run_addr,
+				    unsigned long run_size);
 
 static abort_t reverse_patches(struct update_bundle *bundle);
 static abort_t apply_patches(struct update_bundle *bundle);
@@ -1650,8 +1655,6 @@ static struct module *__module_data_address(unsigned long addr)
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr, enum run_pre_mode mode)
 {
-	struct safety_record *rec;
-	struct ksplice_patch *p;
 	abort_t ret;
 	unsigned long run_size;
 	const struct module *run_module;
@@ -1721,6 +1724,18 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	set_temp_myst_relocs(pack, VAL);
 	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect %s=%" ADDR
 		"\n", s->symbol->label, run_addr);
+	return create_safety_record(pack, s, &pack->safety_records, run_addr,
+				    run_size);
+}
+
+static abort_t create_safety_record(struct module_pack *pack,
+				    const struct ksplice_size *s,
+				    struct list_head *record_list,
+				    unsigned long run_addr,
+				    unsigned long run_size)
+{
+	struct safety_record *rec;
+	struct ksplice_patch *p;
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		if (strcmp(s->symbol->label, p->label) == 0)
@@ -1747,7 +1762,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	rec->first_byte_safe = p->repladdr != 0 &&
 	    (s->flags & KSPLICE_SIZE_TEXT) != 0;
 
-	list_add(&rec->list, &pack->safety_records);
+	list_add(&rec->list, record_list);
 	return OK;
 }
 
