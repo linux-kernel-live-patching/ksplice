@@ -17,15 +17,22 @@
  */
 
 /*
- * "objdiff old.o new.o" prints two lists to STDOUT, one per line:
- * (1) the names of the ELF sections in new.o that either
- *     (a) do not appear in old.o, or
- *     (b) have different contents in old.o and new.o
- * (2) the names of the "entry point" ELF symbols in new.o
- *     corresponding to the ELF sections in list (1)
+ * "objdiff old.o new.o" prints to STDOUT the following, one per line:
+ * - several pairs of the form "<a> <b>;", where <a> and <b> are strings
+ *   containing the Ksplice labels for sections symbols whose Ksplice labels
+ *   differ between old.o and new.o.
+ * - the names of the ELF text sections in new.o that have different contents
+ *   in old.o and new.o.
+ * - the names of the ELF sections in new.o that are not present in old.o.
+ * - the Ksplice labels for the section symbols of the ELF sections in old.o
+ *   that are not present in new.o.
+ * - several lines beginning with either __ksymtab* or ___del_ksymtab*
+ *   (where the * can be one of nothing, _gpl, _unused, _unused_gpl, etc.),
+ *   consisting of lists of exported symbols that are in new.o but not old.o,
+ *   or in old.o but not new.o, respectively.
  *
- * Before printing these two lists, objdiff prints the number of bits
- * per address on the target architecture.
+ * objdiff treats text sections that reference changed rodata sections as having
+ * changed, and rodata sections that have changed as being both new and deleted.
  */
 
 #include "objcommon.h"
