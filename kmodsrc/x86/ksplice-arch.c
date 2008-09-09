@@ -164,7 +164,8 @@ static int next_run_byte(struct ud *ud);
 static abort_t arch_run_pre_cmp(struct module_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long run_addr,
-				unsigned long *run_size, enum run_pre_mode mode)
+				struct list_head *safety_records,
+				enum run_pre_mode mode)
 {
 	int runc, prec;
 	int i;
@@ -210,8 +211,10 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 		}
 		if (ud_disassemble(&pre_ud) == 0) {
 			/* Ran out of pre bytes to match; we're done! */
-			*run_size = (unsigned long)run - run_addr;
-			return OK;
+			return
+			    create_safety_record(pack, s, safety_records,
+						 run_addr,
+						 (unsigned long)run - run_addr);
 		}
 		if (ud_disassemble(&run_ud) == 0)
 			return NO_MATCH;

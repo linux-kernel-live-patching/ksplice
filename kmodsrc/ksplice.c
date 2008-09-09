@@ -453,17 +453,20 @@ static abort_t activate_helper(struct module_pack *pack,
 static abort_t search_for_match(struct module_pack *pack,
 				const struct ksplice_size *s);
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
-			unsigned long run_addr, enum run_pre_mode mode);
+			unsigned long run_addr,
+			struct list_head *safety_records,
+			enum run_pre_mode mode);
 static abort_t run_pre_cmp(struct module_pack *pack,
 			   const struct ksplice_size *s,
-			   unsigned long run_addr, unsigned long *run_size,
+			   unsigned long run_addr,
+			   struct list_head *safety_records,
 			   enum run_pre_mode mode);
 #ifndef FUNCTION_SECTIONS
 /* defined in $ARCH/ksplice-arch.c */
 static abort_t arch_run_pre_cmp(struct module_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long run_addr,
-				unsigned long *run_size,
+				struct list_head *safety_records,
 				enum run_pre_mode mode);
 #endif /* FUNCTION_SECTIONS */
 static void print_bytes(struct module_pack *pack,
@@ -705,7 +708,7 @@ static abort_t process_patches(struct module_pack *pack)
 
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (strcmp(rec->label, p->label) == 0 &&
-			    rec->addr == p->oldaddr) {
+			    follow_trampolines(pack, p->oldaddr) == rec->addr) {
 				found = 1;
 				break;
 			}
@@ -1476,7 +1479,7 @@ static abort_t search_for_match(struct module_pack *pack,
 		run_addr = v->val;
 
 		yield();
-		ret = try_addr(pack, s, run_addr, RUN_PRE_INITIAL);
+		ret = try_addr(pack, s, run_addr, NULL, RUN_PRE_INITIAL);
 		if (ret == NO_MATCH) {
 			list_del(&v->list);
 			kfree(v);
@@ -1498,7 +1501,8 @@ static abort_t search_for_match(struct module_pack *pack,
 		if (singular(&vals)) {
 			run_addr = list_entry(vals.next, struct candidate_val,
 					      list)->val;
-			ret = try_addr(pack, s, run_addr, RUN_PRE_INITIAL);
+			ret = try_addr(pack, s, run_addr, NULL,
+				       RUN_PRE_INITIAL);
 			if (ret != OK) {
 				ksdebug(pack, 3, KERN_DEBUG "ksplice_h: "
 					"run-pre: Debug run failed for sect "
@@ -1511,14 +1515,20 @@ static abort_t search_for_match(struct module_pack *pack,
 #endif /* KSPLICE_STANDALONE */
 
 	if (singular(&vals)) {
+		LIST_HEAD(safety_records);
 		run_addr = list_entry(vals.next, struct candidate_val,
 				      list)->val;
-		ret = try_addr(pack, s, run_addr, RUN_PRE_FINAL);
+		ret = try_addr(pack, s, run_addr, &safety_records,
+			       RUN_PRE_FINAL);
 		release_vals(&vals);
-		if (ret != OK)
+		if (ret != OK) {
+			clear_list(&safety_records, struct safety_record, list);
 			ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: "
 				"Final run failed for sect %s:\n",
 				s->symbol->label);
+		} else {
+			list_splice(&safety_records, &pack->safety_records);
+		}
 		return ret;
 	} else if (!list_empty(&vals)) {
 		struct candidate_val *val;
@@ -1560,7 +1570,8 @@ static void print_bytes(struct module_pack *pack,
 
 static abort_t run_pre_cmp(struct module_pack *pack,
 			   const struct ksplice_size *s,
-			   unsigned long run_addr, unsigned long *run_size,
+			   unsigned long run_addr,
+			   struct list_head *safety_records,
 			   enum run_pre_mode mode)
 {
 	int matched = 0;
@@ -1637,8 +1648,8 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 		pre++;
 		run++;
 	}
-	*run_size = (unsigned long)run - run_addr;
-	return OK;
+	return create_safety_record(pack, s, safety_records, run_addr,
+				    (unsigned long)run - run_addr);
 }
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
@@ -1657,10 +1668,11 @@ static struct module *__module_data_address(unsigned long addr)
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
-			unsigned long run_addr, enum run_pre_mode mode)
+			unsigned long run_addr,
+			struct list_head *safety_records,
+			enum run_pre_mode mode)
 {
 	abort_t ret;
-	unsigned long run_size;
 	const struct module *run_module;
 
 	if ((s->flags & KSPLICE_SIZE_RODATA) != 0 ||
@@ -1682,14 +1694,14 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		return ret;
 
 #ifdef FUNCTION_SECTIONS
-	ret = run_pre_cmp(pack, s, run_addr, &run_size, mode);
+	ret = run_pre_cmp(pack, s, run_addr, safety_records, mode);
 #else
 	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
-		ret = arch_run_pre_cmp(pack, s, run_addr, &run_size, mode);
+		ret = arch_run_pre_cmp(pack, s, run_addr, safety_records, mode);
 	else
-		ret = run_pre_cmp(pack, s, run_addr, &run_size, mode);
+		ret = run_pre_cmp(pack, s, run_addr, safety_records, mode);
 #endif
-	if (ret == NO_MATCH) {
+	if (ret == NO_MATCH && mode != RUN_PRE_FINAL) {
 		set_temp_myst_relocs(pack, NOVAL);
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: %s sect %s "
 			"does not match ",
@@ -1700,15 +1712,16 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, 1, KERN_DEBUG "ksplice_h: run-pre: ");
 		if (pack->bundle->debug >= 1) {
 #ifdef FUNCTION_SECTIONS
-			ret = run_pre_cmp(pack, s, run_addr, &run_size,
+			ret = run_pre_cmp(pack, s, run_addr, safety_records,
 					  RUN_PRE_DEBUG);
 #else
 			if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
 				ret = arch_run_pre_cmp(pack, s, run_addr,
-						       &run_size,
+						       safety_records,
 						       RUN_PRE_DEBUG);
 			else
-				ret = run_pre_cmp(pack, s, run_addr, &run_size,
+				ret = run_pre_cmp(pack, s, run_addr,
+						  safety_records,
 						  RUN_PRE_DEBUG);
 #endif
 			set_temp_myst_relocs(pack, NOVAL);
@@ -1728,8 +1741,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	set_temp_myst_relocs(pack, VAL);
 	ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: found sect %s=%" ADDR
 		"\n", s->symbol->label, run_addr);
-	return create_safety_record(pack, s, &pack->safety_records, run_addr,
-				    run_size);
+	return OK;
 }
 
 static abort_t create_safety_record(struct module_pack *pack,
@@ -1740,6 +1752,9 @@ static abort_t create_safety_record(struct module_pack *pack,
 {
 	struct safety_record *rec;
 	struct ksplice_patch *p;
+
+	if (record_list == NULL)
+		return OK;
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		if (strcmp(s->symbol->label, p->label) == 0)
@@ -2427,7 +2442,7 @@ static abort_t brute_search(struct module_pack *pack,
 		if (run != pre)
 			continue;
 
-		ret = try_addr(pack, s, addr, RUN_PRE_INITIAL);
+		ret = try_addr(pack, s, addr, NULL, RUN_PRE_INITIAL);
 		if (ret == OK) {
 			ret = add_candidate_val(vals, addr);
 			if (ret != OK)
