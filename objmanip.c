@@ -170,6 +170,7 @@ const struct specsect special_sections[] = {
 	{".altinstructions", 2 * sizeof(void *) + 4},
 	{".smp_locks", sizeof(void *)},
 	{".parainstructions", sizeof(void *) + 4},
+	{"__ex_table", 2 * sizeof(unsigned long)},
 }, *const end_special_sections = *(&special_sections + 1);
 
 #define mode(str) starts_with(modestr, str)
@@ -1068,6 +1069,8 @@ int want_section(asection *sect)
 		".altinstr_replacement",
 		".smp_locks",
 		".parainstructions",
+		"__ex_table",
+		".fixup",
 		NULL
 	};
 
