@@ -201,9 +201,9 @@ void load_system_map()
 int needed_data_section(struct superbfd *sbfd, asection *isection)
 {
 	struct supersect *ss = fetch_supersect(sbfd, isection);
-	if (starts_with(isection->name, ".rodata."))
+	if (starts_with(isection->name, ".rodata"))
 		return 1;
-	if (starts_with(isection->name, ".data.")) {
+	if (starts_with(isection->name, ".data")) {
 		/* Ignore .data.percpu sections */
 		if (starts_with(isection->name, ".data.percpu"))
 			return 0;
