@@ -121,7 +121,7 @@ sub do_finalize {
 
 sub do_rmsyms {
 	my ($in, $out, @rmsyms) = @_;
-	my $relocs = runsuc("objmanip", $in, $out, "rmsyms", @rmsyms);
+	my $relocs = runsuc_in("@rmsyms\n", "objmanip", $in, $out, "rmsyms");
 }
 
 sub do_system_map_lookup {

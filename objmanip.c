@@ -143,7 +143,6 @@ static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
 void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms);
 static int deleted_specsect_symbol(bfd *abfd, asymbol *sym);
-int match_varargs(const char *str);
 void read_str_set(struct str_vec *strs);
 int str_in_set(const char *str, const struct str_vec *strs);
 int want_section(asection *sect);
@@ -159,9 +158,7 @@ void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		      bfd_vma offset);
 
-char **varargs;
-int varargs_count;
-struct str_vec sections, newsects, delsects;
+struct str_vec sections, newsects, delsects, rmsyms;
 struct export_desc_vec exports;
 
 const char *modestr, *kid;
@@ -231,12 +228,8 @@ int main(int argc, char *argv[])
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
 	modestr = argv[3];
-	if (mode("keep-primary")) {
+	if (mode("keep-primary"))
 		kid = argv[4];
-	} else if (mode("rmsyms")) {
-		varargs = &argv[4];
-		varargs_count = argc - 4;
-	}
 
 	if (mode("keep-primary")) {
 		read_label_map(isbfd);
@@ -255,6 +248,8 @@ int main(int argc, char *argv[])
 			ed->sectname = sectname;
 			read_str_set(&ed->names);
 		}
+	} else if (mode("rmsyms")) {
+		read_str_set(&rmsyms);
 	}
 
 	if (mode("keep-primary")) {
@@ -420,7 +415,7 @@ void rm_some_relocs(struct supersect *ss)
 		int rm_reloc = 0;
 		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
 
-		if (mode("rmsyms") && match_varargs(sym_ptr->name))
+		if (mode("rmsyms") && str_in_set(sym_ptr->name, &rmsyms))
 			rm_reloc = 1;
 
 		if (mode("keep"))
@@ -1024,22 +1019,12 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (deleted_specsect_symbol(ibfd, sym) == 1)
 			keep = 0;
 
-		if (mode("rmsyms") && match_varargs(sym->name))
+		if (mode("rmsyms") && str_in_set(sym->name, &rmsyms))
 			keep = 0;
 
 		if (keep)
 			*vec_grow(osyms, 1) = sym;
 	}
-}
-
-int match_varargs(const char *str)
-{
-	int i;
-	for (i = 0; i < varargs_count; i++) {
-		if (strcmp(str, varargs[i]) == 0)
-			return 1;
-	}
-	return 0;
 }
 
 void read_str_set(struct str_vec *strs)
