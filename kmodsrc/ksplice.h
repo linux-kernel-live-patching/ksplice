@@ -85,7 +85,7 @@ extern struct list_head ksplice_module_list;
 struct module_pack {
 	const char *name;
 	const char *kid;
-	struct update_bundle *bundle;
+	struct update *update;
 	const char *target_name;
 	struct module *target;
 	unsigned long map_printk;

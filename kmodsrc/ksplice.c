@@ -91,7 +91,7 @@ typedef int __bitwise__ abort_t;
 #define UNEXPECTED_RUNNING_TASK ((__force abort_t) 9)
 #define UNEXPECTED ((__force abort_t) 10)
 
-struct update_bundle {
+struct update {
 	const char *kid;
 	const char *name;
 	struct kobject kobj;
@@ -192,26 +192,26 @@ static bool singular(struct list_head *list)
 }
 
 static int __attribute__((format(printf, 2, 3)))
-_ksdebug(struct update_bundle *bundle, const char *fmt, ...);
+_ksdebug(struct update *update, const char *fmt, ...);
 #ifdef CONFIG_DEBUG_FS
-static abort_t init_debug_buf(struct update_bundle *bundle);
-static void clear_debug_buf(struct update_bundle *bundle);
+static abort_t init_debug_buf(struct update *update);
+static void clear_debug_buf(struct update *update);
 #else /* !CONFIG_DEBUG_FS */
-static inline abort_t init_debug_buf(struct update_bundle *bundle)
+static inline abort_t init_debug_buf(struct update *update)
 {
 	return OK;
 }
 
-static inline void clear_debug_buf(struct update_bundle *bundle)
+static inline void clear_debug_buf(struct update *update)
 {
 	return;
 }
 #endif /* CONFIG_DEBUG_FS */
 
 #define ksdebug(pack, fmt, ...) \
-	_ksdebug(pack->bundle, fmt, ## __VA_ARGS__)
+	_ksdebug(pack->update, fmt, ## __VA_ARGS__)
 
-static LIST_HEAD(update_bundles);
+static LIST_HEAD(updates);
 #ifdef KSPLICE_STANDALONE
 #if defined(CONFIG_KSPLICE) || defined(CONFIG_KSPLICE_MODULE)
 extern struct list_head ksplice_module_list;
@@ -418,7 +418,7 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 #endif /* KSPLICE_STANDALONE */
 #endif /* CONFIG_KALLSYMS */
 static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
-static abort_t new_export_lookup(struct update_bundle *bundle,
+static abort_t new_export_lookup(struct update *update,
 				 const char *name, struct list_head *vals);
 
 #ifdef KSPLICE_STANDALONE
@@ -448,23 +448,23 @@ static int ends_with(const char *str, const char *suffix);
 static abort_t activate_primary(struct module_pack *pack);
 static abort_t process_exports(struct module_pack *pack);
 static abort_t process_patches(struct module_pack *pack);
-static int __apply_patches(void *bundle);
-static int __reverse_patches(void *bundle);
-static abort_t check_each_task(struct update_bundle *bundle);
-static abort_t check_task(struct update_bundle *bundle,
+static int __apply_patches(void *update);
+static int __reverse_patches(void *update);
+static abort_t check_each_task(struct update *update);
+static abort_t check_task(struct update *update,
 			  const struct task_struct *t, int rerun);
-static abort_t check_stack(struct update_bundle *bundle, struct conflict *conf,
+static abort_t check_stack(struct update *update, struct conflict *conf,
 			   const struct thread_info *tinfo,
 			   const unsigned long *stack);
-static abort_t check_address(struct update_bundle *bundle,
+static abort_t check_address(struct update *update,
 			     struct conflict *conf, unsigned long addr);
 static abort_t check_record(struct conflict_frame *frame,
 			    const struct safety_record *rec,
 			    unsigned long addr);
 static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 static int is_stop_machine(const struct task_struct *t);
-static void cleanup_conflicts(struct update_bundle *bundle);
-static void print_conflicts(struct update_bundle *bundle);
+static void cleanup_conflicts(struct update *update);
+static void print_conflicts(struct update *update);
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
 static unsigned long follow_trampolines(struct module_pack *pack,
@@ -532,14 +532,13 @@ static abort_t create_safety_record(struct module_pack *pack,
 				    unsigned long run_addr,
 				    unsigned long run_size);
 
-static abort_t reverse_patches(struct update_bundle *bundle);
-static abort_t apply_patches(struct update_bundle *bundle);
-static abort_t apply_update(struct update_bundle *bundle);
-static struct update_bundle *init_ksplice_bundle(const char *kid);
-static void cleanup_ksplice_bundle(struct update_bundle *bundle);
-static void add_to_bundle(struct module_pack *pack,
-			  struct update_bundle *bundle);
-static int ksplice_sysfs_init(struct update_bundle *bundle);
+static abort_t reverse_patches(struct update *update);
+static abort_t apply_patches(struct update *update);
+static abort_t apply_update(struct update *update);
+static struct update *init_ksplice_update(const char *kid);
+static void cleanup_ksplice_update(struct update *update);
+static void add_to_update(struct module_pack *pack, struct update *update);
+static int ksplice_sysfs_init(struct update *update);
 
 #ifndef KSPLICE_STANDALONE
 #include "ksplice-arch.c"
@@ -555,9 +554,8 @@ static struct kobject *ksplice_kobj;
 
 struct ksplice_attribute {
 	struct attribute attr;
-	ssize_t (*show)(struct update_bundle *bundle, char *buf);
-	ssize_t (*store)(struct update_bundle *bundle, const char *buf,
-			 size_t len);
+	ssize_t (*show)(struct update *update, char *buf);
+	ssize_t (*store)(struct update *update, const char *buf, size_t len);
 };
 
 static ssize_t ksplice_attr_show(struct kobject *kobj, struct attribute *attr,
@@ -565,11 +563,10 @@ static ssize_t ksplice_attr_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct ksplice_attribute *attribute =
 	    container_of(attr, struct ksplice_attribute, attr);
-	struct update_bundle *bundle =
-	    container_of(kobj, struct update_bundle, kobj);
+	struct update *update = container_of(kobj, struct update, kobj);
 	if (attribute->show == NULL)
 		return -EIO;
-	return attribute->show(bundle, buf);
+	return attribute->show(update, buf);
 }
 
 static ssize_t ksplice_attr_store(struct kobject *kobj, struct attribute *attr,
@@ -577,11 +574,10 @@ static ssize_t ksplice_attr_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct ksplice_attribute *attribute =
 	    container_of(attr, struct ksplice_attribute, attr);
-	struct update_bundle *bundle =
-	    container_of(kobj, struct update_bundle, kobj);
+	struct update *update = container_of(kobj, struct update, kobj);
 	if (attribute->store == NULL)
 		return -EIO;
-	return attribute->store(bundle, buf, len);
+	return attribute->store(update, buf, len);
 }
 
 static struct sysfs_ops ksplice_sysfs_ops = {
@@ -591,14 +587,14 @@ static struct sysfs_ops ksplice_sysfs_ops = {
 
 static void ksplice_release(struct kobject *kobj)
 {
-	struct update_bundle *bundle;
-	bundle = container_of(kobj, struct update_bundle, kobj);
-	cleanup_ksplice_bundle(bundle);
+	struct update *update;
+	update = container_of(kobj, struct update, kobj);
+	cleanup_ksplice_update(update);
 }
 
-static ssize_t stage_show(struct update_bundle *bundle, char *buf)
+static ssize_t stage_show(struct update *update, char *buf)
 {
-	switch (bundle->stage) {
+	switch (update->stage) {
 	case STAGE_PREPARING:
 		return snprintf(buf, PAGE_SIZE, "preparing\n");
 	case STAGE_APPLIED:
@@ -609,9 +605,9 @@ static ssize_t stage_show(struct update_bundle *bundle, char *buf)
 	return 0;
 }
 
-static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
+static ssize_t abort_cause_show(struct update *update, char *buf)
 {
-	switch (bundle->abort_cause) {
+	switch (update->abort_cause) {
 	case OK:
 		return snprintf(buf, PAGE_SIZE, "ok\n");
 	case NO_MATCH:
@@ -638,12 +634,12 @@ static ssize_t abort_cause_show(struct update_bundle *bundle, char *buf)
 	return 0;
 }
 
-static ssize_t conflict_show(struct update_bundle *bundle, char *buf)
+static ssize_t conflict_show(struct update *update, char *buf)
 {
 	const struct conflict *conf;
 	const struct conflict_frame *frame;
 	int used = 0;
-	list_for_each_entry(conf, &bundle->conflicts, list) {
+	list_for_each_entry(conf, &update->conflicts, list) {
 		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
 				 conf->process_name, conf->pid);
 		list_for_each_entry(frame, &conf->stack, list) {
@@ -657,31 +653,29 @@ static ssize_t conflict_show(struct update_bundle *bundle, char *buf)
 	return used;
 }
 
-static ssize_t stage_store(struct update_bundle *bundle,
-			   const char *buf, size_t len)
+static ssize_t stage_store(struct update *update, const char *buf, size_t len)
 {
 	if (strncmp(buf, "applied\n", len) == 0 &&
-	    bundle->stage == STAGE_PREPARING)
-		bundle->abort_cause = apply_update(bundle);
+	    update->stage == STAGE_PREPARING)
+		update->abort_cause = apply_update(update);
 	else if (strncmp(buf, "reversed\n", len) == 0 &&
-		 bundle->stage == STAGE_APPLIED)
-		bundle->abort_cause = reverse_patches(bundle);
+		 update->stage == STAGE_APPLIED)
+		update->abort_cause = reverse_patches(update);
 	return len;
 }
 
-static ssize_t debug_show(struct update_bundle *bundle, char *buf)
+static ssize_t debug_show(struct update *update, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%d\n", bundle->debug);
+	return snprintf(buf, PAGE_SIZE, "%d\n", update->debug);
 }
 
-static ssize_t debug_store(struct update_bundle *bundle, const char *buf,
-			   size_t len)
+static ssize_t debug_store(struct update *update, const char *buf, size_t len)
 {
 	unsigned long l;
 	int ret = strict_strtoul(buf, 10, &l);
 	if (ret != 0)
 		return ret;
-	bundle->debug = l;
+	update->debug = l;
 	return len;
 }
 
@@ -850,22 +844,22 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 	return addr;
 }
 
-static abort_t apply_patches(struct update_bundle *bundle)
+static abort_t apply_patches(struct update *update)
 {
 	int i;
 	abort_t ret;
 
 	for (i = 0; i < 5; i++) {
-		cleanup_conflicts(bundle);
+		cleanup_conflicts(update);
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(1);
 #endif /* KSPLICE_STANDALONE */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-		ret = (__force abort_t)stop_machine(__apply_patches, bundle,
+		ret = (__force abort_t)stop_machine(__apply_patches, update,
 						    NULL);
 #else /* LINUX_VERSION_CODE < */
 /* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
-		ret = (__force abort_t)stop_machine_run(__apply_patches, bundle,
+		ret = (__force abort_t)stop_machine_run(__apply_patches, update,
 							NR_CPUS);
 #endif /* LINUX_VERSION_CODE */
 #ifdef KSPLICE_STANDALONE
@@ -881,7 +875,7 @@ static abort_t apply_patches(struct update_bundle *bundle)
 		struct module_pack *pack;
 		const struct ksplice_size *s;
 		struct safety_record *rec;
-		list_for_each_entry(pack, &bundle->packs, list) {
+		list_for_each_entry(pack, &update->packs, list) {
 			for (s = pack->primary_sizes;
 			     s < pack->primary_sizes_end; s++) {
 				rec = kmalloc(sizeof(*rec), GFP_KERNEL);
@@ -893,46 +887,46 @@ static abort_t apply_patches(struct update_bundle *bundle)
 				list_add(&rec->list, &pack->safety_records);
 			}
 		}
-		_ksdebug(bundle, "Update %s applied successfully\n",
-			 bundle->kid);
+		_ksdebug(update, "Update %s applied successfully\n",
+			 update->kid);
 		return OK;
 	} else if (ret == CODE_BUSY) {
-		print_conflicts(bundle);
-		_ksdebug(bundle, "Aborted %s.  stack check: to-be-replaced "
-			 "code is busy.\n", bundle->kid);
+		print_conflicts(update);
+		_ksdebug(update, "Aborted %s.  stack check: to-be-replaced "
+			 "code is busy.\n", update->kid);
 	} else if (ret == ALREADY_REVERSED) {
-		_ksdebug(bundle, "Aborted %s.  Ksplice update %s is already "
-			 "reversed.\n", bundle->kid, bundle->kid);
+		_ksdebug(update, "Aborted %s.  Ksplice update %s is already "
+			 "reversed.\n", update->kid, update->kid);
 	}
 	return ret;
 }
 
-static abort_t reverse_patches(struct update_bundle *bundle)
+static abort_t reverse_patches(struct update *update)
 {
 	int i;
 	abort_t ret;
 	struct module_pack *pack;
 
-	clear_debug_buf(bundle);
-	ret = init_debug_buf(bundle);
+	clear_debug_buf(update);
+	ret = init_debug_buf(update);
 	if (ret != OK)
 		return ret;
 
-	_ksdebug(bundle, "Preparing to reverse %s\n", bundle->kid);
+	_ksdebug(update, "Preparing to reverse %s\n", update->kid);
 
 	for (i = 0; i < 5; i++) {
-		cleanup_conflicts(bundle);
-		clear_list(&bundle->conflicts, struct conflict, list);
+		cleanup_conflicts(update);
+		clear_list(&update->conflicts, struct conflict, list);
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(1);
 #endif /* KSPLICE_STANDALONE */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-		ret = (__force abort_t)stop_machine(__reverse_patches, bundle,
+		ret = (__force abort_t)stop_machine(__reverse_patches, update,
 						    NULL);
 #else /* LINUX_VERSION_CODE < */
 /* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
 		ret = (__force abort_t)stop_machine_run(__reverse_patches,
-							bundle, NR_CPUS);
+							update, NR_CPUS);
 #endif /* LINUX_VERSION_CODE */
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(0);
@@ -942,44 +936,44 @@ static abort_t reverse_patches(struct update_bundle *bundle)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	list_for_each_entry(pack, &bundle->packs, list)
+	list_for_each_entry(pack, &update->packs, list)
 		clear_list(&pack->safety_records, struct safety_record, list);
 	if (ret == OK) {
-		_ksdebug(bundle, "Update %s reversed successfully\n",
-			 bundle->kid);
+		_ksdebug(update, "Update %s reversed successfully\n",
+			 update->kid);
 	} else if (ret == CODE_BUSY) {
-		print_conflicts(bundle);
-		_ksdebug(bundle, "Aborted %s.  stack check: to-be-reversed"
-			 "code is busy.\n", bundle->kid);
+		print_conflicts(update);
+		_ksdebug(update, "Aborted %s.  stack check: to-be-reversed "
+			 "code is busy.\n", update->kid);
 	} else if (ret == MODULE_BUSY) {
-		_ksdebug(bundle, "Update %s is in use by another module\n",
-			 bundle->kid);
+		_ksdebug(update, "Update %s is in use by another module\n",
+			 update->kid);
 	}
 	return ret;
 }
 
-static int __apply_patches(void *bundleptr)
+static int __apply_patches(void *updateptr)
 {
-	struct update_bundle *bundle = bundleptr;
+	struct update *update = updateptr;
 	struct module_pack *pack;
 	struct ksplice_patch *p;
 	struct ksplice_export *export;
 	abort_t ret;
 
-	if (bundle->stage == STAGE_APPLIED)
+	if (update->stage == STAGE_APPLIED)
 		return (__force int)OK;
 
-	if (bundle->stage != STAGE_PREPARING)
+	if (update->stage != STAGE_PREPARING)
 		return (__force int)UNEXPECTED;
 
-	ret = check_each_task(bundle);
+	ret = check_each_task(update);
 	if (ret != OK)
 		return (__force int)ret;
 
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		if (try_module_get(pack->primary) != 1) {
 			struct module_pack *pack1;
-			list_for_each_entry(pack1, &bundle->packs, list) {
+			list_for_each_entry(pack1, &update->packs, list) {
 				if (pack1 == pack)
 					break;
 				module_put(pack1->primary);
@@ -988,69 +982,69 @@ static int __apply_patches(void *bundleptr)
 		}
 	}
 
-	bundle->stage = STAGE_APPLIED;
+	update->stage = STAGE_APPLIED;
 
-	list_for_each_entry(pack, &bundle->packs, list)
+	list_for_each_entry(pack, &update->packs, list)
 		list_add(&pack->module_list_entry.list, &ksplice_module_list);
 
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		for (export = pack->exports; export < pack->exports_end;
 		     export++)
 			export->sym->name = export->new_name;
 	}
 
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		for (p = pack->patches; p < pack->patches_end; p++)
 			insert_trampoline(p);
 	}
 	return (__force int)OK;
 }
 
-static int __reverse_patches(void *bundleptr)
+static int __reverse_patches(void *updateptr)
 {
-	struct update_bundle *bundle = bundleptr;
+	struct update *update = updateptr;
 	struct module_pack *pack;
 	const struct ksplice_patch *p;
 	struct ksplice_export *export;
 	abort_t ret;
 
-	if (bundle->stage != STAGE_APPLIED)
+	if (update->stage != STAGE_APPLIED)
 		return (__force int)OK;
 
 #ifdef CONFIG_MODULE_UNLOAD
 	/* primary's refcount isn't changed by accessing ksplice.ko's sysfs */
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		if (module_refcount(pack->primary) != 1)
 			return (__force int)MODULE_BUSY;
 	}
 #endif /* CONFIG_MODULE_UNLOAD */
 
-	ret = check_each_task(bundle);
+	ret = check_each_task(update);
 	if (ret != OK)
 		return (__force int)ret;
 
-	bundle->stage = STAGE_REVERSED;
+	update->stage = STAGE_REVERSED;
 
-	list_for_each_entry(pack, &bundle->packs, list)
+	list_for_each_entry(pack, &update->packs, list)
 		module_put(pack->primary);
 
-	list_for_each_entry(pack, &bundle->packs, list)
+	list_for_each_entry(pack, &update->packs, list)
 		list_del(&pack->module_list_entry.list);
 
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		for (export = pack->exports; export < pack->exports_end;
 		     export++)
 			export->sym->name = export->saved_name;
 	}
 
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		for (p = pack->patches; p < pack->patches_end; p++)
 			remove_trampoline(p);
 	}
 	return (__force int)OK;
 }
 
-static abort_t check_each_task(struct update_bundle *bundle)
+static abort_t check_each_task(struct update *update)
 {
 	const struct task_struct *g, *p;
 	abort_t status = OK, ret;
@@ -1060,9 +1054,9 @@ static abort_t check_each_task(struct update_bundle *bundle)
 #endif /* LINUX_VERSION_CODE */
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		ret = check_task(bundle, p, 0);
+		ret = check_task(update, p, 0);
 		if (ret != OK) {
-			check_task(bundle, p, 1);
+			check_task(update, p, 1);
 			status = ret;
 		}
 		if (ret != OK && ret != CODE_BUSY)
@@ -1076,7 +1070,7 @@ out:
 	return status;
 }
 
-static abort_t check_task(struct update_bundle *bundle,
+static abort_t check_task(struct update *update,
 			  const struct task_struct *t, int rerun)
 {
 	abort_t status, ret;
@@ -1093,17 +1087,17 @@ static abort_t check_task(struct update_bundle *bundle,
 		}
 		conf->pid = t->pid;
 		INIT_LIST_HEAD(&conf->stack);
-		list_add(&conf->list, &bundle->conflicts);
+		list_add(&conf->list, &update->conflicts);
 	}
 
-	status = check_address(bundle, conf, KSPLICE_IP(t));
+	status = check_address(update, conf, KSPLICE_IP(t));
 	if (t == current) {
-		ret = check_stack(bundle, conf, task_thread_info(t),
+		ret = check_stack(update, conf, task_thread_info(t),
 				  (unsigned long *)__builtin_frame_address(0));
 		if (status == OK)
 			status = ret;
 	} else if (!task_curr(t)) {
-		ret = check_stack(bundle, conf, task_thread_info(t),
+		ret = check_stack(update, conf, task_thread_info(t),
 				  (unsigned long *)KSPLICE_SP(t));
 		if (status == OK)
 			status = ret;
@@ -1114,7 +1108,7 @@ static abort_t check_task(struct update_bundle *bundle,
 }
 
 /* Modified version of Linux's print_context_stack */
-static abort_t check_stack(struct update_bundle *bundle, struct conflict *conf,
+static abort_t check_stack(struct update *update, struct conflict *conf,
 			   const struct thread_info *tinfo,
 			   const unsigned long *stack)
 {
@@ -1123,14 +1117,14 @@ static abort_t check_stack(struct update_bundle *bundle, struct conflict *conf,
 
 	while (valid_stack_ptr(tinfo, stack)) {
 		addr = *stack++;
-		ret = check_address(bundle, conf, addr);
+		ret = check_address(update, conf, addr);
 		if (ret != OK)
 			status = ret;
 	}
 	return status;
 }
 
-static abort_t check_address(struct update_bundle *bundle,
+static abort_t check_address(struct update *update,
 			     struct conflict *conf, unsigned long addr)
 {
 	abort_t status = OK, ret;
@@ -1148,7 +1142,7 @@ static abort_t check_address(struct update_bundle *bundle,
 		list_add(&frame->list, &conf->stack);
 	}
 
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			ret = check_record(frame, rec, addr);
 			if (ret != OK)
@@ -1192,29 +1186,29 @@ static int is_stop_machine(const struct task_struct *t)
 #endif /* LINUX_VERSION_CODE */
 }
 
-static void cleanup_conflicts(struct update_bundle *bundle)
+static void cleanup_conflicts(struct update *update)
 {
 	struct conflict *conf;
-	list_for_each_entry(conf, &bundle->conflicts, list) {
+	list_for_each_entry(conf, &update->conflicts, list) {
 		clear_list(&conf->stack, struct conflict_frame, list);
 		kfree(conf->process_name);
 	}
-	clear_list(&bundle->conflicts, struct conflict, list);
+	clear_list(&update->conflicts, struct conflict, list);
 }
 
-static void print_conflicts(struct update_bundle *bundle)
+static void print_conflicts(struct update *update)
 {
 	const struct conflict *conf;
 	const struct conflict_frame *frame;
-	list_for_each_entry(conf, &bundle->conflicts, list) {
-		_ksdebug(bundle, "stack check: pid %d (%s):", conf->pid,
+	list_for_each_entry(conf, &update->conflicts, list) {
+		_ksdebug(update, "stack check: pid %d (%s):", conf->pid,
 			 conf->process_name);
 		list_for_each_entry(frame, &conf->stack, list) {
-			_ksdebug(bundle, " %" ADDR, frame->addr);
+			_ksdebug(update, " %" ADDR, frame->addr);
 			if (frame->has_conflict)
-				_ksdebug(bundle, " [<-CONFLICT]");
+				_ksdebug(update, " [<-CONFLICT]");
 		}
-		_ksdebug(bundle, "\n");
+		_ksdebug(update, "\n");
 	}
 }
 
@@ -1233,7 +1227,7 @@ static struct module *find_module(const char *name)
 
 int init_ksplice_module(struct module_pack *pack)
 {
-	struct update_bundle *bundle;
+	struct update *update;
 	int ret = 0;
 
 #ifdef KSPLICE_STANDALONE
@@ -1254,27 +1248,27 @@ int init_ksplice_module(struct module_pack *pack)
 			goto out;
 		}
 	}
-	list_for_each_entry(bundle, &update_bundles, list) {
-		if (strcmp(pack->kid, bundle->kid) == 0) {
-			if (bundle->stage != STAGE_PREPARING) {
+	list_for_each_entry(update, &updates, list) {
+		if (strcmp(pack->kid, update->kid) == 0) {
+			if (update->stage != STAGE_PREPARING) {
 				ret = -EPERM;
 				goto out;
 			}
-			add_to_bundle(pack, bundle);
+			add_to_update(pack, update);
 			goto out;
 		}
 	}
-	bundle = init_ksplice_bundle(pack->kid);
-	if (bundle == NULL) {
+	update = init_ksplice_update(pack->kid);
+	if (update == NULL) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	ret = ksplice_sysfs_init(bundle);
+	ret = ksplice_sysfs_init(update);
 	if (ret != 0) {
-		cleanup_ksplice_bundle(bundle);
+		cleanup_ksplice_update(update);
 		goto out;
 	}
-	add_to_bundle(pack, bundle);
+	add_to_update(pack, update);
 out:
 	mutex_unlock(&module_mutex);
 	return ret;
@@ -1283,120 +1277,119 @@ EXPORT_SYMBOL(init_ksplice_module);
 
 void cleanup_ksplice_module(struct module_pack *pack)
 {
-	if (pack->bundle == NULL || pack->bundle->stage == STAGE_APPLIED)
+	if (pack->update == NULL || pack->update->stage == STAGE_APPLIED)
 		return;
 	mutex_lock(&module_mutex);
 	list_del(&pack->list);
 	mutex_unlock(&module_mutex);
-	if (list_empty(&pack->bundle->packs))
+	if (list_empty(&pack->update->packs))
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
-		kobject_put(&pack->bundle->kobj);
+		kobject_put(&pack->update->kobj);
 #else /* LINUX_VERSION_CODE < */
 /* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
-		kobject_unregister(&pack->bundle->kobj);
+		kobject_unregister(&pack->update->kobj);
 #endif /* LINUX_VERSION_CODE */
-	pack->bundle = NULL;
+	pack->update = NULL;
 }
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
-static void add_to_bundle(struct module_pack *pack,
-			  struct update_bundle *bundle)
+static void add_to_update(struct module_pack *pack, struct update *update)
 {
-	pack->bundle = bundle;
-	list_add(&pack->list, &bundle->packs);
+	pack->update = update;
+	list_add(&pack->list, &update->packs);
 	pack->module_list_entry.target = pack->target;
 	pack->module_list_entry.primary = pack->primary;
 }
 
-static void cleanup_ksplice_bundle(struct update_bundle *bundle)
+static void cleanup_ksplice_update(struct update *update)
 {
 	mutex_lock(&module_mutex);
-	list_del(&bundle->list);
+	list_del(&update->list);
 	mutex_unlock(&module_mutex);
-	cleanup_conflicts(bundle);
-	clear_debug_buf(bundle);
-	kfree(bundle->kid);
-	kfree(bundle->name);
-	kfree(bundle);
+	cleanup_conflicts(update);
+	clear_debug_buf(update);
+	kfree(update->kid);
+	kfree(update->name);
+	kfree(update);
 }
 
-static struct update_bundle *init_ksplice_bundle(const char *kid)
+static struct update *init_ksplice_update(const char *kid)
 {
-	struct update_bundle *bundle;
-	bundle = kcalloc(1, sizeof(struct update_bundle), GFP_KERNEL);
-	if (bundle == NULL)
+	struct update *update;
+	update = kcalloc(1, sizeof(struct update), GFP_KERNEL);
+	if (update == NULL)
 		return NULL;
-	bundle->name = kasprintf(GFP_KERNEL, "ksplice_%s", kid);
-	if (bundle->name == NULL) {
-		kfree(bundle);
-		return NULL;
-	}
-	bundle->kid = kstrdup(kid, GFP_KERNEL);
-	if (bundle->kid == NULL) {
-		kfree(bundle->name);
-		kfree(bundle);
+	update->name = kasprintf(GFP_KERNEL, "ksplice_%s", kid);
+	if (update->name == NULL) {
+		kfree(update);
 		return NULL;
 	}
-	INIT_LIST_HEAD(&bundle->packs);
-	if (init_debug_buf(bundle) != OK) {
-		kfree(bundle->kid);
-		kfree(bundle->name);
-		kfree(bundle);
+	update->kid = kstrdup(kid, GFP_KERNEL);
+	if (update->kid == NULL) {
+		kfree(update->name);
+		kfree(update);
 		return NULL;
 	}
-	list_add(&bundle->list, &update_bundles);
-	bundle->stage = STAGE_PREPARING;
-	bundle->abort_cause = OK;
-	INIT_LIST_HEAD(&bundle->conflicts);
-	return bundle;
+	INIT_LIST_HEAD(&update->packs);
+	if (init_debug_buf(update) != OK) {
+		kfree(update->kid);
+		kfree(update->name);
+		kfree(update);
+		return NULL;
+	}
+	list_add(&update->list, &updates);
+	update->stage = STAGE_PREPARING;
+	update->abort_cause = OK;
+	INIT_LIST_HEAD(&update->conflicts);
+	return update;
 }
 
-static int ksplice_sysfs_init(struct update_bundle *bundle)
+static int ksplice_sysfs_init(struct update *update)
 {
 	int ret = 0;
-	memset(&bundle->kobj, 0, sizeof(bundle->kobj));
+	memset(&update->kobj, 0, sizeof(update->kobj));
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 #ifndef KSPLICE_STANDALONE
-	ret = kobject_init_and_add(&bundle->kobj, &ksplice_ktype,
-				   ksplice_kobj, "%s", bundle->kid);
+	ret = kobject_init_and_add(&update->kobj, &ksplice_ktype,
+				   ksplice_kobj, "%s", update->kid);
 #else /* KSPLICE_STANDALONE */
 /* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
-	ret = kobject_init_and_add(&bundle->kobj, &ksplice_ktype,
+	ret = kobject_init_and_add(&update->kobj, &ksplice_ktype,
 				   &THIS_MODULE->mkobj.kobj, "ksplice");
 #endif /* KSPLICE_STANDALONE */
 #else /* LINUX_VERSION_CODE < */
-	ret = kobject_set_name(&bundle->kobj, "%s", "ksplice");
+	ret = kobject_set_name(&update->kobj, "%s", "ksplice");
 	if (ret != 0)
 		return ret;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
-	bundle->kobj.parent = &THIS_MODULE->mkobj.kobj;
+	update->kobj.parent = &THIS_MODULE->mkobj.kobj;
 #else /* LINUX_VERSION_CODE < */
 /* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
-	bundle->kobj.parent = &THIS_MODULE->mkobj->kobj;
+	update->kobj.parent = &THIS_MODULE->mkobj->kobj;
 #endif /* LINUX_VERSION_CODE */
-	bundle->kobj.ktype = &ksplice_ktype;
-	ret = kobject_register(&bundle->kobj);
+	update->kobj.ktype = &ksplice_ktype;
+	ret = kobject_register(&update->kobj);
 #endif /* LINUX_VERSION_CODE */
 	if (ret != 0)
 		return ret;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
-	kobject_uevent(&bundle->kobj, KOBJ_ADD);
+	kobject_uevent(&update->kobj, KOBJ_ADD);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 /* 312c004d36ce6c739512bac83b452f4c20ab1f62 was after 2.6.14 */
 /* 12025235884570ba7f02a6f427f973ac6be7ec54 was after 2.6.9 */
-	kobject_uevent(&bundle->kobj, KOBJ_ADD, NULL);
+	kobject_uevent(&update->kobj, KOBJ_ADD, NULL);
 #endif /* LINUX_VERSION_CODE */
 	return 0;
 }
 
-static abort_t apply_update(struct update_bundle *bundle)
+static abort_t apply_update(struct update *update)
 {
 	struct module_pack *pack;
 	abort_t ret;
 
 	mutex_lock(&module_mutex);
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		if (pack->target == NULL) {
 			apply_paravirt(pack->primary_parainstructions,
 				       pack->primary_parainstructions_end);
@@ -1406,7 +1399,7 @@ static abort_t apply_update(struct update_bundle *bundle)
 	}
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		ksdebug(pack, "Preparing and checking %s\n", pack->name);
 		ret = activate_helper(pack, false);
 		if (ret == NO_MATCH) {
@@ -1434,11 +1427,11 @@ static abort_t apply_update(struct update_bundle *bundle)
 				goto out;
 		}
 	}
-	ret = apply_patches(bundle);
+	ret = apply_patches(update);
 out:
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		clear_list(&pack->reloc_namevals, struct reloc_nameval, list);
-		if (bundle->stage == STAGE_PREPARING)
+		if (update->stage == STAGE_PREPARING)
 			clear_list(&pack->safety_records, struct safety_record,
 				   list);
 	}
@@ -1757,7 +1750,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, "(r_a=%" ADDR " p_a=%" ADDR " s=%lx)\n",
 			run_addr, s->thismod_addr, s->size);
 		ksdebug(pack, "run-pre: ");
-		if (pack->bundle->debug >= 1) {
+		if (pack->update->debug >= 1) {
 #ifdef CONFIG_FUNCTION_DATA_SECTIONS
 			ret = run_pre_cmp(pack, s, run_addr, safety_records,
 					  RUN_PRE_DEBUG);
@@ -2203,7 +2196,7 @@ static abort_t compute_address(struct module_pack *pack,
 
 	ret = exported_symbol_lookup(ksym->name, vals);
 	if (ret == OK)
-		ret = new_export_lookup(pack->bundle, ksym->name, vals);
+		ret = new_export_lookup(pack->update, ksym->name, vals);
 #ifdef CONFIG_KALLSYMS
 	if (ret == OK)
 		ret = kernel_lookup(ksym->name, vals);
@@ -2216,12 +2209,12 @@ static abort_t compute_address(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t new_export_lookup(struct update_bundle *bundle,
+static abort_t new_export_lookup(struct update *update,
 				 const char *name, struct list_head *vals)
 {
 	struct module_pack *pack;
 	struct ksplice_export *exp;
-	list_for_each_entry(pack, &bundle->packs, list) {
+	list_for_each_entry(pack, &update->packs, list) {
 		for (exp = pack->exports; exp < pack->exports_end; exp++) {
 			if (strcmp(exp->new_name, name) == 0 &&
 			    exp->sym != NULL &&
@@ -2528,8 +2521,8 @@ static abort_t brute_search_all(struct module_pack *pack,
 	int saved_debug;
 
 	ksdebug(pack, "brute_search: searching for %s\n", s->symbol->label);
-	saved_debug = pack->bundle->debug;
-	pack->bundle->debug = 0;
+	saved_debug = pack->update->debug;
+	pack->update->debug = 0;
 
 	list_for_each_entry(m, &modules, list) {
 		if (starts_with(m->name, pack->name) ||
@@ -2545,7 +2538,7 @@ static abort_t brute_search_all(struct module_pack *pack,
 	if (ret == OK)
 		ret = brute_search(pack, s, (const void *)init_mm.start_code,
 				   init_mm.end_code - init_mm.start_code, vals);
-	pack->bundle->debug = saved_debug;
+	pack->update->debug = saved_debug;
 
 	return ret;
 }
@@ -2823,69 +2816,69 @@ static struct dentry *debugfs_create_blob(const char *name, mode_t mode,
 }
 #endif /* LINUX_VERSION_CODE */
 
-static void clear_debug_buf(struct update_bundle *bundle)
+static void clear_debug_buf(struct update *update)
 {
-	if (bundle->debugfs_dentry == NULL)
+	if (update->debugfs_dentry == NULL)
 		return;
-	debugfs_remove(bundle->debugfs_dentry);
-	bundle->debugfs_dentry = NULL;
-	bundle->debug_blob.size = 0;
-	vfree(bundle->debug_blob.data);
-	bundle->debug_blob.data = NULL;
+	debugfs_remove(update->debugfs_dentry);
+	update->debugfs_dentry = NULL;
+	update->debug_blob.size = 0;
+	vfree(update->debug_blob.data);
+	update->debug_blob.data = NULL;
 }
 
-static abort_t init_debug_buf(struct update_bundle *bundle)
+static abort_t init_debug_buf(struct update *update)
 {
-	bundle->debug_blob.size = 0;
-	bundle->debug_blob.data = NULL;
-	bundle->debugfs_dentry =
-	    debugfs_create_blob(bundle->name, S_IFREG | S_IRUSR, NULL,
-				&bundle->debug_blob);
-	if (bundle->debugfs_dentry == NULL)
+	update->debug_blob.size = 0;
+	update->debug_blob.data = NULL;
+	update->debugfs_dentry =
+	    debugfs_create_blob(update->name, S_IFREG | S_IRUSR, NULL,
+				&update->debug_blob);
+	if (update->debugfs_dentry == NULL)
 		return OUT_OF_MEMORY;
 	return OK;
 }
 
-static int _ksdebug(struct update_bundle *bundle, const char *fmt, ...)
+static int _ksdebug(struct update *update, const char *fmt, ...)
 {
 	va_list args;
 	unsigned long size, old_size, new_size;
 
-	if (bundle->debug == 0)
+	if (update->debug == 0)
 		return 0;
 
 	/* size includes the trailing '\0' */
 	va_start(args, fmt);
-	size = 1 + vsnprintf(bundle->debug_blob.data, 0, fmt, args);
+	size = 1 + vsnprintf(update->debug_blob.data, 0, fmt, args);
 	va_end(args);
-	old_size = bundle->debug_blob.size == 0 ? 0 :
-	    max(PAGE_SIZE, roundup_pow_of_two(bundle->debug_blob.size));
-	new_size = bundle->debug_blob.size + size == 0 ? 0 :
-	    max(PAGE_SIZE, roundup_pow_of_two(bundle->debug_blob.size + size));
+	old_size = update->debug_blob.size == 0 ? 0 :
+	    max(PAGE_SIZE, roundup_pow_of_two(update->debug_blob.size));
+	new_size = update->debug_blob.size + size == 0 ? 0 :
+	    max(PAGE_SIZE, roundup_pow_of_two(update->debug_blob.size + size));
 	if (new_size > old_size) {
 		char *buf = vmalloc(new_size);
 		if (buf == NULL)
 			return -ENOMEM;
-		memcpy(buf, bundle->debug_blob.data, bundle->debug_blob.size);
-		vfree(bundle->debug_blob.data);
-		bundle->debug_blob.data = buf;
+		memcpy(buf, update->debug_blob.data, update->debug_blob.size);
+		vfree(update->debug_blob.data);
+		update->debug_blob.data = buf;
 	}
 	va_start(args, fmt);
-	bundle->debug_blob.size += vsnprintf(bundle->debug_blob.data +
-					     bundle->debug_blob.size,
+	update->debug_blob.size += vsnprintf(update->debug_blob.data +
+					     update->debug_blob.size,
 					     size, fmt, args);
 	va_end(args);
 	return 0;
 }
 #else /* CONFIG_DEBUG_FS */
-static int _ksdebug(struct update_bundle *bundle, const char *fmt, ...)
+static int _ksdebug(struct update *update, const char *fmt, ...)
 {
 	va_list args;
 
-	if (bundle->debug == 0)
+	if (update->debug == 0)
 		return 0;
 
-	if (!bundle->debug_continue_line)
+	if (!update->debug_continue_line)
 		printk(KERN_DEBUG "ksplice: ");
 
 	va_start(args, fmt);
@@ -2901,7 +2894,7 @@ static int _ksdebug(struct update_bundle *bundle, const char *fmt, ...)
 #endif /* LINUX_VERSION_CODE */
 	va_end(args);
 
-	bundle->debug_continue_line =
+	update->debug_continue_line =
 	    fmt[0] == '\0' || fmt[strlen(fmt) - 1] != '\n';
 	return 0;
 }
@@ -2927,14 +2920,14 @@ static int init_ksplice(void)
 {
 #ifdef KSPLICE_STANDALONE
 	struct module_pack *pack = &ksplice_pack;
-	pack->bundle = init_ksplice_bundle(pack->kid);
-	if (pack->bundle == NULL)
+	pack->update = init_ksplice_update(pack->kid);
+	if (pack->update == NULL)
 		return -ENOMEM;
-	add_to_bundle(pack, pack->bundle);
-	pack->bundle->debug = debug;
-	pack->bundle->abort_cause =
+	add_to_update(pack, pack->update);
+	pack->update->debug = debug;
+	pack->update->abort_cause =
 	    apply_relocs(pack, ksplice_init_relocs, ksplice_init_relocs_end);
-	if (pack->bundle->abort_cause == OK)
+	if (pack->update->abort_cause == OK)
 		bootstrapped = 1;
 #else /* !KSPLICE_STANDALONE */
 	ksplice_kobj = kobject_create_and_add("ksplice", kernel_kobj);
@@ -2947,7 +2940,7 @@ static int init_ksplice(void)
 static void cleanup_ksplice(void)
 {
 #ifdef KSPLICE_STANDALONE
-	cleanup_ksplice_bundle(ksplice_pack.bundle);
+	cleanup_ksplice_update(ksplice_pack.update);
 #else /* !KSPLICE_STANDALONE */
 	kobject_put(ksplice_kobj);
 #endif /* KSPLICE_STANDALONE */
