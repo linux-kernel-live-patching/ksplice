@@ -220,14 +220,14 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 		}
 
 		if (mode == RUN_PRE_DEBUG) {
-			ksdebug(pack, 0, "| ");
+			ksdebug(pack, "| ");
 			print_bytes(pack, run, ud_insn_len(&run_ud),
 				    pre, ud_insn_len(&pre_ud));
 		}
 
 		if (run_ud.mnemonic != pre_ud.mnemonic) {
 			if (mode == RUN_PRE_DEBUG)
-				ksdebug(pack, 3, "mnemonic mismatch: %s %s\n",
+				ksdebug(pack, "mnemonic mismatch: %s %s\n",
 					ud_lookup_mnemonic(run_ud.mnemonic),
 					ud_lookup_mnemonic(pre_ud.mnemonic));
 			ret = NO_MATCH;
@@ -247,8 +247,7 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 			ret = lookup_reloc(pack, (unsigned long)(pre + 4), &r);
 			if (ret == NO_MATCH) {
 				if (mode == RUN_PRE_INITIAL)
-					ksdebug(pack, 0, KERN_DEBUG
-						"Unrecognized ud2\n");
+					ksdebug(pack, "Unrecognized ud2\n");
 				goto out;
 			}
 			if (ret != OK)
@@ -259,9 +258,9 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 				goto out;
 			/* If there's a relocation, then it's a BUG? */
 			if (mode == RUN_PRE_DEBUG) {
-				ksdebug(pack, 0, "[BUG?: ");
+				ksdebug(pack, "[BUG?: ");
 				print_bytes(pack, run + 2, 6, pre + 2, 6);
-				ksdebug(pack, 0, "] ");
+				ksdebug(pack, "] ");
 			}
 			pre += 8;
 			run += 8;
@@ -320,16 +319,15 @@ static abort_t arch_run_pre_cmp(struct module_pack *pack,
 		      run_ud.mnemonic == UD_Isysret ||
 		      run_ud.mnemonic == UD_Isyscall ||
 		      run_ud.mnemonic == UD_Isysenter)) {
-			ksdebug(pack, 3, "<--[No unconditional change of "
+			ksdebug(pack, "<--[No unconditional change of "
 				"control at control transfer point %lx]\n",
 				(unsigned long)pre - pre_addr);
 			return NO_MATCH;
 		}
 
 		if (mode == RUN_PRE_DEBUG)
-			ksdebug(pack, 3, KERN_DEBUG " [Moving run pointer "
-				"for %lx from %lx to %lx]\n",
-				(unsigned long)pre - pre_addr,
+			ksdebug(pack, " [Moving run pointer for %lx from %lx "
+				"to %lx]\n", (unsigned long)pre - pre_addr,
 				(unsigned long)run - run_addr,
 				match_map[(unsigned long)pre - pre_addr]
 				- run_addr);
@@ -382,19 +380,19 @@ static abort_t compare_operands(struct module_pack *pack,
 
 	if (run_op->type != pre_op->type) {
 		if (mode == RUN_PRE_DEBUG)
-			ksdebug(pack, 3, "type mismatch: %d %d\n", run_op->type,
+			ksdebug(pack, "type mismatch: %d %d\n", run_op->type,
 				pre_op->type);
 		return NO_MATCH;
 	}
 	if (run_op->base != pre_op->base) {
 		if (mode == RUN_PRE_DEBUG)
-			ksdebug(pack, 3, "base mismatch: %d %d\n", run_op->base,
+			ksdebug(pack, "base mismatch: %d %d\n", run_op->base,
 				pre_op->base);
 		return NO_MATCH;
 	}
 	if (run_op->index != pre_op->index) {
 		if (mode == RUN_PRE_DEBUG)
-			ksdebug(pack, 3, "index mismatch: %d %d\n",
+			ksdebug(pack, "index mismatch: %d %d\n",
 				run_op->index, pre_op->index);
 		return NO_MATCH;
 	}
@@ -405,18 +403,17 @@ static abort_t compare_operands(struct module_pack *pack,
 	if (ret == OK) {
 		struct ksplice_reloc run_reloc = *r;
 		if (r->size != ud_operand_len(pre_op)) {
-			ksdebug(pack, 3, KERN_DEBUG "ksplice_h: run-pre: reloc "
-				"size %d differs from disassembled size %d\n",
-				r->size, ud_operand_len(pre_op));
+			ksdebug(pack, "ksplice_h: run-pre: reloc size %d "
+				"differs from disassembled size %d\n", r->size,
+				ud_operand_len(pre_op));
 			return NO_MATCH;
 		}
 		if (r->size != ud_operand_len(run_op) &&
 		    (r->dst_mask != 0xffffffff || r->rightshift != 0)) {
 			/* Special features unsupported with differing reloc sizes */
-			ksdebug(pack, 4, KERN_DEBUG "ksplice_h: reloc: invalid "
-				"flags for a relocation with size changed\n");
-			ksdebug(pack, 4, KERN_DEBUG "%ld %u\n", r->dst_mask,
-				r->rightshift);
+			ksdebug(pack, "ksplice_h: reloc: invalid flags for a "
+				"relocation with size changed\n");
+			ksdebug(pack, "%ld %u\n", r->dst_mask, r->rightshift);
 			return UNEXPECTED;
 		}
 		/* 1-byte jumps don't have signed addends */
@@ -430,9 +427,8 @@ static abort_t compare_operands(struct module_pack *pack,
 				   (unsigned long)(run + run_off), mode);
 		if (ret != OK) {
 			if (mode == RUN_PRE_DEBUG)
-				ksdebug(pack, 3, KERN_DEBUG "Matching failure "
-					"at offset %lx\n",
-					(unsigned long)pre - pre_addr);
+				ksdebug(pack, "Matching failure at offset "
+					"%lx\n", (unsigned long)pre - pre_addr);
 			return ret;
 		}
 		/* This operand is a successfully processed relocation */
@@ -454,7 +450,7 @@ static abort_t compare_operands(struct module_pack *pack,
 			/* Jump within the current function.
 			   Check it's to a corresponding place */
 			if (mode == RUN_PRE_DEBUG)
-				ksdebug(pack, 3, "[Jumps: pre=%lx run=%lx "
+				ksdebug(pack, "[Jumps: pre=%lx run=%lx "
 					"pret=%lx runt=%lx] ",
 					(unsigned long)pre - pre_addr,
 					(unsigned long)run - run_addr,
@@ -462,7 +458,7 @@ static abort_t compare_operands(struct module_pack *pack,
 					run_target - run_addr);
 			if (match_map[pre_target - pre_addr] != 0 &&
 			    match_map[pre_target - pre_addr] != run_target) {
-				ksdebug(pack, 3, "<--[Jumps to nonmatching "
+				ksdebug(pack, "<--[Jumps to nonmatching "
 					"locations]\n");
 				return NO_MATCH;
 			} else if (match_map[pre_target - pre_addr] == 0) {
@@ -471,10 +467,9 @@ static abort_t compare_operands(struct module_pack *pack,
 			return OK;
 		} else {
 			if (mode == RUN_PRE_DEBUG) {
-				ksdebug(pack, 3, "<--Different operands!\n");
-				ksdebug(pack, 3, KERN_DEBUG
-					"%lx %lx %lx %lx %x %lx %lx %lx\n",
-					pre_addr, pre_target,
+				ksdebug(pack, "<--Different operands!\n");
+				ksdebug(pack, "%lx %lx %lx %lx %x %lx %lx "
+					"%lx\n", pre_addr, pre_target,
 					pre_addr + s->size, (unsigned long)pre,
 					ud_insn_len(pre_ud), s->size,
 					jump_lval(pre_op), run_target);
@@ -487,7 +482,7 @@ static abort_t compare_operands(struct module_pack *pack,
 		return OK;
 	} else {
 		if (mode == RUN_PRE_DEBUG)
-			ksdebug(pack, 3, "<--Different operands!\n");
+			ksdebug(pack, "<--Different operands!\n");
 		return NO_MATCH;
 	}
 }
@@ -574,8 +569,8 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 		struct module *m = __module_text_address(new_addr);
 		if (m != NULL && m != pack->target &&
 		    strncmp(m->name, "ksplice", strlen("ksplice")) == 0) {
-			ksdebug(pack, 3, KERN_DEBUG "ksplice: Following "
-				"trampoline %lx %lx\n", addr, new_addr);
+			ksdebug(pack, "Following trampoline %lx %lx\n", addr,
+				new_addr);
 			addr = new_addr;
 		}
 	}

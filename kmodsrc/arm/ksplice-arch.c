@@ -41,8 +41,8 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 		m = __module_text_address(new_addr);
 		if (m != NULL && m != pack->target &&
 		    strncmp(m->name, "ksplice", strlen("ksplice")) == 0) {
-			ksdebug(pack, 3, KERN_DEBUG "ksplice: Following "
-				"trampoline %lx %lx\n", addr, new_addr);
+			ksdebug(pack, "Following trampoline %lx %lx\n", addr,
+				new_addr);
 			addr = new_addr;
 		}
 	}
