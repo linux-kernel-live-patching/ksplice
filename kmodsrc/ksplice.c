@@ -867,7 +867,6 @@ static abort_t apply_patches(struct update *update)
 	abort_t ret;
 	struct ksplice_pack *pack;
 	const struct ksplice_section *sect;
-	struct safety_record *rec;
 
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(update);
@@ -906,13 +905,12 @@ static abort_t apply_patches(struct update *update)
 	list_for_each_entry(pack, &update->packs, list) {
 		for (sect = pack->primary_sections;
 		     sect < pack->primary_sections_end; sect++) {
-			rec = kmalloc(sizeof(*rec), GFP_KERNEL);
-			if (rec == NULL)
-				return OUT_OF_MEMORY;
-			rec->addr = sect->thismod_addr;
-			rec->size = sect->size;
-			rec->label = sect->symbol->label;
-			list_add(&rec->list, &pack->safety_records);
+			ret = create_safety_record(pack, sect,
+						   &pack->safety_records,
+						   sect->thismod_addr,
+						   sect->size);
+			if (ret != OK)
+				return ret;
 		}
 	}
 
