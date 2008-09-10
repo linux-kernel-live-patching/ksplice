@@ -605,13 +605,19 @@ static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre_addr,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 static int virtual_address_mapped(unsigned long addr)
 {
-	pgd_t *pgd = pgd_offset_k(addr);
+	pgd_t *pgd;
 #ifdef pud_page
 	pud_t *pud;
 #endif /* pud_page */
 	pmd_t *pmd;
 	pte_t *pte;
 
+#ifdef KSPLICE_STANDALONE
+	if (!bootstrapped)
+		return 1;
+#endif /* KSPLICE_STANDALONE */
+
+	pgd = pgd_offset_k(addr);
 	if (!pgd_present(*pgd))
 		return 0;
 
