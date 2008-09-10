@@ -9,7 +9,8 @@ ksplice-mode-$(KSPLICE_MODE) = y
 PHONY := __ksplice
 __ksplice:
 
-ksplice-objs = $(foreach o,$(1),$(o:=.KSPLICE) $(filter $(KSPLICE_EXTRA_MATCH:=.KSPLICE_helper),$(o:=.KSPLICE_helper)))
+ksplice-extra = $(filter $(KSPLICE_EXTRA_MATCH),$(lib-y) $(single-used-m) $(multi-objs-y) $(multi-objs-m))
+ksplice-objs = $(foreach o,$(1),$(o:=.KSPLICE) $(addsuffix .KSPLICE_helper,$(filter $(ksplice-extra),$(o))))
 
 quiet_cmd_ksplice-combine = COMBINE $(@:.KSPLICE=)
 cmd_ksplice-combine = $(ksplice-script) combine $@ $(filter $(call ksplice-objs,$(ksplice-link-deps)),$^)
