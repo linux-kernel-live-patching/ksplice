@@ -514,3 +514,29 @@ void read_label_map(struct superbfd *sbfd)
 		assert(map < sbfd->maps.data + sbfd->maps.size);
 	}
 }
+
+int is_special(asection *sect)
+{
+	static const char *static_want[] = {
+		".altinstructions",
+		".altinstr_replacement",
+		".smp_locks",
+		".parainstructions",
+		"__ex_table",
+		".fixup",
+		NULL
+	};
+
+	int i;
+	for (i = 0; static_want[i] != NULL; i++) {
+		if (strcmp(sect->name, static_want[i]) == 0)
+			return 1;
+	}
+
+	if (starts_with(sect->name, "__ksymtab"))
+		return 1;
+	if (starts_with(sect->name, "__kcrctab"))
+		return 1;
+	return 0;
+}
+

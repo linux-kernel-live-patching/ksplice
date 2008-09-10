@@ -1054,16 +1054,6 @@ int str_in_set(const char *str, const struct str_vec *strs)
 
 int want_section(asection *sect)
 {
-	static const char *static_want[] = {
-		".altinstructions",
-		".altinstr_replacement",
-		".smp_locks",
-		".parainstructions",
-		"__ex_table",
-		".fixup",
-		NULL
-	};
-
 	if (!mode("keep"))
 		return 1;
 
@@ -1082,20 +1072,19 @@ int want_section(asection *sect)
 	if (mode("keep-helper") && starts_with(sect->name, ".exit.text")
 	    && bfd_get_section_by_name(sect->owner, ".exitcall.exit") == NULL)
 		return 1;
-	if (mode("keep-primary") && starts_with(sect->name, "__ksymtab"))
-		return 1;
-	if (mode("keep-primary") && starts_with(sect->name, "__kcrctab"))
-		return 1;
 	if (mode("keep-primary") && str_in_set(sect->name, &sections))
 		return 1;
 	if (mode("keep-primary") && str_in_set(sect->name, &newsects))
 		return 1;
 
-	int i;
-	for (i = 0; static_want[i] != NULL; i++) {
-		if (strcmp(sect->name, static_want[i]) == 0)
-			return 1;
-	}
+	if (mode("keep-helper") && starts_with(sect->name, "__ksymtab"))
+		return 0;
+	if (mode("keep-helper") && starts_with(sect->name, "__kcrctab"))
+		return 0;
+
+	if (is_special(sect))
+		return 1;
+
 	return 0;
 }
 

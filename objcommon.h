@@ -215,3 +215,5 @@ asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym);
 asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
 const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
 void read_label_map(struct superbfd *sbfd);
+
+int is_special(asection *sect);
