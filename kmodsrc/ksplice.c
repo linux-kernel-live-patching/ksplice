@@ -197,12 +197,12 @@ _ksdebug(struct update *update, const char *fmt, ...);
 static abort_t init_debug_buf(struct update *update);
 static void clear_debug_buf(struct update *update);
 #else /* !CONFIG_DEBUG_FS */
-static inline abort_t init_debug_buf(struct update *update)
+static abort_t init_debug_buf(struct update *update)
 {
 	return OK;
 }
 
-static inline void clear_debug_buf(struct update *update)
+static void clear_debug_buf(struct update *update)
 {
 	return;
 }
@@ -227,7 +227,7 @@ EXPORT_SYMBOL_GPL(ksplice_module_list);
 /* Old kernels do not have kcalloc
  * e629946abd0bb8266e9c3d0fd1bff2ef8dec5443 was after 2.6.8
  */
-static inline void *kcalloc(size_t n, size_t size, typeof(GFP_KERNEL) flags)
+static void *kcalloc(size_t n, size_t size, typeof(GFP_KERNEL) flags)
 {
 	char *mem;
 	if (n != 0 && size > ULONG_MAX / n)
