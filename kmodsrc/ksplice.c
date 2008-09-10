@@ -1741,7 +1741,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 		ksdebug(pack, "run-pre: %s sect %s does not match ",
 			(s->flags & KSPLICE_SIZE_RODATA) != 0 ? "data" : "text",
 			s->symbol->label);
-		ksdebug(pack, "(r_a=%" ADDR " p_a=%" ADDR " s=%ld)\n",
+		ksdebug(pack, "(r_a=%" ADDR " p_a=%" ADDR " s=%lx)\n",
 			run_addr, s->thismod_addr, s->size);
 		ksdebug(pack, "run-pre: ");
 		if (pack->bundle->debug >= 1) {
