@@ -214,11 +214,6 @@ static inline void clear_debug_buf(struct update_bundle *bundle)
 	ksdebug(pack, "Failed to find symbol %s at " \
 		"%s:%d\n", sym_name, __FILE__, __LINE__)
 
-static inline void print_abort(struct module_pack *pack, const char *str)
-{
-	ksdebug(pack, "Aborted. (%s)\n", str);
-}
-
 static LIST_HEAD(update_bundles);
 #ifdef KSPLICE_STANDALONE
 #if defined(CONFIG_KSPLICE) || defined(CONFIG_KSPLICE_MODULE)
@@ -906,7 +901,7 @@ static abort_t apply_patches(struct update_bundle *bundle)
 	} else if (ret == CODE_BUSY) {
 		print_conflicts(bundle);
 		_ksdebug(bundle, "Aborted %s.  stack check: to-be-replaced "
-			 "code is busy\n", bundle->kid);
+			 "code is busy.\n", bundle->kid);
 	} else if (ret == ALREADY_REVERSED) {
 		_ksdebug(bundle, "Aborted %s.  Ksplice update %s is already "
 			 "reversed.\n", bundle->kid, bundle->kid);
@@ -956,8 +951,8 @@ static abort_t reverse_patches(struct update_bundle *bundle)
 			 bundle->kid);
 	} else if (ret == CODE_BUSY) {
 		print_conflicts(bundle);
-		_ksdebug(bundle, "Aborted %s.  stack check: to-be-reversed "
-			 "code is busy\n", bundle->kid);
+		_ksdebug(bundle, "Aborted %s.  stack check: to-be-reversed"
+			 "code is busy.\n", bundle->kid);
 	} else if (ret == MODULE_BUSY) {
 		_ksdebug(bundle, "Update %s is in use by another module\n",
 			 bundle->kid);
@@ -1501,7 +1496,8 @@ static abort_t activate_helper(struct module_pack *pack,
 				ksdebug(pack, "run-pre: could not match "
 					"section %s\n", s->symbol->label);
 		}
-		print_abort(pack, "run-pre: could not match some sections");
+		ksdebug(pack, "Aborted.  run-pre: could not match some"
+			"sections.\n");
 		kfree(finished);
 		return NO_MATCH;
 	}
@@ -1894,7 +1890,7 @@ static abort_t read_reloc_value(struct module_pack *pack,
 		break;
 #endif /* BITS_PER_LONG */
 	default:
-		print_abort(pack, "Invalid relocation size");
+		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
 		return UNEXPECTED;
 	}
 
@@ -1941,13 +1937,13 @@ static abort_t write_reloc_value(struct module_pack *pack,
 		break;
 #endif /* BITS_PER_LONG */
 	default:
-		print_abort(pack, "Invalid relocation size");
+		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
 		return UNEXPECTED;
 	}
 
 	if (read_reloc_value(pack, r, r->blank_addr, &val) != OK ||
 	    val != sym_addr) {
-		print_abort(pack, "relocation overflow");
+		ksdebug(pack, "Aborted.  Relocation overflow.\n");
 		return UNEXPECTED;
 	}
 
@@ -2037,7 +2033,7 @@ static abort_t apply_reloc(struct module_pack *pack,
 		break;
 #endif /* BITS_PER_LONG */
 	default:
-		print_abort(pack, "Invalid relocation size");
+		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
 		return UNEXPECTED;
 	}
 #ifdef KSPLICE_STANDALONE
@@ -2074,7 +2070,7 @@ static abort_t add_system_map_candidates(struct module_pack *pack,
 	 */
 	off = (unsigned long)printk - pack->map_printk;
 	if (off & 0xfffff) {
-		print_abort(pack, "System.map does not match kernel");
+		ksdebug(pack, "Aborted.  System.map does not match kernel.\n");
 		return BAD_SYSTEM_MAP;
 	}
 	for (i = 0; i < symbol->nr_candidates; i++) {
@@ -2781,7 +2777,7 @@ static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
 		    (0x7777777777777777l & dst_mask);
 #endif /* BITS_PER_LONG */
 	default:
-		print_abort(pack, "Invalid relocation size");
+		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
 		return -1;
 	}
 }
