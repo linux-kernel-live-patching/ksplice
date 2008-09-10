@@ -281,6 +281,45 @@ static char *kstrdup(const char *s, typeof(GFP_KERNEL) gfp)
 #define mutex_unlock up
 #endif /* LINUX_VERSION_CODE */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+/* 11443ec7d9286dd25663516436a14edfb5f43857 was after 2.6.21 */
+static char * __attribute_used__
+kvasprintf(typeof(GFP_KERNEL) gfp, const char *fmt, va_list ap)
+{
+	unsigned int len;
+	char *p, dummy[1];
+	va_list aq;
+
+	va_copy(aq, ap);
+	len = vsnprintf(dummy, 0, fmt, aq);
+	va_end(aq);
+
+	p = kmalloc(len + 1, gfp);
+	if (!p)
+		return NULL;
+
+	vsnprintf(p, len + 1, fmt, ap);
+
+	return p;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
+/* e905914f96e11862b130dd229f73045dad9a34e8 was after 2.6.17 */
+static char * __attribute__((format (printf, 2, 3)))
+kasprintf(typeof(GFP_KERNEL) gfp, const char *fmt, ...)
+{
+	va_list ap;
+	char *p;
+
+	va_start(ap, fmt);
+	p = kvasprintf(gfp, fmt, ap);
+	va_end(ap);
+
+	return p;
+}
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 /* 06b2a76d25d3cfbd14680021c1d356c91be6904e was after 2.6.24 */
 static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
@@ -1269,18 +1308,14 @@ static void cleanup_ksplice_bundle(struct update_bundle *bundle)
 static struct update_bundle *init_ksplice_bundle(const char *kid)
 {
 	struct update_bundle *bundle;
-	const char *str = "ksplice_";
-	char *buf;
 	bundle = kcalloc(1, sizeof(struct update_bundle), GFP_KERNEL);
 	if (bundle == NULL)
 		return NULL;
-	buf = kmalloc(strlen(kid) + strlen(str) + 1, GFP_KERNEL);
-	if (buf == NULL) {
+	bundle->name = kasprintf(GFP_KERNEL, "ksplice_%s", kid);
+	if (bundle->name == NULL) {
 		kfree(bundle);
 		return NULL;
 	}
-	snprintf(buf, strlen(kid) + strlen(str) + 1, "%s%s", str, kid);
-	bundle->name = buf;
 	bundle->kid = kstrdup(kid, GFP_KERNEL);
 	if (bundle->kid == NULL) {
 		kfree(bundle->name);
