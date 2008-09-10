@@ -543,7 +543,6 @@ static abort_t create_safety_record(struct module_pack *pack,
 static abort_t reverse_patches(struct update_bundle *bundle);
 static abort_t apply_patches(struct update_bundle *bundle);
 static abort_t apply_update(struct update_bundle *bundle);
-static int register_ksplice_module(struct module_pack *pack);
 static struct update_bundle *init_ksplice_bundle(const char *kid);
 static void cleanup_ksplice_bundle(struct update_bundle *bundle);
 static void add_to_bundle(struct module_pack *pack,
@@ -1239,10 +1238,15 @@ static struct module *find_module(const char *name)
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-static int register_ksplice_module(struct module_pack *pack)
+int init_ksplice_module(struct module_pack *pack)
 {
 	struct update_bundle *bundle;
 	int ret = 0;
+
+#ifdef KSPLICE_STANDALONE
+	if (bootstrapped == 0)
+		return -1;
+#endif /* KSPLICE_STANDALONE */
 
 	INIT_LIST_HEAD(&pack->reloc_namevals);
 	INIT_LIST_HEAD(&pack->safety_records);
@@ -1282,6 +1286,7 @@ out:
 	mutex_unlock(&module_mutex);
 	return ret;
 }
+EXPORT_SYMBOL(init_ksplice_module);
 
 void cleanup_ksplice_module(struct module_pack *pack)
 {
@@ -1390,16 +1395,6 @@ static int ksplice_sysfs_init(struct update_bundle *bundle)
 #endif /* LINUX_VERSION_CODE */
 	return 0;
 }
-
-int init_ksplice_module(struct module_pack *pack)
-{
-#ifdef KSPLICE_STANDALONE
-	if (bootstrapped == 0)
-		return -1;
-#endif /* KSPLICE_STANDALONE */
-	return register_ksplice_module(pack);
-}
-EXPORT_SYMBOL(init_ksplice_module);
 
 static abort_t apply_update(struct update_bundle *bundle)
 {
