@@ -416,11 +416,10 @@ static abort_t compare_operands(struct module_pack *pack,
 			ksdebug(pack, "%ld %u\n", r->dst_mask, r->rightshift);
 			return UNEXPECTED;
 		}
-		/* 1-byte jumps don't have signed addends */
-		if (r->size != ud_operand_len(run_op))
-			run_reloc.signed_addend = 0;
 		/* adjust for differing relocation size */
 		run_reloc.size = ud_operand_len(run_op);
+		if (r->size != run_reloc.size)
+			run_reloc.dst_mask = ~(~0 << run_reloc.size * 8);
 		run_reloc.addend += (ud_operand_len(pre_op) -
 				     ud_operand_len(run_op));
 		ret = handle_reloc(pack, &run_reloc,

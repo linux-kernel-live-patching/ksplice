@@ -394,6 +394,9 @@ static abort_t apply_relocs(struct module_pack *pack,
 			    const struct ksplice_reloc *relocs_end);
 static abort_t apply_reloc(struct module_pack *pack,
 			   const struct ksplice_reloc *r);
+static abort_t read_reloc_value(struct module_pack *pack,
+				const struct ksplice_reloc *r,
+				unsigned long addr, unsigned long *valp);
 static abort_t write_reloc_value(struct module_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long sym_addr);
@@ -1819,68 +1822,74 @@ static abort_t handle_reloc(struct module_pack *pack,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode)
 {
-	long run_reloc_val, expected;
+	unsigned long val;
 	abort_t ret;
-	struct reloc_nameval *nv = find_nameval(pack, r->symbol->label);
-	unsigned char bytes[8];
 
-	if (probe_kernel_read(bytes, (void *)run_addr, r->size) == -EFAULT)
+	ret = read_reloc_value(pack, r, run_addr, &val);
+	if (ret != OK)
+		return ret;
+
+	if (mode == RUN_PRE_INITIAL)
+		ksdebug(pack, "run-pre: reloc at r_a=%" ADDR " p_a=%" ADDR
+			" to %s+%lx: found %s = %" ADDR "\n",
+			run_addr, r->blank_addr, r->symbol->label, r->addend,
+			r->symbol->label, val);
+
+	if (starts_with(r->symbol->label, ".rodata.str"))
+		return OK;
+
+	if (contains_canary(pack, run_addr, r->size, r->dst_mask) != 0)
+		return UNEXPECTED;
+
+	ret = create_nameval(pack, r->symbol->label, val, TEMP);
+	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
+		struct reloc_nameval *nv = find_nameval(pack, r->symbol->label);
+		ksdebug(pack, "run-pre: reloc at r_a=%" ADDR " p_a=%" ADDR
+			": nameval %s = %" ADDR "(%d) does not match expected "
+			"%" ADDR "\n", run_addr, r->blank_addr,
+			r->symbol->label, nv->val, nv->status, val);
+	}
+	return ret;
+}
+
+static abort_t read_reloc_value(struct module_pack *pack,
+				const struct ksplice_reloc *r,
+				unsigned long addr, unsigned long *valp)
+{
+	unsigned char bytes[sizeof(long)];
+	unsigned long val;
+
+	if (probe_kernel_read(bytes, (void *)addr, r->size) == -EFAULT)
 		return NO_MATCH;
 
 	switch (r->size) {
 	case 1:
-		run_reloc_val = *(int8_t *)bytes & (int8_t)r->dst_mask;
+		val = *(uint8_t *)bytes;
 		break;
 	case 2:
-		run_reloc_val = *(int16_t *)bytes & (int16_t)r->dst_mask;
+		val = *(uint16_t *)bytes;
 		break;
 	case 4:
-		run_reloc_val = *(int32_t *)bytes & (int32_t)r->dst_mask;
+		val = *(uint32_t *)bytes;
 		break;
+#if BITS_PER_LONG >= 64
 	case 8:
-		run_reloc_val = *(int64_t *)bytes & (int64_t)r->dst_mask;
+		val = *(uint64_t *)bytes;
 		break;
+#endif /* BITS_PER_LONG */
 	default:
 		print_abort(pack, "Invalid relocation size");
 		return UNEXPECTED;
 	}
 
+	val &= r->dst_mask;
 	if (r->signed_addend)
-		run_reloc_val |=
-		    -(run_reloc_val & (r->dst_mask & ~(r->dst_mask >> 1)));
-
-	run_reloc_val <<= r->rightshift;
-
-	if (mode == RUN_PRE_INITIAL) {
-		ksdebug(pack, "run-pre: reloc at r_a=%" ADDR " p_a=%" ADDR ": ",
-			run_addr, r->blank_addr);
-		ksdebug(pack, "%s=%" ADDR " (A=%" ADDR " *r=%" ADDR ")\n",
-			r->symbol->label, nv != NULL ? nv->val : 0, r->addend,
-			run_reloc_val);
-	}
-
-	if (!starts_with(r->symbol->label, ".rodata.str")) {
-		if (contains_canary(pack, run_addr, r->size, r->dst_mask) != 0)
-			return UNEXPECTED;
-
-		expected = run_reloc_val - r->addend;
-		if (r->pcrel)
-			expected += run_addr;
-
-		ret = create_nameval(pack, r->symbol->label, expected, TEMP);
-		if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
-			ksdebug(pack, "run-pre reloc: Nameval address %" ADDR
-				"(%d) does not match expected %" ADDR " for "
-				"%s!\n", nv->val, nv->status, expected,
-				r->symbol->label);
-			ksdebug(pack, "run-pre reloc: run_reloc: %" ADDR " %"
-				ADDR " %" ADDR "\n", run_addr, run_reloc_val,
-				r->addend);
-			return ret;
-		} else if (ret != OK) {
-			return ret;
-		}
-	}
+		val |= -(val & (r->dst_mask & ~(r->dst_mask >> 1)));
+	val <<= r->rightshift;
+	if (r->pcrel)
+		val += (unsigned long)addr;
+	val -= r->addend;
+	*valp = val;
 	return OK;
 }
 
@@ -1891,31 +1900,35 @@ static abort_t write_reloc_value(struct module_pack *pack,
 	unsigned long val = sym_addr + r->addend;
 	if (r->pcrel)
 		val -= r->blank_addr;
+	val >>= r->rightshift;
 	switch (r->size) {
 	case 1:
-		*(int8_t *)r->blank_addr =
-		    (*(int8_t *)r->blank_addr & ~(int8_t)r->dst_mask)
-		    | ((val >> r->rightshift) & (int8_t)r->dst_mask);
+		*(uint8_t *)r->blank_addr =
+		    (*(uint8_t *)r->blank_addr & ~r->dst_mask) |
+		    (val & r->dst_mask);
 		break;
 	case 2:
-		*(int16_t *)r->blank_addr =
-		    (*(int16_t *)r->blank_addr & ~(int16_t)r->dst_mask)
-		    | ((val >> r->rightshift) & (int16_t)r->dst_mask);
+		*(uint16_t *)r->blank_addr =
+		    (*(uint16_t *)r->blank_addr & ~r->dst_mask) |
+		    (val & r->dst_mask);
 		break;
 	case 4:
-		*(int32_t *)r->blank_addr =
-		    (*(int32_t *)r->blank_addr & ~(int32_t)r->dst_mask)
-		    | ((val >> r->rightshift) & (int32_t)r->dst_mask);
+		*(uint32_t *)r->blank_addr =
+		    (*(uint32_t *)r->blank_addr & ~r->dst_mask) |
+		    (val & r->dst_mask);
 		break;
+#if BITS_PER_LONG >= 64
 	case 8:
-		*(int64_t *)r->blank_addr =
-		    (*(int64_t *)r->blank_addr & ~r->dst_mask) |
-		    ((val >> r->rightshift) & r->dst_mask);
+		*(uint64_t *)r->blank_addr =
+		    (*(uint64_t *)r->blank_addr & ~r->dst_mask) |
+		    (val & r->dst_mask);
 		break;
+#endif /* BITS_PER_LONG */
 	default:
 		print_abort(pack, "Invalid relocation size");
 		return UNEXPECTED;
 	}
+
 	return OK;
 }
 
@@ -1988,17 +2001,19 @@ static abort_t apply_reloc(struct module_pack *pack,
 	ksdebug(pack, "(S=%" ADDR " A=%" ADDR " ", sym_addr, r->addend);
 	switch (r->size) {
 	case 1:
-		ksdebug(pack, "aft=%02x)\n", *(int8_t *)r->blank_addr);
+		ksdebug(pack, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
 		break;
 	case 2:
-		ksdebug(pack, "aft=%04x)\n", *(int16_t *)r->blank_addr);
+		ksdebug(pack, "aft=%04x)\n", *(uint16_t *)r->blank_addr);
 		break;
 	case 4:
-		ksdebug(pack, "aft=%08x)\n", *(int32_t *)r->blank_addr);
+		ksdebug(pack, "aft=%08x)\n", *(uint32_t *)r->blank_addr);
 		break;
+#if BITS_PER_LONG >= 64
 	case 8:
-		ksdebug(pack, "aft=%016llx)\n", *(int64_t *)r->blank_addr);
+		ksdebug(pack, "aft=%016llx)\n", *(uint64_t *)r->blank_addr);
 		break;
+#endif /* BITS_PER_LONG */
 	default:
 		print_abort(pack, "Invalid relocation size");
 		return UNEXPECTED;
@@ -2730,17 +2745,19 @@ static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
 {
 	switch (size) {
 	case 1:
-		return (*(int8_t *)blank_addr & (int8_t)dst_mask) ==
+		return (*(uint8_t *)blank_addr & dst_mask) ==
 		    (0x77 & dst_mask);
 	case 2:
-		return (*(int16_t *)blank_addr & (int16_t)dst_mask) ==
+		return (*(uint16_t *)blank_addr & dst_mask) ==
 		    (0x7777 & dst_mask);
 	case 4:
-		return (*(int32_t *)blank_addr & (int32_t)dst_mask) ==
+		return (*(uint32_t *)blank_addr & dst_mask) ==
 		    (0x77777777 & dst_mask);
+#if BITS_PER_LONG >= 64
 	case 8:
-		return (*(int64_t *)blank_addr & dst_mask) ==
-		    (0x7777777777777777ll & dst_mask);
+		return (*(uint64_t *)blank_addr & dst_mask) ==
+		    (0x7777777777777777l & dst_mask);
+#endif /* BITS_PER_LONG */
 	default:
 		print_abort(pack, "Invalid relocation size");
 		return -1;
