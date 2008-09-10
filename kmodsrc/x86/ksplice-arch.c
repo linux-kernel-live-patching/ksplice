@@ -31,7 +31,7 @@ extern const char thread_return[];
 #define KSPLICE_SP(x) ((x)->thread.esp)
 #endif /* __ASM_X86_PROCESSOR_H */
 
-#ifndef FUNCTION_SECTIONS
+#ifndef CONFIG_FUNCTION_DATA_SECTIONS
 #include "udis86.h"
 
 /* Various efficient no-op patterns for aligning code labels.
@@ -552,7 +552,7 @@ static int next_run_byte(struct ud *ud)
 	ud->userdata++;
 	return byte;
 }
-#endif /* !FUNCTION_SECTIONS */
+#endif /* !CONFIG_FUNCTION_DATA_SECTIONS */
 
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr)

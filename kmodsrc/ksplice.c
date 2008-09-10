@@ -519,14 +519,14 @@ static abort_t run_pre_cmp(struct module_pack *pack,
 			   unsigned long run_addr,
 			   struct list_head *safety_records,
 			   enum run_pre_mode mode);
-#ifndef FUNCTION_SECTIONS
+#ifndef CONFIG_FUNCTION_DATA_SECTIONS
 /* defined in $ARCH/ksplice-arch.c */
 static abort_t arch_run_pre_cmp(struct module_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long run_addr,
 				struct list_head *safety_records,
 				enum run_pre_mode mode);
-#endif /* FUNCTION_SECTIONS */
+#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
 static void print_bytes(struct module_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec);
@@ -1728,14 +1728,14 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	if (ret != OK)
 		return ret;
 
-#ifdef FUNCTION_SECTIONS
+#ifdef CONFIG_FUNCTION_DATA_SECTIONS
 	ret = run_pre_cmp(pack, s, run_addr, safety_records, mode);
-#else
+#else /* !CONFIG_FUNCTION_DATA_SECTIONS */
 	if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
 		ret = arch_run_pre_cmp(pack, s, run_addr, safety_records, mode);
 	else
 		ret = run_pre_cmp(pack, s, run_addr, safety_records, mode);
-#endif
+#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
 	if (ret == NO_MATCH && mode != RUN_PRE_FINAL) {
 		set_temp_myst_relocs(pack, NOVAL);
 		ksdebug(pack, "run-pre: %s sect %s does not match ",
@@ -1745,10 +1745,10 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 			run_addr, s->thismod_addr, s->size);
 		ksdebug(pack, "run-pre: ");
 		if (pack->bundle->debug >= 1) {
-#ifdef FUNCTION_SECTIONS
+#ifdef CONFIG_FUNCTION_DATA_SECTIONS
 			ret = run_pre_cmp(pack, s, run_addr, safety_records,
 					  RUN_PRE_DEBUG);
-#else
+#else /* !CONFIG_FUNCTION_DATA_SECTIONS */
 			if ((s->flags & KSPLICE_SIZE_TEXT) != 0)
 				ret = arch_run_pre_cmp(pack, s, run_addr,
 						       safety_records,
@@ -1757,7 +1757,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 				ret = run_pre_cmp(pack, s, run_addr,
 						  safety_records,
 						  RUN_PRE_DEBUG);
-#endif
+#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
 			set_temp_myst_relocs(pack, NOVAL);
 		}
 		ksdebug(pack, "\n");
