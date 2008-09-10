@@ -267,10 +267,15 @@ int main(int argc, char *argv[])
 	}
 
 	if (mode("keep-primary")) {
-		const char **sectname;
-		for (sectname = sections.data;
-		     sectname < sections.data + sections.size; sectname++)
-			write_ksplice_patch(isbfd, *sectname);
+		asection *sect;
+		for (sect = isbfd->abfd->sections; sect != NULL;
+		     sect = sect->next) {
+			if (str_in_set(sect->name, &sections) ||
+			    (starts_with(sect->name, ".text") &&
+			     want_section(sect) &&
+			     !str_in_set(sect->name, &newsects)))
+				write_ksplice_patch(isbfd, sect->name);
+		}
 
 		const char **label;
 		for (label = delsects.data;
