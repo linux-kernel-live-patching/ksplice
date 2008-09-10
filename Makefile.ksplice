@@ -9,7 +9,7 @@ ksplice-mode-$(KSPLICE_MODE) = y
 PHONY := __ksplice
 __ksplice:
 
-ksplice-objs = $(1:=.KSPLICE)
+ksplice-objs = $(foreach o,$(1),$(o:=.KSPLICE) $(filter $(KSPLICE_EXTRA_MATCH:=.KSPLICE_helper),$(o:=.KSPLICE_helper)))
 
 quiet_cmd_ksplice-combine = COMBINE $(@:.KSPLICE=)
 cmd_ksplice-combine = $(ksplice-script) combine $@ $(filter $(call ksplice-objs,$(ksplice-link-deps)),$^)
@@ -22,6 +22,8 @@ cmd_ksplice-ignore = touch $@
 quiet_cmd_ksplice-cow = COW     $@
 cmd_ksplice-cow = cp -a $@ $@.KSPLICE_pre
 rule_ksplice-mod = $(Q)if [ -s $< ]; then echo $(<:.o.KSPLICE=) > $@; elif [ -e $@ ]; then rm -f $@; fi
+quiet_cmd_ksplice-helper = HELPER  $(@:.KSPLICE_helper=)
+cmd_ksplice-helper = $(ksplice-script) helper $@
 
 ifeq ($(KERNELRELEASE),)
 
@@ -92,6 +94,9 @@ ksplice-deps += $(addprefix $(MODVERDIR)/,$(notdir $(ksplice-mods:%=%.mod.KSPLIC
 $(MODVERDIR)/%.mod.KSPLICE: $(obj)/%.o.KSPLICE
 	$(rule_ksplice-mod)
 .PRECIOUS: $(obj)/%.o.KSPLICE
+
+$(obj)/%.o.KSPLICE_helper: $(obj)/%.o.KSPLICE
+	$(call cmd,ksplice-helper)
 
 define ksplice-cow-check
 	$(if $(filter-out %.KSPLICE,$@), \

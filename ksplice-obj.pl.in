@@ -57,35 +57,56 @@ sub do_diff {
 	return empty_diff($out) if($objdiff !~ m/\S/);
 
 	runsuc_in($objdiff, "objmanip", $obj, "$obj.KSPLICE_primary", "keep-primary", $ENV{KSPLICE_KID});
-	runsuc("objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
 	close OUT;
 	rename "$out.tmp", $out;
+
+	runsuc("objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
+}
+
+sub do_helper {
+	my ($out) = @_;
+	my ($obj) = $out =~ /^(.*)\.KSPLICE_helper$/ or die;
+	my $obj_old = "$obj.KSPLICE_pre";
+	-e $obj_old or $obj_old = $obj;
+	runsuc("objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
+}
+
+sub link_objs {
+	my ($out, @ins) = @_;
+	if (@ins == 0) {
+		runval(shellwords($ENV{AR}), "rcs", $out);
+	} elsif (@ins == 1) {
+		copy @ins, $out;
+	} else {
+		runval(shellwords($ENV{LD}), "-r", "-o", $out, @ins);
+	}
 }
 
 sub do_combine {
 	my ($out, @ins) = @_;
-	my @objs;
+	my @primaries;
+	my @helpers;
 	foreach my $in (@ins) {
-		next if (!-s $in);
-		my ($obj) = $in =~ /^(.*)\.KSPLICE$/ or die;
-		push @objs, $obj;
+		if (my ($obj) = $in =~ /^(.*)\.KSPLICE$/) {
+			next if (!-s $in);
+			push @primaries, "$obj.KSPLICE_primary";
+			push @helpers, "$obj.KSPLICE_helper";
+		} elsif (($obj) = $in =~ /^(.*)\.KSPLICE_helper$/) {
+			push @helpers, "$obj.KSPLICE_helper"
+			    unless (@helpers && $helpers[$#helpers] eq "$obj.KSPLICE_helper");
+		} else {
+			die;
+		}
 	}
 
-	return empty_diff($out) unless (@objs);
+	return empty_diff($out) unless (@helpers);
 
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
-	if (@objs == 1) {
-		copy "$objs[0].KSPLICE_primary", "$obj.KSPLICE_primary";
-		copy "$objs[0].KSPLICE_helper", "$obj.KSPLICE_helper";
-	} else {
-		system(shellwords($ENV{LD}), "-r", "-o",
-		       map { "$_.KSPLICE_primary" } ($obj, @objs));
-		system(shellwords($ENV{LD}), "-r", "-o",
-		       map { "$_.KSPLICE_helper" } ($obj, @objs));
-	}
+	link_objs("$obj.KSPLICE_primary", @primaries);
+	link_objs("$obj.KSPLICE_helper", @helpers);
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
@@ -117,6 +138,7 @@ sub do_system_map_lookup {
 my %handlers = (
 	'snap' => \&do_snap,
 	'diff' => \&do_diff,
+	'helper' => \&do_helper,
 	'combine' => \&do_combine,
 	'finalize' => \&do_finalize,
 	'rmsyms' => \&do_rmsyms,
