@@ -429,7 +429,7 @@ static abort_t brute_search_all(struct ksplice_pack *pack,
 
 static abort_t add_candidate_val(struct list_head *vals, unsigned long val);
 static void release_vals(struct list_head *vals);
-static void set_temp_myst_relocs(struct ksplice_pack *pack, int status_val);
+static void set_temp_namevals(struct ksplice_pack *pack, int status_val);
 static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 			   int size, long dst_mask);
 static int starts_with(const char *str, const char *prefix);
@@ -1747,7 +1747,7 @@ static abort_t try_addr(struct ksplice_pack *pack, const struct ksplice_size *s,
 		ret = run_pre_cmp(pack, s, run_addr, safety_records, mode);
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
 	if (ret == NO_MATCH && mode != RUN_PRE_FINAL) {
-		set_temp_myst_relocs(pack, NOVAL);
+		set_temp_namevals(pack, NOVAL);
 		ksdebug(pack, "run-pre: %s sect %s does not match ",
 			(s->flags & KSPLICE_SIZE_RODATA) != 0 ? "data" : "text",
 			s->symbol->label);
@@ -1768,21 +1768,21 @@ static abort_t try_addr(struct ksplice_pack *pack, const struct ksplice_size *s,
 						  safety_records,
 						  RUN_PRE_DEBUG);
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
-			set_temp_myst_relocs(pack, NOVAL);
+			set_temp_namevals(pack, NOVAL);
 		}
 		ksdebug(pack, "\n");
 		return ret;
 	} else if (ret != OK) {
-		set_temp_myst_relocs(pack, NOVAL);
+		set_temp_namevals(pack, NOVAL);
 		return ret;
 	} else if (mode != RUN_PRE_FINAL) {
-		set_temp_myst_relocs(pack, NOVAL);
+		set_temp_namevals(pack, NOVAL);
 		ksdebug(pack, "run-pre: candidate for sect %s=%" ADDR "\n",
 			s->symbol->label, run_addr);
 		return OK;
 	}
 
-	set_temp_myst_relocs(pack, VAL);
+	set_temp_namevals(pack, VAL);
 	ksdebug(pack, "run-pre: found sect %s=%" ADDR "\n", s->symbol->label,
 		run_addr);
 	return OK;
@@ -2746,16 +2746,16 @@ static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 	return NO_MATCH;
 }
 
-static void set_temp_myst_relocs(struct ksplice_pack *pack, int status_val)
+static void set_temp_namevals(struct ksplice_pack *pack, int status)
 {
 	struct reloc_nameval *nv, *n;
 	list_for_each_entry_safe(nv, n, &pack->reloc_namevals, list) {
 		if (nv->status == TEMP) {
-			if (status_val == NOVAL) {
+			if (status == NOVAL) {
 				list_del(&nv->list);
 				kfree(nv);
 			} else {
-				nv->status = status_val;
+				nv->status = status;
 			}
 		}
 	}
