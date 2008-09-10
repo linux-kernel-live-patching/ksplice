@@ -194,6 +194,7 @@ LIST_HEAD(ksplice_module_list);
 LIST_HEAD(ksplice_module_list);
 EXPORT_SYMBOL_GPL(ksplice_module_list);
 #endif /* KSPLICE_STANDALONE */
+static bool patches_module(const struct module *a, const struct module *b);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* Old kernels do not have kcalloc
@@ -476,6 +477,8 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 				    unsigned long run_addr,
 				    unsigned long run_size);
 static abort_t add_candidate_val(struct list_head *vals, unsigned long val);
+static void prune_trampoline_vals(struct ksplice_pack *pack,
+				  struct list_head *vals);
 static void release_vals(struct list_head *vals);
 static void set_temp_namevals(struct ksplice_pack *pack, int status_val);
 
@@ -1581,6 +1584,7 @@ static abort_t find_section(struct ksplice_pack *pack,
 		}
 		/* Make sure run-pre matching output is displayed if
 		   brute_search succeeds */
+		prune_trampoline_vals(pack, &vals);
 		if (singular(&vals)) {
 			run_addr = list_entry(vals.next, struct candidate_val,
 					      list)->val;
@@ -1596,6 +1600,7 @@ static abort_t find_section(struct ksplice_pack *pack,
 	}
 #endif /* KSPLICE_STANDALONE */
 
+	prune_trampoline_vals(pack, &vals);
 	if (singular(&vals)) {
 		LIST_HEAD(safety_records);
 		run_addr = list_entry(vals.next, struct candidate_val,
@@ -1764,7 +1769,7 @@ static abort_t try_addr(struct ksplice_pack *pack,
 		run_module = __module_data_address(run_addr);
 	else
 		run_module = __module_text_address(run_addr);
-	if (run_module != pack->target) {
+	if (!patches_module(run_module, pack->target)) {
 		ksdebug(pack, "run-pre: ignoring address %" ADDR " in other "
 			"module %s for sect %s\n", run_addr,
 			run_module == NULL ? "vmlinux" : run_module->name,
@@ -2467,6 +2472,33 @@ static const struct kernel_symbol *find_symbol(const char *name,
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
+/* Does a patch b? */
+static bool patches_module(const struct module *a, const struct module *b)
+{
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+	const char *name;
+	if (a == b)
+		return true;
+	if (a == NULL || !starts_with(a->name, "ksplice_"))
+		return false;
+	name = a->name + strlen("ksplice_");
+	name += strcspn(name, "_");
+	if (name[0] != '_')
+		return false;
+	name++;
+	return strcmp(name, b == NULL ? "vmlinux" : b->name) == 0;
+#else /* !KSPLICE_NO_KERNEL_SUPPORT */
+	struct ksplice_module_list_entry *entry;
+	if (a == b)
+		return true;
+	list_for_each_entry(entry, &ksplice_module_list, list) {
+		if (entry->target == b && entry->primary == a)
+			return true;
+	}
+	return false;
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
+}
+
 #ifdef CONFIG_KALLSYMS
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
@@ -2478,7 +2510,7 @@ static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 
 	list_for_each_entry(m, &modules, list) {
 		if (starts_with(m->name, pack->name) ||
-		    !ends_with(m->name, pack->target_name))
+		    !patches_module(m, pack->target))
 			continue;
 		ret = (__force abort_t)
 		    module_kallsyms_on_each_symbol(m, accumulate_matching_names,
@@ -2726,6 +2758,35 @@ static abort_t add_candidate_val(struct list_head *vals, unsigned long val)
 	new->val = val;
 	list_add(&new->list, vals);
 	return OK;
+}
+
+/* If there are only two candidates and their addresses are related by
+   a trampoline, then we have successfully found a function patched by a
+   previous update.  We remove the endpoint of the trampoline from the vals
+   list, so that this update uses the patched function's original address. */
+static void prune_trampoline_vals(struct ksplice_pack *pack,
+				  struct list_head *vals)
+{
+	struct candidate_val *val1, *val2;
+
+	if (list_empty(vals) || singular(vals))
+		return;
+	if (vals->next->next->next != vals)
+		return;
+
+	val1 = list_entry(vals->next, struct candidate_val, list);
+	val2 = list_entry(vals->next->next, struct candidate_val, list);
+
+	if (val1->val == follow_trampolines(pack, val2->val)) {
+		list_del(&val1->list);
+		kfree(val1);
+		return;
+	}
+	if (val2->val == follow_trampolines(pack, val1->val)) {
+		list_del(&val2->list);
+		kfree(val2);
+		return;
+	}
 }
 
 static void release_vals(struct list_head *vals)
