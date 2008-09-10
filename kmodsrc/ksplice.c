@@ -810,8 +810,12 @@ static abort_t process_exports(struct ksplice_pack *pack)
 		 * kernel_symbol structure. */
 		export->sym = (struct kernel_symbol *)sym;
 		export->saved_name = export->sym->name;
-		if (m != pack->primary && use_module(pack->primary, m) != 1)
+		if (m != pack->primary && use_module(pack->primary, m) != 1) {
+			ksdebug(pack, "Aborted.  Could not add dependency on "
+				"symbol %s from module %s.\n", sym->name,
+				m->name);
 			return UNEXPECTED;
+		}
 	}
 	return OK;
 }
@@ -847,7 +851,8 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 	/* Confirm that it is a jump into a ksplice module */
 	m = __module_text_address(new_addr);
 	if (m != NULL && m != pack->target && starts_with(m->name, "ksplice")) {
-		ksdebug(pack, "Following trampoline %lx %lx\n", addr, new_addr);
+		ksdebug(pack, "Following trampoline %lx %lx(%s)\n", addr,
+			new_addr, m->name);
 		return new_addr;
 	}
 	return addr;
@@ -1870,8 +1875,11 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	if (starts_with(r->symbol->label, ".rodata.str"))
 		return OK;
 
-	if (contains_canary(pack, run_addr, r->size, r->dst_mask) != 0)
+	if (contains_canary(pack, run_addr, r->size, r->dst_mask) != 0) {
+		ksdebug(pack, "Aborted.  Unexpected canary in run code at %lx"
+			"\n", run_addr);
 		return UNEXPECTED;
+	}
 
 	ret = create_nameval(pack, r->symbol->label, val, TEMP);
 	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
