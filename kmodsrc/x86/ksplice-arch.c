@@ -591,6 +591,12 @@ static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre_addr,
 	return OK;
 }
 
+static int valid_stack_ptr(const struct thread_info *tinfo, const void *p)
+{
+	return p > (const void *)tinfo
+	    && p <= (const void *)tinfo + THREAD_SIZE - sizeof(long);
+}
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 static int virtual_address_mapped(unsigned long addr)
 {

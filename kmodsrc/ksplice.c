@@ -461,7 +461,6 @@ static abort_t check_address(struct update *update,
 static abort_t check_record(struct conflict_frame *frame,
 			    const struct safety_record *rec,
 			    unsigned long addr);
-static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 static int is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update *update);
 static void print_conflicts(struct update *update);
@@ -474,6 +473,7 @@ static abort_t create_trampoline(struct ksplice_patch *p);
 static unsigned long trampoline_target(unsigned long addr);
 static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
+static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 
 static abort_t add_dependency_on_address(struct module_pack *pack,
 					 unsigned long addr);
@@ -1107,7 +1107,6 @@ static abort_t check_task(struct update *update,
 	return status;
 }
 
-/* Modified version of Linux's print_context_stack */
 static abort_t check_stack(struct update *update, struct conflict *conf,
 			   const struct thread_info *tinfo,
 			   const unsigned long *stack)
@@ -1164,13 +1163,6 @@ static abort_t check_record(struct conflict_frame *frame,
 		return CODE_BUSY;
 	}
 	return OK;
-}
-
-/* Modified version of Linux's valid_stack_ptr */
-static int valid_stack_ptr(const struct thread_info *tinfo, const void *p)
-{
-	return p > (const void *)tinfo
-	    && p <= (const void *)tinfo + THREAD_SIZE - sizeof(long);
 }
 
 static int is_stop_machine(const struct task_struct *t)
