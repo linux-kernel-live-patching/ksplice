@@ -1775,7 +1775,9 @@ static abort_t try_addr(struct ksplice_pack *pack, const struct ksplice_size *s,
 	} else if (ret != OK) {
 		set_temp_namevals(pack, NOVAL);
 		return ret;
-	} else if (mode != RUN_PRE_FINAL) {
+	}
+
+	if (mode != RUN_PRE_FINAL) {
 		set_temp_namevals(pack, NOVAL);
 		ksdebug(pack, "run-pre: candidate for sect %s=%" ADDR "\n",
 			s->symbol->label, run_addr);
