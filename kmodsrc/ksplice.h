@@ -27,13 +27,18 @@ struct ksplice_section {
 
 #define MAX_TRAMPOLINE_SIZE 5
 
-struct ksplice_patch {
-	const char *label;
+struct ksplice_trampoline {
 	unsigned long oldaddr;
 	unsigned long repladdr;
 	char saved[MAX_TRAMPOLINE_SIZE];
 	char trampoline[MAX_TRAMPOLINE_SIZE];
 	unsigned int size;
+};
+
+struct ksplice_patch {
+	const char *label;
+	struct ksplice_trampoline trampoline;
+	struct ksplice_trampoline reverse_trampoline;
 };
 
 struct ksplice_export {

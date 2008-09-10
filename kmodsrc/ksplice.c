@@ -463,8 +463,8 @@ static abort_t check_record(struct conflict_addr *ca,
 static bool is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update *update);
 static void print_conflicts(struct update *update);
-static void insert_trampoline(struct ksplice_patch *p);
-static void remove_trampoline(const struct ksplice_patch *p);
+static void insert_trampoline(struct ksplice_trampoline *t);
+static void remove_trampoline(const struct ksplice_trampoline *t);
 
 static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
 					  const char *label);
@@ -531,7 +531,7 @@ static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* Architecture-specific functions defined in ARCH/ksplice-arch.c */
-static abort_t prepare_trampoline(struct ksplice_patch *p);
+static abort_t prepare_trampoline(struct ksplice_trampoline *t);
 static unsigned long trampoline_target(unsigned long addr);
 static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
@@ -746,11 +746,12 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 				p->label);
 			return FAILED_TO_FIND;
 		}
-		p->oldaddr = nv->val;
+		p->trampoline.oldaddr = nv->val;
 
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (strcmp(rec->label, p->label) == 0 &&
-			    follow_trampolines(pack, p->oldaddr) == rec->addr) {
+			    follow_trampolines(pack, p->trampoline.oldaddr)
+			    == rec->addr) {
 				found = true;
 				break;
 			}
@@ -760,22 +761,34 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 				p->label);
 			return UNEXPECTED;
 		}
-		if (rec->size < p->size) {
+		if (rec->size < p->trampoline.size) {
 			ksdebug(pack, "Symbol %s is too short for trampoline\n",
 				p->label);
 			return UNEXPECTED;
 		}
 
-		if (p->repladdr == 0)
-			p->repladdr = (unsigned long)ksplice_deleted;
+		if (p->trampoline.repladdr == 0)
+			p->trampoline.repladdr = (unsigned long)ksplice_deleted;
 		else
 			rec->first_byte_safe = true;
 
-		ret = prepare_trampoline(p);
+		ret = prepare_trampoline(&p->trampoline);
 		if (ret != OK)
 			return ret;
 
-		ret = add_dependency_on_address(pack, p->oldaddr);
+		if (p->trampoline.oldaddr != rec->addr) {
+			/* If there's already a trampoline at oldaddr, prepare
+			   a reverse trampoline to install there */
+			p->reverse_trampoline.oldaddr = rec->addr;
+			p->reverse_trampoline.repladdr = p->trampoline.oldaddr;
+			ret = prepare_trampoline(&p->reverse_trampoline);
+			if (ret != OK)
+				return ret;
+		} else {
+			p->reverse_trampoline.size = 0;
+		}
+
+		ret = add_dependency_on_address(pack, p->trampoline.oldaddr);
 		if (ret != OK)
 			return ret;
 	}
@@ -810,22 +823,22 @@ static abort_t finalize_exports(struct ksplice_pack *pack)
 	return OK;
 }
 
-static void insert_trampoline(struct ksplice_patch *p)
+static void insert_trampoline(struct ksplice_trampoline *t)
 {
 	mm_segment_t old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	memcpy((void *)p->saved, (void *)p->oldaddr, p->size);
-	memcpy((void *)p->oldaddr, (void *)p->trampoline, p->size);
-	flush_icache_range(p->oldaddr, p->oldaddr + p->size);
+	memcpy((void *)t->saved, (void *)t->oldaddr, t->size);
+	memcpy((void *)t->oldaddr, (void *)t->trampoline, t->size);
+	flush_icache_range(t->oldaddr, t->oldaddr + t->size);
 	set_fs(old_fs);
 }
 
-static void remove_trampoline(const struct ksplice_patch *p)
+static void remove_trampoline(const struct ksplice_trampoline *t)
 {
 	mm_segment_t old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	memcpy((void *)p->oldaddr, (void *)p->saved, p->size);
-	flush_icache_range(p->oldaddr, p->oldaddr + p->size);
+	memcpy((void *)t->oldaddr, (void *)t->saved, t->size);
+	flush_icache_range(t->oldaddr, t->oldaddr + t->size);
 	set_fs(old_fs);
 }
 
@@ -1002,8 +1015,10 @@ static int __apply_patches(void *updateptr)
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++)
-			insert_trampoline(p);
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			insert_trampoline(&p->trampoline);
+			insert_trampoline(&p->reverse_trampoline);
+		}
 	}
 	return (__force int)OK;
 }
@@ -1045,8 +1060,10 @@ static int __reverse_patches(void *updateptr)
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++)
-			remove_trampoline(p);
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			remove_trampoline(&p->trampoline);
+			remove_trampoline(&p->reverse_trampoline);
+		}
 	}
 	return (__force int)OK;
 }
@@ -1833,7 +1850,8 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 	if (p >= pack->patches_end)
 		return OK;
 
-	if ((sect->flags & KSPLICE_SECTION_TEXT) == 0 && p->repladdr != 0) {
+	if ((sect->flags & KSPLICE_SECTION_TEXT) == 0 &&
+	    p->trampoline.repladdr != 0) {
 		ksdebug(pack, "Error: ksplice_patch %s is matched to a "
 			"non-deleted non-text section!\n", sect->symbol->label);
 		return UNEXPECTED;

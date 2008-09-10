@@ -657,7 +657,7 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
 
 	write_string(kpatch_ss, &kpatch->label, "%s",
 		     label_lookup(sbfd, sect->symbol));
-	write_reloc(kpatch_ss, &kpatch->repladdr, &sect->symbol, 0);
+	write_reloc(kpatch_ss, &kpatch->trampoline.repladdr, &sect->symbol, 0);
 }
 
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label)
@@ -667,7 +667,7 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label)
 						 struct ksplice_patch);
 
 	write_string(kpatch_ss, &kpatch->label, "%s", label);
-	kpatch->repladdr = 0;
+	kpatch->trampoline.repladdr = 0;
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,

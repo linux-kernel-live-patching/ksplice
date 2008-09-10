@@ -133,7 +133,7 @@ void show_ksplice_patch(struct supersect *ss,
 	       "repladdr: %s\n"
 	       "\n",
 	       read_string(ss, &kpatch->label),
-	       str_pointer(ss, (void *const *)&kpatch->repladdr));
+	       str_pointer(ss, (void *const *)&kpatch->trampoline.repladdr));
 }
 
 void show_ksplice_patches(struct supersect *kpatch_ss)
