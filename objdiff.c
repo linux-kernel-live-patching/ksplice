@@ -149,24 +149,38 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 
 void print_new_sections(struct superbfd *oldsbfd, struct superbfd *newsbfd)
 {
-	asection *sect;
-	for (sect = newsbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		if (!starts_with(sect->name, ".text"))
-			continue;
-		if (bfd_get_section_by_name(oldsbfd->abfd, sect->name) == NULL)
-			printf("%s ", sect->name);
+	asection *newsect;
+	asection *oldsect;
+	for (newsect = newsbfd->abfd->sections; newsect != NULL;
+	     newsect = newsect->next) {
+		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
+		     oldsect = oldsect->next) {
+			if (newsect->name == oldsect->name ||
+			    strcmp(label_lookup(newsbfd, newsect->symbol),
+				   label_lookup(oldsbfd, oldsect->symbol)) == 0)
+				break;
+		}
+		if (oldsect == NULL)
+			printf("%s ", newsect->name);
 	}
 }
 
 void print_deleted_section_labels(struct superbfd *oldsbfd,
 				  struct superbfd *newsbfd)
 {
-	asection *sect;
-	for (sect = oldsbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		if (!starts_with(sect->name, ".text"))
-			continue;
-		if (bfd_get_section_by_name(newsbfd->abfd, sect->name) == NULL)
-			printf("%s ", label_lookup(oldsbfd, sect->symbol));
+	asection *newsect;
+	asection *oldsect;
+	for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
+	     oldsect = oldsect->next) {
+		for (newsect = newsbfd->abfd->sections; newsect != NULL;
+		     newsect = newsect->next) {
+			if (newsect->name == oldsect->name ||
+			    strcmp(label_lookup(newsbfd, newsect->symbol),
+				   label_lookup(oldsbfd, oldsect->symbol)) == 0)
+				break;
+		}
+		if (newsect == NULL)
+			printf("%s ", label_lookup(oldsbfd, oldsect->symbol));
 	}
 }
 
