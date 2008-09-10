@@ -992,8 +992,7 @@ static abort_t check_each_task(struct update_bundle *bundle)
 		}
 		if (ret != OK && ret != CODE_BUSY)
 			goto out;
-	}
-	while_each_thread(g, p);
+	} while_each_thread(g, p);
 out:
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
 /* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
