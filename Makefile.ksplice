@@ -6,6 +6,8 @@ $(if $(filter_out snap diff,$(KSPLICE_MODE)), \
   $(error Invalid KSPLICE_MODE $(KSPLICE_MODE).))
 ksplice-mode-$(KSPLICE_MODE) = y
 
+KSPLICE_ONLY_TARGETS ?= %
+
 PHONY := __ksplice
 __ksplice:
 
@@ -51,7 +53,7 @@ else	# KERNELRELEASE
 
 include $(srctree)/scripts/Makefile.build
 ksplice-mods += $(obj-m:.o=)
-ksplice-deps += $(builtin-target:=.KSPLICE) $(lib-target:=.KSPLICE)
+ksplice-deps += $(if $(filter $(KSPLICE_ONLY_TARGETS),vmlinux),$(builtin-target:=.KSPLICE) $(lib-target:=.KSPLICE))
 ksplice-dirs += $(addprefix _ksplice_,$(subdir-ym))
 
 ifdef builtin-target
@@ -91,7 +93,8 @@ $(sort $(subdir-obj-y:=.KSPLICE)): $(ksplice-dirs) ;
 
 endif	# KERNELRELEASE
 
-ksplice-deps += $(addprefix $(MODVERDIR)/,$(notdir $(ksplice-mods:%=%.mod.KSPLICE)))
+ksplice-modnames = $(filter $(KSPLICE_ONLY_TARGETS),$(notdir $(ksplice-mods)))
+ksplice-deps += $(ksplice-modnames:%=$(MODVERDIR)/%.mod.KSPLICE)
 $(MODVERDIR)/%.mod.KSPLICE: $(obj)/%.o.KSPLICE
 	$(rule_ksplice-mod)
 .PRECIOUS: $(obj)/%.o.KSPLICE

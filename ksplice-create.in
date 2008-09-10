@@ -23,6 +23,7 @@ use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
 my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
+my @only_targets;
 my @extra_match;
 my $standalone;
 my ($help, $wantversion, $prebuild, $skip_prebuild, $patch_opt) = (0, 0, 0, 0, "-p1");
@@ -33,6 +34,7 @@ GetOptions("help|?" => \$help,
 	"patch=s" => \$patchfile,
 	"diffext=s" => \$diffext,
 	"prebuild" => \$prebuild,
+	"only-targets=s" => \@only_targets,
 	"extra-match=s" => \@extra_match,
 	"standalone!" => \$standalone,
 	"skip-prebuild" => \$skip_prebuild,
@@ -150,7 +152,9 @@ my @standalone_flag;
 @standalone_flag = qw(KSPLICE_STANDALONE=1) if ($standalone);
 
 runval("patch $patch_opt -bz .KSPLICE_pre < $patchfile");
-if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff", "KSPLICE_EXTRA_MATCH=@extra_match") != 0) {
+push @make_ksplice, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
+push @make_ksplice, "KSPLICE_ONLY_TARGETS=@only_targets" if (@only_targets);
+if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
 	revert_orig();
 	die "Aborting: Applying the patch appears to break the kernel build";
 }
