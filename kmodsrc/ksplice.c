@@ -210,9 +210,6 @@ static inline void clear_debug_buf(struct update_bundle *bundle)
 
 #define ksdebug(pack, fmt, ...) \
 	_ksdebug(pack->bundle, fmt, ## __VA_ARGS__)
-#define failed_to_find(pack, sym_name) \
-	ksdebug(pack, "Failed to find symbol %s at " \
-		"%s:%d\n", sym_name, __FILE__, __LINE__)
 
 static LIST_HEAD(update_bundles);
 #ifdef KSPLICE_STANDALONE
@@ -756,7 +753,8 @@ static abort_t process_patches(struct module_pack *pack)
 		struct reloc_nameval *nv = find_nameval(pack, p->label);
 		int found = 0;
 		if (nv == NULL) {
-			failed_to_find(pack, p->label);
+			ksdebug(pack, "Failed to find %s for oldaddr\n",
+				p->label);
 			return FAILED_TO_FIND;
 		}
 		p->oldaddr = nv->val;
@@ -2004,7 +2002,8 @@ static abort_t apply_reloc(struct module_pack *pack,
 	}
 	if (!singular(&vals)) {
 		release_vals(&vals);
-		failed_to_find(pack, r->symbol->label);
+		ksdebug(pack, "Failed to find %s for reloc\n",
+			r->symbol->label);
 		return FAILED_TO_FIND;
 	}
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
