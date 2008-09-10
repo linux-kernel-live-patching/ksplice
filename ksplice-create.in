@@ -83,7 +83,7 @@ my @kbuild_flags = ();
 if(-e "$orig_config_dir/flags") {
 	open(FLAGS, '<', "$orig_config_dir/flags") or die;
 	local $/;
-	@kbuild_flags = &shellwords(<FLAGS>);
+	@kbuild_flags = shellwords(scalar <FLAGS>);
 	close(FLAGS);
 }
 
