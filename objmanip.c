@@ -112,7 +112,7 @@ struct wsect {
 	struct wsect *next;
 };
 
-struct specsect {
+struct table_section {
 	const char *sectname;
 	int entry_size;
 };
@@ -129,7 +129,7 @@ void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 void write_ksplice_size(struct superbfd *sbfd, asymbol **symp);
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label);
-void rm_from_special(struct superbfd *sbfd, const struct specsect *s);
+void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for);
@@ -142,11 +142,11 @@ void mark_symbols_used_in_relocations(bfd *abfd, asection *isection,
 static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
 void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms);
-static int deleted_specsect_symbol(bfd *abfd, asymbol *sym);
+static int deleted_table_section_symbol(bfd *abfd, asymbol *sym);
 void read_str_set(struct str_vec *strs);
 int str_in_set(const char *str, const struct str_vec *strs);
 int want_section(asection *sect);
-const struct specsect *is_special(asection *sect);
+const struct table_section *is_table_section(asection *sect);
 struct supersect *make_section(struct superbfd *sbfd, const char *name);
 void __attribute__((format(printf, 3, 4)))
 write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
@@ -165,12 +165,12 @@ const char *modestr, *kid;
 
 struct wsect *wanted_sections = NULL;
 
-const struct specsect special_sections[] = {
+const struct table_section table_sections[] = {
 	{".altinstructions", 2 * sizeof(void *) + 4},
 	{".smp_locks", sizeof(void *)},
 	{".parainstructions", sizeof(void *) + 4},
 	{"__ex_table", 2 * sizeof(unsigned long)},
-}, *const end_special_sections = *(&special_sections + 1);
+}, *const end_table_sections = *(&table_sections + 1);
 
 #define mode(str) starts_with(modestr, str)
 
@@ -336,16 +336,16 @@ int main(int argc, char *argv[])
 	asection *p;
 	for (p = ibfd->sections; p != NULL; p = p->next) {
 		struct supersect *ss = fetch_supersect(isbfd, p);
-		if (is_special(p) || starts_with(p->name, ".ksplice"))
+		if (is_table_section(p) || starts_with(p->name, ".ksplice"))
 			continue;
 		if (want_section(p) || mode("rmsyms"))
 			rm_some_relocs(ss);
 	}
 
-	const struct specsect *ss;
+	const struct table_section *ss;
 	if (mode("keep")) {
-		for (ss = special_sections; ss != end_special_sections; ss++)
-			rm_from_special(isbfd, ss);
+		for (ss = table_sections; ss != end_table_sections; ss++)
+			filter_table_section(isbfd, ss);
 	}
 
 	copy_object(ibfd, obfd);
@@ -689,7 +689,7 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 	}
 }
 
-void rm_from_special(struct superbfd *sbfd, const struct specsect *s)
+void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 {
 	asection *isection = bfd_get_section_by_name(sbfd->abfd, s->sectname);
 	if (isection == NULL)
@@ -708,7 +708,7 @@ void rm_from_special(struct superbfd *sbfd, const struct specsect *s)
 		asection *p;
 		for (p = sbfd->abfd->sections; p != NULL; p = p->next) {
 			if (sym->section == p
-			    && !is_special(p) && !want_section(p))
+			    && !is_table_section(p) && !want_section(p))
 				break;
 		}
 		if (p != NULL)
@@ -753,7 +753,7 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for)
 {
-	if (!want_section(looking_at) || is_special(looking_at))
+	if (!want_section(looking_at) || is_table_section(looking_at))
 		return;
 
 	struct superbfd *sbfd = fetch_superbfd(abfd);
@@ -952,7 +952,7 @@ void ss_mark_symbols_used_in_relocations(struct supersect *ss)
 	}
 }
 
-static int deleted_specsect_symbol(bfd *abfd, asymbol *sym)
+static int deleted_table_section_symbol(bfd *abfd, asymbol *sym)
 {
 	struct superbfd *sbfd = fetch_superbfd(abfd);
 	struct supersect *ss = fetch_supersect(sbfd, sym->section);
@@ -1015,7 +1015,7 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (!want_section(sym->section))
 			keep = 0;
 
-		if (deleted_specsect_symbol(ibfd, sym) == 1)
+		if (deleted_table_section_symbol(ibfd, sym) == 1)
 			keep = 0;
 
 		if (mode("rmsyms") && str_in_set(sym->name, &rmsyms))
@@ -1099,10 +1099,10 @@ int want_section(asection *sect)
 	return 0;
 }
 
-const struct specsect *is_special(asection *sect)
+const struct table_section *is_table_section(asection *sect)
 {
-	const struct specsect *ss;
-	for (ss = special_sections; ss != end_special_sections; ss++) {
+	const struct table_section *ss;
+	for (ss = table_sections; ss != end_table_sections; ss++) {
 		if (strcmp(ss->sectname, sect->name) == 0)
 			return ss;
 	}
