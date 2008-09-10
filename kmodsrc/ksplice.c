@@ -848,6 +848,9 @@ static abort_t apply_patches(struct update *update)
 {
 	int i;
 	abort_t ret;
+	struct ksplice_pack *pack;
+	const struct ksplice_size *s;
+	struct safety_record *rec;
 
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(update);
@@ -871,26 +874,7 @@ static abort_t apply_patches(struct update *update)
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
 
-	if (ret == OK) {
-		struct ksplice_pack *pack;
-		const struct ksplice_size *s;
-		struct safety_record *rec;
-		list_for_each_entry(pack, &update->packs, list) {
-			for (s = pack->primary_sizes;
-			     s < pack->primary_sizes_end; s++) {
-				rec = kmalloc(sizeof(*rec), GFP_KERNEL);
-				if (rec == NULL)
-					return OUT_OF_MEMORY;
-				rec->addr = s->thismod_addr;
-				rec->size = s->size;
-				rec->label = s->symbol->label;
-				list_add(&rec->list, &pack->safety_records);
-			}
-		}
-		_ksdebug(update, "Update %s applied successfully\n",
-			 update->kid);
-		return OK;
-	} else if (ret == CODE_BUSY) {
+	if (ret == CODE_BUSY) {
 		print_conflicts(update);
 		_ksdebug(update, "Aborted %s.  stack check: to-be-replaced "
 			 "code is busy.\n", update->kid);
@@ -898,7 +882,24 @@ static abort_t apply_patches(struct update *update)
 		_ksdebug(update, "Aborted %s.  Ksplice update %s is already "
 			 "reversed.\n", update->kid, update->kid);
 	}
-	return ret;
+
+	if (ret != OK)
+		return ret;
+
+	list_for_each_entry(pack, &update->packs, list) {
+		for (s = pack->primary_sizes; s < pack->primary_sizes_end; s++) {
+			rec = kmalloc(sizeof(*rec), GFP_KERNEL);
+			if (rec == NULL)
+				return OUT_OF_MEMORY;
+			rec->addr = s->thismod_addr;
+			rec->size = s->size;
+			rec->label = s->symbol->label;
+			list_add(&rec->list, &pack->safety_records);
+		}
+	}
+
+	_ksdebug(update, "Update %s applied successfully\n", update->kid);
+	return OK;
 }
 
 static abort_t reverse_patches(struct update *update)
@@ -938,10 +939,8 @@ static abort_t reverse_patches(struct update *update)
 	}
 	list_for_each_entry(pack, &update->packs, list)
 		clear_list(&pack->safety_records, struct safety_record, list);
-	if (ret == OK) {
-		_ksdebug(update, "Update %s reversed successfully\n",
-			 update->kid);
-	} else if (ret == CODE_BUSY) {
+
+	if (ret == CODE_BUSY) {
 		print_conflicts(update);
 		_ksdebug(update, "Aborted %s.  stack check: to-be-reversed "
 			 "code is busy.\n", update->kid);
@@ -949,7 +948,12 @@ static abort_t reverse_patches(struct update *update)
 		_ksdebug(update, "Update %s is in use by another module\n",
 			 update->kid);
 	}
-	return ret;
+
+	if (ret != OK)
+		return ret;
+
+	_ksdebug(update, "Update %s reversed successfully\n", update->kid);
+	return OK;
 }
 
 static int __apply_patches(void *updateptr)
@@ -2195,16 +2199,22 @@ static abort_t compute_address(struct ksplice_pack *pack,
 #endif
 
 	ret = exported_symbol_lookup(ksym->name, vals);
-	if (ret == OK)
-		ret = new_export_lookup(pack->update, ksym->name, vals);
-#ifdef CONFIG_KALLSYMS
-	if (ret == OK)
-		ret = kernel_lookup(ksym->name, vals);
-	if (ret == OK)
-		ret = other_module_lookup(pack, ksym->name, vals);
-#endif /* CONFIG_KALLSYMS */
 	if (ret != OK)
 		return ret;
+
+	ret = new_export_lookup(pack->update, ksym->name, vals);
+	if (ret != OK)
+		return ret;
+
+#ifdef CONFIG_KALLSYMS
+	ret = kernel_lookup(ksym->name, vals);
+	if (ret != OK)
+		return ret;
+
+	ret = other_module_lookup(pack, ksym->name, vals);
+	if (ret != OK)
+		return ret;
+#endif /* CONFIG_KALLSYMS */
 
 	return OK;
 }
@@ -2530,16 +2540,17 @@ static abort_t brute_search_all(struct ksplice_pack *pack,
 			continue;
 		ret = brute_search(pack, s, m->module_core, m->core_size, vals);
 		if (ret != OK)
-			break;
+			goto out;
 		ret = brute_search(pack, s, m->module_init, m->init_size, vals);
 		if (ret != OK)
-			break;
+			goto out;
 	}
-	if (ret == OK)
-		ret = brute_search(pack, s, (const void *)init_mm.start_code,
-				   init_mm.end_code - init_mm.start_code, vals);
-	pack->update->debug = saved_debug;
 
+	ret = brute_search(pack, s, (const void *)init_mm.start_code,
+			   init_mm.end_code - init_mm.start_code, vals);
+
+out:
+	pack->update->debug = saved_debug;
 	return ret;
 }
 
