@@ -82,7 +82,7 @@ struct ksplice_module_list_entry {
 /* List of all ksplice modules and the module they patch */
 extern struct list_head ksplice_module_list;
 
-struct module_pack {
+struct ksplice_pack {
 	const char *name;
 	const char *kid;
 	struct update *update;
@@ -108,7 +108,7 @@ struct module_pack {
 	struct list_head list;
 };
 
-int init_ksplice_module(struct module_pack *pack);
-void cleanup_ksplice_module(struct module_pack *pack);
+int init_ksplice_module(struct ksplice_pack *pack);
+void cleanup_ksplice_module(struct ksplice_pack *pack);
 
 #endif /* __KERNEL__ */

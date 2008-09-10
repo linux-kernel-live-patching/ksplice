@@ -163,13 +163,13 @@ static long probe_kernel_read(void *dst, void *src, size_t size)
 }
 #endif /* LINUX_VERSION_CODE */
 
-static struct reloc_nameval *find_nameval(struct module_pack *pack,
+static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
 					  const char *label);
-static abort_t create_nameval(struct module_pack *pack, const char *label,
+static abort_t create_nameval(struct ksplice_pack *pack, const char *label,
 			      unsigned long val, int status);
-static abort_t lookup_reloc(struct module_pack *pack, unsigned long addr,
+static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 			    const struct ksplice_reloc **relocp);
-static abort_t handle_reloc(struct module_pack *pack,
+static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode);
 
@@ -381,21 +381,21 @@ extern const unsigned long __start___kcrctab_gpl_future[];
 
 #endif /* KSPLICE_STANDALONE */
 
-static abort_t apply_relocs(struct module_pack *pack,
+static abort_t apply_relocs(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *relocs,
 			    const struct ksplice_reloc *relocs_end);
-static abort_t apply_reloc(struct module_pack *pack,
+static abort_t apply_reloc(struct ksplice_pack *pack,
 			   const struct ksplice_reloc *r);
-static abort_t read_reloc_value(struct module_pack *pack,
+static abort_t read_reloc_value(struct ksplice_pack *pack,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp);
-static abort_t write_reloc_value(struct module_pack *pack,
+static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long sym_addr);
-static abort_t add_system_map_candidates(struct module_pack *pack,
+static abort_t add_system_map_candidates(struct ksplice_pack *pack,
 					 const struct ksplice_symbol *symbol,
 					 struct list_head *vals);
-static abort_t compute_address(struct module_pack *pack,
+static abort_t compute_address(struct ksplice_pack *pack,
 			       const struct ksplice_symbol *ksym,
 			       struct list_head *vals);
 
@@ -408,7 +408,7 @@ struct accumulate_struct {
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val);
 static abort_t kernel_lookup(const char *name, struct list_head *vals);
-static abort_t other_module_lookup(struct module_pack *pack, const char *name,
+static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 				   struct list_head *vals);
 #ifdef KSPLICE_STANDALONE
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
@@ -422,15 +422,15 @@ static abort_t new_export_lookup(struct update *update,
 				 const char *name, struct list_head *vals);
 
 #ifdef KSPLICE_STANDALONE
-static abort_t brute_search_all(struct module_pack *pack,
+static abort_t brute_search_all(struct ksplice_pack *pack,
 				const struct ksplice_size *s,
 				struct list_head *vals);
 #endif /* KSPLICE_STANDALONE */
 
 static abort_t add_candidate_val(struct list_head *vals, unsigned long val);
 static void release_vals(struct list_head *vals);
-static void set_temp_myst_relocs(struct module_pack *pack, int status_val);
-static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
+static void set_temp_myst_relocs(struct ksplice_pack *pack, int status_val);
+static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 			   int size, long dst_mask);
 static int starts_with(const char *str, const char *prefix);
 static int ends_with(const char *str, const char *suffix);
@@ -445,9 +445,9 @@ static int ends_with(const char *str, const char *suffix);
 	} while (0)
 
 /* primary */
-static abort_t activate_primary(struct module_pack *pack);
-static abort_t process_exports(struct module_pack *pack);
-static abort_t process_patches(struct module_pack *pack);
+static abort_t activate_primary(struct ksplice_pack *pack);
+static abort_t process_exports(struct ksplice_pack *pack);
+static abort_t process_patches(struct ksplice_pack *pack);
 static int __apply_patches(void *update);
 static int __reverse_patches(void *update);
 static abort_t check_each_task(struct update *update);
@@ -466,18 +466,18 @@ static void cleanup_conflicts(struct update *update);
 static void print_conflicts(struct update *update);
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
-static unsigned long follow_trampolines(struct module_pack *pack,
+static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr);
 /* Architecture-specific functions defined in ARCH/ksplice-arch.c */
 static abort_t create_trampoline(struct ksplice_patch *p);
 static unsigned long trampoline_target(unsigned long addr);
-static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre,
+static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
 static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 
-static abort_t add_dependency_on_address(struct module_pack *pack,
+static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr);
-static abort_t add_patch_dependencies(struct module_pack *pack);
+static abort_t add_patch_dependencies(struct ksplice_pack *pack);
 
 #if defined(KSPLICE_STANDALONE) && \
     !defined(CONFIG_KSPLICE) && !defined(CONFIG_KSPLICE_MODULE)
@@ -502,31 +502,31 @@ static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* helper */
-static abort_t activate_helper(struct module_pack *pack,
+static abort_t activate_helper(struct ksplice_pack *pack,
 			       bool consider_data_sections);
-static abort_t search_for_match(struct module_pack *pack,
+static abort_t search_for_match(struct ksplice_pack *pack,
 				const struct ksplice_size *s);
-static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
+static abort_t try_addr(struct ksplice_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr,
 			struct list_head *safety_records,
 			enum run_pre_mode mode);
-static abort_t run_pre_cmp(struct module_pack *pack,
+static abort_t run_pre_cmp(struct ksplice_pack *pack,
 			   const struct ksplice_size *s,
 			   unsigned long run_addr,
 			   struct list_head *safety_records,
 			   enum run_pre_mode mode);
 #ifndef CONFIG_FUNCTION_DATA_SECTIONS
 /* defined in $ARCH/ksplice-arch.c */
-static abort_t arch_run_pre_cmp(struct module_pack *pack,
+static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long run_addr,
 				struct list_head *safety_records,
 				enum run_pre_mode mode);
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
-static void print_bytes(struct module_pack *pack,
+static void print_bytes(struct ksplice_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec);
-static abort_t create_safety_record(struct module_pack *pack,
+static abort_t create_safety_record(struct ksplice_pack *pack,
 				    const struct ksplice_size *s,
 				    struct list_head *record_list,
 				    unsigned long run_addr,
@@ -537,7 +537,7 @@ static abort_t apply_patches(struct update *update);
 static abort_t apply_update(struct update *update);
 static struct update *init_ksplice_update(const char *kid);
 static void cleanup_ksplice_update(struct update *update);
-static void add_to_update(struct module_pack *pack, struct update *update);
+static void add_to_update(struct ksplice_pack *pack, struct update *update);
 static int ksplice_sysfs_init(struct update *update);
 
 #ifndef KSPLICE_STANDALONE
@@ -702,7 +702,7 @@ static struct kobj_type ksplice_ktype = {
 	.default_attrs = ksplice_attrs,
 };
 
-static abort_t activate_primary(struct module_pack *pack)
+static abort_t activate_primary(struct ksplice_pack *pack)
 {
 	abort_t ret;
 	ret = apply_relocs(pack, pack->primary_relocs,
@@ -736,7 +736,7 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 #endif
 }
 
-static abort_t process_patches(struct module_pack *pack)
+static abort_t process_patches(struct ksplice_pack *pack)
 {
 	struct ksplice_patch *p;
 	struct safety_record *rec;
@@ -783,7 +783,7 @@ static abort_t process_patches(struct module_pack *pack)
 	return OK;
 }
 
-static abort_t process_exports(struct module_pack *pack)
+static abort_t process_exports(struct ksplice_pack *pack)
 {
 	struct ksplice_export *export;
 	struct module *m;
@@ -826,7 +826,7 @@ static void remove_trampoline(const struct ksplice_patch *p)
 	set_fs(old_fs);
 }
 
-static unsigned long follow_trampolines(struct module_pack *pack,
+static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr)
 {
 	unsigned long new_addr = trampoline_target(addr);
@@ -872,7 +872,7 @@ static abort_t apply_patches(struct update *update)
 	}
 
 	if (ret == OK) {
-		struct module_pack *pack;
+		struct ksplice_pack *pack;
 		const struct ksplice_size *s;
 		struct safety_record *rec;
 		list_for_each_entry(pack, &update->packs, list) {
@@ -905,7 +905,7 @@ static abort_t reverse_patches(struct update *update)
 {
 	int i;
 	abort_t ret;
-	struct module_pack *pack;
+	struct ksplice_pack *pack;
 
 	clear_debug_buf(update);
 	ret = init_debug_buf(update);
@@ -955,7 +955,7 @@ static abort_t reverse_patches(struct update *update)
 static int __apply_patches(void *updateptr)
 {
 	struct update *update = updateptr;
-	struct module_pack *pack;
+	struct ksplice_pack *pack;
 	struct ksplice_patch *p;
 	struct ksplice_export *export;
 	abort_t ret;
@@ -972,7 +972,7 @@ static int __apply_patches(void *updateptr)
 
 	list_for_each_entry(pack, &update->packs, list) {
 		if (try_module_get(pack->primary) != 1) {
-			struct module_pack *pack1;
+			struct ksplice_pack *pack1;
 			list_for_each_entry(pack1, &update->packs, list) {
 				if (pack1 == pack)
 					break;
@@ -1003,7 +1003,7 @@ static int __apply_patches(void *updateptr)
 static int __reverse_patches(void *updateptr)
 {
 	struct update *update = updateptr;
-	struct module_pack *pack;
+	struct ksplice_pack *pack;
 	const struct ksplice_patch *p;
 	struct ksplice_export *export;
 	abort_t ret;
@@ -1128,7 +1128,7 @@ static abort_t check_address(struct update *update,
 {
 	abort_t status = OK, ret;
 	const struct safety_record *rec;
-	struct module_pack *pack;
+	struct ksplice_pack *pack;
 	struct conflict_frame *frame = NULL;
 
 	if (conf != NULL) {
@@ -1217,7 +1217,7 @@ static struct module *find_module(const char *name)
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-int init_ksplice_module(struct module_pack *pack)
+int init_ksplice_module(struct ksplice_pack *pack)
 {
 	struct update *update;
 	int ret = 0;
@@ -1267,7 +1267,7 @@ out:
 }
 EXPORT_SYMBOL(init_ksplice_module);
 
-void cleanup_ksplice_module(struct module_pack *pack)
+void cleanup_ksplice_module(struct ksplice_pack *pack)
 {
 	if (pack->update == NULL || pack->update->stage == STAGE_APPLIED)
 		return;
@@ -1285,7 +1285,7 @@ void cleanup_ksplice_module(struct module_pack *pack)
 }
 EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
 
-static void add_to_update(struct module_pack *pack, struct update *update)
+static void add_to_update(struct ksplice_pack *pack, struct update *update)
 {
 	pack->update = update;
 	list_add(&pack->list, &update->packs);
@@ -1376,7 +1376,7 @@ static int ksplice_sysfs_init(struct update *update)
 
 static abort_t apply_update(struct update *update)
 {
-	struct module_pack *pack;
+	struct ksplice_pack *pack;
 	abort_t ret;
 
 	mutex_lock(&module_mutex);
@@ -1431,7 +1431,7 @@ out:
 	return ret;
 }
 
-static abort_t activate_helper(struct module_pack *pack,
+static abort_t activate_helper(struct ksplice_pack *pack,
 			       bool consider_data_sections)
 {
 	const struct ksplice_size *s;
@@ -1488,7 +1488,7 @@ static abort_t activate_helper(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t search_for_match(struct module_pack *pack,
+static abort_t search_for_match(struct ksplice_pack *pack,
 				const struct ksplice_size *s)
 {
 	int i;
@@ -1584,7 +1584,7 @@ static abort_t search_for_match(struct module_pack *pack,
 	return NO_MATCH;
 }
 
-static void print_bytes(struct module_pack *pack,
+static void print_bytes(struct ksplice_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec)
 {
@@ -1602,7 +1602,7 @@ static void print_bytes(struct module_pack *pack,
 		ksdebug(pack, "/%02x ", pre[o]);
 }
 
-static abort_t run_pre_cmp(struct module_pack *pack,
+static abort_t run_pre_cmp(struct ksplice_pack *pack,
 			   const struct ksplice_size *s,
 			   unsigned long run_addr,
 			   struct list_head *safety_records,
@@ -1701,7 +1701,7 @@ static struct module *__module_data_address(unsigned long addr)
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
+static abort_t try_addr(struct ksplice_pack *pack, const struct ksplice_size *s,
 			unsigned long run_addr,
 			struct list_head *safety_records,
 			enum run_pre_mode mode)
@@ -1776,7 +1776,7 @@ static abort_t try_addr(struct module_pack *pack, const struct ksplice_size *s,
 	return OK;
 }
 
-static abort_t create_safety_record(struct module_pack *pack,
+static abort_t create_safety_record(struct ksplice_pack *pack,
 				    const struct ksplice_size *s,
 				    struct list_head *record_list,
 				    unsigned long run_addr,
@@ -1813,7 +1813,7 @@ static abort_t create_safety_record(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t handle_reloc(struct module_pack *pack,
+static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode)
 {
@@ -1847,7 +1847,7 @@ static abort_t handle_reloc(struct module_pack *pack,
 	return ret;
 }
 
-static abort_t read_reloc_value(struct module_pack *pack,
+static abort_t read_reloc_value(struct ksplice_pack *pack,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp)
 {
@@ -1888,7 +1888,7 @@ static abort_t read_reloc_value(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t write_reloc_value(struct module_pack *pack,
+static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long sym_addr)
 {
@@ -1933,7 +1933,7 @@ static abort_t write_reloc_value(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t apply_relocs(struct module_pack *pack,
+static abort_t apply_relocs(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *relocs,
 			    const struct ksplice_reloc *relocs_end)
 {
@@ -1946,7 +1946,7 @@ static abort_t apply_relocs(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t apply_reloc(struct module_pack *pack,
+static abort_t apply_reloc(struct ksplice_pack *pack,
 			   const struct ksplice_reloc *r)
 {
 	abort_t ret;
@@ -2032,7 +2032,7 @@ static abort_t apply_reloc(struct module_pack *pack,
 	return add_dependency_on_address(pack, sym_addr);
 }
 
-static abort_t add_system_map_candidates(struct module_pack *pack,
+static abort_t add_system_map_candidates(struct ksplice_pack *pack,
 					 const struct ksplice_symbol *symbol,
 					 struct list_head *vals)
 {
@@ -2065,7 +2065,7 @@ static abort_t add_system_map_candidates(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t add_dependency_on_address(struct module_pack *pack,
+static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr)
 {
 	struct module *m =
@@ -2078,7 +2078,7 @@ static abort_t add_dependency_on_address(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t add_patch_dependencies(struct module_pack *pack)
+static abort_t add_patch_dependencies(struct ksplice_pack *pack)
 {
 	abort_t ret;
 	const struct ksplice_patch *p;
@@ -2153,7 +2153,7 @@ static int use_module(struct module *a, struct module *b)
 #endif /* CONFIG_MODULE_UNLOAD */
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-static abort_t compute_address(struct module_pack *pack,
+static abort_t compute_address(struct ksplice_pack *pack,
 			       const struct ksplice_symbol *ksym,
 			       struct list_head *vals)
 {
@@ -2204,7 +2204,7 @@ static abort_t compute_address(struct module_pack *pack,
 static abort_t new_export_lookup(struct update *update,
 				 const char *name, struct list_head *vals)
 {
-	struct module_pack *pack;
+	struct ksplice_pack *pack;
 	struct ksplice_export *exp;
 	list_for_each_entry(pack, &update->packs, list) {
 		for (exp = pack->exports; exp < pack->exports_end; exp++) {
@@ -2409,7 +2409,7 @@ static const struct kernel_symbol *find_symbol(const char *name,
 
 #ifdef CONFIG_KALLSYMS
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
-static abort_t other_module_lookup(struct module_pack *pack, const char *name,
+static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 				   struct list_head *vals)
 {
 	abort_t ret = OK;
@@ -2429,7 +2429,7 @@ static abort_t other_module_lookup(struct module_pack *pack, const char *name,
 	return ret;
 }
 #else /* !KSPLICE_NO_KERNEL_SUPPORT */
-static abort_t other_module_lookup(struct module_pack *pack, const char *name,
+static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 				   struct list_head *vals)
 {
 	struct accumulate_struct acc = { name, vals };
@@ -2469,7 +2469,7 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 #endif /* CONFIG_KALLSYMS */
 
 #ifdef KSPLICE_STANDALONE
-static abort_t brute_search(struct module_pack *pack,
+static abort_t brute_search(struct ksplice_pack *pack,
 			    const struct ksplice_size *s,
 			    const void *start, unsigned long len,
 			    struct list_head *vals)
@@ -2504,7 +2504,7 @@ static abort_t brute_search(struct module_pack *pack,
 	return OK;
 }
 
-static abort_t brute_search_all(struct module_pack *pack,
+static abort_t brute_search_all(struct ksplice_pack *pack,
 				const struct ksplice_size *s,
 				struct list_head *vals)
 {
@@ -2670,7 +2670,7 @@ static void release_vals(struct list_head *vals)
 	clear_list(vals, struct candidate_val, list);
 }
 
-static struct reloc_nameval *find_nameval(struct module_pack *pack,
+static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
 					  const char *label)
 {
 	struct reloc_nameval *nv;
@@ -2681,7 +2681,7 @@ static struct reloc_nameval *find_nameval(struct module_pack *pack,
 	return NULL;
 }
 
-static abort_t create_nameval(struct module_pack *pack, const char *label,
+static abort_t create_nameval(struct ksplice_pack *pack, const char *label,
 			      unsigned long val, int status)
 {
 	struct reloc_nameval *nv = find_nameval(pack, label);
@@ -2698,7 +2698,7 @@ static abort_t create_nameval(struct module_pack *pack, const char *label,
 	return OK;
 }
 
-static abort_t lookup_reloc(struct module_pack *pack, unsigned long addr,
+static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 			    const struct ksplice_reloc **relocp)
 {
 	const struct ksplice_reloc *r;
@@ -2727,7 +2727,7 @@ static abort_t lookup_reloc(struct module_pack *pack, unsigned long addr,
 	return NO_MATCH;
 }
 
-static void set_temp_myst_relocs(struct module_pack *pack, int status_val)
+static void set_temp_myst_relocs(struct ksplice_pack *pack, int status_val)
 {
 	struct reloc_nameval *nv, *n;
 	list_for_each_entry_safe(nv, n, &pack->reloc_namevals, list) {
@@ -2742,7 +2742,7 @@ static void set_temp_myst_relocs(struct module_pack *pack, int status_val)
 	}
 }
 
-static int contains_canary(struct module_pack *pack, unsigned long blank_addr,
+static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 			   int size, long dst_mask)
 {
 	switch (size) {
@@ -2897,21 +2897,21 @@ static int debug;
 module_param(debug, int, 0600);
 MODULE_PARM_DESC(debug, "Debug level");
 
-static struct module_pack ksplice_pack = {
+static struct ksplice_pack bootstrap_pack = {
 	.name = "ksplice_" STR(KSPLICE_KID),
 	.kid = "init_" STR(KSPLICE_KID),
 	.target_name = NULL,
 	.target = NULL,
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
-	.reloc_namevals = LIST_HEAD_INIT(ksplice_pack.reloc_namevals),
+	.reloc_namevals = LIST_HEAD_INIT(bootstrap_pack.reloc_namevals),
 };
 #endif /* KSPLICE_STANDALONE */
 
 static int init_ksplice(void)
 {
 #ifdef KSPLICE_STANDALONE
-	struct module_pack *pack = &ksplice_pack;
+	struct ksplice_pack *pack = &bootstrap_pack;
 	pack->update = init_ksplice_update(pack->kid);
 	if (pack->update == NULL)
 		return -ENOMEM;
@@ -2932,7 +2932,7 @@ static int init_ksplice(void)
 static void cleanup_ksplice(void)
 {
 #ifdef KSPLICE_STANDALONE
-	cleanup_ksplice_update(ksplice_pack.update);
+	cleanup_ksplice_update(bootstrap_pack.update);
 #else /* !KSPLICE_STANDALONE */
 	kobject_put(ksplice_kobj);
 #endif /* KSPLICE_STANDALONE */

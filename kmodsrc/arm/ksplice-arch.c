@@ -49,8 +49,9 @@ static abort_t create_trampoline(struct ksplice_patch *p)
 	return OK;
 }
 
-static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre_addr,
-			       unsigned long run_addr, int *matched)
+static abort_t handle_paravirt(struct ksplice_pack *pack,
+			       unsigned long pre_addr, unsigned long run_addr,
+			       int *matched)
 {
 	*matched = 0;
 	return OK;

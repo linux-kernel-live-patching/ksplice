@@ -30,7 +30,7 @@ extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 
 /* Defined in primary.c */
 #define pack KSPLICE_UNIQ(pack)
-extern struct module_pack pack;
+extern struct ksplice_pack pack;
 
 static int init_helper(void)
 {

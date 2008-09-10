@@ -148,7 +148,7 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 };
 /* *INDENT-ON* */
 
-static abort_t compare_operands(struct module_pack *pack,
+static abort_t compare_operands(struct ksplice_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long *match_map,
 				unsigned long run_addr,
@@ -162,7 +162,7 @@ static uint8_t ud_prefix_len(struct ud *ud);
 static long jump_lval(struct ud_operand *operand);
 static int next_run_byte(struct ud *ud);
 
-static abort_t arch_run_pre_cmp(struct module_pack *pack,
+static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long run_addr,
 				struct list_head *safety_records,
@@ -356,7 +356,7 @@ out:
 	return ret;
 }
 
-static abort_t compare_operands(struct module_pack *pack,
+static abort_t compare_operands(struct ksplice_pack *pack,
 				const struct ksplice_size *s,
 				unsigned long *match_map,
 				unsigned long run_addr,
@@ -573,8 +573,9 @@ static abort_t create_trampoline(struct ksplice_patch *p)
 	return OK;
 }
 
-static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre_addr,
-			       unsigned long run_addr, int *matched)
+static abort_t handle_paravirt(struct ksplice_pack *pack,
+			       unsigned long pre_addr, unsigned long run_addr,
+			       int *matched)
 {
 	unsigned char run[5], pre[5];
 	*matched = 0;

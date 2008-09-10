@@ -31,7 +31,7 @@ extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 #endif
 
 #define pack KSPLICE_UNIQ(pack)
-struct module_pack pack = {
+struct ksplice_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_MID),
 	.kid = STR(KSPLICE_KID),
 	.target_name = STR(KSPLICE_TARGET),
