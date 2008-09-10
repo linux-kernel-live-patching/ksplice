@@ -281,6 +281,30 @@ static char *kstrdup(const char *s, typeof(GFP_KERNEL) gfp)
 #define mutex_unlock up
 #endif /* LINUX_VERSION_CODE */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+/* 06b2a76d25d3cfbd14680021c1d356c91be6904e was after 2.6.24 */
+static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
+{
+	char *tail;
+	unsigned long val;
+	size_t len;
+
+	*res = 0;
+	len = strlen(cp);
+	if (len == 0)
+		return -EINVAL;
+
+	val = simple_strtoul(cp, &tail, base);
+	if ((*tail == '\0') ||
+	    ((len == (size_t)(tail - cp) + 1) && (*tail == '\n'))) {
+		*res = val;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+#endif
+
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
 #endif /* !task_thread_info */
@@ -624,13 +648,12 @@ static ssize_t debug_show(struct update_bundle *bundle, char *buf)
 static ssize_t debug_store(struct update_bundle *bundle, const char *buf,
 			   size_t len)
 {
-	char *tmp;
-	int d = simple_strtoul(buf, &tmp, 10);
-	if (*buf && (*tmp == '\0' || *tmp == '\n')) {
-		bundle->debug = d;
-		return len;
-	}
-	return -EINVAL;
+	unsigned long l;
+	int ret = strict_strtoul(buf, 10, &l);
+	if (ret != 0)
+		return ret;
+	bundle->debug = l;
+	return len;
 }
 
 static struct ksplice_attribute stage_attribute =
