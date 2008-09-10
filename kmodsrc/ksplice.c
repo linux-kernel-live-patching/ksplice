@@ -903,7 +903,7 @@ static abort_t apply_patches(struct update_bundle *bundle)
 		}
 		_ksdebug(bundle, "Update %s applied successfully\n",
 			 bundle->kid);
-		return 0;
+		return OK;
 	} else if (ret == CODE_BUSY) {
 		print_conflicts(bundle);
 		_ksdebug(bundle, "Aborted %s.  stack check: to-be-replaced "
