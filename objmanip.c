@@ -423,8 +423,8 @@ void rm_some_relocs(struct supersect *ss)
 
 		if (mode("keep-primary") && want_section(sym_ptr->section) &&
 		    (str_in_set(sym_ptr->section->name, &newsects) ||
-		     bfd_is_und_section(sym_ptr->section) ||
-		     (sym_ptr->flags & BSF_FUNCTION) == 0))
+		     bfd_is_const_section(sym_ptr->section) ||
+		     starts_with(sym_ptr->section->name, ".rodata.str")))
 			rm_reloc = 0;
 
 		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
