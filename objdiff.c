@@ -41,16 +41,16 @@ struct export {
 DECLARE_VEC_TYPE(struct export, export_vec);
 
 void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-			 void (*s_fn)(struct supersect *));
+			 void (*s_fn)(struct superbfd *, asection *));
+void foreach_new_section(struct superbfd *oldsbfd, struct superbfd *newsbfd,
+			 void (*s_fn)(struct superbfd *, asection *));
+void print_newbfd_section_name(struct superbfd *sbfd, asection *sect);
+void print_newbfd_symbol_label(struct superbfd *sbfd, asection *sect);
 struct export_vec *get_export_syms(struct superbfd *sbfd);
 void compare_exported_symbols(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd, char *addstr);
 int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 	      struct superbfd *newsbfd, asection *newp);
-static void print_newbfd_section_name(struct supersect *ss);
-void print_new_sections(struct superbfd *oldsbfd, struct superbfd *newsbfd);
-void print_deleted_section_labels(struct superbfd *oldsbfd,
-				  struct superbfd *newsbfd);
 static void print_section_symbol_renames(struct superbfd *oldsbfd,
 					 struct superbfd *newsbfd);
 
@@ -72,9 +72,9 @@ int main(int argc, char *argv[])
 	print_section_symbol_renames(oldsbfd, newsbfd);
 	foreach_nonmatching(oldsbfd, newsbfd, print_newbfd_section_name);
 	printf("\n");
-	print_new_sections(oldsbfd, newsbfd);
+	foreach_new_section(oldsbfd, newsbfd, print_newbfd_section_name);
 	printf("\n");
-	print_deleted_section_labels(oldsbfd, newsbfd);
+	foreach_new_section(newsbfd, oldsbfd, print_newbfd_symbol_label);
 	compare_exported_symbols(oldsbfd, newsbfd, "");
 	compare_exported_symbols(newsbfd, oldsbfd, "del_");
 	printf("\n");
@@ -147,45 +147,40 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 	}
 }
 
-void print_new_sections(struct superbfd *oldsbfd, struct superbfd *newsbfd)
+void foreach_new_section(struct superbfd *oldsbfd, struct superbfd *newsbfd,
+			 void (*s_fn)(struct superbfd *, asection *))
 {
-	asection *newsect;
-	asection *oldsect;
+	asection *oldsect, *newsect;
+	struct supersect *old_ss, *new_ss;
 	for (newsect = newsbfd->abfd->sections; newsect != NULL;
 	     newsect = newsect->next) {
+		if (starts_with(newsect->name, ".rodata.str") ||
+		    is_special(newsect))
+			continue;
 		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
 		     oldsect = oldsect->next) {
-			if (newsect->name == oldsect->name ||
+			if (strcmp(newsect->name, oldsect->name) != 0 &&
 			    strcmp(label_lookup(newsbfd, newsect->symbol),
-				   label_lookup(oldsbfd, oldsect->symbol)) == 0)
+				   label_lookup(oldsbfd, oldsect->symbol))
+			    != 0)
+				continue;
+			if (!starts_with(newsect->name, ".rodata"))
 				break;
+			new_ss = fetch_supersect(oldsbfd, oldsect);
+			old_ss = fetch_supersect(oldsbfd, oldsect);
+			if (old_ss->contents.size != new_ss->contents.size ||
+			    memcmp(old_ss->contents.data, new_ss->contents.data,
+				   old_ss->contents.size) != 0)
+				oldsect = NULL;
+			break;
 		}
 		if (oldsect == NULL)
-			printf("%s ", newsect->name);
-	}
-}
-
-void print_deleted_section_labels(struct superbfd *oldsbfd,
-				  struct superbfd *newsbfd)
-{
-	asection *newsect;
-	asection *oldsect;
-	for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
-	     oldsect = oldsect->next) {
-		for (newsect = newsbfd->abfd->sections; newsect != NULL;
-		     newsect = newsect->next) {
-			if (newsect->name == oldsect->name ||
-			    strcmp(label_lookup(newsbfd, newsect->symbol),
-				   label_lookup(oldsbfd, oldsect->symbol)) == 0)
-				break;
-		}
-		if (newsect == NULL)
-			printf("%s ", label_lookup(oldsbfd, oldsect->symbol));
+			s_fn(newsbfd, newsect);
 	}
 }
 
 void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-			 void (*s_fn)(struct supersect *))
+			 void (*s_fn)(struct superbfd *, asection *))
 {
 	asection *newp, *oldp;
 	struct supersect *old_ss, *new_ss;
@@ -202,7 +197,7 @@ void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 			   new_ss->contents.size) == 0 &&
 		    reloc_cmp(oldsbfd, oldp, newsbfd, newp) == 0)
 			continue;
-		s_fn(new_ss);
+		s_fn(newsbfd, newp);
 	}
 }
 
@@ -300,7 +295,12 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 	return 0;
 }
 
-void print_newbfd_section_name(struct supersect *ss)
+void print_newbfd_section_name(struct superbfd *sbfd, asection *sect)
 {
-	printf("%s ", ss->name);
+	printf("%s ", sect->name);
+}
+
+void print_newbfd_symbol_label(struct superbfd *sbfd, asection *sect)
+{
+	printf("%s ", label_lookup(sbfd, sect->symbol));
 }
