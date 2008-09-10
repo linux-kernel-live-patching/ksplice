@@ -1929,6 +1929,12 @@ static abort_t write_reloc_value(struct module_pack *pack,
 		return UNEXPECTED;
 	}
 
+	if (read_reloc_value(pack, r, r->blank_addr, &val) != OK ||
+	    val != sym_addr) {
+		print_abort(pack, "relocation overflow");
+		return UNEXPECTED;
+	}
+
 	return OK;
 }
 
