@@ -979,6 +979,9 @@ static int __apply_patches(void *bundleptr)
 
 	bundle->stage = STAGE_APPLIED;
 
+	list_for_each_entry(pack, &bundle->packs, list)
+		list_add(&pack->module_list_entry.list, &ksplice_module_list);
+
 	list_for_each_entry(pack, &bundle->packs, list) {
 		for (export = pack->exports; export < pack->exports_end;
 		     export++)
@@ -1019,6 +1022,9 @@ static int __reverse_patches(void *bundleptr)
 
 	list_for_each_entry(pack, &bundle->packs, list)
 		module_put(pack->primary);
+
+	list_for_each_entry(pack, &bundle->packs, list)
+		list_del(&pack->module_list_entry.list);
 
 	list_for_each_entry(pack, &bundle->packs, list) {
 		for (export = pack->exports; export < pack->exports_end;
@@ -1239,8 +1245,6 @@ static int register_ksplice_module(struct module_pack *pack)
 				goto out;
 			}
 			add_to_bundle(pack, bundle);
-			list_add(&pack->module_list_entry.list,
-				 &ksplice_module_list);
 			goto out;
 		}
 	}
@@ -1255,7 +1259,6 @@ static int register_ksplice_module(struct module_pack *pack)
 		goto out;
 	}
 	add_to_bundle(pack, bundle);
-	list_add(&pack->module_list_entry.list, &ksplice_module_list);
 out:
 	mutex_unlock(&module_mutex);
 	return ret;
@@ -1267,7 +1270,6 @@ void cleanup_ksplice_module(struct module_pack *pack)
 		return;
 	mutex_lock(&module_mutex);
 	list_del(&pack->list);
-	list_del(&pack->module_list_entry.list);
 	mutex_unlock(&module_mutex);
 	if (list_empty(&pack->bundle->packs))
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
