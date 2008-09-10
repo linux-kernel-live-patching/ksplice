@@ -475,10 +475,11 @@ static void cleanup_conflicts(struct update_bundle *bundle);
 static void print_conflicts(struct update_bundle *bundle);
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
-/* Architecture-specific functions defined in ARCH/ksplice-arch.c */
-static abort_t create_trampoline(struct ksplice_patch *p);
 static unsigned long follow_trampolines(struct module_pack *pack,
 					unsigned long addr);
+/* Architecture-specific functions defined in ARCH/ksplice-arch.c */
+static abort_t create_trampoline(struct ksplice_patch *p);
+static unsigned long trampoline_target(unsigned long addr);
 static abort_t handle_paravirt(struct module_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
 
@@ -837,6 +838,24 @@ static void remove_trampoline(const struct ksplice_patch *p)
 	memcpy((void *)p->oldaddr, (void *)p->saved, p->size);
 	flush_icache_range(p->oldaddr, p->oldaddr + p->size);
 	set_fs(old_fs);
+}
+
+static unsigned long follow_trampolines(struct module_pack *pack,
+					unsigned long addr)
+{
+	unsigned long new_addr = trampoline_target(addr);
+	struct module *m;
+
+	if (addr == new_addr)
+		return addr;
+
+	/* Confirm that it is a jump into a ksplice module */
+	m = __module_text_address(new_addr);
+	if (m != NULL && m != pack->target && starts_with(m->name, "ksplice")) {
+		ksdebug(pack, "Following trampoline %lx %lx\n", addr, new_addr);
+		return new_addr;
+	}
+	return addr;
 }
 
 static abort_t apply_patches(struct update_bundle *bundle)

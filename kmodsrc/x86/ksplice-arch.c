@@ -553,26 +553,15 @@ static int next_run_byte(struct ud *ud)
 }
 #endif /* !CONFIG_FUNCTION_DATA_SECTIONS */
 
-static unsigned long follow_trampolines(struct module_pack *pack,
-					unsigned long addr)
+static unsigned long trampoline_target(unsigned long addr)
 {
 	unsigned char bytes[5];
 
 	if (probe_kernel_read(bytes, (void *)addr, sizeof(bytes)) == -EFAULT)
 		return addr;
 
-	if (bytes[0] == 0xE9) {
-		/* Remember to add the length of the e9 */
-		unsigned long new_addr = addr + 5 + *(int32_t *)(&bytes[1]);
-		/* Confirm that it is a jump into a ksplice module */
-		struct module *m = __module_text_address(new_addr);
-		if (m != NULL && m != pack->target &&
-		    strncmp(m->name, "ksplice", strlen("ksplice")) == 0) {
-			ksdebug(pack, "Following trampoline %lx %lx\n", addr,
-				new_addr);
-			addr = new_addr;
-		}
-	}
+	if (bytes[0] == 0xE9)
+		return addr + 5 + *(int32_t *)(&bytes[1]);
 	return addr;
 }
 

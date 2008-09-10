@@ -21,12 +21,10 @@
 #define KSPLICE_IP(x) thread_saved_pc(x)
 #define KSPLICE_SP(x) thread_saved_fp(x)
 
-static unsigned long follow_trampolines(struct module_pack *pack,
-					unsigned long addr)
+static unsigned long trampoline_target(unsigned long addr)
 {
 	uint32_t word;
 	unsigned long new_addr;
-	struct module *m;
 
 	if (probe_kernel_read(&word, (void *)addr, sizeof(word)) == -EFAULT)
 		return addr;
@@ -36,15 +34,7 @@ static unsigned long follow_trampolines(struct module_pack *pack,
 		new_addr |= -(new_addr & (0x00ffffff & ~(0x00ffffff >> 1)));
 		new_addr <<= 2;
 		new_addr += addr + 8;
-
-		/* Confirm that it is a jump into a ksplice module */
-		m = __module_text_address(new_addr);
-		if (m != NULL && m != pack->target &&
-		    strncmp(m->name, "ksplice", strlen("ksplice")) == 0) {
-			ksdebug(pack, "Following trampoline %lx %lx\n", addr,
-				new_addr);
-			addr = new_addr;
-		}
+		return new_addr;
 	}
 	return addr;
 }
