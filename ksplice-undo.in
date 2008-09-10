@@ -94,28 +94,27 @@ to-be-changed functions is not on a thread's kernel stack.
 END
 		"module_busy" => <<'END',
 Ksplice has aborted the undo operation because it appears that the Ksplice
-update that you are trying to unload is in use by another module.  You can
-find out what module is using the Ksplice update using the lsmod command.
+update that you are trying to unload is in use by another module.  You can find
+out what module is using the Ksplice update using the lsmod command.
+END
+		"unexpected_running_task" => <<'END',
+Ksplice has aborted the undo operation because of an unexpected failure during
+the kernel stack check.  Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
 		"out_of_memory" => <<'END',
 Ksplice has aborted the undo operation because the kernel ran out of memory.
 END
-		"unexpected_running_task" => <<'END',
-Ksplice has aborted the upgrade because a task was running while it
-was attempting to check that the code changed by the update was not
-busy.
-END
 		"unexpected" => <<'END',
 Ksplice has aborted because of an unexpected error.
+Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
 		"UNKNOWN" => <<'END',
-The Ksplice kernel interface has returned an error string that
-ksplice-undo does not understand.  This is probably the result of
-using a version of ksplice-apply that is older than the version of the
-Ksplice kernel module source.
+The Ksplice kernel component has returned an error code that this version of
+ksplice-undo does not understand.
 END
 		"ok" => <<'END',
 Ksplice has aborted the undo operation for unknown reasons.
+Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
 );
 	$error = "UNKNOWN" if (!exists $errors{$error});

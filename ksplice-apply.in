@@ -148,7 +148,7 @@ kernel, then it appears that your current compiler and/or assembler are
 behaving differently from the compiler and assembler used to build the running
 kernel.  If possible, please use the exact compiler and assembler that were
 used to build the running kernel.  If you are using exactly the same compiler
-and assembler, feel free to report a bug to PACKAGE_BUGREPORT.
+and assembler, consider reporting a bug to PACKAGE_BUGREPORT.
 END
 		"code_busy" => <<'END',
 Ksplice has aborted the upgrade because it appears that the code that you are
@@ -161,37 +161,36 @@ Ksplice has aborted the upgrade because it appears that the System.map file
 provided to ksplice-create does not match the running kernel.
 END
 		"failed_to_find" => <<'END',
-Ksplice has aborted the upgrade because it was unable to resolve some
-of the symbols used in the update.
+Ksplice has aborted the upgrade because it was unable to resolve some of the
+symbols used in the update.
 END
 		"already_reversed" => <<'END',
-The Ksplice update you are attempting to apply has already been
-applied and reversed.  You need to unload the Ksplice modules related
-to this update before you can reapply this update.
+The Ksplice update that you are attempting to apply has already been applied
+and reversed.  You need to unload the Ksplice modules associated with this
+update before you can apply this update again.
 END
 		"missing_export" => <<'END',
-Ksplice was unable to find some of the structures needed to make the
-adjustments to the kernel's exported symbols made by the patch.
+Ksplice has aborted the upgrade because the symbols exported by the kernel
+did not match Ksplice's expectations.
 END
 		"unexpected_running_task" => <<'END',
-Ksplice has aborted the upgrade because a task was running while it
-was attempting to check that the code changed by the update was not
-busy.
+Ksplice has aborted the upgrade because of an unexpected failure during the
+kernel stack check.  Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
 		"out_of_memory" => <<'END',
 Ksplice has aborted the upgrade because the kernel ran out of memory.
 END
 		"unexpected" => <<'END',
 Ksplice has aborted because of an unexpected error.
+Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
 		"UNKNOWN" => <<'END',
-The Ksplice kernel interface has returned an error string that
-ksplice-apply does not understand.  This is probably the result of
-using a version of ksplice-apply that is older than the version of the
-Ksplice kernel module source.
+The Ksplice kernel component has returned an error code that this version of
+ksplice-apply does not understand.
 END
 		"ok" => <<'END',
 Ksplice has aborted the upgrade for unknown reasons.
+Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
 	);
 	$error = "UNKNOWN" if (!exists $errors{$error});
