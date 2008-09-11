@@ -180,6 +180,10 @@ struct kernel_symbol {
 	char *name;
 };
 
+struct exception_table_entry {
+	unsigned long insn, fixup;
+};
+
 struct superbfd *fetch_superbfd(bfd *abfd);
 struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect);
 struct supersect *new_supersect(struct superbfd *sbfd, const char *name);

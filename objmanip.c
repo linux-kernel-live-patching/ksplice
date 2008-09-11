@@ -88,6 +88,7 @@ void write_ksplice_section(struct superbfd *sbfd, asymbol **symp);
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label);
 void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
+void filter_ex_table_section(struct superbfd *sbfd);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for);
@@ -127,7 +128,6 @@ const struct table_section table_sections[] = {
 	{".altinstructions", 2 * sizeof(void *) + 4},
 	{".smp_locks", sizeof(void *)},
 	{".parainstructions", sizeof(void *) + 4},
-	{"__ex_table", 2 * sizeof(unsigned long)},
 }, *const end_table_sections = *(&table_sections + 1);
 
 #define mode(str) starts_with(modestr, str)
@@ -298,7 +298,8 @@ int main(int argc, char *argv[])
 	asection *p;
 	for (p = ibfd->sections; p != NULL; p = p->next) {
 		struct supersect *ss = fetch_supersect(isbfd, p);
-		if (is_table_section(p) || starts_with(p->name, ".ksplice"))
+		if (is_table_section(p) || starts_with(p->name, ".ksplice") ||
+		    strcmp(p->name, ".fixup") == 0)
 			continue;
 		if (want_section(p) || mode("rmsyms"))
 			rm_some_relocs(ss);
@@ -308,6 +309,7 @@ int main(int argc, char *argv[])
 	if (mode("keep")) {
 		for (ss = table_sections; ss != end_table_sections; ss++)
 			filter_table_section(isbfd, ss);
+		filter_ex_table_section(isbfd);
 	}
 
 	copy_object(ibfd, obfd);
@@ -434,7 +436,19 @@ arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		 bfd_vma offset)
 {
-	*vec_grow(&ss->new_relocs, 1) = create_reloc(ss, addr, symp, offset);
+	arelent *new_reloc = create_reloc(ss, addr, symp, offset), **relocp;
+	for (relocp = ss->relocs.data;
+	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+		if ((*relocp)->address == new_reloc->address) {
+			memmove(relocp,
+				relocp + 1,
+				(void *)(ss->relocs.data + ss->relocs.size) -
+				(void *)(relocp + 1));
+			ss->relocs.size--;
+			relocp--;
+		}
+	}
+	*vec_grow(&ss->new_relocs, 1) = new_reloc;
 }
 
 void write_string(struct supersect *ss, const char **addr, const char *fmt, ...)
@@ -700,6 +714,102 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	}
 }
 
+struct fixup_entry {
+	bfd_vma offset;
+	bool used;
+	bfd_vma ex_offset;
+};
+DECLARE_VEC_TYPE(struct fixup_entry, fixup_entry_vec);
+
+int compare_fixups(const void *aptr, const void *bptr)
+{
+	const struct fixup_entry *a = aptr, *b = bptr;
+	if (a->offset < b->offset)
+		return -1;
+	else if (a->offset > b->offset)
+		return 1;
+	else
+		return (int)a->used - (int)b->used;
+}
+
+void filter_ex_table_section(struct superbfd *sbfd)
+{
+	asection *isection = bfd_get_section_by_name(sbfd->abfd, "__ex_table");
+	if (isection == NULL)
+		return;
+	asection *fixup_sect = bfd_get_section_by_name(sbfd->abfd, ".fixup");
+
+	struct supersect *ss = fetch_supersect(sbfd, isection), orig_ss;
+	supersect_move(&orig_ss, ss);
+
+	struct supersect *fixup_ss = NULL;
+	if (fixup_sect != NULL)
+		fixup_ss = fetch_supersect(sbfd, fixup_sect);
+
+	struct fixup_entry_vec fixups;
+	vec_init(&fixups);
+
+	const struct exception_table_entry *orig_entry;
+	for (orig_entry = orig_ss.contents.data;
+	     (void *)orig_entry < orig_ss.contents.data + orig_ss.contents.size;
+	     orig_entry++) {
+		asymbol *sym, *fixup_sym;
+		read_reloc(&orig_ss, &orig_entry->insn,
+			   sizeof(orig_entry->insn), &sym);
+
+		struct fixup_entry *f;
+		bfd_vma fixup_offset = read_reloc(&orig_ss, &orig_entry->fixup,
+						  sizeof(orig_entry->fixup),
+						  &fixup_sym);
+		if (fixup_sym->section == fixup_sect) {
+			assert(fixup_offset < fixup_ss->contents.size);
+			f = vec_grow(&fixups, 1);
+			f->offset = fixup_offset;
+			f->used = false;
+		}
+
+		asection *p;
+		for (p = sbfd->abfd->sections; p != NULL; p = p->next) {
+			if (sym->section == p
+			    && !is_table_section(p) && !want_section(p))
+				break;
+		}
+		if (p != NULL)
+			continue;
+
+		if (fixup_sym->section == fixup_sect) {
+			f->used = true;
+			f->ex_offset = ss->contents.size;
+		}
+		sect_copy(ss, sect_grow(ss, 1, struct exception_table_entry),
+			  &orig_ss, orig_entry, 1);
+	}
+
+	if (fixup_sect == NULL)
+		return;
+
+	struct supersect orig_fixup_ss;
+	supersect_move(&orig_fixup_ss, fixup_ss);
+
+	qsort(fixups.data, fixups.size, sizeof(*fixups.data), compare_fixups);
+	*vec_grow(&fixups, 1) = (struct fixup_entry)
+	    { .offset = orig_fixup_ss.contents.size, .used = false };
+
+	struct fixup_entry *f;
+	for (f = fixups.data; f < fixups.data + fixups.size - 1; f++) {
+		if (!f->used)
+			continue;
+		write_reloc(ss, ss->contents.data + f->ex_offset,
+			    &fixup_ss->symbol, fixup_ss->contents.size);
+		sect_copy(fixup_ss,
+			  sect_grow(fixup_ss, (f + 1)->offset - f->offset,
+				    unsigned char),
+			  &orig_fixup_ss,
+			  orig_fixup_ss.contents.data + f->offset,
+			  (f + 1)->offset - f->offset);
+	}
+}
+
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 {
 	if (want_section(sect))
@@ -744,7 +854,8 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 		asymbol *sym = *(*relocp)->sym_ptr_ptr;
 		if (sym->section == (asection *)looking_for &&
 		    (!starts_with(sym->section->name, ".text") ||
-		     get_reloc_offset(ss, *relocp, true) != 0)) {
+		     (get_reloc_offset(ss, *relocp, true) != 0 &&
+		      strcmp(looking_at->name, ".fixup") != 0))) {
 			struct wsect *w = malloc(sizeof(*w));
 			w->sect = looking_for;
 			w->next = wanted_sections;
@@ -1075,5 +1186,7 @@ bool is_table_section(asection *sect)
 		if (strcmp(ss->sectname, sect->name) == 0)
 			return true;
 	}
+	if (strcmp(sect->name, "__ex_table") == 0)
+		return true;
 	return false;
 }
