@@ -187,7 +187,9 @@ LIST_HEAD(ksplice_module_list);
 #else /* !KSPLICE_STANDALONE */
 LIST_HEAD(ksplice_module_list);
 EXPORT_SYMBOL_GPL(ksplice_module_list);
+static struct kobject *ksplice_kobj;
 #endif /* KSPLICE_STANDALONE */
+
 static bool patches_module(const struct module *a, const struct module *b);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
@@ -537,10 +539,6 @@ static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 			kfree(list_entry(_pos, type, member));	\
 		}						\
 	} while (0)
-
-#ifndef KSPLICE_STANDALONE
-static struct kobject *ksplice_kobj;
-#endif /* !KSPLICE_STANDALONE */
 
 struct ksplice_attribute {
 	struct attribute attr;
