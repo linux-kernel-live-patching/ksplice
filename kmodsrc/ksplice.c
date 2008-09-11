@@ -2121,8 +2121,7 @@ static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 {
 	struct module *m =
 	    __module_text_address(follow_trampolines(pack, addr));
-	if (m == NULL || starts_with(m->name, pack->name) ||
-	    ends_with(m->name, "_helper"))
+	if (m == NULL || m == pack->primary)
 		return OK;
 	if (use_module(pack->primary, m) != 1)
 		return MODULE_BUSY;
