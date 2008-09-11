@@ -1407,29 +1407,31 @@ static abort_t apply_update(struct update *update)
 		ksdebug(pack, "Preparing and checking %s\n", pack->name);
 		ret = activate_helper(pack, false);
 		if (ret == NO_MATCH) {
-			ksdebug(pack, "Trying to continue without the "
-				"unmatched sections; we will find them later."
-				"\n");
+			ksdebug(pack, "Continuing without some sections; "
+				"we might find them later.\n");
 			ret = activate_primary(pack);
 			if (ret != OK) {
 				ksdebug(pack, "Aborted.  Unable to continue "
 					"without the unmatched sections.\n");
 				goto out;
 			}
+
 			ksdebug(pack, "run-pre: Considering .data sections to "
 				"find the unmatched sections\n");
 			ret = activate_helper(pack, true);
 			if (ret != OK)
 				goto out;
+
 			ksdebug(pack, "run-pre: Found all previously unmatched "
 				"sections\n");
+			continue;
 		} else if (ret != OK) {
 			goto out;
-		} else {
-			ret = activate_primary(pack);
-			if (ret != OK)
-				goto out;
 		}
+
+		ret = activate_primary(pack);
+		if (ret != OK)
+			goto out;
 	}
 	ret = apply_patches(update);
 out:
