@@ -510,8 +510,8 @@ static struct module *__module_data_address(unsigned long addr);
 /* helper */
 static abort_t activate_helper(struct ksplice_pack *pack,
 			       bool consider_data_sections);
-static abort_t search_for_match(struct ksplice_pack *pack,
-				const struct ksplice_section *sect);
+static abort_t find_section(struct ksplice_pack *pack,
+			    const struct ksplice_section *sect);
 static abort_t try_addr(struct ksplice_pack *pack,
 			const struct ksplice_section *sect,
 			unsigned long run_addr,
@@ -1498,7 +1498,7 @@ static abort_t activate_helper(struct ksplice_pack *pack,
 			if (!consider_data_sections &&
 			    (sect->flags & KSPLICE_SECTION_DATA) != 0)
 				continue;
-			ret = search_for_match(pack, sect);
+			ret = find_section(pack, sect);
 			if (ret == OK) {
 				finished[i] = 1;
 				if ((sect->flags & KSPLICE_SECTION_DATA) == 0)
@@ -1529,8 +1529,8 @@ static abort_t activate_helper(struct ksplice_pack *pack,
 	return OK;
 }
 
-static abort_t search_for_match(struct ksplice_pack *pack,
-				const struct ksplice_section *sect)
+static abort_t find_section(struct ksplice_pack *pack,
+			    const struct ksplice_section *sect)
 {
 	int i;
 	abort_t ret;
