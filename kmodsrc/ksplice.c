@@ -1073,11 +1073,16 @@ static abort_t check_each_task(struct update *update)
 			status = ret;
 		}
 		if (ret != OK && ret != CODE_BUSY)
-			goto out;
-	} while_each_thread(g, p);
-out:
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
 /* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
+			goto out;
+#else /* LINUX_VERSION_CODE < */
+			return ret;
+#endif /* LINUX_VERSION_CODE */
+	} while_each_thread(g, p);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
+/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
+out:
 	read_unlock(&tasklist_lock);
 #endif /* LINUX_VERSION_CODE */
 	return status;
