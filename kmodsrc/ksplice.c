@@ -1786,10 +1786,10 @@ static abort_t try_addr(struct ksplice_pack *pack,
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
 	if (ret == NO_MATCH && mode != RUN_PRE_FINAL) {
 		set_temp_namevals(pack, NOVAL);
-		ksdebug(pack, "run-pre: %s sect %s does not match ",
+		ksdebug(pack, "run-pre: %s sect %s does not match (r_a=%lx "
+			"p_a=%lx s=%lx)\n",
 			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "data" :
-			"text", sect->symbol->label);
-		ksdebug(pack, "(r_a=%lx p_a=%lx s=%lx)\n", run_addr,
+			"text", sect->symbol->label, run_addr,
 			sect->thismod_addr, sect->size);
 		ksdebug(pack, "run-pre: ");
 		if (pack->update->debug >= 1) {
