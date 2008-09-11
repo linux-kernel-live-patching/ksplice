@@ -1295,9 +1295,17 @@ static void add_to_update(struct ksplice_pack *pack, struct update *update)
 
 static void cleanup_ksplice_update(struct update *update)
 {
+#ifdef KSPLICE_STANDALONE
+	if (bootstrapped)
+		mutex_lock(&module_mutex);
+	list_del(&update->list);
+	if (bootstrapped)
+		mutex_unlock(&module_mutex);
+#else /* !KSPLICE_STANDALONE */
 	mutex_lock(&module_mutex);
 	list_del(&update->list);
 	mutex_unlock(&module_mutex);
+#endif /* KSPLICE_STANDALONE */
 	cleanup_conflicts(update);
 	clear_debug_buf(update);
 	kfree(update->kid);
