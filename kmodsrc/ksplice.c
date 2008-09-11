@@ -451,7 +451,7 @@ static bool ends_with(const char *str, const char *suffix);
 	} while (0)
 
 /* primary */
-static abort_t activate_primary(struct ksplice_pack *pack);
+static abort_t finalize_pack(struct ksplice_pack *pack);
 static abort_t process_exports(struct ksplice_pack *pack);
 static abort_t process_patches(struct ksplice_pack *pack);
 static int __apply_patches(void *update);
@@ -712,7 +712,7 @@ static struct kobj_type ksplice_ktype = {
 	.default_attrs = ksplice_attrs,
 };
 
-static abort_t activate_primary(struct ksplice_pack *pack)
+static abort_t finalize_pack(struct ksplice_pack *pack)
 {
 	abort_t ret;
 	ret = apply_relocs(pack, pack->primary_relocs,
@@ -1446,7 +1446,7 @@ static abort_t activate_pack(struct ksplice_pack *pack)
 	if (ret == NO_MATCH) {
 		ksdebug(pack, "Continuing without some sections; we might "
 			"find them later.\n");
-		ret = activate_primary(pack);
+		ret = finalize_pack(pack);
 		if (ret != OK) {
 			ksdebug(pack, "Aborted.  Unable to continue without "
 				"the unmatched sections.\n");
@@ -1466,7 +1466,7 @@ static abort_t activate_pack(struct ksplice_pack *pack)
 		return ret;
 	}
 
-	return activate_primary(pack);
+	return finalize_pack(pack);
 }
 
 static abort_t activate_helper(struct ksplice_pack *pack,
