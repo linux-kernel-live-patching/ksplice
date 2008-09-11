@@ -359,12 +359,12 @@ static void cleanup_ksplice_update(struct update *update);
 static void add_to_update(struct ksplice_pack *pack, struct update *update);
 static int ksplice_sysfs_init(struct update *update);
 
-/* preparing the relocations and patches for application */
+/* Preparing the relocations and patches for application */
 static abort_t apply_update(struct update *update);
 static abort_t activate_pack(struct ksplice_pack *pack);
 static abort_t finalize_pack(struct ksplice_pack *pack);
-static abort_t process_exports(struct ksplice_pack *pack);
-static abort_t process_patches(struct ksplice_pack *pack);
+static abort_t finalize_exports(struct ksplice_pack *pack);
+static abort_t finalize_patches(struct ksplice_pack *pack);
 static abort_t add_patch_dependencies(struct ksplice_pack *pack);
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr);
@@ -723,11 +723,11 @@ static abort_t finalize_pack(struct ksplice_pack *pack)
 	if (ret != OK)
 		return ret;
 
-	ret = process_patches(pack);
+	ret = finalize_patches(pack);
 	if (ret != OK)
 		return ret;
 
-	ret = process_exports(pack);
+	ret = finalize_exports(pack);
 	if (ret != OK)
 		return ret;
 
@@ -749,7 +749,7 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 #endif
 }
 
-static abort_t process_patches(struct ksplice_pack *pack)
+static abort_t finalize_patches(struct ksplice_pack *pack)
 {
 	struct ksplice_patch *p;
 	struct safety_record *rec;
@@ -796,7 +796,7 @@ static abort_t process_patches(struct ksplice_pack *pack)
 	return OK;
 }
 
-static abort_t process_exports(struct ksplice_pack *pack)
+static abort_t finalize_exports(struct ksplice_pack *pack)
 {
 	struct ksplice_export *export;
 	struct module *m;
