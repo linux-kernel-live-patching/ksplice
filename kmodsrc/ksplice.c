@@ -714,8 +714,7 @@ static abort_t finalize_pack(struct ksplice_pack *pack)
 
 static void __attribute__((noreturn)) ksplice_deleted(void)
 {
-	printk(KERN_CRIT "Attempted call of kernel function deleted by Ksplice "
-	       "update!\n");
+	printk(KERN_CRIT "Called a kernel function deleted by Ksplice!\n");
 	BUG();
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 /* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
