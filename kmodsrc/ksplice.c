@@ -1718,7 +1718,8 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 			return NO_MATCH;
 		}
 
-		if (runval != *pre && (sect->flags & KSPLICE_SECTION_DATA) == 0) {
+		if (runval != *pre &&
+		    (sect->flags & KSPLICE_SECTION_DATA) == 0) {
 			if (mode == RUN_PRE_INITIAL)
 				ksdebug(pack, "sect does not match after "
 					"%lx/%lx bytes\n", offset, sect->size);

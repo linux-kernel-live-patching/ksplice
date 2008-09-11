@@ -16,8 +16,7 @@
  *  02110-1301, USA.
  */
 
-#include <linux/kernel.h>
-#include <asm/thread_info.h>
+#include <linux/thread_info.h>
 #define KSPLICE_IP(x) thread_saved_pc(x)
 #define KSPLICE_SP(x) thread_saved_fp(x)
 

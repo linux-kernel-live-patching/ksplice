@@ -412,7 +412,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 		}
 		if (r->size != ud_operand_len(run_op) &&
 		    (r->dst_mask != 0xffffffff || r->rightshift != 0)) {
-			/* Special features unsupported with differing reloc sizes */
+			/* Reloc types unsupported with differing reloc sizes */
 			ksdebug(pack, "ksplice_h: reloc: invalid flags for a "
 				"relocation with size changed\n");
 			ksdebug(pack, "%ld %u\n", r->dst_mask, r->rightshift);
@@ -531,7 +531,7 @@ static uint8_t ud_prefix_len(struct ud *ud)
 static long jump_lval(struct ud_operand *operand)
 {
 	if (operand->type == UD_OP_JIMM) {
-		switch(operand->size) {
+		switch (operand->size) {
 		case 8:
 			return operand->lval.sbyte;
 		case 16:
