@@ -2173,7 +2173,7 @@ static abort_t compute_address(struct ksplice_pack *pack,
 		return add_candidate_val(vals, nv->val);
 	}
 
-	if (starts_with(ksym->label, ".rodata"))
+	if (starts_with(ksym->label, ".rodata.str"))
 		return OK;
 
 #ifdef CONFIG_MODULE_UNLOAD
