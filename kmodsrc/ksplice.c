@@ -484,15 +484,6 @@ static bool starts_with(const char *str, const char *prefix);
 static bool ends_with(const char *str, const char *suffix);
 static bool singular(struct list_head *list);
 
-#define clear_list(head, type, member)				\
-	do {							\
-		struct list_head *_pos, *_n;			\
-		list_for_each_safe(_pos, _n, head) {		\
-			list_del(_pos);				\
-			kfree(list_entry(_pos, type, member));	\
-		}						\
-	} while (0)
-
 /* Debugging */
 static abort_t init_debug_buf(struct update *update);
 static void clear_debug_buf(struct update *update);
@@ -537,6 +528,15 @@ static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 #elif defined CONFIG_ARM
 #include "arm/ksplice-arch.c"
 #endif /* KSPLICE_STANDALONE */
+
+#define clear_list(head, type, member)				\
+	do {							\
+		struct list_head *_pos, *_n;			\
+		list_for_each_safe(_pos, _n, head) {		\
+			list_del(_pos);				\
+			kfree(list_entry(_pos, type, member));	\
+		}						\
+	} while (0)
 
 #ifndef KSPLICE_STANDALONE
 static struct kobject *ksplice_kobj;
