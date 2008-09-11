@@ -482,11 +482,7 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr);
 static bool starts_with(const char *str, const char *prefix);
 static bool ends_with(const char *str, const char *suffix);
-
-static bool singular(struct list_head *list)
-{
-	return !list_empty(list) && list->next->next == list;
-}
+static bool singular(struct list_head *list);
 
 #define clear_list(head, type, member)				\
 	do {							\
@@ -2894,6 +2890,11 @@ static bool ends_with(const char *str, const char *suffix)
 {
 	return strlen(str) >= strlen(suffix) &&
 	    strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0;
+}
+
+static bool singular(struct list_head *list)
+{
+	return !list_empty(list) && list->next->next == list;
 }
 
 #ifdef CONFIG_DEBUG_FS
