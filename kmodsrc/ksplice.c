@@ -118,7 +118,7 @@ struct conflict {
 	struct list_head list;
 };
 
-struct conflict_frame {
+struct conflict_addr {
 	unsigned long addr;
 	int has_conflict;
 	const char *label;
@@ -464,7 +464,7 @@ static abort_t check_stack(struct update *update, struct conflict *conf,
 			   const unsigned long *stack);
 static abort_t check_address(struct update *update,
 			     struct conflict *conf, unsigned long addr);
-static abort_t check_record(struct conflict_frame *frame,
+static abort_t check_record(struct conflict_addr *ca,
 			    const struct safety_record *rec,
 			    unsigned long addr);
 static int is_stop_machine(const struct task_struct *t);
@@ -646,16 +646,16 @@ static ssize_t abort_cause_show(struct update *update, char *buf)
 static ssize_t conflict_show(struct update *update, char *buf)
 {
 	const struct conflict *conf;
-	const struct conflict_frame *frame;
+	const struct conflict_addr *ca;
 	int used = 0;
 	list_for_each_entry(conf, &update->conflicts, list) {
 		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
 				 conf->process_name, conf->pid);
-		list_for_each_entry(frame, &conf->stack, list) {
-			if (!frame->has_conflict)
+		list_for_each_entry(ca, &conf->stack, list) {
+			if (!ca->has_conflict)
 				continue;
 			used += snprintf(buf + used, PAGE_SIZE - used, " %s",
-					 frame->label);
+					 ca->label);
 		}
 		used += snprintf(buf + used, PAGE_SIZE - used, "\n");
 	}
@@ -1142,21 +1142,21 @@ static abort_t check_address(struct update *update,
 	abort_t status = OK, ret;
 	const struct safety_record *rec;
 	struct ksplice_pack *pack;
-	struct conflict_frame *frame = NULL;
+	struct conflict_addr *ca = NULL;
 
 	if (conf != NULL) {
-		frame = kmalloc(sizeof(*frame), GFP_ATOMIC);
-		if (frame == NULL)
+		ca = kmalloc(sizeof(*ca), GFP_ATOMIC);
+		if (ca == NULL)
 			return OUT_OF_MEMORY;
-		frame->addr = addr;
-		frame->has_conflict = 0;
-		frame->label = NULL;
-		list_add(&frame->list, &conf->stack);
+		ca->addr = addr;
+		ca->has_conflict = 0;
+		ca->label = NULL;
+		list_add(&ca->list, &conf->stack);
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			ret = check_record(frame, rec, addr);
+			ret = check_record(ca, rec, addr);
 			if (ret != OK)
 				status = ret;
 		}
@@ -1164,14 +1164,14 @@ static abort_t check_address(struct update *update,
 	return status;
 }
 
-static abort_t check_record(struct conflict_frame *frame,
+static abort_t check_record(struct conflict_addr *ca,
 			    const struct safety_record *rec, unsigned long addr)
 {
 	if ((addr > rec->addr && addr < rec->addr + rec->size) ||
 	    (addr == rec->addr && !rec->first_byte_safe)) {
-		if (frame != NULL) {
-			frame->label = rec->label;
-			frame->has_conflict = 1;
+		if (ca != NULL) {
+			ca->label = rec->label;
+			ca->has_conflict = 1;
 		}
 		return CODE_BUSY;
 	}
@@ -1195,7 +1195,7 @@ static void cleanup_conflicts(struct update *update)
 {
 	struct conflict *conf;
 	list_for_each_entry(conf, &update->conflicts, list) {
-		clear_list(&conf->stack, struct conflict_frame, list);
+		clear_list(&conf->stack, struct conflict_addr, list);
 		kfree(conf->process_name);
 	}
 	clear_list(&update->conflicts, struct conflict, list);
@@ -1204,13 +1204,13 @@ static void cleanup_conflicts(struct update *update)
 static void print_conflicts(struct update *update)
 {
 	const struct conflict *conf;
-	const struct conflict_frame *frame;
+	const struct conflict_addr *ca;
 	list_for_each_entry(conf, &update->conflicts, list) {
 		_ksdebug(update, "stack check: pid %d (%s):", conf->pid,
 			 conf->process_name);
-		list_for_each_entry(frame, &conf->stack, list) {
-			_ksdebug(update, " %" ADDR, frame->addr);
-			if (frame->has_conflict)
+		list_for_each_entry(ca, &conf->stack, list) {
+			_ksdebug(update, " %" ADDR, ca->addr);
+			if (ca->has_conflict)
 				_ksdebug(update, " [<-CONFLICT]");
 		}
 		_ksdebug(update, "\n");
