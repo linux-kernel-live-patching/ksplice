@@ -144,8 +144,8 @@ struct ksplice_system_map {
 #define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_MID)
 #define KSPLICE_KID_UNIQ(s) PASTE(s##_, KSPLICE_KID)
 #ifdef KSPLICE_STANDALONE
-#define init_ksplice_module KSPLICE_KID_UNIQ(init_ksplice_module)
-#define cleanup_ksplice_module KSPLICE_KID_UNIQ(cleanup_ksplice_module)
+#define init_ksplice_pack KSPLICE_KID_UNIQ(init_ksplice_pack)
+#define cleanup_ksplice_pack KSPLICE_KID_UNIQ(cleanup_ksplice_pack)
 #endif
 
 /**
@@ -223,16 +223,16 @@ struct ksplice_pack {
 
 
 /**
- * init_ksplice_module() - Initializes a pack
+ * init_ksplice_pack() - Initializes a pack
  * @pack:	The pack to be initialized.  The non-private fields should
  * 		already be filled when this is called.
  **/
-int init_ksplice_module(struct ksplice_pack *pack);
+int init_ksplice_pack(struct ksplice_pack *pack);
 
 /**
- * cleanup_ksplice_module() - Cleans up a pack
+ * cleanup_ksplice_pack() - Cleans up a pack
  * @pack:	The pack to be cleaned up
  */
-void cleanup_ksplice_module(struct ksplice_pack *pack);
+void cleanup_ksplice_pack(struct ksplice_pack *pack);
 
 #endif /* __KERNEL__ */

@@ -50,12 +50,12 @@ static int init_helper(void)
 	pack.helper_system_map = ksplice_system_map;
 	pack.helper_system_map_end = ksplice_system_map_end;
 #endif /* KSPLICE_STANDALONE */
-	return init_ksplice_module(&pack);
+	return init_ksplice_pack(&pack);
 }
 
 static void cleanup_helper(void)
 {
-	cleanup_ksplice_module(&pack);
+	cleanup_ksplice_pack(&pack);
 }
 
 module_init(init_helper);

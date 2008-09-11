@@ -1238,7 +1238,7 @@ static struct module *find_module(const char *name)
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-int init_ksplice_module(struct ksplice_pack *pack)
+int init_ksplice_pack(struct ksplice_pack *pack)
 {
 	struct update *update;
 	int ret = 0;
@@ -1291,9 +1291,9 @@ out:
 	mutex_unlock(&module_mutex);
 	return ret;
 }
-EXPORT_SYMBOL(init_ksplice_module);
+EXPORT_SYMBOL(init_ksplice_pack);
 
-void cleanup_ksplice_module(struct ksplice_pack *pack)
+void cleanup_ksplice_pack(struct ksplice_pack *pack)
 {
 	if (pack->update == NULL || pack->update->stage == STAGE_APPLIED)
 		return;
@@ -1309,7 +1309,7 @@ void cleanup_ksplice_module(struct ksplice_pack *pack)
 #endif /* LINUX_VERSION_CODE */
 	pack->update = NULL;
 }
-EXPORT_SYMBOL_GPL(cleanup_ksplice_module);
+EXPORT_SYMBOL_GPL(cleanup_ksplice_pack);
 
 static void add_to_update(struct ksplice_pack *pack, struct update *update)
 {

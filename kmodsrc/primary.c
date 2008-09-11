@@ -69,7 +69,7 @@ static int init_primary(void)
 
 static void cleanup_primary(void)
 {
-	cleanup_ksplice_module(&pack);
+	cleanup_ksplice_pack(&pack);
 }
 
 module_init(init_primary);
