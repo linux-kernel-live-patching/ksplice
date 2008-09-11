@@ -535,6 +535,7 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 static abort_t reverse_patches(struct update *update);
 static abort_t apply_patches(struct update *update);
 static abort_t apply_update(struct update *update);
+static abort_t activate_pack(struct ksplice_pack *pack);
 static struct update *init_ksplice_update(const char *kid);
 static void cleanup_ksplice_update(struct update *update);
 static void add_to_update(struct ksplice_pack *pack, struct update *update);
@@ -1404,32 +1405,7 @@ static abort_t apply_update(struct update *update)
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
 	list_for_each_entry(pack, &update->packs, list) {
-		ksdebug(pack, "Preparing and checking %s\n", pack->name);
-		ret = activate_helper(pack, false);
-		if (ret == NO_MATCH) {
-			ksdebug(pack, "Continuing without some sections; "
-				"we might find them later.\n");
-			ret = activate_primary(pack);
-			if (ret != OK) {
-				ksdebug(pack, "Aborted.  Unable to continue "
-					"without the unmatched sections.\n");
-				goto out;
-			}
-
-			ksdebug(pack, "run-pre: Considering .data sections to "
-				"find the unmatched sections\n");
-			ret = activate_helper(pack, true);
-			if (ret != OK)
-				goto out;
-
-			ksdebug(pack, "run-pre: Found all previously unmatched "
-				"sections\n");
-			continue;
-		} else if (ret != OK) {
-			goto out;
-		}
-
-		ret = activate_primary(pack);
+		ret = activate_pack(pack);
 		if (ret != OK)
 			goto out;
 	}
@@ -1443,6 +1419,39 @@ out:
 	}
 	mutex_unlock(&module_mutex);
 	return ret;
+}
+
+
+static abort_t activate_pack(struct ksplice_pack *pack)
+{
+	abort_t ret;
+
+	ksdebug(pack, "Preparing and checking %s\n", pack->name);
+	ret = activate_helper(pack, false);
+	if (ret == NO_MATCH) {
+		ksdebug(pack, "Continuing without some sections; we might "
+			"find them later.\n");
+		ret = activate_primary(pack);
+		if (ret != OK) {
+			ksdebug(pack, "Aborted.  Unable to continue without "
+				"the unmatched sections.\n");
+			return ret;
+		}
+
+		ksdebug(pack, "run-pre: Considering .data sections to find the "
+			"unmatched sections\n");
+		ret = activate_helper(pack, true);
+		if (ret != OK)
+			return ret;
+
+		ksdebug(pack, "run-pre: Found all previously unmatched "
+			"sections\n");
+		return OK;
+	} else if (ret != OK) {
+		return ret;
+	}
+
+	return activate_primary(pack);
 }
 
 static abort_t activate_helper(struct ksplice_pack *pack,
