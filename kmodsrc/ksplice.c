@@ -1260,6 +1260,11 @@ int init_ksplice_module(struct ksplice_pack *pack)
 			ret = -ENODEV;
 			goto out;
 		}
+		ret = use_module(pack->primary, pack->target);
+		if (ret != 1) {
+			ret = -ENODEV;
+			goto out;
+		}
 	}
 	list_for_each_entry(update, &updates, list) {
 		if (strcmp(pack->kid, update->kid) == 0) {
