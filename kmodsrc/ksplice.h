@@ -120,7 +120,6 @@ struct ksplice_pack {
 	    *primary_system_map, *primary_system_map_end,
 	    *helper_system_map, *helper_system_map_end;
 #endif /* KSPLICE_STANDALONE */
-	struct list_head reloc_addrmaps;
 	struct list_head reloc_namevals;
 	struct list_head safety_records;
 	struct list_head list;
