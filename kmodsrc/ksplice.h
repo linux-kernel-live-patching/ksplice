@@ -15,15 +15,15 @@ struct ksplice_reloc {
 	int signed_addend;
 };
 
-struct ksplice_size {
+struct ksplice_section {
 	const struct ksplice_symbol *symbol;
 	unsigned long size;
 	unsigned long thismod_addr;
 	unsigned int flags;
 };
-#define KSPLICE_SIZE_TEXT 0x00000001
-#define KSPLICE_SIZE_RODATA 0x00000002
-#define KSPLICE_SIZE_DATA 0x00000004
+#define KSPLICE_SECTION_TEXT 0x00000001
+#define KSPLICE_SECTION_RODATA 0x00000002
+#define KSPLICE_SECTION_DATA 0x00000004
 
 #define MAX_TRAMPOLINE_SIZE 5
 
@@ -100,9 +100,9 @@ struct ksplice_pack {
 	struct module *primary;
 	struct ksplice_module_list_entry module_list_entry;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
-	const struct ksplice_size *primary_sizes, *primary_sizes_end;
+	const struct ksplice_section *primary_sections, *primary_sections_end;
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
-	const struct ksplice_size *helper_sizes, *helper_sizes_end;
+	const struct ksplice_section *helper_sections, *helper_sections_end;
 	struct ksplice_patch *patches, *patches_end;
 	struct ksplice_export *exports, *exports_end;
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS

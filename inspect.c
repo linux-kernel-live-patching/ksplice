@@ -92,36 +92,37 @@ void show_ksplice_relocs(struct supersect *kreloc_ss)
 	printf("\n");
 }
 
-void show_ksplice_size_flags(const struct ksplice_size *ksize)
+void show_ksplice_section_flags(const struct ksplice_section *ksect)
 {
 	printf("flags:");
-	if (ksize->flags & KSPLICE_SIZE_RODATA)
+	if (ksect->flags & KSPLICE_SECTION_RODATA)
 		printf(" rodata");
-	if (ksize->flags & KSPLICE_SIZE_TEXT)
+	if (ksect->flags & KSPLICE_SECTION_TEXT)
 		printf(" text");
-	if (ksize->flags & KSPLICE_SIZE_DATA)
+	if (ksect->flags & KSPLICE_SECTION_DATA)
 		printf(" data");
 	printf("\n");
 }
 
-void show_ksplice_size(struct supersect *ss, const struct ksplice_size *ksize)
+void show_ksplice_section(struct supersect *ss,
+			  const struct ksplice_section *ksect)
 {
 	printf("symbol: %s\n"
 	       "thismod_addr: %s  size: %lx\n",
-	       str_ksplice_symbolp(ss, &ksize->symbol),
-	       str_pointer(ss, (void *const *)&ksize->thismod_addr),
-	       read_num(ss, &ksize->size));
-	show_ksplice_size_flags(ksize);
+	       str_ksplice_symbolp(ss, &ksect->symbol),
+	       str_pointer(ss, (void *const *)&ksect->thismod_addr),
+	       read_num(ss, &ksect->size));
+	show_ksplice_section_flags(ksect);
 	printf("\n");
 }
 
-void show_ksplice_sizes(struct supersect *ksize_ss)
+void show_ksplice_sections(struct supersect *ksect_ss)
 {
-	printf("KSPLICE SIZES:\n\n");
-	struct ksplice_size *ksize;
-	for (ksize = ksize_ss->contents.data; (void *)ksize <
-	     ksize_ss->contents.data + ksize_ss->contents.size; ksize++)
-		show_ksplice_size(ksize_ss, ksize);
+	printf("KSPLICE SECTIONS:\n\n");
+	struct ksplice_section *ksect;
+	for (ksect = ksect_ss->contents.data; (void *)ksect <
+	     ksect_ss->contents.data + ksect_ss->contents.size; ksect++)
+		show_ksplice_section(ksect_ss, ksect);
 	printf("\n");
 }
 
@@ -218,12 +219,13 @@ int main(int argc, char *argv[])
 		printf("No ksplice relocations.\n\n");
 	}
 
-	asection *ksize_sect = bfd_get_section_by_name(ibfd, ".ksplice_sizes");
-	if (ksize_sect != NULL) {
-		struct supersect *ksize_ss = fetch_supersect(sbfd, ksize_sect);
-		show_ksplice_sizes(ksize_ss);
+	asection *ksect_sect = bfd_get_section_by_name(ibfd,
+						       ".ksplice_sections");
+	if (ksect_sect != NULL) {
+		struct supersect *ksect_ss = fetch_supersect(sbfd, ksect_sect);
+		show_ksplice_sections(ksect_ss);
 	} else {
-		printf("No ksplice sizes.\n\n");
+		printf("No ksplice sections.\n\n");
 	}
 
 	asection *kpatch_sect = bfd_get_section_by_name(ibfd,

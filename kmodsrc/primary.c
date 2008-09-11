@@ -23,7 +23,7 @@
 #endif
 
 extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
-extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
+extern const struct ksplice_section ksplice_sections[], ksplice_sections_end[];
 extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
 extern struct ksplice_export ksplice_exports[], ksplice_exports_end[];
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
@@ -45,8 +45,8 @@ struct ksplice_pack pack = {
 	.primary = THIS_MODULE,
 	.primary_relocs = ksplice_relocs,
 	.primary_relocs_end = ksplice_relocs_end,
-	.primary_sizes = ksplice_sizes,
-	.primary_sizes_end = ksplice_sizes_end,
+	.primary_sections = ksplice_sections,
+	.primary_sections_end = ksplice_sections_end,
 	.patches = ksplice_patches,
 	.patches_end = ksplice_patches_end,
 	.exports = ksplice_exports,

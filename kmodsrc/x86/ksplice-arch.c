@@ -149,7 +149,7 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 /* *INDENT-ON* */
 
 static abort_t compare_operands(struct ksplice_pack *pack,
-				const struct ksplice_size *s,
+				const struct ksplice_section *sect,
 				unsigned long *match_map,
 				unsigned long run_addr,
 				const unsigned char *run,
@@ -163,7 +163,7 @@ static long jump_lval(struct ud_operand *operand);
 static int next_run_byte(struct ud *ud);
 
 static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
-				const struct ksplice_size *s,
+				const struct ksplice_section *sect,
 				unsigned long run_addr,
 				struct list_head *safety_records,
 				enum run_pre_mode mode)
@@ -173,11 +173,11 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	abort_t ret;
 	const unsigned char *run, *pre;
 	struct ud pre_ud, run_ud;
-	unsigned long run_start, pre_addr = s->thismod_addr;
+	unsigned long run_start, pre_addr = sect->thismod_addr;
 
 	unsigned long *match_map;
 
-	if (s->size == 0)
+	if (sect->size == 0)
 		return NO_MATCH;
 
 	run_addr = follow_trampolines(pack, run_addr);
@@ -188,7 +188,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	ud_init(&pre_ud);
 	ud_set_mode(&pre_ud, BITS_PER_LONG);
 	ud_set_syntax(&pre_ud, UD_SYN_ATT);
-	ud_set_input_buffer(&pre_ud, (unsigned char *)pre, s->size);
+	ud_set_input_buffer(&pre_ud, (unsigned char *)pre, sect->size);
 	ud_set_pc(&pre_ud, 0);
 
 	ud_init(&run_ud);
@@ -199,16 +199,16 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	run_ud.userdata = (unsigned char *)run_addr;
 	run_start = run_addr;
 
-	match_map = vmalloc(sizeof(*match_map) * s->size);
+	match_map = vmalloc(sizeof(*match_map) * sect->size);
 	if (match_map == NULL)
 		return OUT_OF_MEMORY;
-	memset(match_map, 0, sizeof(*match_map) * s->size);
+	memset(match_map, 0, sizeof(*match_map) * sect->size);
 	match_map[0] = run_addr;
 
 	while (1) {
 		if (ud_disassemble(&pre_ud) == 0) {
 			/* Ran out of pre bytes to match; we're done! */
-			ret = create_safety_record(pack, s, safety_records,
+			ret = create_safety_record(pack, sect, safety_records,
 						   run_start,
 						   (unsigned long)run -
 						   run_start);
@@ -271,7 +271,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
 
 		for (i = 0; i < ARRAY_SIZE(run_ud.operand); i++) {
-			ret = compare_operands(pack, s, match_map, run_addr,
+			ret = compare_operands(pack, sect, match_map, run_addr,
 					       run, pre, &run_ud, &pre_ud, i,
 					       mode);
 			if (ret != OK)
@@ -293,7 +293,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			pre += prec;
 		}
 
-		if ((unsigned long)pre - pre_addr >= s->size)
+		if ((unsigned long)pre - pre_addr >= sect->size)
 			continue;
 
 		if (match_map[(unsigned long)pre - pre_addr] ==
@@ -333,7 +333,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				- run_addr);
 
 		/* Create a safety_record for the block just matched */
-		ret = create_safety_record(pack, s, safety_records,
+		ret = create_safety_record(pack, sect, safety_records,
 					   run_start,
 					   (unsigned long)run - run_start);
 		if (ret != OK)
@@ -357,7 +357,7 @@ out:
 }
 
 static abort_t compare_operands(struct ksplice_pack *pack,
-				const struct ksplice_size *s,
+				const struct ksplice_section *sect,
 				unsigned long *match_map,
 				unsigned long run_addr,
 				const unsigned char *run,
@@ -367,7 +367,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 {
 	abort_t ret;
 	int i;
-	unsigned long pre_addr = s->thismod_addr;
+	unsigned long pre_addr = sect->thismod_addr;
 	struct ud_operand *run_op = &run_ud->operand[opnum];
 	struct ud_operand *pre_op = &pre_ud->operand[opnum];
 	uint8_t run_off = ud_prefix_len(run_ud);
@@ -445,7 +445,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 			/* Paravirt-inserted pcrel jump; OK! */
 			return OK;
 		} else if (pre_target >= pre_addr &&
-			   pre_target < pre_addr + s->size) {
+			   pre_target < pre_addr + sect->size) {
 			/* Jump within the current function.
 			   Check it's to a corresponding place */
 			if (mode == RUN_PRE_DEBUG)
@@ -469,9 +469,10 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 				ksdebug(pack, "<--Different operands!\n");
 				ksdebug(pack, "%lx %lx %lx %lx %x %lx %lx "
 					"%lx\n", pre_addr, pre_target,
-					pre_addr + s->size, (unsigned long)pre,
-					ud_insn_len(pre_ud), s->size,
-					jump_lval(pre_op), run_target);
+					pre_addr + sect->size,
+					(unsigned long)pre, ud_insn_len(pre_ud),
+					sect->size, jump_lval(pre_op),
+					run_target);
 			}
 			return NO_MATCH;
 		}

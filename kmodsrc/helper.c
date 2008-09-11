@@ -23,7 +23,7 @@
 #endif
 
 extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
-extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
+extern const struct ksplice_section ksplice_sections[], ksplice_sections_end[];
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 #endif
@@ -40,8 +40,8 @@ static int init_helper(void)
 {
 	pack.helper_relocs = ksplice_relocs;
 	pack.helper_relocs_end = ksplice_relocs_end;
-	pack.helper_sizes = ksplice_sizes;
-	pack.helper_sizes_end = ksplice_sizes_end;
+	pack.helper_sections = ksplice_sections;
+	pack.helper_sections_end = ksplice_sections_end;
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	pack.helper_parainstructions = parainstructions;
 	pack.helper_parainstructions_end = parainstructions_end;

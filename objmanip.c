@@ -32,7 +32,7 @@
  *
  * This mode prepares the object file to be used for run-pre matching.  This
  * involves replacing all ELF relocations with ksplice relocations and
- * writing ksplice_size structures for each ELF text or data section.
+ * writing ksplice_section structures for each ELF text or data section.
  *
  * - rmsyms mode: "objmanip <in.o> <out.o> rmsyms
  *
@@ -84,7 +84,7 @@ DEFINE_HASH_TYPE(bool, bool_hash, bool_hash_init, bool_hash_free,
 void rm_some_relocs(struct supersect *ss);
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
-void write_ksplice_size(struct superbfd *sbfd, asymbol **symp);
+void write_ksplice_section(struct superbfd *sbfd, asymbol **symp);
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label);
 void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
@@ -262,7 +262,7 @@ int main(int argc, char *argv[])
 				continue;
 			if ((sym->flags & BSF_FUNCTION) != 0 ||
 			    needed_data_section(isbfd, sect))
-				write_ksplice_size(isbfd, symp);
+				write_ksplice_section(isbfd, symp);
 		}
 	}
 
@@ -606,26 +606,26 @@ void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto)
 	bfd_put(bits, ss->parent->abfd, x, address);
 }
 
-void write_ksplice_size(struct superbfd *sbfd, asymbol **symp)
+void write_ksplice_section(struct superbfd *sbfd, asymbol **symp)
 {
 	asymbol *sym = *symp;
-	struct supersect *ksize_ss = make_section(sbfd, ".ksplice_sizes");
-	struct ksplice_size *ksize = sect_grow(ksize_ss, 1,
-					       struct ksplice_size);
+	struct supersect *ksect_ss = make_section(sbfd, ".ksplice_sections");
+	struct ksplice_section *ksect = sect_grow(ksect_ss, 1,
+						  struct ksplice_section);
 
-	write_ksplice_symbol(ksize_ss, &ksize->symbol, sym,
+	write_ksplice_symbol(ksect_ss, &ksect->symbol, sym,
 			     mode("keep-primary") ? "(post)" : "");
-	ksize->size = bfd_get_section_size(sym->section);
-	ksize->flags = 0;
+	ksect->size = bfd_get_section_size(sym->section);
+	ksect->flags = 0;
 	if (starts_with(sym->section->name, ".rodata"))
-		ksize->flags |= KSPLICE_SIZE_RODATA;
+		ksect->flags |= KSPLICE_SECTION_RODATA;
 	if (starts_with(sym->section->name, ".data"))
-		ksize->flags |= KSPLICE_SIZE_DATA;
+		ksect->flags |= KSPLICE_SECTION_DATA;
 	if (starts_with(sym->section->name, ".text") ||
 	    starts_with(sym->section->name, ".exit.text"))
-		ksize->flags |= KSPLICE_SIZE_TEXT;
-	assert(ksize->flags != 0);
-	write_reloc(ksize_ss, &ksize->thismod_addr, symp, 0);
+		ksect->flags |= KSPLICE_SECTION_TEXT;
+	assert(ksect->flags != 0);
+	write_reloc(ksect_ss, &ksect->thismod_addr, symp, 0);
 }
 
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
