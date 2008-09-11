@@ -394,6 +394,15 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long sym_addr);
+
+struct accumulate_struct {
+	const char *desired_name;
+	struct list_head *vals;
+};
+
+static abort_t lookup_symbol(struct ksplice_pack *pack,
+			     const struct ksplice_symbol *ksym,
+			     struct list_head *vals);
 #ifdef KSPLICE_STANDALONE
 static abort_t
 add_system_map_candidates(struct ksplice_pack *pack,
@@ -401,15 +410,6 @@ add_system_map_candidates(struct ksplice_pack *pack,
 			  const struct ksplice_system_map *end,
 			  const char *label, struct list_head *vals);
 #endif /* KSPLICE_STANDALONE */
-static abort_t compute_address(struct ksplice_pack *pack,
-			       const struct ksplice_symbol *ksym,
-			       struct list_head *vals);
-
-struct accumulate_struct {
-	const char *desired_name;
-	struct list_head *vals;
-};
-
 #ifdef CONFIG_KALLSYMS
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val);
@@ -1547,7 +1547,7 @@ static abort_t search_for_match(struct ksplice_pack *pack,
 		return ret;
 	}
 #endif /* KSPLICE_STANDALONE */
-	ret = compute_address(pack, sect->symbol, &vals);
+	ret = lookup_symbol(pack, sect->symbol, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
 		return ret;
@@ -2029,7 +2029,7 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 		}
 	}
 #endif /* KSPLICE_STANDALONE */
-	ret = compute_address(pack, r->symbol, &vals);
+	ret = lookup_symbol(pack, r->symbol, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
 		return ret;
@@ -2212,9 +2212,13 @@ static int use_module(struct module *a, struct module *b)
 #endif /* CONFIG_MODULE_UNLOAD */
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-static abort_t compute_address(struct ksplice_pack *pack,
-			       const struct ksplice_symbol *ksym,
-			       struct list_head *vals)
+/* If we've already found the symbol's address through run-pre matching,
+   add it to the vals list and return.  Otherwise, populate the vals list
+   with all the values obtained by looking up the symbol in kallsyms, the
+   exported symbol table, and similar sources of symbol address information. */
+static abort_t lookup_symbol(struct ksplice_pack *pack,
+			     const struct ksplice_symbol *ksym,
+			     struct list_head *vals)
 {
 	abort_t ret;
 	struct reloc_nameval *nv;
