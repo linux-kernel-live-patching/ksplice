@@ -146,23 +146,21 @@ void show_ksplice_patches(struct supersect *kpatch_ss)
 	printf("\n");
 }
 
-void show_ksplice_export(struct supersect *ss,
-			 const struct ksplice_export *export)
+void show_ksplice_export(struct supersect *ss, const struct ksplice_export *exp)
 {
 	printf("name: %s\n"
 	       "newname: %s\n"
 	       "\n",
-	       read_string(ss, &export->name),
-	       read_string(ss, &export->new_name));
+	       read_string(ss, &exp->name), read_string(ss, &exp->new_name));
 }
 
 void show_ksplice_exports(struct supersect *export_ss)
 {
 	printf("KSPLICE EXPORTS:\n\n");
-	const struct ksplice_export *export;
-	for (export = export_ss->contents.data; (void *)export <
-	     export_ss->contents.data + export_ss->contents.size; export++)
-		show_ksplice_export(export_ss, export);
+	const struct ksplice_export *exp;
+	for (exp = export_ss->contents.data; (void *)exp <
+	     export_ss->contents.data + export_ss->contents.size; exp++)
+		show_ksplice_export(export_ss, exp);
 	printf("\n");
 }
 

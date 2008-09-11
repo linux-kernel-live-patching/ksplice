@@ -797,22 +797,22 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 
 static abort_t finalize_exports(struct ksplice_pack *pack)
 {
-	struct ksplice_export *export;
+	struct ksplice_export *exp;
 	struct module *m;
 	const struct kernel_symbol *sym;
 
-	for (export = pack->exports; export < pack->exports_end; export++) {
-		sym = find_symbol(export->name, &m, NULL, true, false);
+	for (exp = pack->exports; exp < pack->exports_end; exp++) {
+		sym = find_symbol(exp->name, &m, NULL, true, false);
 		if (sym == NULL) {
 			ksdebug(pack, "Could not find kernel_symbol struct for "
-				"%s\n", export->name);
+				"%s\n", exp->name);
 			return MISSING_EXPORT;
 		}
 
 		/* Cast away const since we are planning to mutate the
 		 * kernel_symbol structure. */
-		export->sym = (struct kernel_symbol *)sym;
-		export->saved_name = export->sym->name;
+		exp->sym = (struct kernel_symbol *)sym;
+		exp->saved_name = exp->sym->name;
 		if (m != pack->primary && use_module(pack->primary, m) != 1) {
 			ksdebug(pack, "Aborted.  Could not add dependency on "
 				"symbol %s from module %s.\n", sym->name,
@@ -979,7 +979,7 @@ static int __apply_patches(void *updateptr)
 	struct update *update = updateptr;
 	struct ksplice_pack *pack;
 	struct ksplice_patch *p;
-	struct ksplice_export *export;
+	struct ksplice_export *exp;
 	abort_t ret;
 
 	if (update->stage == STAGE_APPLIED)
@@ -1010,9 +1010,8 @@ static int __apply_patches(void *updateptr)
 		list_add(&pack->module_list_entry.list, &ksplice_module_list);
 
 	list_for_each_entry(pack, &update->packs, list) {
-		for (export = pack->exports; export < pack->exports_end;
-		     export++)
-			export->sym->name = export->new_name;
+		for (exp = pack->exports; exp < pack->exports_end; exp++)
+			exp->sym->name = exp->new_name;
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
@@ -1027,7 +1026,7 @@ static int __reverse_patches(void *updateptr)
 	struct update *update = updateptr;
 	struct ksplice_pack *pack;
 	const struct ksplice_patch *p;
-	struct ksplice_export *export;
+	struct ksplice_export *exp;
 	abort_t ret;
 
 	if (update->stage != STAGE_APPLIED)
@@ -1054,9 +1053,8 @@ static int __reverse_patches(void *updateptr)
 		list_del(&pack->module_list_entry.list);
 
 	list_for_each_entry(pack, &update->packs, list) {
-		for (export = pack->exports; export < pack->exports_end;
-		     export++)
-			export->sym->name = export->saved_name;
+		for (exp = pack->exports; exp < pack->exports_end; exp++)
+			exp->sym->name = exp->saved_name;
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {

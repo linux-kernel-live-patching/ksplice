@@ -655,17 +655,17 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 			  const char *export_type, bool del)
 {
 	struct supersect *export_ss = make_section(sbfd, ".ksplice_exports");
-	struct ksplice_export *export = sect_grow(export_ss, 1,
-						  struct ksplice_export);
+	struct ksplice_export *exp = sect_grow(export_ss, 1,
+					       struct ksplice_export);
 
 	if (del) {
-		write_string(export_ss, &export->name, "%s", symname);
-		write_string(export_ss, &export->new_name,
-			     "DISABLED_%s_%s", symname, kid);
-	} else {
-		write_string(export_ss, &export->new_name, "%s", symname);
-		write_string(export_ss, &export->name, "DISABLED_%s_%s",
+		write_string(export_ss, &exp->name, "%s", symname);
+		write_string(export_ss, &exp->new_name, "DISABLED_%s_%s",
 			     symname, kid);
+	} else {
+		write_string(export_ss, &exp->new_name, "%s", symname);
+		write_string(export_ss, &exp->name, "DISABLED_%s_%s", symname,
+			     kid);
 	}
 }
 
