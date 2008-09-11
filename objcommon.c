@@ -199,7 +199,7 @@ bfd_vma addr_offset(struct supersect *ss, const void *addr)
 	return (void *)addr - ss->contents.data;
 }
 
-bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc)
+bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, bool adjust_pc)
 {
 	int size = bfd_get_reloc_size(reloc->howto);
 
@@ -248,7 +248,7 @@ bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
 				fprintf(stderr, "warning: unexpected "
 					"non-absolute relocation at %s+%lx\n",
 					ss->name, (unsigned long)address);
-			return get_reloc_offset(ss, reloc, 0);
+			return get_reloc_offset(ss, reloc, false);
 		}
 	}
 	if (symp != NULL)
@@ -307,7 +307,7 @@ void search_for_caller(bfd *abfd, asection *sect, void *searchptr)
 	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 		asymbol *rsym = *(*relocp)->sym_ptr_ptr;
 		if (rsym->section == search->sym->section &&
-		    rsym->value + get_reloc_offset(ss, *relocp, 1) ==
+		    rsym->value + get_reloc_offset(ss, *relocp, true) ==
 		    search->sym->value) {
 			if (search->calling_section != sect)
 				search->count++;
@@ -515,7 +515,7 @@ void read_label_map(struct superbfd *sbfd)
 	}
 }
 
-int is_special(asection *sect)
+bool is_special(asection *sect)
 {
 	static const char *static_want[] = {
 		".altinstructions",
@@ -530,13 +530,13 @@ int is_special(asection *sect)
 	int i;
 	for (i = 0; static_want[i] != NULL; i++) {
 		if (strcmp(sect->name, static_want[i]) == 0)
-			return 1;
+			return true;
 	}
 
 	if (starts_with(sect->name, "__ksymtab"))
-		return 1;
+		return true;
 	if (starts_with(sect->name, "__kcrctab"))
-		return 1;
-	return 0;
+		return true;
+	return false;
 }
 

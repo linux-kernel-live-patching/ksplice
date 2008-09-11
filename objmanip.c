@@ -100,17 +100,17 @@ void mark_symbols_used_in_relocations(bfd *abfd, asection *isection,
 static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
 void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms);
-static int deleted_table_section_symbol(bfd *abfd, asymbol *sym);
+static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym);
 void read_str_set(struct str_vec *strs);
-int str_in_set(const char *str, const struct str_vec *strs);
-int want_section(asection *sect);
-const struct table_section *is_table_section(asection *sect);
+bool str_in_set(const char *str, const struct str_vec *strs);
+bool want_section(asection *sect);
+bool is_table_section(asection *sect);
 struct supersect *make_section(struct superbfd *sbfd, const char *name);
 void __attribute__((format(printf, 3, 4)))
 write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
 void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed);
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
-			  const char *export_type, int del);
+			  const char *export_type, bool del);
 void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		 bfd_vma offset);
 arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
@@ -158,18 +158,18 @@ void load_system_map()
 	fclose(fp);
 }
 
-int needed_data_section(struct superbfd *sbfd, asection *isection)
+bool needed_data_section(struct superbfd *sbfd, asection *isection)
 {
 	struct supersect *ss = fetch_supersect(sbfd, isection);
 	if (starts_with(isection->name, ".rodata"))
-		return 1;
+		return true;
 	if (starts_with(isection->name, ".data")) {
 		/* Ignore .data.percpu sections */
 		if (starts_with(isection->name, ".data.percpu"))
-			return 0;
+			return false;
 		return ss->relocs.size != 0;
 	}
-	return 0;
+	return false;
 }
 
 int main(int argc, char *argv[])
@@ -288,7 +288,7 @@ int main(int argc, char *argv[])
 				     symname < ed->names.data + ed->names.size;
 				     symname++)
 					write_ksplice_export(isbfd, *symname,
-							     export_type, 1);
+							     export_type, true);
 			} else {
 				rm_some_exports(isbfd, ed);
 			}
@@ -355,7 +355,7 @@ void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed)
 		struct kernel_symbol *ksym = sect_grow(ss, 1, typeof(*ksym));
 		sect_copy(ss, &ksym->value, &orig_ss, &orig_ksym->value, 1);
 		/* Replace name with a mangled name */
-		write_ksplice_export(ss->parent, sym->name, export_type, 0);
+		write_ksplice_export(ss->parent, sym->name, export_type, false);
 		write_string(ss, (const char **)&ksym->name,
 			     "DISABLED_%s_%s", sym->name, kid);
 
@@ -374,23 +374,23 @@ void rm_some_relocs(struct supersect *ss)
 	arelent **relocp;
 	for (relocp = orig_relocs.data;
 	     relocp < orig_relocs.data + orig_relocs.size; relocp++) {
-		int rm_reloc = 0;
+		bool rm_reloc = false;
 		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
 
 		if (mode("rmsyms") && str_in_set(sym_ptr->name, &rmsyms))
-			rm_reloc = 1;
+			rm_reloc = true;
 
 		if (mode("keep"))
-			rm_reloc = 1;
+			rm_reloc = true;
 
 		if (mode("keep-primary") && want_section(sym_ptr->section) &&
 		    (str_in_set(sym_ptr->section->name, &newsects) ||
 		     bfd_is_const_section(sym_ptr->section) ||
 		     starts_with(sym_ptr->section->name, ".rodata.str")))
-			rm_reloc = 0;
+			rm_reloc = false;
 
 		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
-			rm_reloc = 1;
+			rm_reloc = true;
 
 		if (rm_reloc)
 			write_ksplice_reloc(ss, *relocp);
@@ -570,7 +570,7 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 
 	reloc_howto_type *howto = orig_reloc->howto;
 
-	bfd_vma addend = get_reloc_offset(ss, orig_reloc, 0);
+	bfd_vma addend = get_reloc_offset(ss, orig_reloc, false);
 	blot_section(ss, orig_reloc->address, howto);
 
 	struct supersect *kreloc_ss = make_section(ss->parent,
@@ -652,7 +652,7 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label)
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
-			  const char *export_type, int del)
+			  const char *export_type, bool del)
 {
 	struct supersect *export_ss = make_section(sbfd, ".ksplice_exports");
 	struct ksplice_export *export = sect_grow(export_ss, 1,
@@ -744,7 +744,7 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 		asymbol *sym = *(*relocp)->sym_ptr_ptr;
 		if (sym->section == (asection *)looking_for &&
 		    (!starts_with(sym->section->name, ".text") ||
-		     get_reloc_offset(ss, *relocp, 1) != 0)) {
+		     get_reloc_offset(ss, *relocp, true) != 0)) {
 			struct wsect *w = malloc(sizeof(*w));
 			w->sect = looking_for;
 			w->next = wanted_sections;
@@ -932,13 +932,13 @@ void ss_mark_symbols_used_in_relocations(struct supersect *ss)
 	}
 }
 
-static int deleted_table_section_symbol(bfd *abfd, asymbol *sym)
+static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym)
 {
 	struct superbfd *sbfd = fetch_superbfd(abfd);
 	struct supersect *ss = fetch_supersect(sbfd, sym->section);
 
 	if (bfd_is_const_section(sym->section))
-		return 0;
+		return false;
 
 	asymbol **symp;
 	for (symp = ss->syms.data; symp < ss->syms.data + ss->syms.size; symp++) {
@@ -961,7 +961,7 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 	for (symp = isyms->data; symp < isyms->data + isyms->size; symp++) {
 		asymbol *sym = *symp;
 
-		int keep;
+		bool keep;
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
 		    !(mode("keep-primary") &&
@@ -975,31 +975,31 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    || ((sym->flags & BSF_SECTION_SYM) != 0
 			&& ((*(sym->section)->symbol_ptr_ptr)->flags
 			    & BSF_KEEP) != 0))
-			keep = 1;
+			keep = true;
 		else if ((sym->flags & (BSF_GLOBAL | BSF_WEAK)) != 0)
-			keep = 1;
+			keep = true;
 		else if (bfd_decode_symclass(sym) == 'I')
 			/* Global symbols in $idata sections need to be retained.
 			   External users of the  library containing the $idata
 			   section may reference these symbols.  */
-			keep = 1;
+			keep = true;
 		else if ((sym->flags & BSF_GLOBAL) != 0
 			 || (sym->flags & BSF_WEAK) != 0
 			 || bfd_is_com_section(sym->section))
-			keep = 1;
+			keep = true;
 		else if ((sym->flags & BSF_DEBUGGING) != 0)
-			keep = 1;
+			keep = true;
 		else
 			keep = !bfd_is_local_label(ibfd, sym);
 
 		if (!want_section(sym->section))
-			keep = 0;
+			keep = false;
 
-		if (deleted_table_section_symbol(ibfd, sym) == 1)
-			keep = 0;
+		if (deleted_table_section_symbol(ibfd, sym))
+			keep = false;
 
 		if (mode("rmsyms") && str_in_set(sym->name, &rmsyms))
-			keep = 0;
+			keep = false;
 
 		if (keep)
 			*vec_grow(osyms, 1) = sym;
@@ -1022,58 +1022,58 @@ void read_str_set(struct str_vec *strs)
 	}
 }
 
-int str_in_set(const char *str, const struct str_vec *strs)
+bool str_in_set(const char *str, const struct str_vec *strs)
 {
 	const char **strp;
 	for (strp = strs->data; strp < strs->data + strs->size; strp++) {
 		if (strcmp(str, *strp) == 0)
-			return 1;
+			return true;
 	}
-	return 0;
+	return false;
 }
 
-int want_section(asection *sect)
+bool want_section(asection *sect)
 {
 	if (!mode("keep"))
-		return 1;
+		return true;
 
 	if (mode("keep-primary") && bfd_is_abs_section(sect))
-		return 1;
+		return true;
 	const struct wsect *w = wanted_sections;
 	for (; w != NULL; w = w->next) {
 		if (w->sect == sect)
-			return 1;
+			return true;
 	}
 
 	if (starts_with(sect->name, ".ksplice"))
-		return 1;
+		return true;
 	if (mode("keep-helper") && starts_with(sect->name, ".text"))
-		return 1;
+		return true;
 	if (mode("keep-helper") && starts_with(sect->name, ".exit.text")
 	    && bfd_get_section_by_name(sect->owner, ".exitcall.exit") == NULL)
-		return 1;
+		return true;
 	if (mode("keep-primary") && str_in_set(sect->name, &sections))
-		return 1;
+		return true;
 	if (mode("keep-primary") && str_in_set(sect->name, &newsects))
-		return 1;
+		return true;
 
 	if (mode("keep-helper") && starts_with(sect->name, "__ksymtab"))
-		return 0;
+		return false;
 	if (mode("keep-helper") && starts_with(sect->name, "__kcrctab"))
-		return 0;
+		return false;
 
 	if (is_special(sect))
-		return 1;
+		return true;
 
-	return 0;
+	return false;
 }
 
-const struct table_section *is_table_section(asection *sect)
+bool is_table_section(asection *sect)
 {
 	const struct table_section *ss;
 	for (ss = table_sections; ss != end_table_sections; ss++) {
 		if (strcmp(ss->sectname, sect->name) == 0)
-			return ss;
+			return true;
 	}
-	return NULL;
+	return false;
 }

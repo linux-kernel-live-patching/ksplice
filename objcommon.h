@@ -201,7 +201,7 @@ void sect_do_copy(struct supersect *dest_ss, void *dest,
 	 strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0)
 
 bfd_vma addr_offset(struct supersect *ss, const void *addr);
-bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, int adjust_pc);
+bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, bool adjust_pc);
 bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
 		   asymbol **symp);
 const void *read_pointer(struct supersect *ss, void *const *addr,
@@ -217,4 +217,4 @@ asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
 const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
 void read_label_map(struct superbfd *sbfd);
 
-int is_special(asection *sect);
+bool is_special(asection *sect);

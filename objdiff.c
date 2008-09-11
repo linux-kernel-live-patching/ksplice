@@ -56,8 +56,8 @@ void print_newbfd_symbol_label(struct superbfd *sbfd, asection *sect);
 struct export_vec *get_export_syms(struct superbfd *sbfd);
 void compare_exported_symbols(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd, char *addstr);
-int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
-	      struct superbfd *newsbfd, asection *newp);
+bool relocs_equal(struct superbfd *oldsbfd, asection *oldp,
+		  struct superbfd *newsbfd, asection *newp);
 static void print_section_symbol_renames(struct superbfd *oldsbfd,
 					 struct superbfd *newsbfd);
 
@@ -128,23 +128,22 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 		return;
 	old_exports = get_export_syms(oldsbfd);
 	struct export *old, *new;
-	int found;
 	asection *last_sect = NULL;
 	for (new = new_exports->data; new < new_exports->data +
 	     new_exports->size; new++) {
-		found = 0;
+		bool found = false;
 		if (old_exports != NULL) {
 			for (old = old_exports->data; old < old_exports->data +
 			     old_exports->size; old++) {
 				if (strcmp(new->name, old->name) == 0 &&
 				    strcmp(new->sect->name, old->sect->name)
 				    == 0) {
-					found = 1;
+					found = true;
 					break;
 				}
 			}
 		}
-		if (found == 0) {
+		if (!found) {
 			if (last_sect != new->sect) {
 				last_sect = new->sect;
 				printf("\n%s%s", addstr, new->sect->name);
@@ -202,7 +201,7 @@ void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 		if (new_ss->contents.size == old_ss->contents.size &&
 		    memcmp(new_ss->contents.data, old_ss->contents.data,
 			   new_ss->contents.size) == 0 &&
-		    reloc_cmp(oldsbfd, oldp, newsbfd, newp) == 0)
+		    relocs_equal(oldsbfd, oldp, newsbfd, newp))
 			continue;
 		s_fn(newsbfd, newp);
 	}
@@ -233,13 +232,13 @@ static void print_section_symbol_renames(struct superbfd *oldsbfd,
 }
 
 /*
- * reloc_cmp checks to see whether the old section and the new section
+ * relocs_equal checks to see whether the old section and the new section
  * reference different read-only data in their relocations -- if a hard-coded
- * string has been changed between the old file and the new file, reloc_cmp
+ * string has been changed between the old file and the new file, relocs_equal
  * will detect the difference.
  */
-int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
-	      struct superbfd *newsbfd, asection *newp)
+bool relocs_equal(struct superbfd *oldsbfd, asection *oldp,
+		  struct superbfd *newsbfd, asection *newp)
 {
 	int i;
 	struct supersect *old_ss, *new_ss;
@@ -248,7 +247,7 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 	new_ss = fetch_supersect(newsbfd, newp);
 
 	if (old_ss->relocs.size != new_ss->relocs.size)
-		return -1;
+		return false;
 
 	for (i = 0; i < old_ss->relocs.size; i++) {
 		struct supersect *ro_old_ss, *ro_new_ss;
@@ -260,12 +259,12 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 		ro_new_ss = fetch_supersect(newsbfd, new_sym->section);
 
 		bfd_vma old_offset =
-		    get_reloc_offset(old_ss, old_ss->relocs.data[i], 1);
+		    get_reloc_offset(old_ss, old_ss->relocs.data[i], true);
 		bfd_vma new_offset =
-		    get_reloc_offset(new_ss, new_ss->relocs.data[i], 1);
+		    get_reloc_offset(new_ss, new_ss->relocs.data[i], true);
 
 		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
-			return -1;
+			return false;
 
 		if (!starts_with(ro_old_ss->name, ".rodata")) {
 			/* for non-rodata, we just compare that the two
@@ -273,7 +272,7 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 			   section. */
 			if (old_sym->value + old_offset !=
 			    new_sym->value + new_offset)
-				return -1;
+				return false;
 			continue;
 		}
 
@@ -287,19 +286,19 @@ int reloc_cmp(struct superbfd *oldsbfd, asection *oldp,
 			     old_offset,
 			     ro_new_ss->contents.data + new_sym->value +
 			     new_offset) != 0)
-				return -1;
+				return false;
 			continue;
 		}
 
 		if (ro_old_ss->contents.size != ro_new_ss->contents.size)
-			return -1;
+			return false;
 
 		if (memcmp(ro_old_ss->contents.data, ro_new_ss->contents.data,
 			   ro_old_ss->contents.size) != 0)
-			return -1;
+			return false;
 	}
 
-	return 0;
+	return true;
 }
 
 void print_newbfd_section_name(struct superbfd *sbfd, asection *sect)
