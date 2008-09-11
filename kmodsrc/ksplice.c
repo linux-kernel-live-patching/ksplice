@@ -1507,7 +1507,7 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 				ksdebug(pack, "run-pre: could not match "
 					"section %s\n", sect->symbol->label);
 		}
-		ksdebug(pack, "Aborted.  run-pre: could not match some"
+		ksdebug(pack, "Aborted.  run-pre: could not match some "
 			"sections.\n");
 		kfree(finished);
 		return NO_MATCH;
