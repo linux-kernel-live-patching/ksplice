@@ -348,7 +348,6 @@ extern const unsigned long __start___kcrctab_gpl_future[];
 
 #endif /* KSPLICE_STANDALONE */
 
-/* Initializing new updates */
 static struct update *init_ksplice_update(const char *kid);
 static void cleanup_ksplice_update(struct update *update);
 static void add_to_update(struct ksplice_pack *pack, struct update *update);
@@ -390,7 +389,7 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 			   struct list_head *safety_records,
 			   enum run_pre_mode mode);
 #ifndef CONFIG_FUNCTION_DATA_SECTIONS
-/* defined in $ARCH/ksplice-arch.c */
+/* defined in arch/ARCH/kernel/ksplice-arch.c */
 static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
 				unsigned long run_addr,
@@ -515,7 +514,7 @@ static const struct kernel_symbol *find_symbol(const char *name,
 static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-/* Architecture-specific functions defined in ARCH/ksplice-arch.c */
+/* Architecture-specific functions defined in arch/ARCH/kernel/ksplice-arch.c */
 static abort_t prepare_trampoline(struct ksplice_trampoline *t);
 static unsigned long trampoline_target(unsigned long addr);
 static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
@@ -728,7 +727,6 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 	struct safety_record *rec;
 	abort_t ret;
 
-	/* Check every patch has a safety_record */
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		struct reloc_nameval *nv = find_nameval(pack, p->label);
 		bool found = false;
@@ -1024,7 +1022,6 @@ static int __reverse_patches(void *updateptr)
 		return (__force int)OK;
 
 #ifdef CONFIG_MODULE_UNLOAD
-	/* primary's refcount isn't changed by accessing ksplice.ko's sysfs */
 	list_for_each_entry(pack, &update->packs, list) {
 		if (module_refcount(pack->primary) != 1)
 			return (__force int)MODULE_BUSY;
@@ -1447,6 +1444,13 @@ static abort_t activate_pack(struct ksplice_pack *pack)
 	ksdebug(pack, "Preparing and checking %s\n", pack->name);
 	ret = match_pack_sections(pack, false);
 	if (ret == NO_MATCH) {
+		/* It is possible that by using relocations from .data sections
+		   we can successfully run-pre match the rest of the sections.
+		   To avoid using any symbols obtained from .data sections
+		   (which may be unreliable) in the post code, we first prepare
+		   the post code and then try to run-pre match the remaining
+		   sections with the help of .data sections.
+		 */
 		ksdebug(pack, "Continuing without some sections; we might "
 			"find them later.\n");
 		ret = finalize_pack(pack);
@@ -2200,10 +2204,6 @@ static int use_module(struct module *a, struct module *b)
 #endif /* CONFIG_MODULE_UNLOAD */
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-/* If we've already found the symbol's address through run-pre matching,
-   add it to the vals list and return.  Otherwise, populate the vals list
-   with all the values obtained by looking up the symbol in kallsyms, the
-   exported symbol table, and similar sources of symbol address information. */
 static abort_t lookup_symbol(struct ksplice_pack *pack,
 			     const struct ksplice_symbol *ksym,
 			     struct list_head *vals)
@@ -2464,7 +2464,7 @@ static const struct kernel_symbol *find_symbol(const char *name,
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-/* Does a patch b? */
+/* Does module a patch module b? */
 static bool patches_module(const struct module *a, const struct module *b)
 {
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
