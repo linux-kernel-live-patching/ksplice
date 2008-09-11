@@ -77,6 +77,10 @@ struct export_desc {
 };
 DECLARE_VEC_TYPE(struct export_desc, export_desc_vec);
 
+#define bool_init(b) *(b) = false
+DEFINE_HASH_TYPE(bool, bool_hash, bool_hash_init, bool_hash_free,
+		 bool_hash_lookup, bool_init);
+
 void rm_some_relocs(struct supersect *ss);
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
@@ -134,6 +138,8 @@ DEFINE_HASH_TYPE(struct addr_vec, addr_vec_hash,
 		 vec_init);
 struct addr_vec_hash system_map;
 
+struct bool_hash system_map_written;
+
 void load_system_map()
 {
 	const char *config_dir = getenv("KSPLICE_CONFIG_DIR");
@@ -180,6 +186,8 @@ int main(int argc, char *argv[])
 	assert(obfd);
 
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
+
+	bool_hash_init(&system_map_written);
 
 	modestr = argv[3];
 	if (mode("keep-primary"))
@@ -509,14 +517,19 @@ void write_ksplice_system_map(struct superbfd *sbfd, asymbol *sym,
 			      const char *addstr_sect)
 {
 	struct supersect *smap_ss = make_section(sbfd, ".ksplice_system_map");
+	struct ksplice_system_map *smap;
+	const char *label = label_lookup(sbfd, sym);
 
-	struct ksplice_system_map *smap = sect_grow(smap_ss, 1,
-						    struct ksplice_system_map);
+	bool *done = bool_hash_lookup(&system_map_written, label, TRUE);
+	if (*done)
+		return;
+	*done = true;
+
+	smap = sect_grow(smap_ss, 1, struct ksplice_system_map);
 
 	write_system_map_array(sbfd, smap_ss, &smap->candidates,
 			       &smap->nr_candidates, sym);
-	write_string(smap_ss, &smap->label, "%s%s",
-		     label_lookup(sbfd, sym), addstr_sect);
+	write_string(smap_ss, &smap->label, "%s%s", label, addstr_sect);
 }
 
 void write_ksplice_symbol(struct supersect *ss,
