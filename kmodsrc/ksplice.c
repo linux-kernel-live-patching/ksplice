@@ -657,10 +657,12 @@ static ssize_t conflict_show(struct update *update, char *buf)
 
 static ssize_t stage_store(struct update *update, const char *buf, size_t len)
 {
-	if (strncmp(buf, "applied\n", len) == 0 &&
+	if ((strncmp(buf, "applied", len) == 0 ||
+	     strncmp(buf, "applied\n", len) == 0) &&
 	    update->stage == STAGE_PREPARING)
 		update->abort_cause = apply_update(update);
-	else if (strncmp(buf, "reversed\n", len) == 0 &&
+	else if ((strncmp(buf, "reversed", len) == 0 ||
+		  strncmp(buf, "reversed\n", len) == 0) &&
 		 update->stage == STAGE_APPLIED)
 		update->abort_cause = reverse_patches(update);
 	return len;
