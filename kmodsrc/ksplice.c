@@ -508,8 +508,8 @@ static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* helper */
-static abort_t activate_helper(struct ksplice_pack *pack,
-			       bool consider_data_sections);
+static abort_t match_pack_sections(struct ksplice_pack *pack,
+				   bool consider_data_sections);
 static abort_t find_section(struct ksplice_pack *pack,
 			    const struct ksplice_section *sect);
 static abort_t try_addr(struct ksplice_pack *pack,
@@ -1442,7 +1442,7 @@ static abort_t activate_pack(struct ksplice_pack *pack)
 	abort_t ret;
 
 	ksdebug(pack, "Preparing and checking %s\n", pack->name);
-	ret = activate_helper(pack, false);
+	ret = match_pack_sections(pack, false);
 	if (ret == NO_MATCH) {
 		ksdebug(pack, "Continuing without some sections; we might "
 			"find them later.\n");
@@ -1455,7 +1455,7 @@ static abort_t activate_pack(struct ksplice_pack *pack)
 
 		ksdebug(pack, "run-pre: Considering .data sections to find the "
 			"unmatched sections\n");
-		ret = activate_helper(pack, true);
+		ret = match_pack_sections(pack, true);
 		if (ret != OK)
 			return ret;
 
@@ -1469,8 +1469,8 @@ static abort_t activate_pack(struct ksplice_pack *pack)
 	return finalize_pack(pack);
 }
 
-static abort_t activate_helper(struct ksplice_pack *pack,
-			       bool consider_data_sections)
+static abort_t match_pack_sections(struct ksplice_pack *pack,
+				   bool consider_data_sections)
 {
 	const struct ksplice_section *sect;
 	abort_t ret;
