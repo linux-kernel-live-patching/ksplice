@@ -119,12 +119,12 @@ my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : 
 my @make_ksplice = ("make", "-f", "$datadir/Makefile.ksplice", "-rR", @jlevel, @kbuild_flags);
 
 sub revert_orig() {
-	for(split(/\0/, runstr(qw(find -name *.KSPLICE*pre* -print0)))) {
+	for(split(/\0/, runstr(qw(find -name *.KSPLICE* -print0)))) {
 		if(my ($file) = m/^(.*)\.KSPLICE_pre$/) {
 			rename($_, $file);
 			runval("$datadir/ksplice-obj.pl", "snap", "$file.KSPLICE") if(-e "$file.KSPLICE");
-		} elsif(m/\.KSPLICE.*\.pre/) {
-			unlink($_);
+		} elsif(m/\.KSPLICE_(?:primary|helper)$/) {
+			unlink($_) if(-e $_);
 		}
 	}
 }
