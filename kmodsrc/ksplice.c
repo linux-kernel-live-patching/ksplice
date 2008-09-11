@@ -55,12 +55,6 @@
 #define true 1
 #endif /* LINUX_VERSION_CODE */
 
-#if BITS_PER_LONG == 32
-#define ADDR "08lx"
-#elif BITS_PER_LONG == 64
-#define ADDR "016lx"
-#endif /* BITS_PER_LONG */
-
 enum stage {
 	STAGE_PREPARING, STAGE_APPLIED, STAGE_REVERSED
 };
@@ -1223,7 +1217,7 @@ static void print_conflicts(struct update *update)
 		_ksdebug(update, "stack check: pid %d (%s):", conf->pid,
 			 conf->process_name);
 		list_for_each_entry(ca, &conf->stack, list) {
-			_ksdebug(update, " %" ADDR, ca->addr);
+			_ksdebug(update, " %lx", ca->addr);
 			if (ca->has_conflict)
 				_ksdebug(update, " [<-CONFLICT]");
 		}
@@ -1772,10 +1766,9 @@ static abort_t try_addr(struct ksplice_pack *pack,
 	else
 		run_module = __module_text_address(run_addr);
 	if (!patches_module(run_module, pack->target)) {
-		ksdebug(pack, "run-pre: ignoring address %" ADDR " in other "
-			"module %s for sect %s\n", run_addr,
-			run_module == NULL ? "vmlinux" : run_module->name,
-			sect->symbol->label);
+		ksdebug(pack, "run-pre: ignoring address %lx in other module "
+			"%s for sect %s\n", run_addr, run_module == NULL ?
+			"vmlinux" : run_module->name, sect->symbol->label);
 		return NO_MATCH;
 	}
 
@@ -1797,7 +1790,7 @@ static abort_t try_addr(struct ksplice_pack *pack,
 		ksdebug(pack, "run-pre: %s sect %s does not match ",
 			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "data" :
 			"text", sect->symbol->label);
-		ksdebug(pack, "(r_a=%" ADDR " p_a=%" ADDR " s=%lx)\n", run_addr,
+		ksdebug(pack, "(r_a=%lx p_a=%lx s=%lx)\n", run_addr,
 			sect->thismod_addr, sect->size);
 		ksdebug(pack, "run-pre: ");
 		if (pack->update->debug >= 1) {
@@ -1825,13 +1818,13 @@ static abort_t try_addr(struct ksplice_pack *pack,
 
 	if (mode != RUN_PRE_FINAL) {
 		set_temp_namevals(pack, NOVAL);
-		ksdebug(pack, "run-pre: candidate for sect %s=%" ADDR "\n",
+		ksdebug(pack, "run-pre: candidate for sect %s=%lx\n",
 			sect->symbol->label, run_addr);
 		return OK;
 	}
 
 	set_temp_namevals(pack, VAL);
-	ksdebug(pack, "run-pre: found sect %s=%" ADDR "\n", sect->symbol->label,
+	ksdebug(pack, "run-pre: found sect %s=%lx\n", sect->symbol->label,
 		run_addr);
 	return OK;
 }
@@ -1886,10 +1879,9 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 		return ret;
 
 	if (mode == RUN_PRE_INITIAL)
-		ksdebug(pack, "run-pre: reloc at r_a=%" ADDR " p_a=%" ADDR
-			" to %s+%lx: found %s = %" ADDR "\n",
-			run_addr, r->blank_addr, r->symbol->label, r->addend,
-			r->symbol->label, val);
+		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx to %s+%lx: "
+			"found %s = %lx\n", run_addr, r->blank_addr,
+			r->symbol->label, r->addend, r->symbol->label, val);
 
 	if (starts_with(r->symbol->label, ".rodata.str"))
 		return OK;
@@ -1903,10 +1895,10 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	ret = create_nameval(pack, r->symbol->label, val, TEMP);
 	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
 		struct reloc_nameval *nv = find_nameval(pack, r->symbol->label);
-		ksdebug(pack, "run-pre: reloc at r_a=%" ADDR " p_a=%" ADDR
-			": nameval %s = %" ADDR "(%d) does not match expected "
-			"%" ADDR "\n", run_addr, r->blank_addr,
-			r->symbol->label, nv->val, nv->status, val);
+		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx: nameval %s = "
+			"%lx(%d) does not match expected %lx\n", run_addr,
+			r->blank_addr, r->symbol->label, nv->val, nv->status,
+			val);
 	}
 	return ret;
 }
@@ -2022,7 +2014,7 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	if (canary_ret < 0)
 		return UNEXPECTED;
 	if (canary_ret == 0) {
-		ksdebug(pack, "reloc: skipped %s:%" ADDR "(altinstr)\n",
+		ksdebug(pack, "reloc: skipped %s:%lx (altinstr)\n",
 			r->symbol->label, r->blank_offset);
 		return OK;
 	}
@@ -2057,9 +2049,8 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	if (ret != OK)
 		return ret;
 
-	ksdebug(pack, "reloc: %s:%" ADDR " ", r->symbol->label,
-		r->blank_offset);
-	ksdebug(pack, "(S=%" ADDR " A=%" ADDR " ", sym_addr, r->addend);
+	ksdebug(pack, "reloc: %s:%lx", r->symbol->label, r->blank_offset);
+	ksdebug(pack, "(S=%lx A=%lx ", sym_addr, r->addend);
 	switch (r->size) {
 	case 1:
 		ksdebug(pack, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
@@ -2229,7 +2220,7 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 	nv = find_nameval(pack, ksym->label);
 	if (nv != NULL) {
 		release_vals(vals);
-		ksdebug(pack, "using detected sym %s=%" ADDR "\n", ksym->label,
+		ksdebug(pack, "using detected sym %s=%lx\n", ksym->label,
 			nv->val);
 		return add_candidate_val(vals, nv->val);
 	}
@@ -2836,8 +2827,8 @@ static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 			if (canary_ret < 0)
 				return UNEXPECTED;
 			if (canary_ret == 0) {
-				ksdebug(pack, "reloc: skipped %s:%" ADDR
-					" (altinstr)\n", r->symbol->label,
+				ksdebug(pack, "reloc: skipped %s:%lx "
+					"(altinstr)\n", r->symbol->label,
 					r->blank_offset);
 				return NO_MATCH;
 			}
