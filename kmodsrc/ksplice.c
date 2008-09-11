@@ -481,7 +481,6 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr);
 static bool patches_module(const struct module *a, const struct module *b);
 static bool starts_with(const char *str, const char *prefix);
-static bool ends_with(const char *str, const char *suffix);
 static bool singular(struct list_head *list);
 
 /* Debugging */
@@ -2884,12 +2883,6 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 static bool starts_with(const char *str, const char *prefix)
 {
 	return strncmp(str, prefix, strlen(prefix)) == 0;
-}
-
-static bool ends_with(const char *str, const char *suffix)
-{
-	return strlen(str) >= strlen(suffix) &&
-	    strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0;
 }
 
 static bool singular(struct list_head *list)
