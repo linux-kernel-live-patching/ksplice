@@ -190,8 +190,6 @@ EXPORT_SYMBOL_GPL(ksplice_module_list);
 static struct kobject *ksplice_kobj;
 #endif /* KSPLICE_STANDALONE */
 
-static bool patches_module(const struct module *a, const struct module *b);
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* Old kernels do not have kcalloc
  * e629946abd0bb8266e9c3d0fd1bff2ef8dec5443 was after 2.6.8
@@ -482,6 +480,7 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 			   int size, long dst_mask);
 static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr);
+static bool patches_module(const struct module *a, const struct module *b);
 static bool starts_with(const char *str, const char *prefix);
 static bool ends_with(const char *str, const char *suffix);
 static bool singular(struct list_head *list);
