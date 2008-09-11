@@ -544,7 +544,7 @@ static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* Architecture-specific functions defined in ARCH/ksplice-arch.c */
-static abort_t create_trampoline(struct ksplice_patch *p);
+static abort_t prepare_trampoline(struct ksplice_patch *p);
 static unsigned long trampoline_target(unsigned long addr);
 static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
@@ -784,7 +784,7 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 		else
 			rec->first_byte_safe = true;
 
-		ret = create_trampoline(p);
+		ret = prepare_trampoline(p);
 		if (ret != OK)
 			return ret;
 
