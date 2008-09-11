@@ -365,7 +365,6 @@ static abort_t activate_pack(struct ksplice_pack *pack);
 static abort_t finalize_pack(struct ksplice_pack *pack);
 static abort_t finalize_exports(struct ksplice_pack *pack);
 static abort_t finalize_patches(struct ksplice_pack *pack);
-static abort_t add_patch_dependencies(struct ksplice_pack *pack);
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr);
 static abort_t apply_relocs(struct ksplice_pack *pack,
@@ -731,10 +730,6 @@ static abort_t finalize_pack(struct ksplice_pack *pack)
 	if (ret != OK)
 		return ret;
 
-	ret = add_patch_dependencies(pack);
-	if (ret != OK)
-		return ret;
-
 	return OK;
 }
 
@@ -790,6 +785,10 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 			rec->first_byte_safe = true;
 
 		ret = create_trampoline(p);
+		if (ret != OK)
+			return ret;
+
+		ret = add_dependency_on_address(pack, p->oldaddr);
 		if (ret != OK)
 			return ret;
 	}
@@ -2138,18 +2137,6 @@ static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 	if (use_module(pack->primary, m) != 1)
 		return MODULE_BUSY;
 	return OK;
-}
-
-static abort_t add_patch_dependencies(struct ksplice_pack *pack)
-{
-	abort_t ret;
-	const struct ksplice_patch *p;
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		ret = add_dependency_on_address(pack, p->oldaddr);
-		if (ret != OK)
-			return ret;
-	}
-	return 0;
 }
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
