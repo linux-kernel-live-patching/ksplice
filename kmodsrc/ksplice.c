@@ -81,15 +81,17 @@ typedef int __bitwise__ abort_t;
 
 #define OK ((__force abort_t) 0)
 #define NO_MATCH ((__force abort_t) 1)
-#define BAD_SYSTEM_MAP ((__force abort_t) 2)
-#define CODE_BUSY ((__force abort_t) 3)
-#define MODULE_BUSY ((__force abort_t) 4)
-#define OUT_OF_MEMORY ((__force abort_t) 5)
-#define FAILED_TO_FIND ((__force abort_t) 6)
-#define ALREADY_REVERSED ((__force abort_t) 7)
-#define MISSING_EXPORT ((__force abort_t) 8)
-#define UNEXPECTED_RUNNING_TASK ((__force abort_t) 9)
-#define UNEXPECTED ((__force abort_t) 10)
+#define CODE_BUSY ((__force abort_t) 2)
+#define MODULE_BUSY ((__force abort_t) 3)
+#define OUT_OF_MEMORY ((__force abort_t) 4)
+#define FAILED_TO_FIND ((__force abort_t) 5)
+#define ALREADY_REVERSED ((__force abort_t) 6)
+#define MISSING_EXPORT ((__force abort_t) 7)
+#define UNEXPECTED_RUNNING_TASK ((__force abort_t) 8)
+#define UNEXPECTED ((__force abort_t) 9)
+#ifdef KSPLICE_STANDALONE
+#define BAD_SYSTEM_MAP ((__force abort_t) 10)
+#endif /* KSPLICE_STANDALONE */
 
 struct update {
 	const char *kid;
@@ -392,9 +394,13 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long sym_addr);
-static abort_t add_system_map_candidates(struct ksplice_pack *pack,
-					 const struct ksplice_symbol *symbol,
-					 struct list_head *vals);
+#ifdef KSPLICE_STANDALONE
+static abort_t
+add_system_map_candidates(struct ksplice_pack *pack,
+			  const struct ksplice_system_map *start,
+			  const struct ksplice_system_map *end,
+			  const char *label, struct list_head *vals);
+#endif /* KSPLICE_STANDALONE */
 static abort_t compute_address(struct ksplice_pack *pack,
 			       const struct ksplice_symbol *ksym,
 			       struct list_head *vals);
@@ -613,8 +619,10 @@ static ssize_t abort_cause_show(struct update *update, char *buf)
 		return snprintf(buf, PAGE_SIZE, "ok\n");
 	case NO_MATCH:
 		return snprintf(buf, PAGE_SIZE, "no_match\n");
+#ifdef KSPLICE_STANDALONE
 	case BAD_SYSTEM_MAP:
 		return snprintf(buf, PAGE_SIZE, "bad_system_map\n");
+#endif /* KSPLICE_STANDALONE */
 	case CODE_BUSY:
 		return snprintf(buf, PAGE_SIZE, "code_busy\n");
 	case MODULE_BUSY:
@@ -1520,11 +1528,15 @@ static abort_t search_for_match(struct ksplice_pack *pack,
 	LIST_HEAD(vals);
 	struct candidate_val *v, *n;
 
-	ret = add_system_map_candidates(pack, s->symbol, &vals);
+#ifdef KSPLICE_STANDALONE
+	ret = add_system_map_candidates(pack, pack->helper_system_map,
+					pack->helper_system_map_end,
+					s->symbol->label, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
 		return ret;
 	}
+#endif /* KSPLICE_STANDALONE */
 	ret = compute_address(pack, s->symbol, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
@@ -1990,20 +2002,15 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped) {
-		ret = add_system_map_candidates(pack, r->symbol, &vals);
+		ret = add_system_map_candidates(pack,
+						pack->primary_system_map,
+						pack->primary_system_map_end,
+						r->symbol->label, &vals);
 		if (ret != OK) {
 			release_vals(&vals);
 			return ret;
 		}
 	}
-#else /* !KSPLICE_STANDALONE */
-#ifdef CONFIG_KALLSYMS
-	ret = add_system_map_candidates(pack, r->symbol, &vals);
-	if (ret != OK) {
-		release_vals(&vals);
-		return ret;
-	}
-#endif /* CONFIG_KALLSYMS */
 #endif /* KSPLICE_STANDALONE */
 	ret = compute_address(pack, r->symbol, &vals);
 	if (ret != OK) {
@@ -2057,13 +2064,17 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	return add_dependency_on_address(pack, sym_addr);
 }
 
-static abort_t add_system_map_candidates(struct ksplice_pack *pack,
-					 const struct ksplice_symbol *symbol,
-					 struct list_head *vals)
+#ifdef KSPLICE_STANDALONE
+static abort_t
+add_system_map_candidates(struct ksplice_pack *pack,
+			  const struct ksplice_system_map *start,
+			  const struct ksplice_system_map *end,
+			  const char *label, struct list_head *vals)
 {
 	abort_t ret;
 	long off;
 	int i;
+	const struct ksplice_system_map *smap;
 
 	/* Some Fedora kernel releases have System.map files whose symbol
 	 * addresses disagree with the running kernel by a constant address
@@ -2082,13 +2093,20 @@ static abort_t add_system_map_candidates(struct ksplice_pack *pack,
 		ksdebug(pack, "Aborted.  System.map does not match kernel.\n");
 		return BAD_SYSTEM_MAP;
 	}
-	for (i = 0; i < symbol->nr_candidates; i++) {
-		ret = add_candidate_val(vals, symbol->candidates[i] + off);
+	for (smap = start; smap < end; smap++) {
+		if (strcmp(smap->label, label) == 0)
+			break;
+	}
+	if (smap >= end)
+		return OK;
+	for (i = 0; i < smap->nr_candidates; i++) {
+		ret = add_candidate_val(vals, smap->candidates[i] + off);
 		if (ret != OK)
 			return ret;
 	}
 	return OK;
 }
+#endif /* !KSPLICE_STANDALONE */
 
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr)
@@ -2929,6 +2947,8 @@ static int debug;
 module_param(debug, int, 0600);
 MODULE_PARM_DESC(debug, "Debug level");
 
+extern struct ksplice_system_map ksplice_system_map[], ksplice_system_map_end[];
+
 static struct ksplice_pack bootstrap_pack = {
 	.name = "ksplice_" STR(KSPLICE_KID),
 	.kid = "init_" STR(KSPLICE_KID),
@@ -2937,6 +2957,8 @@ static struct ksplice_pack bootstrap_pack = {
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
 	.reloc_namevals = LIST_HEAD_INIT(bootstrap_pack.reloc_namevals),
+	.primary_system_map = ksplice_system_map,
+	.primary_system_map_end = ksplice_system_map_end,
 };
 #endif /* KSPLICE_STANDALONE */
 

@@ -16,6 +16,10 @@
  *  02110-1301, USA.
  */
 
+/* Always define KSPLICE_STANDALONE, even if you're using integrated Ksplice.
+   inspect won't compile without it. */
+#define KSPLICE_STANDALONE
+
 #define _GNU_SOURCE
 #include "objcommon.h"
 #include "kmodsrc/ksplice.h"
@@ -45,11 +49,9 @@ char *str_ksplice_symbol(struct supersect *ss,
 			 const struct ksplice_symbol *ksymbol)
 {
 	char *str;
-	assert(asprintf(&str, "%s (%s %s)",
+	assert(asprintf(&str, "%s (%s)",
 			read_string(ss, &ksymbol->label),
-			read_string(ss, &ksymbol->name),
-			str_ulong_vec(ss, &ksymbol->candidates,
-				      &ksymbol->nr_candidates)));
+			read_string(ss, &ksymbol->name)));
 	return str;
 }
 
@@ -163,6 +165,25 @@ void show_ksplice_exports(struct supersect *export_ss)
 	printf("\n");
 }
 
+void show_ksplice_system_map(struct supersect *ss,
+			     const struct ksplice_system_map *smap)
+{
+	printf("%s %s\n",
+	       read_string(ss, &smap->label),
+	       str_ulong_vec(ss, &smap->candidates, &smap->nr_candidates));
+}
+
+void show_ksplice_system_maps(struct supersect *smap_ss)
+{
+	printf("KSPLICE SYSTEM.MAP:\n\n");
+	const struct ksplice_system_map *smap;
+	for (smap = smap_ss->contents.data;
+	     (void *)smap < smap_ss->contents.data + smap_ss->contents.size;
+	     smap++)
+		show_ksplice_system_map(smap_ss, smap);
+	printf("\n");
+}
+
 int main(int argc, char *argv[])
 {
 	bfd *ibfd;
@@ -223,6 +244,15 @@ int main(int argc, char *argv[])
 		show_ksplice_exports(export_ss);
 	} else {
 		printf("No ksplice exports.\n\n");
+	}
+
+	asection *smap_sect = bfd_get_section_by_name(ibfd,
+						      ".ksplice_system_map");
+	if (smap_sect != NULL) {
+		struct supersect *smap_ss = fetch_supersect(sbfd, smap_sect);
+		show_ksplice_system_maps(smap_ss);
+	} else {
+		printf("No ksplice System.map.\n\n");
 	}
 
 	return 0;

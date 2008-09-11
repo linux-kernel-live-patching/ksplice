@@ -27,6 +27,10 @@ extern const struct ksplice_size ksplice_sizes[], ksplice_sizes_end[];
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 #endif
+#ifdef KSPLICE_STANDALONE
+extern struct ksplice_system_map ksplice_system_map[],
+    ksplice_system_map_end[];
+#endif /* KSPLICE_STANDALONE */
 
 /* Defined in primary.c */
 #define pack KSPLICE_UNIQ(pack)
@@ -42,6 +46,10 @@ static int init_helper(void)
 	pack.helper_parainstructions = parainstructions;
 	pack.helper_parainstructions_end = parainstructions_end;
 #endif
+#ifdef KSPLICE_STANDALONE
+	pack.helper_system_map = ksplice_system_map;
+	pack.helper_system_map_end = ksplice_system_map_end;
+#endif /* KSPLICE_STANDALONE */
 	return init_ksplice_module(&pack);
 }
 

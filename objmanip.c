@@ -46,6 +46,10 @@
  * ksplice relocations.
  */
 
+/* Always define KSPLICE_STANDALONE, even if you're using integrated Ksplice.
+   objmanip won't compile without it. */
+#define KSPLICE_STANDALONE
+
 #define _GNU_SOURCE
 #include "objcommon.h"
 #include "kmodsrc/ksplice.h"
@@ -501,6 +505,20 @@ void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 	vec_free(&addrs);
 }
 
+void write_ksplice_system_map(struct superbfd *sbfd, asymbol *sym,
+			      const char *addstr_sect)
+{
+	struct supersect *smap_ss = make_section(sbfd, ".ksplice_system_map");
+
+	struct ksplice_system_map *smap = sect_grow(smap_ss, 1,
+						    struct ksplice_system_map);
+
+	write_system_map_array(sbfd, smap_ss, &smap->candidates,
+			       &smap->nr_candidates, sym);
+	write_string(smap_ss, &smap->label, "%s%s",
+		     label_lookup(sbfd, sym), addstr_sect);
+}
+
 void write_ksplice_symbol(struct supersect *ss,
 			  const struct ksplice_symbol *const *addr,
 			  asymbol *sym, const char *addstr_sect)
@@ -527,8 +545,7 @@ void write_ksplice_symbol(struct supersect *ss,
 	write_string(ksymbol_ss, &ksymbol->label, "%s%s",
 		     label_lookup(ss->parent, sym), addstr_sect);
 
-	write_system_map_array(ss->parent, ksymbol_ss, &ksymbol->candidates,
-			       &ksymbol->nr_candidates, sym);
+	write_ksplice_system_map(ksymbol_ss->parent, sym, addstr_sect);
 
 	write_reloc(ss, addr, &ksymbol_ss->symbol,
 		    (void *)ksymbol - ksymbol_ss->contents.data);

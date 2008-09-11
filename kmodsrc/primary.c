@@ -29,13 +29,19 @@ extern struct ksplice_export ksplice_exports[], ksplice_exports_end[];
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 #endif
+#ifdef KSPLICE_STANDALONE
+extern struct ksplice_system_map ksplice_system_map[],
+    ksplice_system_map_end[];
+#endif /* KSPLICE_STANDALONE */
 
 #define pack KSPLICE_UNIQ(pack)
 struct ksplice_pack pack = {
 	.name = "ksplice_" STR(KSPLICE_MID),
 	.kid = STR(KSPLICE_KID),
 	.target_name = STR(KSPLICE_TARGET),
+#ifdef KSPLICE_STANDALONE
 	.map_printk = MAP_PRINTK,
+#endif /* KSPLICE_STANDALONE */
 	.primary = THIS_MODULE,
 	.primary_relocs = ksplice_relocs,
 	.primary_relocs_end = ksplice_relocs_end,
@@ -49,6 +55,10 @@ struct ksplice_pack pack = {
 	.primary_parainstructions = parainstructions,
 	.primary_parainstructions_end = parainstructions_end,
 #endif
+#ifdef KSPLICE_STANDALONE
+	.primary_system_map = ksplice_system_map,
+	.primary_system_map_end = ksplice_system_map_end,
+#endif /* KSPLICE_STANDALONE */
 };
 EXPORT_SYMBOL_GPL(pack);
 

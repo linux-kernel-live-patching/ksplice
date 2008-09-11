@@ -1,8 +1,6 @@
 struct ksplice_symbol {
 	const char *name;
 	const char *label;
-	unsigned long nr_candidates;
-	const unsigned long *candidates;
 };
 
 struct ksplice_reloc {
@@ -44,6 +42,14 @@ struct ksplice_export {
 	const char *new_name;
 	struct kernel_symbol *sym;
 };
+
+#ifdef KSPLICE_STANDALONE
+struct ksplice_system_map {
+	const char *label;
+	unsigned long nr_candidates;
+	const unsigned long *candidates;
+};
+#endif /* KSPLICE_STANDALONE */
 
 #ifdef __KERNEL__
 #include <linux/module.h>
@@ -88,7 +94,9 @@ struct ksplice_pack {
 	struct update *update;
 	const char *target_name;
 	struct module *target;
+#ifdef KSPLICE_STANDALONE
 	unsigned long map_printk;
+#endif /* KSPLICE_STANDALONE */
 	struct module *primary;
 	struct ksplice_module_list_entry module_list_entry;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
@@ -102,6 +110,11 @@ struct ksplice_pack {
 	    *primary_parainstructions, *primary_parainstructions_end,
 	    *helper_parainstructions, *helper_parainstructions_end;
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
+#ifdef KSPLICE_STANDALONE
+	struct ksplice_system_map
+	    *primary_system_map, *primary_system_map_end,
+	    *helper_system_map, *helper_system_map_end;
+#endif /* KSPLICE_STANDALONE */
 	struct list_head reloc_addrmaps;
 	struct list_head reloc_namevals;
 	struct list_head safety_records;
