@@ -145,13 +145,13 @@ struct reloc_nameval {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
 /* 2fff0a48416af891dce38fd425246e337831e0bb was after 2.6.19 */
-static int virtual_address_mapped(unsigned long addr)
+static bool virtual_address_mapped(unsigned long addr)
 {
 	char retval;
 	return probe_kernel_address(addr, retval) != -EFAULT;
 }
 #else /* LINUX_VERSION_CODE < */
-static int virtual_address_mapped(unsigned long addr);
+static bool virtual_address_mapped(unsigned long addr);
 #endif /* LINUX_VERSION_CODE */
 
 static long probe_kernel_read(void *dst, void *src, size_t size)
@@ -339,7 +339,7 @@ static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
 
 #ifdef KSPLICE_STANDALONE
 
-static int bootstrapped = 0;
+static bool bootstrapped = false;
 
 #ifdef CONFIG_KALLSYMS
 extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
@@ -438,8 +438,8 @@ static void release_vals(struct list_head *vals);
 static void set_temp_namevals(struct ksplice_pack *pack, int status_val);
 static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 			   int size, long dst_mask);
-static int starts_with(const char *str, const char *prefix);
-static int ends_with(const char *str, const char *suffix);
+static bool starts_with(const char *str, const char *prefix);
+static bool ends_with(const char *str, const char *suffix);
 
 #define clear_list(head, type, member)				\
 	do {							\
@@ -458,7 +458,7 @@ static int __apply_patches(void *update);
 static int __reverse_patches(void *update);
 static abort_t check_each_task(struct update *update);
 static abort_t check_task(struct update *update,
-			  const struct task_struct *t, int rerun);
+			  const struct task_struct *t, bool rerun);
 static abort_t check_stack(struct update *update, struct conflict *conf,
 			   const struct thread_info *tinfo,
 			   const unsigned long *stack);
@@ -467,7 +467,7 @@ static abort_t check_address(struct update *update,
 static abort_t check_record(struct conflict_addr *ca,
 			    const struct safety_record *rec,
 			    unsigned long addr);
-static int is_stop_machine(const struct task_struct *t);
+static bool is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update *update);
 static void print_conflicts(struct update *update);
 static void insert_trampoline(struct ksplice_patch *p);
@@ -479,7 +479,7 @@ static abort_t create_trampoline(struct ksplice_patch *p);
 static unsigned long trampoline_target(unsigned long addr);
 static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
-static int valid_stack_ptr(const struct thread_info *tinfo, const void *p);
+static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr);
@@ -754,7 +754,7 @@ static abort_t process_patches(struct ksplice_pack *pack)
 	/* Check every patch has a safety_record */
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		struct reloc_nameval *nv = find_nameval(pack, p->label);
-		int found = 0;
+		bool found = false;
 		if (nv == NULL) {
 			ksdebug(pack, "Failed to find %s for oldaddr\n",
 				p->label);
@@ -765,7 +765,7 @@ static abort_t process_patches(struct ksplice_pack *pack)
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (strcmp(rec->label, p->label) == 0 &&
 			    follow_trampolines(pack, p->oldaddr) == rec->addr) {
-				found = 1;
+				found = true;
 				break;
 			}
 		}
@@ -1072,9 +1072,9 @@ static abort_t check_each_task(struct update *update)
 #endif /* LINUX_VERSION_CODE */
 	do_each_thread(g, p) {
 		/* do_each_thread is a double loop! */
-		ret = check_task(update, p, 0);
+		ret = check_task(update, p, false);
 		if (ret != OK) {
-			check_task(update, p, 1);
+			check_task(update, p, true);
 			status = ret;
 		}
 		if (ret != OK && ret != CODE_BUSY)
@@ -1089,7 +1089,7 @@ out:
 }
 
 static abort_t check_task(struct update *update,
-			  const struct task_struct *t, int rerun)
+			  const struct task_struct *t, bool rerun)
 {
 	abort_t status, ret;
 	struct conflict *conf = NULL;
@@ -1183,12 +1183,12 @@ static abort_t check_record(struct conflict_addr *ca,
 	return OK;
 }
 
-static int is_stop_machine(const struct task_struct *t)
+static bool is_stop_machine(const struct task_struct *t)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 	const char *num;
 	if (!starts_with(t->comm, "kstop"))
-		return 0;
+		return false;
 	num = t->comm + strlen("kstop");
 	return num[strspn(num, "0123456789")] == '\0';
 #else /* LINUX_VERSION_CODE < */
@@ -1241,7 +1241,7 @@ int init_ksplice_module(struct ksplice_pack *pack)
 	int ret = 0;
 
 #ifdef KSPLICE_STANDALONE
-	if (bootstrapped == 0)
+	if (!bootstrapped)
 		return -1;
 #endif /* KSPLICE_STANDALONE */
 
@@ -2823,12 +2823,12 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 	}
 }
 
-static int starts_with(const char *str, const char *prefix)
+static bool starts_with(const char *str, const char *prefix)
 {
 	return strncmp(str, prefix, strlen(prefix)) == 0;
 }
 
-static int ends_with(const char *str, const char *suffix)
+static bool ends_with(const char *str, const char *suffix)
 {
 	return strlen(str) >= strlen(suffix) &&
 	    strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0;
@@ -2981,7 +2981,7 @@ static int init_ksplice(void)
 	pack->update->abort_cause =
 	    apply_relocs(pack, ksplice_init_relocs, ksplice_init_relocs_end);
 	if (pack->update->abort_cause == OK)
-		bootstrapped = 1;
+		bootstrapped = true;
 #else /* !KSPLICE_STANDALONE */
 	ksplice_kobj = kobject_create_and_add("ksplice", kernel_kobj);
 	if (ksplice_kobj == NULL)

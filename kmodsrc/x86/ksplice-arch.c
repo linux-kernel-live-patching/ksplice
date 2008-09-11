@@ -592,14 +592,14 @@ static abort_t handle_paravirt(struct ksplice_pack *pack,
 	return OK;
 }
 
-static int valid_stack_ptr(const struct thread_info *tinfo, const void *p)
+static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p)
 {
 	return p > (const void *)tinfo
 	    && p <= (const void *)tinfo + THREAD_SIZE - sizeof(long);
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
-static int virtual_address_mapped(unsigned long addr)
+static bool virtual_address_mapped(unsigned long addr)
 {
 	pgd_t *pgd;
 #ifdef pud_page
@@ -610,17 +610,17 @@ static int virtual_address_mapped(unsigned long addr)
 
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
-		return 1;
+		return true;
 #endif /* KSPLICE_STANDALONE */
 
 	pgd = pgd_offset_k(addr);
 	if (!pgd_present(*pgd))
-		return 0;
+		return false;
 
 #ifdef pud_page
 	pud = pud_offset(pgd, addr);
 	if (!pud_present(*pud))
-		return 0;
+		return false;
 
 	pmd = pmd_offset(pud, addr);
 #else /* pud_page */
@@ -628,15 +628,15 @@ static int virtual_address_mapped(unsigned long addr)
 #endif /* pud_page */
 
 	if (!pmd_present(*pmd))
-		return 0;
+		return false;
 
 	if (pmd_large(*pmd))
-		return 1;
+		return true;
 
 	pte = pte_offset_kernel(pmd, addr);
 	if (!pte_present(*pte))
-		return 0;
+		return false;
 
-	return 1;
+	return true;
 }
 #endif /* LINUX_VERSION_CODE */

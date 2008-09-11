@@ -57,7 +57,7 @@ static abort_t handle_paravirt(struct ksplice_pack *pack,
 	return OK;
 }
 
-static int valid_stack_ptr(const struct thread_info *tinfo, const void *p)
+static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p)
 {
 	return p > (const void *)tinfo
 	    && p <= (const void *)tinfo + THREAD_SIZE - sizeof(long);
