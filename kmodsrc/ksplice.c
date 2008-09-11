@@ -120,7 +120,7 @@ struct conflict {
 
 struct conflict_addr {
 	unsigned long addr;
-	int has_conflict;
+	bool has_conflict;
 	const char *label;
 	struct list_head list;
 };
@@ -1149,7 +1149,7 @@ static abort_t check_address(struct update *update,
 		if (ca == NULL)
 			return OUT_OF_MEMORY;
 		ca->addr = addr;
-		ca->has_conflict = 0;
+		ca->has_conflict = false;
 		ca->label = NULL;
 		list_add(&ca->list, &conf->stack);
 	}
@@ -1171,7 +1171,7 @@ static abort_t check_record(struct conflict_addr *ca,
 	    (addr == rec->addr && !rec->first_byte_safe)) {
 		if (ca != NULL) {
 			ca->label = rec->label;
-			ca->has_conflict = 1;
+			ca->has_conflict = true;
 		}
 		return CODE_BUSY;
 	}
