@@ -1,8 +1,30 @@
+/**
+ * struct ksplice_symbol - Ksplice's analogue of an ELF symbol
+ * @name:	The ELF name of the symbol
+ * @label:	A unique Ksplice name for the symbol
+ **/
 struct ksplice_symbol {
 	const char *name;
 	const char *label;
 };
 
+/**
+ * struct ksplice_reloc - Ksplice's analogue of an ELF relocation
+ * @blank_addr:		The address of the relocation's storage unit
+ * @blank_offset:	The offset (from the start of the section) of the
+ * 			relocation's storage unit
+ * @symbol:		The ksplice_symbol associated with this relocation
+ * @pcrel:		Is the relocation PC relative?
+ * @addend:		The ELF addend of the relocation
+ * @size:		The size, in bytes, of the item to be relocated
+ * @dst_mask:		Bitmask for which parts of the instruction or data are
+ * 			replaced with the relocated value
+ * 			(based on dst_mask from GNU BFD's reloc_howto_struct)
+ * @rightshift:		The value the final relocation is shifted right by;
+ * 			used to drop unwanted data from the relocation
+ * 			(based on rightshift from GNU BFD's reloc_howto_struct)
+ * @signed_addend:	Should the addend be interpreted as a signed value?
+ **/
 struct ksplice_reloc {
 	unsigned long blank_addr;
 	long blank_offset;
@@ -15,6 +37,14 @@ struct ksplice_reloc {
 	int signed_addend;
 };
 
+/**
+ * struct ksplice_section - Ksplice's analogue of an ELF section
+ * @symbol:		The ksplice_symbol associated with this section
+ * @size:		The length, in bytes, of this section
+ * @thismod_addr:	The address of the section
+ * @flags:		Specifies whether this section contains text, read-only
+ * 			data, or data
+ **/
 struct ksplice_section {
 	const struct ksplice_symbol *symbol;
 	unsigned long size;
@@ -27,25 +57,59 @@ struct ksplice_section {
 
 #define MAX_TRAMPOLINE_SIZE 5
 
+/**
+ * struct ksplice_trampoline - A trampoline Ksplice should insert
+ * @repladdr:		The address of the replacement function
+ * @oldaddr:		The address of the obsolete function
+ * @trampoline:		The bytes of the trampoline itself
+ * @saved:		The bytes of the original function which were
+ * 			overwritten by the trampoline
+ * @size:		The size of the trampoline
+ *
+ * Any value put into a private field by user space will be ignored.
+ **/
 struct ksplice_trampoline {
-	unsigned long oldaddr;
 	unsigned long repladdr;
-	char saved[MAX_TRAMPOLINE_SIZE];
+/* private: */
+	unsigned long oldaddr;
 	char trampoline[MAX_TRAMPOLINE_SIZE];
+	char saved[MAX_TRAMPOLINE_SIZE];
 	unsigned int size;
 };
 
+/**
+ * struct ksplice_patch - A function replacement that Ksplice should perform
+ * @label:		The unique Ksplice name for the obsolete function
+ * @trampoline:		A trampoline to insert over the obsolete function
+ * @reverse_trampoline:	A trampoline to insert over the repladdr of any
+ * 			trampoline previously installed at the start of the
+ * 			obsolete function (if the function has been previously
+ * 			patched)
+ *
+ * Any value put into a private field by user space will be ignored.
+ **/
 struct ksplice_patch {
 	const char *label;
 	struct ksplice_trampoline trampoline;
+/* private: */
 	struct ksplice_trampoline reverse_trampoline;
 };
 
+/**
+ * struct ksplice_export - A change to be made to the exported symbol table
+ * @name:		The obsolete name of the exported symbol
+ * @new_name:		The new name of the exported symbol
+ * @sym:		The kernel_symbol being changed
+ * @saved_name:		The pointer to the original name of the kernel_symbol
+ *
+ * Any value put into a private field by user space will be ignored.
+ **/
 struct ksplice_export {
 	const char *name;
-	const char *saved_name;
 	const char *new_name;
+/* private: */
 	struct kernel_symbol *sym;
+	const char *saved_name;
 };
 
 #ifdef KSPLICE_STANDALONE
@@ -84,26 +148,54 @@ struct ksplice_system_map {
 #define cleanup_ksplice_module KSPLICE_KID_UNIQ(cleanup_ksplice_module)
 #endif
 
+/**
+ * struct ksplice_module_list_entry - A record of a Ksplice pack's target
+ * @target:	A module that is patched
+ * @primary:	A Ksplice module that patches target
+ **/
 struct ksplice_module_list_entry {
 	struct module *target;
 	struct module *primary;
+/* private: */
 	struct list_head list;
 };
 
 /* List of all ksplice modules and the module they patch */
 extern struct list_head ksplice_module_list;
 
+/**
+ * struct ksplice_pack - Data for one module modified by a Ksplice update
+ * @name:			The name of the primary module for the pack
+ * @kid:			The Ksplice unique identifier for the pack
+ * @target_name:		The name of the module modified by the pack
+ * @primary:			The primary module associated with the pack
+ * @primary_relocs:		The relocations for the primary module
+ * @primary_relocs_end:		The end pointer for primary_relocs
+ * @primary_sections:		The sections in the primary module
+ * @primary_sections_end:	The end pointer for primary_sections array
+ * @helper_relocs:		The relocations for the helper module
+ * @helper_relocs_end:		The end pointer for helper_relocs array
+ * @helper_sections:		The sections in the helper module
+ * @helper_sections_end:	The end pointer for helper_sections array
+ * @patches:			The function replacements in the pack
+ * @patches_end:		The end pointer for patches array
+ * @exports:			The exported symbol changes in the pack
+ * @exports_end:		The end pointer for the exports array
+ * @update:			The atomic update the pack is part of
+ * @target:			The module modified by the pack
+ * @reloc_namevals:		The mapping between Ksplice symbol labels and
+ *				their values
+ * @safety_records:		The ranges of addresses that must not be on a
+ *				kernel stack for the patch to apply safely
+ **/
 struct ksplice_pack {
 	const char *name;
 	const char *kid;
-	struct update *update;
 	const char *target_name;
-	struct module *target;
 #ifdef KSPLICE_STANDALONE
 	unsigned long map_printk;
 #endif /* KSPLICE_STANDALONE */
 	struct module *primary;
-	struct ksplice_module_list_entry module_list_entry;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
 	const struct ksplice_section *primary_sections, *primary_sections_end;
 	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
@@ -120,12 +212,27 @@ struct ksplice_pack {
 	    *primary_system_map, *primary_system_map_end,
 	    *helper_system_map, *helper_system_map_end;
 #endif /* KSPLICE_STANDALONE */
+/* private: */
+	struct ksplice_module_list_entry module_list_entry;
+	struct update *update;
+	struct module *target;
 	struct list_head reloc_namevals;
 	struct list_head safety_records;
 	struct list_head list;
 };
 
+
+/**
+ * init_ksplice_module() - Initializes a pack
+ * @pack:	The pack to be initialized.  The non-private fields should
+ * 		already be filled when this is called.
+ **/
 int init_ksplice_module(struct ksplice_pack *pack);
+
+/**
+ * cleanup_ksplice_module() - Cleans up a pack
+ * @pack:	The pack to be cleaned up
+ */
 void cleanup_ksplice_module(struct ksplice_pack *pack);
 
 #endif /* __KERNEL__ */
