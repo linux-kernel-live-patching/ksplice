@@ -140,6 +140,24 @@ struct reloc_nameval {
 	enum { NOVAL, TEMP, VAL } status;
 };
 
+struct safety_record {
+	struct list_head list;
+	const char *label;
+	unsigned long addr;
+	unsigned long size;
+	bool first_byte_safe;
+};
+
+struct candidate_val {
+	struct list_head list;
+	unsigned long val;
+};
+
+struct accumulate_struct {
+	const char *desired_name;
+	struct list_head *vals;
+};
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
 /* c33fa9f5609e918824446ef9a75319d4a802f1f4 was after 2.6.25 */
 
@@ -164,54 +182,6 @@ static long probe_kernel_read(void *dst, void *src, size_t size)
 	return 0;
 }
 #endif /* LINUX_VERSION_CODE */
-
-static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
-					  const char *label);
-static abort_t create_nameval(struct ksplice_pack *pack, const char *label,
-			      unsigned long val, int status);
-static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
-			    const struct ksplice_reloc **relocp);
-static abort_t handle_reloc(struct ksplice_pack *pack,
-			    const struct ksplice_reloc *r,
-			    unsigned long run_addr, enum run_pre_mode mode);
-
-struct safety_record {
-	struct list_head list;
-	const char *label;
-	unsigned long addr;
-	unsigned long size;
-	bool first_byte_safe;
-};
-
-struct candidate_val {
-	struct list_head list;
-	unsigned long val;
-};
-
-static bool singular(struct list_head *list)
-{
-	return !list_empty(list) && list->next->next == list;
-}
-
-static int __attribute__((format(printf, 2, 3)))
-_ksdebug(struct update *update, const char *fmt, ...);
-#ifdef CONFIG_DEBUG_FS
-static abort_t init_debug_buf(struct update *update);
-static void clear_debug_buf(struct update *update);
-#else /* !CONFIG_DEBUG_FS */
-static abort_t init_debug_buf(struct update *update)
-{
-	return OK;
-}
-
-static void clear_debug_buf(struct update *update)
-{
-	return;
-}
-#endif /* CONFIG_DEBUG_FS */
-
-#define ksdebug(pack, fmt, ...) \
-	_ksdebug(pack->update, fmt, ## __VA_ARGS__)
 
 static LIST_HEAD(updates);
 #ifdef KSPLICE_STANDALONE
@@ -383,23 +353,71 @@ extern const unsigned long __start___kcrctab_gpl_future[];
 
 #endif /* KSPLICE_STANDALONE */
 
+/* Initializing new updates */
+static struct update *init_ksplice_update(const char *kid);
+static void cleanup_ksplice_update(struct update *update);
+static void add_to_update(struct ksplice_pack *pack, struct update *update);
+static int ksplice_sysfs_init(struct update *update);
+
+/* preparing the relocations and patches for application */
+static abort_t apply_update(struct update *update);
+static abort_t activate_pack(struct ksplice_pack *pack);
+static abort_t finalize_pack(struct ksplice_pack *pack);
+static abort_t process_exports(struct ksplice_pack *pack);
+static abort_t process_patches(struct ksplice_pack *pack);
+static abort_t add_patch_dependencies(struct ksplice_pack *pack);
+static abort_t add_dependency_on_address(struct ksplice_pack *pack,
+					 unsigned long addr);
 static abort_t apply_relocs(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *relocs,
 			    const struct ksplice_reloc *relocs_end);
 static abort_t apply_reloc(struct ksplice_pack *pack,
 			   const struct ksplice_reloc *r);
-static abort_t read_reloc_value(struct ksplice_pack *pack,
-				const struct ksplice_reloc *r,
-				unsigned long addr, unsigned long *valp);
 static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long sym_addr);
+static abort_t read_reloc_value(struct ksplice_pack *pack,
+				const struct ksplice_reloc *r,
+				unsigned long addr, unsigned long *valp);
 
-struct accumulate_struct {
-	const char *desired_name;
-	struct list_head *vals;
-};
+/* run-pre matching */
+static abort_t match_pack_sections(struct ksplice_pack *pack,
+				   bool consider_data_sections);
+static abort_t find_section(struct ksplice_pack *pack,
+			    const struct ksplice_section *sect);
+static abort_t try_addr(struct ksplice_pack *pack,
+			const struct ksplice_section *sect,
+			unsigned long run_addr,
+			struct list_head *safety_records,
+			enum run_pre_mode mode);
+static abort_t run_pre_cmp(struct ksplice_pack *pack,
+			   const struct ksplice_section *sect,
+			   unsigned long run_addr,
+			   struct list_head *safety_records,
+			   enum run_pre_mode mode);
+#ifndef CONFIG_FUNCTION_DATA_SECTIONS
+/* defined in $ARCH/ksplice-arch.c */
+static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
+				const struct ksplice_section *sect,
+				unsigned long run_addr,
+				struct list_head *safety_records,
+				enum run_pre_mode mode);
+#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
+static void print_bytes(struct ksplice_pack *pack,
+			const unsigned char *run, int runc,
+			const unsigned char *pre, int prec);
+#ifdef KSPLICE_STANDALONE
+static abort_t brute_search_all(struct ksplice_pack *pack,
+				const struct ksplice_section *sect,
+				struct list_head *vals);
+#endif /* KSPLICE_STANDALONE */
+static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
+			    const struct ksplice_reloc **relocp);
+static abort_t handle_reloc(struct ksplice_pack *pack,
+			    const struct ksplice_reloc *r,
+			    unsigned long run_addr, enum run_pre_mode mode);
 
+/* Computing possible addresses for symbols */
 static abort_t lookup_symbol(struct ksplice_pack *pack,
 			     const struct ksplice_symbol *ksym,
 			     struct list_head *vals);
@@ -427,33 +445,9 @@ static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
 static abort_t new_export_lookup(struct update *update,
 				 const char *name, struct list_head *vals);
 
-#ifdef KSPLICE_STANDALONE
-static abort_t brute_search_all(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
-				struct list_head *vals);
-#endif /* KSPLICE_STANDALONE */
-
-static abort_t add_candidate_val(struct list_head *vals, unsigned long val);
-static void release_vals(struct list_head *vals);
-static void set_temp_namevals(struct ksplice_pack *pack, int status_val);
-static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
-			   int size, long dst_mask);
-static bool starts_with(const char *str, const char *prefix);
-static bool ends_with(const char *str, const char *suffix);
-
-#define clear_list(head, type, member)				\
-	do {							\
-		struct list_head *_pos, *_n;			\
-		list_for_each_safe(_pos, _n, head) {		\
-			list_del(_pos);				\
-			kfree(list_entry(_pos, type, member));	\
-		}						\
-	} while (0)
-
-/* primary */
-static abort_t finalize_pack(struct ksplice_pack *pack);
-static abort_t process_exports(struct ksplice_pack *pack);
-static abort_t process_patches(struct ksplice_pack *pack);
+/* Atomic update insertion and removal */
+static abort_t apply_patches(struct update *update);
+static abort_t reverse_patches(struct update *update);
 static int __apply_patches(void *update);
 static int __reverse_patches(void *update);
 static abort_t check_each_task(struct update *update);
@@ -472,18 +466,61 @@ static void cleanup_conflicts(struct update *update);
 static void print_conflicts(struct update *update);
 static void insert_trampoline(struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
+
+static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
+					  const char *label);
+static abort_t create_nameval(struct ksplice_pack *pack, const char *label,
+			      unsigned long val, int status);
+static abort_t create_safety_record(struct ksplice_pack *pack,
+				    const struct ksplice_section *sect,
+				    struct list_head *record_list,
+				    unsigned long run_addr,
+				    unsigned long run_size);
+static abort_t add_candidate_val(struct list_head *vals, unsigned long val);
+static void release_vals(struct list_head *vals);
+static void set_temp_namevals(struct ksplice_pack *pack, int status_val);
+
+static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
+			   int size, long dst_mask);
 static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr);
-/* Architecture-specific functions defined in ARCH/ksplice-arch.c */
-static abort_t create_trampoline(struct ksplice_patch *p);
-static unsigned long trampoline_target(unsigned long addr);
-static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
-			       unsigned long run, int *matched);
-static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
+static bool starts_with(const char *str, const char *prefix);
+static bool ends_with(const char *str, const char *suffix);
 
-static abort_t add_dependency_on_address(struct ksplice_pack *pack,
-					 unsigned long addr);
-static abort_t add_patch_dependencies(struct ksplice_pack *pack);
+static bool singular(struct list_head *list)
+{
+	return !list_empty(list) && list->next->next == list;
+}
+
+#define clear_list(head, type, member)				\
+	do {							\
+		struct list_head *_pos, *_n;			\
+		list_for_each_safe(_pos, _n, head) {		\
+			list_del(_pos);				\
+			kfree(list_entry(_pos, type, member));	\
+		}						\
+	} while (0)
+
+/* Debugging */
+static int __attribute__((format(printf, 2, 3)))
+_ksdebug(struct update *update, const char *fmt, ...);
+#ifdef CONFIG_DEBUG_FS
+static abort_t init_debug_buf(struct update *update);
+static void clear_debug_buf(struct update *update);
+#else /* !CONFIG_DEBUG_FS */
+static abort_t init_debug_buf(struct update *update)
+{
+	return OK;
+}
+
+static void clear_debug_buf(struct update *update)
+{
+	return;
+}
+#endif /* CONFIG_DEBUG_FS */
+
+#define ksdebug(pack, fmt, ...) \
+	_ksdebug(pack->update, fmt, ## __VA_ARGS__)
 
 #if defined(KSPLICE_STANDALONE) && \
     !defined(CONFIG_KSPLICE) && !defined(CONFIG_KSPLICE_MODULE)
@@ -507,46 +544,12 @@ static const struct kernel_symbol *find_symbol(const char *name,
 static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-/* helper */
-static abort_t match_pack_sections(struct ksplice_pack *pack,
-				   bool consider_data_sections);
-static abort_t find_section(struct ksplice_pack *pack,
-			    const struct ksplice_section *sect);
-static abort_t try_addr(struct ksplice_pack *pack,
-			const struct ksplice_section *sect,
-			unsigned long run_addr,
-			struct list_head *safety_records,
-			enum run_pre_mode mode);
-static abort_t run_pre_cmp(struct ksplice_pack *pack,
-			   const struct ksplice_section *sect,
-			   unsigned long run_addr,
-			   struct list_head *safety_records,
-			   enum run_pre_mode mode);
-#ifndef CONFIG_FUNCTION_DATA_SECTIONS
-/* defined in $ARCH/ksplice-arch.c */
-static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
-				unsigned long run_addr,
-				struct list_head *safety_records,
-				enum run_pre_mode mode);
-#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
-static void print_bytes(struct ksplice_pack *pack,
-			const unsigned char *run, int runc,
-			const unsigned char *pre, int prec);
-static abort_t create_safety_record(struct ksplice_pack *pack,
-				    const struct ksplice_section *sect,
-				    struct list_head *record_list,
-				    unsigned long run_addr,
-				    unsigned long run_size);
-
-static abort_t reverse_patches(struct update *update);
-static abort_t apply_patches(struct update *update);
-static abort_t apply_update(struct update *update);
-static abort_t activate_pack(struct ksplice_pack *pack);
-static struct update *init_ksplice_update(const char *kid);
-static void cleanup_ksplice_update(struct update *update);
-static void add_to_update(struct ksplice_pack *pack, struct update *update);
-static int ksplice_sysfs_init(struct update *update);
+/* Architecture-specific functions defined in ARCH/ksplice-arch.c */
+static abort_t create_trampoline(struct ksplice_patch *p);
+static unsigned long trampoline_target(unsigned long addr);
+static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
+			       unsigned long run, int *matched);
+static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 
 #ifndef KSPLICE_STANDALONE
 #include "ksplice-arch.c"
