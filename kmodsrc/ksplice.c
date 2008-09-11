@@ -501,23 +501,10 @@ static bool singular(struct list_head *list)
 	} while (0)
 
 /* Debugging */
-static int __attribute__((format(printf, 2, 3)))
-_ksdebug(struct update *update, const char *fmt, ...);
-#ifdef CONFIG_DEBUG_FS
 static abort_t init_debug_buf(struct update *update);
 static void clear_debug_buf(struct update *update);
-#else /* !CONFIG_DEBUG_FS */
-static abort_t init_debug_buf(struct update *update)
-{
-	return OK;
-}
-
-static void clear_debug_buf(struct update *update)
-{
-	return;
-}
-#endif /* CONFIG_DEBUG_FS */
-
+static int __attribute__((format(printf, 2, 3)))
+_ksdebug(struct update *update, const char *fmt, ...);
 #define ksdebug(pack, fmt, ...) \
 	_ksdebug(pack->update, fmt, ## __VA_ARGS__)
 
@@ -2923,6 +2910,16 @@ static int _ksdebug(struct update *update, const char *fmt, ...)
 	return 0;
 }
 #else /* CONFIG_DEBUG_FS */
+static abort_t init_debug_buf(struct update *update)
+{
+	return OK;
+}
+
+static void clear_debug_buf(struct update *update)
+{
+	return;
+}
+
 static int _ksdebug(struct update *update, const char *fmt, ...)
 {
 	va_list args;
