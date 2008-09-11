@@ -1658,17 +1658,20 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 {
 	int matched = 0;
 	abort_t ret;
-	unsigned long pre_addr = sect->thismod_addr;
 	const struct ksplice_reloc *r;
-	const unsigned char *pre, *run;
+	const unsigned char *pre, *run, *pre_start, *run_start;
 	unsigned char runval;
 
 	if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
 		run_addr = follow_trampolines(pack, run_addr);
 
-	pre = (const unsigned char *)pre_addr;
-	run = (const unsigned char *)run_addr;
-	while (pre < (const unsigned char *)pre_addr + sect->size) {
+	pre_start = (const unsigned char *)sect->thismod_addr;
+	run_start = (const unsigned char *)run_addr;
+
+	pre = pre_start;
+	run = run_start;
+	while (pre < pre_start + sect->size) {
+		unsigned long offset = pre - pre_start;
 		ret = lookup_reloc(pack, (unsigned long)pre, &r);
 		if (ret == OK) {
 			ret = handle_reloc(pack, r, (unsigned long)run, mode);
@@ -1676,8 +1679,7 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 				if (mode == RUN_PRE_INITIAL)
 					ksdebug(pack, "reloc in sect does not "
 						"match after %lx/%lx bytes\n",
-						(unsigned long)pre - pre_addr,
-						sect->size);
+						offset, sect->size);
 				return ret;
 			}
 			if (mode == RUN_PRE_DEBUG)
@@ -1707,22 +1709,17 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 		if (probe_kernel_read(&runval, (void *)run, 1) == -EFAULT) {
 			if (mode == RUN_PRE_INITIAL)
 				ksdebug(pack, "sect unmapped after %lx/%lx "
-					"bytes\n",
-					(unsigned long)pre - pre_addr,
-					sect->size);
+					"bytes\n", offset, sect->size);
 			return NO_MATCH;
 		}
 
 		if (runval != *pre && (sect->flags & KSPLICE_SECTION_DATA) == 0) {
 			if (mode == RUN_PRE_INITIAL)
 				ksdebug(pack, "sect does not match after "
-					"%lx/%lx bytes\n",
-					(unsigned long)pre - pre_addr,
-					sect->size);
+					"%lx/%lx bytes\n", offset, sect->size);
 			if (mode == RUN_PRE_DEBUG) {
 				print_bytes(pack, run, 1, pre, 1);
-				ksdebug(pack, "[p_o=%lx] ! ",
-					(unsigned long)pre - pre_addr);
+				ksdebug(pack, "[p_o=%lx] ! ", offset);
 				print_bytes(pack, run + 1, 2, pre + 1, 2);
 			}
 			return NO_MATCH;
@@ -1733,7 +1730,7 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 		run++;
 	}
 	return create_safety_record(pack, sect, safety_records, run_addr,
-				    (unsigned long)run - run_addr);
+				    run - run_start);
 }
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT

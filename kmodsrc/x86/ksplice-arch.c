@@ -150,8 +150,8 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 
 static abort_t compare_operands(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
-				unsigned long *match_map,
-				unsigned long run_addr,
+				const unsigned char **match_map,
+				const unsigned char *run_start,
 				const unsigned char *run,
 				const unsigned char *pre, struct ud *run_ud,
 				struct ud *pre_ud, int opnum,
@@ -171,19 +171,20 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	int runc, prec;
 	int i;
 	abort_t ret;
-	const unsigned char *run, *pre;
+	const unsigned char *run, *pre, *run_start, *pre_start, *safety_start;
 	struct ud pre_ud, run_ud;
-	unsigned long run_start, pre_addr = sect->thismod_addr;
-
-	unsigned long *match_map;
+	const unsigned char **match_map;
 
 	if (sect->size == 0)
 		return NO_MATCH;
 
 	run_addr = follow_trampolines(pack, run_addr);
 
-	run = (const unsigned char *)run_addr;
-	pre = (const unsigned char *)pre_addr;
+	pre_start = (const unsigned char *)sect->thismod_addr;
+	run_start = (const unsigned char *)run_addr;
+
+	run = run_start;
+	pre = pre_start;
 
 	ud_init(&pre_ud);
 	ud_set_mode(&pre_ud, BITS_PER_LONG);
@@ -197,21 +198,23 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	ud_set_input_hook(&run_ud, next_run_byte);
 	ud_set_pc(&run_ud, 0);
 	run_ud.userdata = (unsigned char *)run_addr;
-	run_start = run_addr;
+	safety_start = run_start;
 
 	match_map = vmalloc(sizeof(*match_map) * sect->size);
 	if (match_map == NULL)
 		return OUT_OF_MEMORY;
 	memset(match_map, 0, sizeof(*match_map) * sect->size);
-	match_map[0] = run_addr;
+	match_map[0] = run_start;
 
 	while (1) {
+		unsigned long pre_offset = pre - pre_start;
+		unsigned long run_offset = run - run_start;
 		if (ud_disassemble(&pre_ud) == 0) {
 			/* Ran out of pre bytes to match; we're done! */
+			unsigned long safety_offset = run - safety_start;
 			ret = create_safety_record(pack, sect, safety_records,
-						   run_start,
-						   (unsigned long)run -
-						   run_start);
+						   (unsigned long)safety_start,
+						   safety_offset);
 			goto out;
 		}
 		if (ud_disassemble(&run_ud) == 0) {
@@ -271,7 +274,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
 
 		for (i = 0; i < ARRAY_SIZE(run_ud.operand); i++) {
-			ret = compare_operands(pack, sect, match_map, run_addr,
+			ret = compare_operands(pack, sect, match_map, run_start,
 					       run, pre, &run_ud, &pre_ud, i,
 					       mode);
 			if (ret != OK)
@@ -293,16 +296,14 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			pre += prec;
 		}
 
-		if ((unsigned long)pre - pre_addr >= sect->size)
+		if (pre - pre_start >= sect->size)
 			continue;
 
-		if (match_map[(unsigned long)pre - pre_addr] ==
-		    (unsigned long)run)
+		if (match_map[pre - pre_start] == run)
 			continue;
 
-		if (match_map[(unsigned long)pre - pre_addr] == 0) {
-			match_map[(unsigned long)pre - pre_addr] =
-			    (unsigned long)run;
+		if (match_map[pre - pre_start] == NULL) {
+			match_map[pre - pre_start] = run;
 			continue;
 		}
 
@@ -321,35 +322,33 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 		      run_ud.mnemonic == UD_Isysenter)) {
 			ksdebug(pack, "<--[No unconditional change of "
 				"control at control transfer point %lx]\n",
-				(unsigned long)pre - pre_addr);
+				pre_offset);
 			return NO_MATCH;
 		}
 
 		if (mode == RUN_PRE_DEBUG)
 			ksdebug(pack, " [Moving run pointer for %lx from %lx "
-				"to %lx]\n", (unsigned long)pre - pre_addr,
-				(unsigned long)run - run_addr,
-				match_map[(unsigned long)pre - pre_addr]
-				- run_addr);
+				"to %lx]\n", pre_offset, run_offset,
+				(unsigned long)(match_map[pre_offset] -
+						run_start));
 
 		/* Create a safety_record for the block just matched */
 		ret = create_safety_record(pack, sect, safety_records,
-					   run_start,
-					   (unsigned long)run - run_start);
+					   (unsigned long)safety_start,
+					   run - safety_start);
 		if (ret != OK)
 			goto out;
 
 		/* We re-initialize the ud structure because
 		   it may have cached upcoming bytes */
-		run = (const unsigned char *)
-		    match_map[(unsigned long)pre - pre_addr];
+		run = match_map[pre - pre_start];
 		ud_init(&run_ud);
 		ud_set_mode(&run_ud, BITS_PER_LONG);
 		ud_set_syntax(&run_ud, UD_SYN_ATT);
 		ud_set_input_hook(&run_ud, next_run_byte);
 		ud_set_pc(&run_ud, 0);
 		run_ud.userdata = (unsigned char *)run;
-		run_start = (unsigned long)run;
+		safety_start = run;
 	}
 out:
 	vfree(match_map);
@@ -358,8 +357,8 @@ out:
 
 static abort_t compare_operands(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
-				unsigned long *match_map,
-				unsigned long run_addr,
+				const unsigned char **match_map,
+				const unsigned char *run_start,
 				const unsigned char *run,
 				const unsigned char *pre, struct ud *run_ud,
 				struct ud *pre_ud, int opnum,
@@ -367,7 +366,10 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 {
 	abort_t ret;
 	int i;
-	unsigned long pre_addr = sect->thismod_addr;
+	const unsigned char *pre_start =
+	    (const unsigned char *)sect->thismod_addr;
+	unsigned long pre_offset = pre - pre_start;
+	unsigned long run_offset = run - run_start;
 	struct ud_operand *run_op = &run_ud->operand[opnum];
 	struct ud_operand *pre_op = &pre_ud->operand[opnum];
 	uint8_t run_off = ud_prefix_len(run_ud);
@@ -427,7 +429,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 		if (ret != OK) {
 			if (mode == RUN_PRE_DEBUG)
 				ksdebug(pack, "Matching failure at offset "
-					"%lx\n", (unsigned long)pre - pre_addr);
+					"%lx\n", pre_offset);
 			return ret;
 		}
 		/* This operand is a successfully processed relocation */
@@ -437,42 +439,43 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 	}
 	if (pre_op->type == UD_OP_JIMM) {
 		/* Immediate jump without a relocation */
-		unsigned long pre_target = (unsigned long)pre +
-		    ud_insn_len(pre_ud) + jump_lval(pre_op);
-		unsigned long run_target = (unsigned long)run +
-		    ud_insn_len(run_ud) + jump_lval(run_op);
+		const unsigned char *pre_target = pre + ud_insn_len(pre_ud) +
+		    jump_lval(pre_op);
+		const unsigned char *run_target = run + ud_insn_len(run_ud) +
+		    jump_lval(run_op);
 		if (pre_target == run_target) {
 			/* Paravirt-inserted pcrel jump; OK! */
 			return OK;
-		} else if (pre_target >= pre_addr &&
-			   pre_target < pre_addr + sect->size) {
+		} else if (pre_target >= pre_start &&
+			   pre_target < pre_start + sect->size) {
 			/* Jump within the current function.
 			   Check it's to a corresponding place */
+			unsigned long new_pre_offset = pre_target - pre_start;
+			unsigned long new_run_offset = run_target - run_start;
 			if (mode == RUN_PRE_DEBUG)
 				ksdebug(pack, "[Jumps: pre=%lx run=%lx "
-					"pret=%lx runt=%lx] ",
-					(unsigned long)pre - pre_addr,
-					(unsigned long)run - run_addr,
-					pre_target - pre_addr,
-					run_target - run_addr);
-			if (match_map[pre_target - pre_addr] != 0 &&
-			    match_map[pre_target - pre_addr] != run_target) {
+					"pret=%lx runt=%lx] ", pre_offset,
+					run_offset, new_pre_offset,
+					new_run_offset);
+			if (match_map[pre_target - pre_start] != NULL &&
+			    match_map[pre_target - pre_start] != run_target) {
 				ksdebug(pack, "<--[Jumps to nonmatching "
 					"locations]\n");
 				return NO_MATCH;
-			} else if (match_map[pre_target - pre_addr] == 0) {
-				match_map[pre_target - pre_addr] = run_target;
+			} else if (match_map[pre_target - pre_start] == NULL) {
+				match_map[pre_target - pre_start] = run_target;
 			}
 			return OK;
 		} else {
 			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(pack, "<--Different operands!\n");
 				ksdebug(pack, "%lx %lx %lx %lx %x %lx %lx "
-					"%lx\n", pre_addr, pre_target,
-					pre_addr + sect->size,
+					"%lx\n", (unsigned long)pre_start,
+					(unsigned long)pre_target,
+					(unsigned long)pre_start + sect->size,
 					(unsigned long)pre, ud_insn_len(pre_ud),
 					sect->size, jump_lval(pre_op),
-					run_target);
+					(unsigned long)run_target);
 			}
 			return NO_MATCH;
 		}
