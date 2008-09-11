@@ -90,6 +90,10 @@ DECLARE_VEC_TYPE(struct export_desc, export_desc_vec);
 DEFINE_HASH_TYPE(bool, bool_hash, bool_hash_init, bool_hash_free,
 		 bool_hash_lookup, bool_init);
 
+#define ulong_init(x) *(x) = 0
+DEFINE_HASH_TYPE(unsigned long, ulong_hash, ulong_hash_init,
+		 ulong_hash_free, ulong_hash_lookup, ulong_init);
+
 void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 			 void (*s_fn)(struct superbfd *, asection *));
 void foreach_new_section(struct superbfd *oldsbfd, struct superbfd *newsbfd,
@@ -163,6 +167,7 @@ DEFINE_HASH_TYPE(struct addr_vec, addr_vec_hash,
 struct addr_vec_hash system_map;
 
 struct bool_hash system_map_written;
+struct ulong_hash ksplice_symbol_offset;
 
 void load_system_map()
 {
@@ -212,6 +217,7 @@ int main(int argc, char *argv[])
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
 	bool_hash_init(&system_map_written);
+	ulong_hash_init(&ksplice_symbol_offset);
 
 	modestr = argv[3];
 	if (mode("keep-primary")) {
@@ -826,8 +832,20 @@ void write_ksplice_symbol(struct supersect *ss,
 {
 	struct supersect *ksymbol_ss = make_section(ss->parent,
 						    ".ksplice_symbols");
-	struct ksplice_symbol *ksymbol = sect_grow(ksymbol_ss, 1,
-						   struct ksplice_symbol);
+	struct ksplice_symbol *ksymbol;
+	unsigned long *ksymbol_offp;
+	const char *label = label_lookup(ss->parent, sym);
+	char *output;
+	assert(asprintf(&output, "%s%s", label, addstr_sect) >= 0);
+
+	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, output, FALSE);
+	if (ksymbol_offp != NULL) {
+		write_reloc(ss, addr, &ksymbol_ss->symbol, *ksymbol_offp);
+		return;
+	}
+	ksymbol = sect_grow(ksymbol_ss, 1, struct ksplice_symbol);
+	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, output, TRUE);
+	*ksymbol_offp = (void *)ksymbol - ksymbol_ss->contents.data;
 
 	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
 		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
@@ -843,13 +861,11 @@ void write_ksplice_symbol(struct supersect *ss,
 				     gsym->name);
 	}
 
-	write_string(ksymbol_ss, &ksymbol->label, "%s%s",
-		     label_lookup(ss->parent, sym), addstr_sect);
+	write_string(ksymbol_ss, &ksymbol->label, "%s%s", label, addstr_sect);
 
 	write_ksplice_system_map(ksymbol_ss->parent, sym, addstr_sect);
 
-	write_reloc(ss, addr, &ksymbol_ss->symbol,
-		    (void *)ksymbol - ksymbol_ss->contents.data);
+	write_reloc(ss, addr, &ksymbol_ss->symbol, *ksymbol_offp);
 }
 
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
