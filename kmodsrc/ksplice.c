@@ -748,7 +748,7 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 		if (!found) {
 			ksdebug(pack, "No safety record for patch %s\n",
 				p->label);
-			return UNEXPECTED;
+			return NO_MATCH;
 		}
 		if (rec->size < p->trampoline.size) {
 			ksdebug(pack, "Symbol %s is too short for trampoline\n",
