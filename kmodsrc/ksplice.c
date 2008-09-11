@@ -2601,8 +2601,7 @@ static abort_t brute_search_all(struct ksplice_pack *pack,
 	pack->update->debug = 0;
 
 	list_for_each_entry(m, &modules, list) {
-		if (starts_with(m->name, pack->name) ||
-		    ends_with(m->name, "_helper"))
+		if (!patches_module(m, pack->target))
 			continue;
 		ret = brute_search(pack, sect, m->module_core, m->core_size,
 				   vals);
