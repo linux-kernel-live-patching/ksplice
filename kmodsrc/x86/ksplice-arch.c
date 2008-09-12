@@ -180,7 +180,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 
 	run_addr = follow_trampolines(pack, run_addr);
 
-	pre_start = (const unsigned char *)sect->thismod_addr;
+	pre_start = (const unsigned char *)sect->address;
 	run_start = (const unsigned char *)run_addr;
 
 	run = run_start;
@@ -366,8 +366,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 {
 	abort_t ret;
 	int i;
-	const unsigned char *pre_start =
-	    (const unsigned char *)sect->thismod_addr;
+	const unsigned char *pre_start = (const unsigned char *)sect->address;
 	unsigned long pre_offset = pre - pre_start;
 	unsigned long run_offset = run - run_start;
 	struct ud_operand *run_op = &run_ud->operand[opnum];

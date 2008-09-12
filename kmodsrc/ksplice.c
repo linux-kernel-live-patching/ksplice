@@ -1295,8 +1295,8 @@ static abort_t try_addr(struct ksplice_pack *pack,
 		ksdebug(pack, "run-pre: %s sect %s does not match (r_a=%lx "
 			"p_a=%lx s=%lx)\n",
 			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "data" :
-			"text", sect->symbol->label, run_addr,
-			sect->thismod_addr, sect->size);
+			"text", sect->symbol->label, run_addr, sect->address,
+			sect->size);
 		ksdebug(pack, "run-pre: ");
 		if (pack->update->debug >= 1) {
 #ifdef CONFIG_FUNCTION_DATA_SECTIONS
@@ -1349,7 +1349,7 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 	if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
 		run_addr = follow_trampolines(pack, run_addr);
 
-	pre_start = (const unsigned char *)sect->thismod_addr;
+	pre_start = (const unsigned char *)sect->address;
 	run_start = (const unsigned char *)run_addr;
 
 	pre = pre_start;
@@ -1454,7 +1454,7 @@ static abort_t brute_search(struct ksplice_pack *pack,
 		if (probe_kernel_read(&run, (void *)addr, 1) == -EFAULT)
 			return OK;
 
-		pre = *(const unsigned char *)(sect->thismod_addr);
+		pre = *(const unsigned char *)(sect->address);
 
 		if (run != pre)
 			continue;
@@ -1762,8 +1762,7 @@ static abort_t apply_patches(struct update *update)
 		     sect < pack->primary_sections_end; sect++) {
 			ret = create_safety_record(pack, sect,
 						   &pack->safety_records,
-						   sect->thismod_addr,
-						   sect->size);
+						   sect->address, sect->size);
 			if (ret != OK)
 				return ret;
 		}

@@ -108,9 +108,9 @@ void show_ksplice_section(struct supersect *ss,
 			  const struct ksplice_section *ksect)
 {
 	printf("symbol: %s\n"
-	       "thismod_addr: %s  size: %lx\n",
+	       "address: %s  size: %lx\n",
 	       str_ksplice_symbolp(ss, &ksect->symbol),
-	       str_pointer(ss, (void *const *)&ksect->thismod_addr),
+	       str_pointer(ss, (void *const *)&ksect->address),
 	       read_num(ss, &ksect->size));
 	show_ksplice_section_flags(ksect);
 	printf("\n");

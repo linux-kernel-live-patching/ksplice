@@ -644,7 +644,7 @@ void write_ksplice_section(struct superbfd *sbfd, asymbol **symp)
 	    starts_with(sym->section->name, ".exit.text"))
 		ksect->flags |= KSPLICE_SECTION_TEXT;
 	assert(ksect->flags != 0);
-	write_reloc(ksect_ss, &ksect->thismod_addr, symp, 0);
+	write_reloc(ksect_ss, &ksect->address, symp, 0);
 }
 
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)

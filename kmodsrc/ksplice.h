@@ -49,14 +49,14 @@ struct ksplice_reloc {
  * struct ksplice_section - Ksplice's analogue of an ELF section
  * @symbol:		The ksplice_symbol associated with this section
  * @size:		The length, in bytes, of this section
- * @thismod_addr:	The address of the section
+ * @address:		The address of the section
  * @flags:		Specifies whether this section contains text, read-only
  * 			data, or data
  **/
 struct ksplice_section {
 	const struct ksplice_symbol *symbol;
+	unsigned long address;
 	unsigned long size;
-	unsigned long thismod_addr;
 	unsigned int flags;
 };
 #define KSPLICE_SECTION_TEXT 0x00000001
