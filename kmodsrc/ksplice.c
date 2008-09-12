@@ -1308,34 +1308,6 @@ void cleanup_ksplice_pack(struct ksplice_pack *pack)
 }
 EXPORT_SYMBOL_GPL(cleanup_ksplice_pack);
 
-static void add_to_update(struct ksplice_pack *pack, struct update *update)
-{
-	pack->update = update;
-	list_add(&pack->list, &update->packs);
-	pack->module_list_entry.target = pack->target;
-	pack->module_list_entry.primary = pack->primary;
-}
-
-static void cleanup_ksplice_update(struct update *update)
-{
-#ifdef KSPLICE_STANDALONE
-	if (bootstrapped)
-		mutex_lock(&module_mutex);
-	list_del(&update->list);
-	if (bootstrapped)
-		mutex_unlock(&module_mutex);
-#else /* !KSPLICE_STANDALONE */
-	mutex_lock(&module_mutex);
-	list_del(&update->list);
-	mutex_unlock(&module_mutex);
-#endif /* KSPLICE_STANDALONE */
-	cleanup_conflicts(update);
-	clear_debug_buf(update);
-	kfree(update->kid);
-	kfree(update->name);
-	kfree(update);
-}
-
 static struct update *init_ksplice_update(const char *kid)
 {
 	struct update *update;
@@ -1365,6 +1337,34 @@ static struct update *init_ksplice_update(const char *kid)
 	update->abort_cause = OK;
 	INIT_LIST_HEAD(&update->conflicts);
 	return update;
+}
+
+static void cleanup_ksplice_update(struct update *update)
+{
+#ifdef KSPLICE_STANDALONE
+	if (bootstrapped)
+		mutex_lock(&module_mutex);
+	list_del(&update->list);
+	if (bootstrapped)
+		mutex_unlock(&module_mutex);
+#else /* !KSPLICE_STANDALONE */
+	mutex_lock(&module_mutex);
+	list_del(&update->list);
+	mutex_unlock(&module_mutex);
+#endif /* KSPLICE_STANDALONE */
+	cleanup_conflicts(update);
+	clear_debug_buf(update);
+	kfree(update->kid);
+	kfree(update->name);
+	kfree(update);
+}
+
+static void add_to_update(struct ksplice_pack *pack, struct update *update)
+{
+	pack->update = update;
+	list_add(&pack->list, &update->packs);
+	pack->module_list_entry.target = pack->target;
+	pack->module_list_entry.primary = pack->primary;
 }
 
 static int ksplice_sysfs_init(struct update *update)
