@@ -2008,6 +2008,76 @@ static void print_bytes(struct ksplice_pack *pack,
 		ksdebug(pack, "/%02x ", pre[o]);
 }
 
+#ifdef KSPLICE_STANDALONE
+static abort_t brute_search(struct ksplice_pack *pack,
+			    const struct ksplice_section *sect,
+			    const void *start, unsigned long len,
+			    struct list_head *vals)
+{
+	unsigned long addr;
+	char run, pre;
+	abort_t ret;
+
+	for (addr = (unsigned long)start; addr < (unsigned long)start + len;
+	     addr++) {
+		if (addr % 100000 == 0)
+			yield();
+
+		if (probe_kernel_read(&run, (void *)addr, 1) == -EFAULT)
+			return OK;
+
+		pre = *(const unsigned char *)(sect->thismod_addr);
+
+		if (run != pre)
+			continue;
+
+		ret = try_addr(pack, sect, addr, NULL, RUN_PRE_INITIAL);
+		if (ret == OK) {
+			ret = add_candidate_val(vals, addr);
+			if (ret != OK)
+				return ret;
+		} else if (ret != NO_MATCH) {
+			return ret;
+		}
+	}
+
+	return OK;
+}
+
+static abort_t brute_search_all(struct ksplice_pack *pack,
+				const struct ksplice_section *sect,
+				struct list_head *vals)
+{
+	struct module *m;
+	abort_t ret = OK;
+	int saved_debug;
+
+	ksdebug(pack, "brute_search: searching for %s\n", sect->symbol->label);
+	saved_debug = pack->update->debug;
+	pack->update->debug = 0;
+
+	list_for_each_entry(m, &modules, list) {
+		if (!patches_module(m, pack->target))
+			continue;
+		ret = brute_search(pack, sect, m->module_core, m->core_size,
+				   vals);
+		if (ret != OK)
+			goto out;
+		ret = brute_search(pack, sect, m->module_init, m->init_size,
+				   vals);
+		if (ret != OK)
+			goto out;
+	}
+
+	ret = brute_search(pack, sect, (const void *)init_mm.start_code,
+			   init_mm.end_code - init_mm.start_code, vals);
+
+out:
+	pack->update->debug = saved_debug;
+	return ret;
+}
+#endif /* KSPLICE_STANDALONE */
+
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 static struct module *__module_data_address(unsigned long addr)
 {
@@ -2510,76 +2580,6 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 	return (__force int)OK;
 }
 #endif /* CONFIG_KALLSYMS */
-
-#ifdef KSPLICE_STANDALONE
-static abort_t brute_search(struct ksplice_pack *pack,
-			    const struct ksplice_section *sect,
-			    const void *start, unsigned long len,
-			    struct list_head *vals)
-{
-	unsigned long addr;
-	char run, pre;
-	abort_t ret;
-
-	for (addr = (unsigned long)start; addr < (unsigned long)start + len;
-	     addr++) {
-		if (addr % 100000 == 0)
-			yield();
-
-		if (probe_kernel_read(&run, (void *)addr, 1) == -EFAULT)
-			return OK;
-
-		pre = *(const unsigned char *)(sect->thismod_addr);
-
-		if (run != pre)
-			continue;
-
-		ret = try_addr(pack, sect, addr, NULL, RUN_PRE_INITIAL);
-		if (ret == OK) {
-			ret = add_candidate_val(vals, addr);
-			if (ret != OK)
-				return ret;
-		} else if (ret != NO_MATCH) {
-			return ret;
-		}
-	}
-
-	return OK;
-}
-
-static abort_t brute_search_all(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
-				struct list_head *vals)
-{
-	struct module *m;
-	abort_t ret = OK;
-	int saved_debug;
-
-	ksdebug(pack, "brute_search: searching for %s\n", sect->symbol->label);
-	saved_debug = pack->update->debug;
-	pack->update->debug = 0;
-
-	list_for_each_entry(m, &modules, list) {
-		if (!patches_module(m, pack->target))
-			continue;
-		ret = brute_search(pack, sect, m->module_core, m->core_size,
-				   vals);
-		if (ret != OK)
-			goto out;
-		ret = brute_search(pack, sect, m->module_init, m->init_size,
-				   vals);
-		if (ret != OK)
-			goto out;
-	}
-
-	ret = brute_search(pack, sect, (const void *)init_mm.start_code,
-			   init_mm.end_code - init_mm.start_code, vals);
-
-out:
-	pack->update->debug = saved_debug;
-	return ret;
-}
-#endif /* KSPLICE_STANDALONE */
 
 #if defined KSPLICE_NO_KERNEL_SUPPORT && defined CONFIG_KALLSYMS
 static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
