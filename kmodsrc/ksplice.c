@@ -427,12 +427,6 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 static abort_t kernel_lookup(const char *name, struct list_head *vals);
 static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 				   struct list_head *vals);
-#ifdef KSPLICE_STANDALONE
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
-						    char *result);
-#endif /* LINUX_VERSION_CODE */
-#endif /* KSPLICE_STANDALONE */
 #endif /* CONFIG_KALLSYMS */
 static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
 static abort_t new_export_lookup(struct update *update,
@@ -499,6 +493,13 @@ _ksdebug(struct update *update, const char *fmt, ...);
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 /* Functions defined here that will be exported in later kernels */
 #ifdef CONFIG_KALLSYMS
+static int kernel_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
+						    unsigned long),
+					  void *data);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
+						    char *result);
+#endif /* LINUX_VERSION_CODE */
 static int module_kallsyms_on_each_symbol(const struct module *mod,
 					  int (*fn)(void *, const char *,
 						    unsigned long),
@@ -2616,17 +2617,20 @@ out:
 	pack->update->debug = saved_debug;
 	return ret;
 }
+#endif /* KSPLICE_STANDALONE */
 
 #ifdef CONFIG_KALLSYMS
-/* Modified version of Linux's kallsyms_lookup_name */
-static abort_t kernel_lookup(const char *name, struct list_head *vals)
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+static int kernel_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
+						    unsigned long),
+					  void *data)
 {
-	abort_t ret;
-	char namebuf[KSYM_NAME_LEN + 1];
+	char namebuf[KSYM_NAME_LEN];
 	unsigned long i;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 	unsigned long off;
 #endif /* LINUX_VERSION_CODE */
+	int ret;
 
 /*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
  *  2.6.10 was the first release after this commit
@@ -2634,12 +2638,9 @@ static abort_t kernel_lookup(const char *name, struct list_head *vals)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 	for (i = 0, off = 0; i < kallsyms_num_syms; i++) {
 		off = ksplice_kallsyms_expand_symbol(off, namebuf);
-
-		if (strcmp(namebuf, name) == 0) {
-			ret = add_candidate_val(vals, kallsyms_addresses[i]);
-			if (ret != OK)
-				return ret;
-		}
+		ret = fn(data, namebuf, kallsyms_addresses[i]);
+		if (ret != 0)
+			return ret;
 	}
 #else /* LINUX_VERSION_CODE < */
 	char *knames;
@@ -2649,17 +2650,14 @@ static abort_t kernel_lookup(const char *name, struct list_head *vals)
 
 		strlcpy(namebuf + prefix, knames, KSYM_NAME_LEN - prefix);
 
-		if (strcmp(namebuf, name) == 0) {
-			ret = add_candidate_val(vals, kallsyms_addresses[i]);
-			if (ret != OK)
-				return ret;
-		}
+		ret = fn(data, namebuf, kallsyms_addresses[i]);
+		if (ret != OK)
+			return ret;
 
 		knames += strlen(knames) + 1;
 	}
 #endif /* LINUX_VERSION_CODE */
-
-	return OK;
+	return 0;
 }
 
 /*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
@@ -2702,7 +2700,6 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 }
 #endif /* LINUX_VERSION_CODE */
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
 static int module_kallsyms_on_each_symbol(const struct module *mod,
 					  int (*fn)(void *, const char *,
 						    unsigned long),
@@ -2720,8 +2717,6 @@ static int module_kallsyms_on_each_symbol(const struct module *mod,
 	return 0;
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
-#endif /* CONFIG_KALLSYMS */
-#else /* !KSPLICE_STANDALONE */
 
 static abort_t kernel_lookup(const char *name, struct list_head *vals)
 {
@@ -2729,7 +2724,7 @@ static abort_t kernel_lookup(const char *name, struct list_head *vals)
 	return (__force abort_t)
 	    kernel_kallsyms_on_each_symbol(accumulate_matching_names, &acc);
 }
-#endif /* KSPLICE_STANDALONE */
+#endif /* CONFIG_KALLSYMS */
 
 static abort_t add_candidate_val(struct list_head *vals, unsigned long val)
 {
