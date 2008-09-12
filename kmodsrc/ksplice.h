@@ -182,7 +182,7 @@ extern struct list_head ksplice_module_list;
  * @exports_end:		The end pointer for the exports array
  * @update:			The atomic update the pack is part of
  * @target:			The module modified by the pack
- * @reloc_namevals:		The mapping between Ksplice symbol labels and
+ * @labelvals:			The mapping between Ksplice symbol labels and
  *				their values
  * @safety_records:		The ranges of addresses that must not be on a
  *				kernel stack for the patch to apply safely
@@ -215,7 +215,7 @@ struct ksplice_pack {
 	struct ksplice_module_list_entry module_list_entry;
 	struct update *update;
 	struct module *target;
-	struct list_head reloc_namevals;
+	struct list_head labelvals;
 	struct list_head safety_records;
 	struct list_head list;
 };

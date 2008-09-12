@@ -127,7 +127,7 @@ struct debugfs_blob_wrapper {
 };
 #endif /* CONFIG_DEBUG_FS && LINUX_VERSION_CODE */
 
-struct reloc_nameval {
+struct labelval {
 	struct list_head list;
 	const char *label;
 	unsigned long val;
@@ -462,10 +462,10 @@ static void print_conflicts(struct update *update);
 static void insert_trampoline(struct ksplice_trampoline *t);
 static void remove_trampoline(const struct ksplice_trampoline *t);
 
-static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
-					  const char *label);
-static abort_t create_nameval(struct ksplice_pack *pack, const char *label,
-			      unsigned long val, int status);
+static struct labelval *find_labelval(struct ksplice_pack *pack,
+				      const char *label);
+static abort_t create_labelval(struct ksplice_pack *pack, const char *label,
+			       unsigned long val, int status);
 static abort_t create_safety_record(struct ksplice_pack *pack,
 				    const struct ksplice_section *sect,
 				    struct list_head *record_list,
@@ -475,7 +475,7 @@ static abort_t add_candidate_val(struct list_head *vals, unsigned long val);
 static void prune_trampoline_vals(struct ksplice_pack *pack,
 				  struct list_head *vals);
 static void release_vals(struct list_head *vals);
-static void set_temp_namevals(struct ksplice_pack *pack, int status_val);
+static void set_temp_labelvals(struct ksplice_pack *pack, int status_val);
 
 static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 			   int size, long dst_mask);
@@ -557,7 +557,7 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 		return -1;
 #endif /* KSPLICE_STANDALONE */
 
-	INIT_LIST_HEAD(&pack->reloc_namevals);
+	INIT_LIST_HEAD(&pack->labelvals);
 	INIT_LIST_HEAD(&pack->safety_records);
 
 	mutex_lock(&module_mutex);
@@ -742,7 +742,7 @@ static abort_t apply_update(struct update *update)
 	ret = apply_patches(update);
 out:
 	list_for_each_entry(pack, &update->packs, list) {
-		clear_list(&pack->reloc_namevals, struct reloc_nameval, list);
+		clear_list(&pack->labelvals, struct labelval, list);
 		if (update->stage == STAGE_PREPARING)
 			clear_list(&pack->safety_records, struct safety_record,
 				   list);
@@ -845,14 +845,14 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 	abort_t ret;
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
-		struct reloc_nameval *nv = find_nameval(pack, p->label);
+		struct labelval *lv = find_labelval(pack, p->label);
 		bool found = false;
-		if (nv == NULL) {
+		if (lv == NULL) {
 			ksdebug(pack, "Failed to find %s for oldaddr\n",
 				p->label);
 			return FAILED_TO_FIND;
 		}
-		p->trampoline.oldaddr = nv->val;
+		p->trampoline.oldaddr = lv->val;
 
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (strcmp(rec->label, p->label) == 0 &&
@@ -999,9 +999,9 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	if (!bootstrapped)
 		return OK;
 #endif /* KSPLICE_STANDALONE */
-	/* Create namevals so that we can verify our choices in the second
+	/* Create labelvals so that we can verify our choices in the second
 	   round of run-pre matching that considers data sections. */
-	ret = create_nameval(pack, r->symbol->label, sym_addr, VAL);
+	ret = create_labelval(pack, r->symbol->label, sym_addr, VAL);
 	if (ret != OK)
 		return ret;
 	return add_dependency_on_address(pack, sym_addr);
@@ -1277,7 +1277,7 @@ static abort_t try_addr(struct ksplice_pack *pack,
 		return NO_MATCH;
 	}
 
-	ret = create_nameval(pack, sect->symbol->label, run_addr, TEMP);
+	ret = create_labelval(pack, sect->symbol->label, run_addr, TEMP);
 	if (ret != OK)
 		return ret;
 
@@ -1291,7 +1291,7 @@ static abort_t try_addr(struct ksplice_pack *pack,
 		ret = run_pre_cmp(pack, sect, run_addr, safety_records, mode);
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
 	if (ret == NO_MATCH && mode != RUN_PRE_FINAL) {
-		set_temp_namevals(pack, NOVAL);
+		set_temp_labelvals(pack, NOVAL);
 		ksdebug(pack, "run-pre: %s sect %s does not match (r_a=%lx "
 			"p_a=%lx s=%lx)\n",
 			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "data" :
@@ -1312,23 +1312,23 @@ static abort_t try_addr(struct ksplice_pack *pack,
 						  safety_records,
 						  RUN_PRE_DEBUG);
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
-			set_temp_namevals(pack, NOVAL);
+			set_temp_labelvals(pack, NOVAL);
 		}
 		ksdebug(pack, "\n");
 		return ret;
 	} else if (ret != OK) {
-		set_temp_namevals(pack, NOVAL);
+		set_temp_labelvals(pack, NOVAL);
 		return ret;
 	}
 
 	if (mode != RUN_PRE_FINAL) {
-		set_temp_namevals(pack, NOVAL);
+		set_temp_labelvals(pack, NOVAL);
 		ksdebug(pack, "run-pre: candidate for sect %s=%lx\n",
 			sect->symbol->label, run_addr);
 		return OK;
 	}
 
-	set_temp_namevals(pack, VAL);
+	set_temp_labelvals(pack, VAL);
 	ksdebug(pack, "run-pre: found sect %s=%lx\n", sect->symbol->label,
 		run_addr);
 	return OK;
@@ -1562,12 +1562,12 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 		return UNEXPECTED;
 	}
 
-	ret = create_nameval(pack, r->symbol->label, val, TEMP);
+	ret = create_labelval(pack, r->symbol->label, val, TEMP);
 	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
-		struct reloc_nameval *nv = find_nameval(pack, r->symbol->label);
-		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx: nameval %s = "
-			"%lx(%d) does not match expected %lx\n", run_addr,
-			r->blank_addr, r->symbol->label, nv->val, nv->status,
+		struct labelval *lv = find_labelval(pack, r->symbol->label);
+		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx: labelval %s "
+			"= %lx(%d) does not match expected %lx\n", run_addr,
+			r->blank_addr, r->symbol->label, lv->val, lv->status,
 			val);
 	}
 	return ret;
@@ -1578,19 +1578,19 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 			     struct list_head *vals)
 {
 	abort_t ret;
-	struct reloc_nameval *nv;
+	struct labelval *lv;
 
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return OK;
 #endif /* KSPLICE_STANDALONE */
 
-	nv = find_nameval(pack, ksym->label);
-	if (nv != NULL) {
+	lv = find_labelval(pack, ksym->label);
+	if (lv != NULL) {
 		release_vals(vals);
 		ksdebug(pack, "using detected sym %s=%lx\n", ksym->label,
-			nv->val);
-		return add_candidate_val(vals, nv->val);
+			lv->val);
+		return add_candidate_val(vals, lv->val);
 	}
 
 	if (starts_with(ksym->label, ".rodata.str"))
@@ -2103,31 +2103,31 @@ static void remove_trampoline(const struct ksplice_trampoline *t)
 	set_fs(old_fs);
 }
 
-static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
-					  const char *label)
+static struct labelval *find_labelval(struct ksplice_pack *pack,
+				      const char *label)
 {
-	struct reloc_nameval *nv;
-	list_for_each_entry(nv, &pack->reloc_namevals, list) {
-		if (strcmp(nv->label, label) == 0)
-			return nv;
+	struct labelval *lv;
+	list_for_each_entry(lv, &pack->labelvals, list) {
+		if (strcmp(lv->label, label) == 0)
+			return lv;
 	}
 	return NULL;
 }
 
-static abort_t create_nameval(struct ksplice_pack *pack, const char *label,
-			      unsigned long val, int status)
+static abort_t create_labelval(struct ksplice_pack *pack, const char *label,
+			       unsigned long val, int status)
 {
-	struct reloc_nameval *nv = find_nameval(pack, label);
-	if (nv != NULL)
-		return nv->val == val ? OK : NO_MATCH;
+	struct labelval *lv = find_labelval(pack, label);
+	if (lv != NULL)
+		return lv->val == val ? OK : NO_MATCH;
 
-	nv = kmalloc(sizeof(*nv), GFP_KERNEL);
-	if (nv == NULL)
+	lv = kmalloc(sizeof(*lv), GFP_KERNEL);
+	if (lv == NULL)
 		return OUT_OF_MEMORY;
-	nv->label = label;
-	nv->val = val;
-	nv->status = status;
-	list_add(&nv->list, &pack->reloc_namevals);
+	lv->label = label;
+	lv->val = val;
+	lv->status = status;
+	list_add(&lv->list, &pack->labelvals);
 	return OK;
 }
 
@@ -2219,16 +2219,16 @@ static void release_vals(struct list_head *vals)
 	clear_list(vals, struct candidate_val, list);
 }
 
-static void set_temp_namevals(struct ksplice_pack *pack, int status)
+static void set_temp_labelvals(struct ksplice_pack *pack, int status)
 {
-	struct reloc_nameval *nv, *n;
-	list_for_each_entry_safe(nv, n, &pack->reloc_namevals, list) {
-		if (nv->status == TEMP) {
+	struct labelval *lv, *n;
+	list_for_each_entry_safe(lv, n, &pack->labelvals, list) {
+		if (lv->status == TEMP) {
 			if (status == NOVAL) {
-				list_del(&nv->list);
-				kfree(nv);
+				list_del(&lv->list);
+				kfree(lv);
 			} else {
-				nv->status = status;
+				lv->status = status;
 			}
 		}
 	}
@@ -2971,7 +2971,7 @@ static struct ksplice_pack bootstrap_pack = {
 	.target = NULL,
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
-	.reloc_namevals = LIST_HEAD_INIT(bootstrap_pack.reloc_namevals),
+	.labelvals = LIST_HEAD_INIT(bootstrap_pack.labelvals),
 	.primary_system_map = ksplice_system_map,
 	.primary_system_map_end = ksplice_system_map_end,
 };
