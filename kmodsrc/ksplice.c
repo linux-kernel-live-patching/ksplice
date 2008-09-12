@@ -424,7 +424,6 @@ add_system_map_candidates(struct ksplice_pack *pack,
 #ifdef CONFIG_KALLSYMS
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val);
-static abort_t kernel_lookup(const char *name, struct list_head *vals);
 static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 				   struct list_head *vals);
 #endif /* CONFIG_KALLSYMS */
@@ -2243,10 +2242,6 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 		return ret;
 
 #ifdef CONFIG_KALLSYMS
-	ret = kernel_lookup(ksym->name, vals);
-	if (ret != OK)
-		return ret;
-
 	ret = other_module_lookup(pack, ksym->name, vals);
 	if (ret != OK)
 		return ret;
@@ -2505,8 +2500,15 @@ static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 		    module_kallsyms_on_each_symbol(m, accumulate_matching_names,
 						   &acc);
 		if (ret != OK)
-			break;
+			return ret;
 	}
+
+	if (pack->target == NULL)
+		ret = (__force abort_t)
+		    kernel_kallsyms_on_each_symbol(accumulate_matching_names,
+						   &acc);
+	else
+		ret = OK;
 	return ret;
 }
 #else /* !KSPLICE_NO_KERNEL_SUPPORT */
@@ -2529,10 +2531,14 @@ static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 			return ret;
 	}
 	if (pack->target == NULL)
-		return OK;
-	ret = (__force abort_t)
-	    module_kallsyms_on_each_symbol(pack->target,
-					   accumulate_matching_names, &acc);
+		ret = (__force abort_t)
+		    kernel_kallsyms_on_each_symbol(accumulate_matching_names,
+						   &acc);
+	else
+		ret = (__force abort_t)
+		    module_kallsyms_on_each_symbol(pack->target,
+						   accumulate_matching_names,
+						   &acc);
 	return ret;
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
@@ -2619,8 +2625,7 @@ out:
 }
 #endif /* KSPLICE_STANDALONE */
 
-#ifdef CONFIG_KALLSYMS
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
+#if defined KSPLICE_NO_KERNEL_SUPPORT && defined CONFIG_KALLSYMS
 static int kernel_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 						    unsigned long),
 					  void *data)
@@ -2716,15 +2721,7 @@ static int module_kallsyms_on_each_symbol(const struct module *mod,
 	}
 	return 0;
 }
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
-
-static abort_t kernel_lookup(const char *name, struct list_head *vals)
-{
-	struct accumulate_struct acc = { name, vals };
-	return (__force abort_t)
-	    kernel_kallsyms_on_each_symbol(accumulate_matching_names, &acc);
-}
-#endif /* CONFIG_KALLSYMS */
+#endif /* KSPLICE_NO_KERNEL_SUPPORT && CONFIG_KALLSYMS */
 
 static abort_t add_candidate_val(struct list_head *vals, unsigned long val)
 {
