@@ -581,7 +581,7 @@ static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
 	if (probe_kernel_read(&byte, (void *)addr, sizeof(byte)) == -EFAULT)
 		return NO_MATCH;
 
-	if (byte != 0xE9)
+	if (byte != 0xe9)
 		return NO_MATCH;
 
 	ret = read_reloc_value(pack, &trampoline_reloc, addr + 1, new_addr);
@@ -596,7 +596,7 @@ static abort_t prepare_trampoline(struct ksplice_pack *pack,
 				  struct ksplice_trampoline *t)
 {
 	t->size = 5;
-	t->trampoline[0] = 0xE9;
+	t->trampoline[0] = 0xe9;
 	return write_reloc_value(pack, &trampoline_reloc,
 				 (unsigned long)t->trampoline + 1,
 				 t->repladdr - (t->oldaddr + 1));
