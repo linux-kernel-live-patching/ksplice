@@ -1491,6 +1491,100 @@ static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 	return OK;
 }
 
+static abort_t apply_relocs(struct ksplice_pack *pack,
+			    const struct ksplice_reloc *relocs,
+			    const struct ksplice_reloc *relocs_end)
+{
+	const struct ksplice_reloc *r;
+	for (r = relocs; r < relocs_end; r++) {
+		abort_t ret = apply_reloc(pack, r);
+		if (ret != OK)
+			return ret;
+	}
+	return OK;
+}
+
+static abort_t apply_reloc(struct ksplice_pack *pack,
+			   const struct ksplice_reloc *r)
+{
+	abort_t ret;
+	int canary_ret;
+	unsigned long sym_addr;
+	LIST_HEAD(vals);
+
+	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
+	if (canary_ret < 0)
+		return UNEXPECTED;
+	if (canary_ret == 0) {
+		ksdebug(pack, "reloc: skipped %s:%lx (altinstr)\n",
+			r->symbol->label, r->blank_offset);
+		return OK;
+	}
+
+#ifdef KSPLICE_STANDALONE
+	if (!bootstrapped) {
+		ret = add_system_map_candidates(pack,
+						pack->primary_system_map,
+						pack->primary_system_map_end,
+						r->symbol->label, &vals);
+		if (ret != OK) {
+			release_vals(&vals);
+			return ret;
+		}
+	}
+#endif /* KSPLICE_STANDALONE */
+	ret = lookup_symbol(pack, r->symbol, &vals);
+	if (ret != OK) {
+		release_vals(&vals);
+		return ret;
+	}
+	if (!singular(&vals)) {
+		release_vals(&vals);
+		ksdebug(pack, "Failed to find %s for reloc\n",
+			r->symbol->label);
+		return FAILED_TO_FIND;
+	}
+	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
+	release_vals(&vals);
+
+	ret = write_reloc_value(pack, r, r->blank_addr,
+				r->pcrel ? sym_addr - r->blank_addr : sym_addr);
+	if (ret != OK)
+		return ret;
+
+	ksdebug(pack, "reloc: %s:%lx", r->symbol->label, r->blank_offset);
+	ksdebug(pack, "(S=%lx A=%lx ", sym_addr, r->addend);
+	switch (r->size) {
+	case 1:
+		ksdebug(pack, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
+		break;
+	case 2:
+		ksdebug(pack, "aft=%04x)\n", *(uint16_t *)r->blank_addr);
+		break;
+	case 4:
+		ksdebug(pack, "aft=%08x)\n", *(uint32_t *)r->blank_addr);
+		break;
+#if BITS_PER_LONG >= 64
+	case 8:
+		ksdebug(pack, "aft=%016llx)\n", *(uint64_t *)r->blank_addr);
+		break;
+#endif /* BITS_PER_LONG */
+	default:
+		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		return UNEXPECTED;
+	}
+#ifdef KSPLICE_STANDALONE
+	if (!bootstrapped)
+		return OK;
+#endif /* KSPLICE_STANDALONE */
+	/* Create namevals so that we can verify our choices in the second
+	   round of run-pre matching that considers data sections. */
+	ret = create_nameval(pack, r->symbol->label, sym_addr, VAL);
+	if (ret != OK)
+		return ret;
+	return add_dependency_on_address(pack, sym_addr);
+}
+
 static abort_t match_pack_sections(struct ksplice_pack *pack,
 				   bool consider_data_sections)
 {
@@ -1999,100 +2093,6 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 	}
 
 	return OK;
-}
-
-static abort_t apply_relocs(struct ksplice_pack *pack,
-			    const struct ksplice_reloc *relocs,
-			    const struct ksplice_reloc *relocs_end)
-{
-	const struct ksplice_reloc *r;
-	for (r = relocs; r < relocs_end; r++) {
-		abort_t ret = apply_reloc(pack, r);
-		if (ret != OK)
-			return ret;
-	}
-	return OK;
-}
-
-static abort_t apply_reloc(struct ksplice_pack *pack,
-			   const struct ksplice_reloc *r)
-{
-	abort_t ret;
-	int canary_ret;
-	unsigned long sym_addr;
-	LIST_HEAD(vals);
-
-	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
-	if (canary_ret < 0)
-		return UNEXPECTED;
-	if (canary_ret == 0) {
-		ksdebug(pack, "reloc: skipped %s:%lx (altinstr)\n",
-			r->symbol->label, r->blank_offset);
-		return OK;
-	}
-
-#ifdef KSPLICE_STANDALONE
-	if (!bootstrapped) {
-		ret = add_system_map_candidates(pack,
-						pack->primary_system_map,
-						pack->primary_system_map_end,
-						r->symbol->label, &vals);
-		if (ret != OK) {
-			release_vals(&vals);
-			return ret;
-		}
-	}
-#endif /* KSPLICE_STANDALONE */
-	ret = lookup_symbol(pack, r->symbol, &vals);
-	if (ret != OK) {
-		release_vals(&vals);
-		return ret;
-	}
-	if (!singular(&vals)) {
-		release_vals(&vals);
-		ksdebug(pack, "Failed to find %s for reloc\n",
-			r->symbol->label);
-		return FAILED_TO_FIND;
-	}
-	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
-	release_vals(&vals);
-
-	ret = write_reloc_value(pack, r, r->blank_addr,
-				r->pcrel ? sym_addr - r->blank_addr : sym_addr);
-	if (ret != OK)
-		return ret;
-
-	ksdebug(pack, "reloc: %s:%lx", r->symbol->label, r->blank_offset);
-	ksdebug(pack, "(S=%lx A=%lx ", sym_addr, r->addend);
-	switch (r->size) {
-	case 1:
-		ksdebug(pack, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
-		break;
-	case 2:
-		ksdebug(pack, "aft=%04x)\n", *(uint16_t *)r->blank_addr);
-		break;
-	case 4:
-		ksdebug(pack, "aft=%08x)\n", *(uint32_t *)r->blank_addr);
-		break;
-#if BITS_PER_LONG >= 64
-	case 8:
-		ksdebug(pack, "aft=%016llx)\n", *(uint64_t *)r->blank_addr);
-		break;
-#endif /* BITS_PER_LONG */
-	default:
-		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
-		return UNEXPECTED;
-	}
-#ifdef KSPLICE_STANDALONE
-	if (!bootstrapped)
-		return OK;
-#endif /* KSPLICE_STANDALONE */
-	/* Create namevals so that we can verify our choices in the second
-	   round of run-pre matching that considers data sections. */
-	ret = create_nameval(pack, r->symbol->label, sym_addr, VAL);
-	if (ret != OK)
-		return ret;
-	return add_dependency_on_address(pack, sym_addr);
 }
 
 #ifdef KSPLICE_STANDALONE
