@@ -2526,33 +2526,6 @@ static const struct kernel_symbol *find_symbol(const char *name,
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-/* Does module a patch module b? */
-static bool patches_module(const struct module *a, const struct module *b)
-{
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
-	const char *name;
-	if (a == b)
-		return true;
-	if (a == NULL || !starts_with(a->name, "ksplice_"))
-		return false;
-	name = a->name + strlen("ksplice_");
-	name += strcspn(name, "_");
-	if (name[0] != '_')
-		return false;
-	name++;
-	return strcmp(name, b == NULL ? "vmlinux" : b->name) == 0;
-#else /* !KSPLICE_NO_KERNEL_SUPPORT */
-	struct ksplice_module_list_entry *entry;
-	if (a == b)
-		return true;
-	list_for_each_entry(entry, &ksplice_module_list, list) {
-		if (entry->target == b && entry->primary == a)
-			return true;
-	}
-	return false;
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
-}
-
 #if defined KSPLICE_NO_KERNEL_SUPPORT && defined CONFIG_KALLSYMS
 static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 					     struct module *, unsigned long),
@@ -2826,6 +2799,33 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 		return new_addr;
 	}
 	return addr;
+}
+
+/* Does module a patch module b? */
+static bool patches_module(const struct module *a, const struct module *b)
+{
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+	const char *name;
+	if (a == b)
+		return true;
+	if (a == NULL || !starts_with(a->name, "ksplice_"))
+		return false;
+	name = a->name + strlen("ksplice_");
+	name += strcspn(name, "_");
+	if (name[0] != '_')
+		return false;
+	name++;
+	return strcmp(name, b == NULL ? "vmlinux" : b->name) == 0;
+#else /* !KSPLICE_NO_KERNEL_SUPPORT */
+	struct ksplice_module_list_entry *entry;
+	if (a == b)
+		return true;
+	list_for_each_entry(entry, &ksplice_module_list, list) {
+		if (entry->target == b && entry->primary == a)
+			return true;
+	}
+	return false;
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 }
 
 static bool starts_with(const char *str, const char *prefix)
