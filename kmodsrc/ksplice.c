@@ -367,12 +367,12 @@ static abort_t apply_relocs(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *relocs_end);
 static abort_t apply_reloc(struct ksplice_pack *pack,
 			   const struct ksplice_reloc *r);
-static abort_t write_reloc_value(struct ksplice_pack *pack,
-				 const struct ksplice_reloc *r,
-				 unsigned long addr, unsigned long sym_addr);
 static abort_t read_reloc_value(struct ksplice_pack *pack,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp);
+static abort_t write_reloc_value(struct ksplice_pack *pack,
+				 const struct ksplice_reloc *r,
+				 unsigned long addr, unsigned long sym_addr);
 
 /* run-pre matching */
 static abort_t match_pack_sections(struct ksplice_pack *pack,
@@ -1585,6 +1585,83 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	return add_dependency_on_address(pack, sym_addr);
 }
 
+static abort_t read_reloc_value(struct ksplice_pack *pack,
+				const struct ksplice_reloc *r,
+				unsigned long addr, unsigned long *valp)
+{
+	unsigned char bytes[sizeof(long)];
+	unsigned long val;
+
+	if (probe_kernel_read(bytes, (void *)addr, r->size) == -EFAULT)
+		return NO_MATCH;
+
+	switch (r->size) {
+	case 1:
+		val = *(uint8_t *)bytes;
+		break;
+	case 2:
+		val = *(uint16_t *)bytes;
+		break;
+	case 4:
+		val = *(uint32_t *)bytes;
+		break;
+#if BITS_PER_LONG >= 64
+	case 8:
+		val = *(uint64_t *)bytes;
+		break;
+#endif /* BITS_PER_LONG */
+	default:
+		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		return UNEXPECTED;
+	}
+
+	val &= r->dst_mask;
+	if (r->signed_addend)
+		val |= -(val & (r->dst_mask & ~(r->dst_mask >> 1)));
+	val <<= r->rightshift;
+	val -= r->addend;
+	*valp = val;
+	return OK;
+}
+
+static abort_t write_reloc_value(struct ksplice_pack *pack,
+				 const struct ksplice_reloc *r,
+				 unsigned long addr, unsigned long sym_addr)
+{
+	unsigned long val = sym_addr + r->addend;
+	val >>= r->rightshift;
+	switch (r->size) {
+	case 1:
+		*(uint8_t *)addr =
+		    (*(uint8_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
+		break;
+	case 2:
+		*(uint16_t *)addr =
+		    (*(uint16_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
+		break;
+	case 4:
+		*(uint32_t *)addr =
+		    (*(uint32_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
+		break;
+#if BITS_PER_LONG >= 64
+	case 8:
+		*(uint64_t *)addr =
+		    (*(uint64_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
+		break;
+#endif /* BITS_PER_LONG */
+	default:
+		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		return UNEXPECTED;
+	}
+
+	if (read_reloc_value(pack, r, addr, &val) != OK || val != sym_addr) {
+		ksdebug(pack, "Aborted.  Relocation overflow.\n");
+		return UNEXPECTED;
+	}
+
+	return OK;
+}
+
 static abort_t match_pack_sections(struct ksplice_pack *pack,
 				   bool consider_data_sections)
 {
@@ -2016,83 +2093,6 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 			val);
 	}
 	return ret;
-}
-
-static abort_t read_reloc_value(struct ksplice_pack *pack,
-				const struct ksplice_reloc *r,
-				unsigned long addr, unsigned long *valp)
-{
-	unsigned char bytes[sizeof(long)];
-	unsigned long val;
-
-	if (probe_kernel_read(bytes, (void *)addr, r->size) == -EFAULT)
-		return NO_MATCH;
-
-	switch (r->size) {
-	case 1:
-		val = *(uint8_t *)bytes;
-		break;
-	case 2:
-		val = *(uint16_t *)bytes;
-		break;
-	case 4:
-		val = *(uint32_t *)bytes;
-		break;
-#if BITS_PER_LONG >= 64
-	case 8:
-		val = *(uint64_t *)bytes;
-		break;
-#endif /* BITS_PER_LONG */
-	default:
-		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
-		return UNEXPECTED;
-	}
-
-	val &= r->dst_mask;
-	if (r->signed_addend)
-		val |= -(val & (r->dst_mask & ~(r->dst_mask >> 1)));
-	val <<= r->rightshift;
-	val -= r->addend;
-	*valp = val;
-	return OK;
-}
-
-static abort_t write_reloc_value(struct ksplice_pack *pack,
-				 const struct ksplice_reloc *r,
-				 unsigned long addr, unsigned long sym_addr)
-{
-	unsigned long val = sym_addr + r->addend;
-	val >>= r->rightshift;
-	switch (r->size) {
-	case 1:
-		*(uint8_t *)addr =
-		    (*(uint8_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
-		break;
-	case 2:
-		*(uint16_t *)addr =
-		    (*(uint16_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
-		break;
-	case 4:
-		*(uint32_t *)addr =
-		    (*(uint32_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
-		break;
-#if BITS_PER_LONG >= 64
-	case 8:
-		*(uint64_t *)addr =
-		    (*(uint64_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
-		break;
-#endif /* BITS_PER_LONG */
-	default:
-		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
-		return UNEXPECTED;
-	}
-
-	if (read_reloc_value(pack, r, addr, &val) != OK || val != sym_addr) {
-		ksdebug(pack, "Aborted.  Relocation overflow.\n");
-		return UNEXPECTED;
-	}
-
-	return OK;
 }
 
 #ifdef KSPLICE_STANDALONE
