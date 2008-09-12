@@ -1479,6 +1479,18 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 	return OK;
 }
 
+static abort_t add_dependency_on_address(struct ksplice_pack *pack,
+					 unsigned long addr)
+{
+	struct module *m =
+	    __module_text_address(follow_trampolines(pack, addr));
+	if (m == NULL || m == pack->primary)
+		return OK;
+	if (use_module(pack->primary, m) != 1)
+		return MODULE_BUSY;
+	return OK;
+}
+
 static abort_t match_pack_sections(struct ksplice_pack *pack,
 				   bool consider_data_sections)
 {
@@ -2126,18 +2138,6 @@ add_system_map_candidates(struct ksplice_pack *pack,
 	return OK;
 }
 #endif /* !KSPLICE_STANDALONE */
-
-static abort_t add_dependency_on_address(struct ksplice_pack *pack,
-					 unsigned long addr)
-{
-	struct module *m =
-	    __module_text_address(follow_trampolines(pack, addr));
-	if (m == NULL || m == pack->primary)
-		return OK;
-	if (use_module(pack->primary, m) != 1)
-		return MODULE_BUSY;
-	return OK;
-}
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 #ifdef CONFIG_MODULE_UNLOAD
