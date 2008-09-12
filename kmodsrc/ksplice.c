@@ -705,69 +705,6 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 #endif
 }
 
-static abort_t finalize_patches(struct ksplice_pack *pack)
-{
-	struct ksplice_patch *p;
-	struct safety_record *rec;
-	abort_t ret;
-
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		struct reloc_nameval *nv = find_nameval(pack, p->label);
-		bool found = false;
-		if (nv == NULL) {
-			ksdebug(pack, "Failed to find %s for oldaddr\n",
-				p->label);
-			return FAILED_TO_FIND;
-		}
-		p->trampoline.oldaddr = nv->val;
-
-		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (strcmp(rec->label, p->label) == 0 &&
-			    follow_trampolines(pack, p->trampoline.oldaddr)
-			    == rec->addr) {
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
-			ksdebug(pack, "No safety record for patch %s\n",
-				p->label);
-			return NO_MATCH;
-		}
-		if (rec->size < p->trampoline.size) {
-			ksdebug(pack, "Symbol %s is too short for trampoline\n",
-				p->label);
-			return UNEXPECTED;
-		}
-
-		if (p->trampoline.repladdr == 0)
-			p->trampoline.repladdr = (unsigned long)ksplice_deleted;
-		else
-			rec->first_byte_safe = true;
-
-		ret = prepare_trampoline(pack, &p->trampoline);
-		if (ret != OK)
-			return ret;
-
-		if (p->trampoline.oldaddr != rec->addr) {
-			/* If there's already a trampoline at oldaddr, prepare
-			   a reverse trampoline to install there */
-			p->reverse_trampoline.oldaddr = rec->addr;
-			p->reverse_trampoline.repladdr = p->trampoline.oldaddr;
-			ret = prepare_trampoline(pack, &p->reverse_trampoline);
-			if (ret != OK)
-				return ret;
-		} else {
-			p->reverse_trampoline.size = 0;
-		}
-
-		ret = add_dependency_on_address(pack, p->trampoline.oldaddr);
-		if (ret != OK)
-			return ret;
-	}
-	return OK;
-}
-
 static void insert_trampoline(struct ksplice_trampoline *t)
 {
 	mm_segment_t old_fs = get_fs();
@@ -1475,6 +1412,69 @@ static abort_t finalize_exports(struct ksplice_pack *pack)
 				m->name);
 			return UNEXPECTED;
 		}
+	}
+	return OK;
+}
+
+static abort_t finalize_patches(struct ksplice_pack *pack)
+{
+	struct ksplice_patch *p;
+	struct safety_record *rec;
+	abort_t ret;
+
+	for (p = pack->patches; p < pack->patches_end; p++) {
+		struct reloc_nameval *nv = find_nameval(pack, p->label);
+		bool found = false;
+		if (nv == NULL) {
+			ksdebug(pack, "Failed to find %s for oldaddr\n",
+				p->label);
+			return FAILED_TO_FIND;
+		}
+		p->trampoline.oldaddr = nv->val;
+
+		list_for_each_entry(rec, &pack->safety_records, list) {
+			if (strcmp(rec->label, p->label) == 0 &&
+			    follow_trampolines(pack, p->trampoline.oldaddr)
+			    == rec->addr) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			ksdebug(pack, "No safety record for patch %s\n",
+				p->label);
+			return NO_MATCH;
+		}
+		if (rec->size < p->trampoline.size) {
+			ksdebug(pack, "Symbol %s is too short for trampoline\n",
+				p->label);
+			return UNEXPECTED;
+		}
+
+		if (p->trampoline.repladdr == 0)
+			p->trampoline.repladdr = (unsigned long)ksplice_deleted;
+		else
+			rec->first_byte_safe = true;
+
+		ret = prepare_trampoline(pack, &p->trampoline);
+		if (ret != OK)
+			return ret;
+
+		if (p->trampoline.oldaddr != rec->addr) {
+			/* If there's already a trampoline at oldaddr, prepare
+			   a reverse trampoline to install there */
+			p->reverse_trampoline.oldaddr = rec->addr;
+			p->reverse_trampoline.repladdr = p->trampoline.oldaddr;
+			ret = prepare_trampoline(pack, &p->reverse_trampoline);
+			if (ret != OK)
+				return ret;
+		} else {
+			p->reverse_trampoline.size = 0;
+		}
+
+		ret = add_dependency_on_address(pack, p->trampoline.oldaddr);
+		if (ret != OK)
+			return ret;
 	}
 	return OK;
 }
