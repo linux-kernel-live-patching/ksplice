@@ -2377,6 +2377,15 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 }
 #endif /* CONFIG_KALLSYMS */
 
+static abort_t exported_symbol_lookup(const char *name, struct list_head *vals)
+{
+	const struct kernel_symbol *sym;
+	sym = find_symbol(name, NULL, NULL, true, false);
+	if (sym == NULL)
+		return OK;
+	return add_candidate_val(vals, sym->value);
+}
+
 static abort_t new_export_lookup(struct update *update,
 				 const char *name, struct list_head *vals)
 {
@@ -2393,15 +2402,6 @@ static abort_t new_export_lookup(struct update *update,
 		}
 	}
 	return OK;
-}
-
-static abort_t exported_symbol_lookup(const char *name, struct list_head *vals)
-{
-	const struct kernel_symbol *sym;
-	sym = find_symbol(name, NULL, NULL, true, false);
-	if (sym == NULL)
-		return OK;
-	return add_candidate_val(vals, sym->value);
 }
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
