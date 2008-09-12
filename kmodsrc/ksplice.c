@@ -1770,7 +1770,8 @@ static abort_t apply_patches(struct update *update)
 	if (ret != OK)
 		return ret;
 
-	_ksdebug(update, "Update %s applied successfully\n", update->kid);
+	_ksdebug(update, "Atomic patch insertion for %s complete\n",
+		 update->kid);
 	return OK;
 }
 
@@ -1824,7 +1825,7 @@ static abort_t reverse_patches(struct update *update)
 	if (ret != OK)
 		return ret;
 
-	_ksdebug(update, "Update %s reversed successfully\n", update->kid);
+	_ksdebug(update, "Atomic patch removal for %s complete\n", update->kid);
 	return OK;
 }
 
@@ -2940,6 +2941,10 @@ static ssize_t stage_store(struct update *update, const char *buf, size_t len)
 		  strncmp(buf, "reversed\n", len) == 0) &&
 		 update->stage == STAGE_APPLIED)
 		update->abort_cause = reverse_patches(update);
+	if (update->abort_cause == OK)
+		printk(KERN_INFO "ksplice: Update %s %s successfully\n",
+		       update->kid,
+		       update->stage == STAGE_APPLIED ? "applied" : "reversed");
 	return len;
 }
 
