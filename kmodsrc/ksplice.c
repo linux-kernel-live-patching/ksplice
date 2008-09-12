@@ -424,8 +424,8 @@ add_system_map_candidates(struct ksplice_pack *pack,
 #ifdef CONFIG_KALLSYMS
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     unsigned long sym_val);
-static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
-				   struct list_head *vals);
+static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
+				      const char *name, struct list_head *vals);
 #endif /* CONFIG_KALLSYMS */
 static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
 static abort_t new_export_lookup(struct update *update,
@@ -2242,7 +2242,7 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 		return ret;
 
 #ifdef CONFIG_KALLSYMS
-	ret = other_module_lookup(pack, ksym->name, vals);
+	ret = lookup_symbol_kallsyms(pack, ksym->name, vals);
 	if (ret != OK)
 		return ret;
 #endif /* CONFIG_KALLSYMS */
@@ -2485,8 +2485,8 @@ static bool patches_module(const struct module *a, const struct module *b)
 
 #ifdef CONFIG_KALLSYMS
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
-static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
-				   struct list_head *vals)
+static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
+				      const char *name, struct list_head *vals)
 {
 	abort_t ret = OK;
 	struct accumulate_struct acc = { name, vals };
@@ -2512,8 +2512,8 @@ static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
 	return ret;
 }
 #else /* !KSPLICE_NO_KERNEL_SUPPORT */
-static abort_t other_module_lookup(struct ksplice_pack *pack, const char *name,
-				   struct list_head *vals)
+static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
+				      const char *name, struct list_head *vals)
 {
 	struct accumulate_struct acc = { name, vals };
 	struct ksplice_module_list_entry *entry;
