@@ -747,375 +747,6 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 	return addr;
 }
 
-static abort_t apply_patches(struct update *update)
-{
-	int i;
-	abort_t ret;
-	struct ksplice_pack *pack;
-	const struct ksplice_section *sect;
-
-	for (i = 0; i < 5; i++) {
-		cleanup_conflicts(update);
-#ifdef KSPLICE_STANDALONE
-		bust_spinlocks(1);
-#endif /* KSPLICE_STANDALONE */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-		ret = (__force abort_t)stop_machine(__apply_patches, update,
-						    NULL);
-#else /* LINUX_VERSION_CODE < */
-/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
-		ret = (__force abort_t)stop_machine_run(__apply_patches, update,
-							NR_CPUS);
-#endif /* LINUX_VERSION_CODE */
-#ifdef KSPLICE_STANDALONE
-		bust_spinlocks(0);
-#endif /* KSPLICE_STANDALONE */
-		if (ret != CODE_BUSY)
-			break;
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(1000));
-	}
-
-	if (ret == CODE_BUSY) {
-		print_conflicts(update);
-		_ksdebug(update, "Aborted %s.  stack check: to-be-replaced "
-			 "code is busy.\n", update->kid);
-	} else if (ret == ALREADY_REVERSED) {
-		_ksdebug(update, "Aborted %s.  Ksplice update %s is already "
-			 "reversed.\n", update->kid, update->kid);
-	}
-
-	if (ret != OK)
-		return ret;
-
-	list_for_each_entry(pack, &update->packs, list) {
-		for (sect = pack->primary_sections;
-		     sect < pack->primary_sections_end; sect++) {
-			ret = create_safety_record(pack, sect,
-						   &pack->safety_records,
-						   sect->thismod_addr,
-						   sect->size);
-			if (ret != OK)
-				return ret;
-		}
-	}
-
-	_ksdebug(update, "Update %s applied successfully\n", update->kid);
-	return OK;
-}
-
-static abort_t reverse_patches(struct update *update)
-{
-	int i;
-	abort_t ret;
-	struct ksplice_pack *pack;
-
-	clear_debug_buf(update);
-	ret = init_debug_buf(update);
-	if (ret != OK)
-		return ret;
-
-	_ksdebug(update, "Preparing to reverse %s\n", update->kid);
-
-	for (i = 0; i < 5; i++) {
-		cleanup_conflicts(update);
-		clear_list(&update->conflicts, struct conflict, list);
-#ifdef KSPLICE_STANDALONE
-		bust_spinlocks(1);
-#endif /* KSPLICE_STANDALONE */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-		ret = (__force abort_t)stop_machine(__reverse_patches, update,
-						    NULL);
-#else /* LINUX_VERSION_CODE < */
-/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
-		ret = (__force abort_t)stop_machine_run(__reverse_patches,
-							update, NR_CPUS);
-#endif /* LINUX_VERSION_CODE */
-#ifdef KSPLICE_STANDALONE
-		bust_spinlocks(0);
-#endif /* KSPLICE_STANDALONE */
-		if (ret != CODE_BUSY)
-			break;
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(1000));
-	}
-	list_for_each_entry(pack, &update->packs, list)
-		clear_list(&pack->safety_records, struct safety_record, list);
-
-	if (ret == CODE_BUSY) {
-		print_conflicts(update);
-		_ksdebug(update, "Aborted %s.  stack check: to-be-reversed "
-			 "code is busy.\n", update->kid);
-	} else if (ret == MODULE_BUSY) {
-		_ksdebug(update, "Update %s is in use by another module\n",
-			 update->kid);
-	}
-
-	if (ret != OK)
-		return ret;
-
-	_ksdebug(update, "Update %s reversed successfully\n", update->kid);
-	return OK;
-}
-
-static int __apply_patches(void *updateptr)
-{
-	struct update *update = updateptr;
-	struct ksplice_pack *pack;
-	struct ksplice_patch *p;
-	struct ksplice_export *exp;
-	abort_t ret;
-
-	if (update->stage == STAGE_APPLIED)
-		return (__force int)OK;
-
-	if (update->stage != STAGE_PREPARING)
-		return (__force int)UNEXPECTED;
-
-	ret = check_each_task(update);
-	if (ret != OK)
-		return (__force int)ret;
-
-	list_for_each_entry(pack, &update->packs, list) {
-		if (try_module_get(pack->primary) != 1) {
-			struct ksplice_pack *pack1;
-			list_for_each_entry(pack1, &update->packs, list) {
-				if (pack1 == pack)
-					break;
-				module_put(pack1->primary);
-			}
-			return (__force int)UNEXPECTED;
-		}
-	}
-
-	update->stage = STAGE_APPLIED;
-
-	list_for_each_entry(pack, &update->packs, list)
-		list_add(&pack->module_list_entry.list, &ksplice_module_list);
-
-	list_for_each_entry(pack, &update->packs, list) {
-		for (exp = pack->exports; exp < pack->exports_end; exp++)
-			exp->sym->name = exp->new_name;
-	}
-
-	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			insert_trampoline(&p->trampoline);
-			insert_trampoline(&p->reverse_trampoline);
-		}
-	}
-	return (__force int)OK;
-}
-
-static int __reverse_patches(void *updateptr)
-{
-	struct update *update = updateptr;
-	struct ksplice_pack *pack;
-	const struct ksplice_patch *p;
-	struct ksplice_export *exp;
-	abort_t ret;
-
-	if (update->stage != STAGE_APPLIED)
-		return (__force int)OK;
-
-#ifdef CONFIG_MODULE_UNLOAD
-	list_for_each_entry(pack, &update->packs, list) {
-		if (module_refcount(pack->primary) != 1)
-			return (__force int)MODULE_BUSY;
-	}
-#endif /* CONFIG_MODULE_UNLOAD */
-
-	ret = check_each_task(update);
-	if (ret != OK)
-		return (__force int)ret;
-
-	update->stage = STAGE_REVERSED;
-
-	list_for_each_entry(pack, &update->packs, list)
-		module_put(pack->primary);
-
-	list_for_each_entry(pack, &update->packs, list)
-		list_del(&pack->module_list_entry.list);
-
-	list_for_each_entry(pack, &update->packs, list) {
-		for (exp = pack->exports; exp < pack->exports_end; exp++)
-			exp->sym->name = exp->saved_name;
-	}
-
-	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			remove_trampoline(&p->trampoline);
-			remove_trampoline(&p->reverse_trampoline);
-		}
-	}
-	return (__force int)OK;
-}
-
-static abort_t check_each_task(struct update *update)
-{
-	const struct task_struct *g, *p;
-	abort_t status = OK, ret;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
-/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
-	read_lock(&tasklist_lock);
-#endif /* LINUX_VERSION_CODE */
-	do_each_thread(g, p) {
-		/* do_each_thread is a double loop! */
-		ret = check_task(update, p, false);
-		if (ret != OK) {
-			check_task(update, p, true);
-			status = ret;
-		}
-		if (ret != OK && ret != CODE_BUSY)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
-/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
-			goto out;
-#else /* LINUX_VERSION_CODE < */
-			return ret;
-#endif /* LINUX_VERSION_CODE */
-	} while_each_thread(g, p);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
-/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
-out:
-	read_unlock(&tasklist_lock);
-#endif /* LINUX_VERSION_CODE */
-	return status;
-}
-
-static abort_t check_task(struct update *update,
-			  const struct task_struct *t, bool rerun)
-{
-	abort_t status, ret;
-	struct conflict *conf = NULL;
-
-	if (rerun) {
-		conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
-		if (conf == NULL)
-			return OUT_OF_MEMORY;
-		conf->process_name = kstrdup(t->comm, GFP_ATOMIC);
-		if (conf->process_name == NULL) {
-			kfree(conf);
-			return OUT_OF_MEMORY;
-		}
-		conf->pid = t->pid;
-		INIT_LIST_HEAD(&conf->stack);
-		list_add(&conf->list, &update->conflicts);
-	}
-
-	status = check_address(update, conf, KSPLICE_IP(t));
-	if (t == current) {
-		ret = check_stack(update, conf, task_thread_info(t),
-				  (unsigned long *)__builtin_frame_address(0));
-		if (status == OK)
-			status = ret;
-	} else if (!task_curr(t)) {
-		ret = check_stack(update, conf, task_thread_info(t),
-				  (unsigned long *)KSPLICE_SP(t));
-		if (status == OK)
-			status = ret;
-	} else if (!is_stop_machine(t)) {
-		status = UNEXPECTED_RUNNING_TASK;
-	}
-	return status;
-}
-
-static abort_t check_stack(struct update *update, struct conflict *conf,
-			   const struct thread_info *tinfo,
-			   const unsigned long *stack)
-{
-	abort_t status = OK, ret;
-	unsigned long addr;
-
-	while (valid_stack_ptr(tinfo, stack)) {
-		addr = *stack++;
-		ret = check_address(update, conf, addr);
-		if (ret != OK)
-			status = ret;
-	}
-	return status;
-}
-
-static abort_t check_address(struct update *update,
-			     struct conflict *conf, unsigned long addr)
-{
-	abort_t status = OK, ret;
-	const struct safety_record *rec;
-	struct ksplice_pack *pack;
-	struct conflict_addr *ca = NULL;
-
-	if (conf != NULL) {
-		ca = kmalloc(sizeof(*ca), GFP_ATOMIC);
-		if (ca == NULL)
-			return OUT_OF_MEMORY;
-		ca->addr = addr;
-		ca->has_conflict = false;
-		ca->label = NULL;
-		list_add(&ca->list, &conf->stack);
-	}
-
-	list_for_each_entry(pack, &update->packs, list) {
-		list_for_each_entry(rec, &pack->safety_records, list) {
-			ret = check_record(ca, rec, addr);
-			if (ret != OK)
-				status = ret;
-		}
-	}
-	return status;
-}
-
-static abort_t check_record(struct conflict_addr *ca,
-			    const struct safety_record *rec, unsigned long addr)
-{
-	if ((addr > rec->addr && addr < rec->addr + rec->size) ||
-	    (addr == rec->addr && !rec->first_byte_safe)) {
-		if (ca != NULL) {
-			ca->label = rec->label;
-			ca->has_conflict = true;
-		}
-		return CODE_BUSY;
-	}
-	return OK;
-}
-
-static bool is_stop_machine(const struct task_struct *t)
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-	const char *num;
-	if (!starts_with(t->comm, "kstop"))
-		return false;
-	num = t->comm + strlen("kstop");
-	return num[strspn(num, "0123456789")] == '\0';
-#else /* LINUX_VERSION_CODE < */
-	return strcmp(t->comm, "kstopmachine") == 0;
-#endif /* LINUX_VERSION_CODE */
-}
-
-static void cleanup_conflicts(struct update *update)
-{
-	struct conflict *conf;
-	list_for_each_entry(conf, &update->conflicts, list) {
-		clear_list(&conf->stack, struct conflict_addr, list);
-		kfree(conf->process_name);
-	}
-	clear_list(&update->conflicts, struct conflict, list);
-}
-
-static void print_conflicts(struct update *update)
-{
-	const struct conflict *conf;
-	const struct conflict_addr *ca;
-	list_for_each_entry(conf, &update->conflicts, list) {
-		_ksdebug(update, "stack check: pid %d (%s):", conf->pid,
-			 conf->process_name);
-		list_for_each_entry(ca, &conf->stack, list) {
-			_ksdebug(update, " %lx", ca->addr);
-			if (ca->has_conflict)
-				_ksdebug(update, " [<-CONFLICT]");
-		}
-		_ksdebug(update, "\n");
-	}
-}
-
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 static struct module *find_module(const char *name)
 {
@@ -2402,6 +2033,375 @@ static abort_t new_export_lookup(struct update *update,
 		}
 	}
 	return OK;
+}
+
+static abort_t apply_patches(struct update *update)
+{
+	int i;
+	abort_t ret;
+	struct ksplice_pack *pack;
+	const struct ksplice_section *sect;
+
+	for (i = 0; i < 5; i++) {
+		cleanup_conflicts(update);
+#ifdef KSPLICE_STANDALONE
+		bust_spinlocks(1);
+#endif /* KSPLICE_STANDALONE */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+		ret = (__force abort_t)stop_machine(__apply_patches, update,
+						    NULL);
+#else /* LINUX_VERSION_CODE < */
+/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
+		ret = (__force abort_t)stop_machine_run(__apply_patches, update,
+							NR_CPUS);
+#endif /* LINUX_VERSION_CODE */
+#ifdef KSPLICE_STANDALONE
+		bust_spinlocks(0);
+#endif /* KSPLICE_STANDALONE */
+		if (ret != CODE_BUSY)
+			break;
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(1000));
+	}
+
+	if (ret == CODE_BUSY) {
+		print_conflicts(update);
+		_ksdebug(update, "Aborted %s.  stack check: to-be-replaced "
+			 "code is busy.\n", update->kid);
+	} else if (ret == ALREADY_REVERSED) {
+		_ksdebug(update, "Aborted %s.  Ksplice update %s is already "
+			 "reversed.\n", update->kid, update->kid);
+	}
+
+	if (ret != OK)
+		return ret;
+
+	list_for_each_entry(pack, &update->packs, list) {
+		for (sect = pack->primary_sections;
+		     sect < pack->primary_sections_end; sect++) {
+			ret = create_safety_record(pack, sect,
+						   &pack->safety_records,
+						   sect->thismod_addr,
+						   sect->size);
+			if (ret != OK)
+				return ret;
+		}
+	}
+
+	_ksdebug(update, "Update %s applied successfully\n", update->kid);
+	return OK;
+}
+
+static abort_t reverse_patches(struct update *update)
+{
+	int i;
+	abort_t ret;
+	struct ksplice_pack *pack;
+
+	clear_debug_buf(update);
+	ret = init_debug_buf(update);
+	if (ret != OK)
+		return ret;
+
+	_ksdebug(update, "Preparing to reverse %s\n", update->kid);
+
+	for (i = 0; i < 5; i++) {
+		cleanup_conflicts(update);
+		clear_list(&update->conflicts, struct conflict, list);
+#ifdef KSPLICE_STANDALONE
+		bust_spinlocks(1);
+#endif /* KSPLICE_STANDALONE */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+		ret = (__force abort_t)stop_machine(__reverse_patches, update,
+						    NULL);
+#else /* LINUX_VERSION_CODE < */
+/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
+		ret = (__force abort_t)stop_machine_run(__reverse_patches,
+							update, NR_CPUS);
+#endif /* LINUX_VERSION_CODE */
+#ifdef KSPLICE_STANDALONE
+		bust_spinlocks(0);
+#endif /* KSPLICE_STANDALONE */
+		if (ret != CODE_BUSY)
+			break;
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(1000));
+	}
+	list_for_each_entry(pack, &update->packs, list)
+		clear_list(&pack->safety_records, struct safety_record, list);
+
+	if (ret == CODE_BUSY) {
+		print_conflicts(update);
+		_ksdebug(update, "Aborted %s.  stack check: to-be-reversed "
+			 "code is busy.\n", update->kid);
+	} else if (ret == MODULE_BUSY) {
+		_ksdebug(update, "Update %s is in use by another module\n",
+			 update->kid);
+	}
+
+	if (ret != OK)
+		return ret;
+
+	_ksdebug(update, "Update %s reversed successfully\n", update->kid);
+	return OK;
+}
+
+static int __apply_patches(void *updateptr)
+{
+	struct update *update = updateptr;
+	struct ksplice_pack *pack;
+	struct ksplice_patch *p;
+	struct ksplice_export *exp;
+	abort_t ret;
+
+	if (update->stage == STAGE_APPLIED)
+		return (__force int)OK;
+
+	if (update->stage != STAGE_PREPARING)
+		return (__force int)UNEXPECTED;
+
+	ret = check_each_task(update);
+	if (ret != OK)
+		return (__force int)ret;
+
+	list_for_each_entry(pack, &update->packs, list) {
+		if (try_module_get(pack->primary) != 1) {
+			struct ksplice_pack *pack1;
+			list_for_each_entry(pack1, &update->packs, list) {
+				if (pack1 == pack)
+					break;
+				module_put(pack1->primary);
+			}
+			return (__force int)UNEXPECTED;
+		}
+	}
+
+	update->stage = STAGE_APPLIED;
+
+	list_for_each_entry(pack, &update->packs, list)
+		list_add(&pack->module_list_entry.list, &ksplice_module_list);
+
+	list_for_each_entry(pack, &update->packs, list) {
+		for (exp = pack->exports; exp < pack->exports_end; exp++)
+			exp->sym->name = exp->new_name;
+	}
+
+	list_for_each_entry(pack, &update->packs, list) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			insert_trampoline(&p->trampoline);
+			insert_trampoline(&p->reverse_trampoline);
+		}
+	}
+	return (__force int)OK;
+}
+
+static int __reverse_patches(void *updateptr)
+{
+	struct update *update = updateptr;
+	struct ksplice_pack *pack;
+	const struct ksplice_patch *p;
+	struct ksplice_export *exp;
+	abort_t ret;
+
+	if (update->stage != STAGE_APPLIED)
+		return (__force int)OK;
+
+#ifdef CONFIG_MODULE_UNLOAD
+	list_for_each_entry(pack, &update->packs, list) {
+		if (module_refcount(pack->primary) != 1)
+			return (__force int)MODULE_BUSY;
+	}
+#endif /* CONFIG_MODULE_UNLOAD */
+
+	ret = check_each_task(update);
+	if (ret != OK)
+		return (__force int)ret;
+
+	update->stage = STAGE_REVERSED;
+
+	list_for_each_entry(pack, &update->packs, list)
+		module_put(pack->primary);
+
+	list_for_each_entry(pack, &update->packs, list)
+		list_del(&pack->module_list_entry.list);
+
+	list_for_each_entry(pack, &update->packs, list) {
+		for (exp = pack->exports; exp < pack->exports_end; exp++)
+			exp->sym->name = exp->saved_name;
+	}
+
+	list_for_each_entry(pack, &update->packs, list) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			remove_trampoline(&p->trampoline);
+			remove_trampoline(&p->reverse_trampoline);
+		}
+	}
+	return (__force int)OK;
+}
+
+static abort_t check_each_task(struct update *update)
+{
+	const struct task_struct *g, *p;
+	abort_t status = OK, ret;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
+/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
+	read_lock(&tasklist_lock);
+#endif /* LINUX_VERSION_CODE */
+	do_each_thread(g, p) {
+		/* do_each_thread is a double loop! */
+		ret = check_task(update, p, false);
+		if (ret != OK) {
+			check_task(update, p, true);
+			status = ret;
+		}
+		if (ret != OK && ret != CODE_BUSY)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
+/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
+			goto out;
+#else /* LINUX_VERSION_CODE < */
+			return ret;
+#endif /* LINUX_VERSION_CODE */
+	} while_each_thread(g, p);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
+/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
+out:
+	read_unlock(&tasklist_lock);
+#endif /* LINUX_VERSION_CODE */
+	return status;
+}
+
+static abort_t check_task(struct update *update,
+			  const struct task_struct *t, bool rerun)
+{
+	abort_t status, ret;
+	struct conflict *conf = NULL;
+
+	if (rerun) {
+		conf = kmalloc(sizeof(*conf), GFP_ATOMIC);
+		if (conf == NULL)
+			return OUT_OF_MEMORY;
+		conf->process_name = kstrdup(t->comm, GFP_ATOMIC);
+		if (conf->process_name == NULL) {
+			kfree(conf);
+			return OUT_OF_MEMORY;
+		}
+		conf->pid = t->pid;
+		INIT_LIST_HEAD(&conf->stack);
+		list_add(&conf->list, &update->conflicts);
+	}
+
+	status = check_address(update, conf, KSPLICE_IP(t));
+	if (t == current) {
+		ret = check_stack(update, conf, task_thread_info(t),
+				  (unsigned long *)__builtin_frame_address(0));
+		if (status == OK)
+			status = ret;
+	} else if (!task_curr(t)) {
+		ret = check_stack(update, conf, task_thread_info(t),
+				  (unsigned long *)KSPLICE_SP(t));
+		if (status == OK)
+			status = ret;
+	} else if (!is_stop_machine(t)) {
+		status = UNEXPECTED_RUNNING_TASK;
+	}
+	return status;
+}
+
+static abort_t check_stack(struct update *update, struct conflict *conf,
+			   const struct thread_info *tinfo,
+			   const unsigned long *stack)
+{
+	abort_t status = OK, ret;
+	unsigned long addr;
+
+	while (valid_stack_ptr(tinfo, stack)) {
+		addr = *stack++;
+		ret = check_address(update, conf, addr);
+		if (ret != OK)
+			status = ret;
+	}
+	return status;
+}
+
+static abort_t check_address(struct update *update,
+			     struct conflict *conf, unsigned long addr)
+{
+	abort_t status = OK, ret;
+	const struct safety_record *rec;
+	struct ksplice_pack *pack;
+	struct conflict_addr *ca = NULL;
+
+	if (conf != NULL) {
+		ca = kmalloc(sizeof(*ca), GFP_ATOMIC);
+		if (ca == NULL)
+			return OUT_OF_MEMORY;
+		ca->addr = addr;
+		ca->has_conflict = false;
+		ca->label = NULL;
+		list_add(&ca->list, &conf->stack);
+	}
+
+	list_for_each_entry(pack, &update->packs, list) {
+		list_for_each_entry(rec, &pack->safety_records, list) {
+			ret = check_record(ca, rec, addr);
+			if (ret != OK)
+				status = ret;
+		}
+	}
+	return status;
+}
+
+static abort_t check_record(struct conflict_addr *ca,
+			    const struct safety_record *rec, unsigned long addr)
+{
+	if ((addr > rec->addr && addr < rec->addr + rec->size) ||
+	    (addr == rec->addr && !rec->first_byte_safe)) {
+		if (ca != NULL) {
+			ca->label = rec->label;
+			ca->has_conflict = true;
+		}
+		return CODE_BUSY;
+	}
+	return OK;
+}
+
+static bool is_stop_machine(const struct task_struct *t)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+	const char *num;
+	if (!starts_with(t->comm, "kstop"))
+		return false;
+	num = t->comm + strlen("kstop");
+	return num[strspn(num, "0123456789")] == '\0';
+#else /* LINUX_VERSION_CODE < */
+	return strcmp(t->comm, "kstopmachine") == 0;
+#endif /* LINUX_VERSION_CODE */
+}
+
+static void cleanup_conflicts(struct update *update)
+{
+	struct conflict *conf;
+	list_for_each_entry(conf, &update->conflicts, list) {
+		clear_list(&conf->stack, struct conflict_addr, list);
+		kfree(conf->process_name);
+	}
+	clear_list(&update->conflicts, struct conflict, list);
+}
+
+static void print_conflicts(struct update *update)
+{
+	const struct conflict *conf;
+	const struct conflict_addr *ca;
+	list_for_each_entry(conf, &update->conflicts, list) {
+		_ksdebug(update, "stack check: pid %d (%s):", conf->pid,
+			 conf->process_name);
+		list_for_each_entry(ca, &conf->stack, list) {
+			_ksdebug(update, " %lx", ca->addr);
+			if (ca->has_conflict)
+				_ksdebug(update, " [<-CONFLICT]");
+		}
+		_ksdebug(update, "\n");
+	}
 }
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
