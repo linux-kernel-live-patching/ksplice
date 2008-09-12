@@ -1687,21 +1687,6 @@ static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 	return NO_MATCH;
 }
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
-static struct module *__module_data_address(unsigned long addr)
-{
-	struct module *mod;
-
-	list_for_each_entry(mod, &modules, list) {
-		if (addr >= (unsigned long)mod->module_core +
-		    mod->core_text_size &&
-		    addr < (unsigned long)mod->module_core + mod->core_size)
-			return mod;
-	}
-	return NULL;
-}
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
-
 static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode)
@@ -2955,6 +2940,19 @@ static const struct kernel_symbol *find_symbol(const char *name,
 		return fsa.sym;
 	}
 
+	return NULL;
+}
+
+static struct module *__module_data_address(unsigned long addr)
+{
+	struct module *mod;
+
+	list_for_each_entry(mod, &modules, list) {
+		if (addr >= (unsigned long)mod->module_core +
+		    mod->core_text_size &&
+		    addr < (unsigned long)mod->module_core + mod->core_size)
+			return mod;
+	}
 	return NULL;
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
