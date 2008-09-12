@@ -709,25 +709,6 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 #endif
 }
 
-static unsigned long follow_trampolines(struct ksplice_pack *pack,
-					unsigned long addr)
-{
-	unsigned long new_addr;
-	struct module *m;
-
-	if (trampoline_target(pack, addr, &new_addr) != OK)
-		return addr;
-
-	/* Confirm that it is a jump into a ksplice module */
-	m = __module_text_address(new_addr);
-	if (m != NULL && m != pack->target && starts_with(m->name, "ksplice")) {
-		ksdebug(pack, "Following trampoline %lx %lx(%s)\n", addr,
-			new_addr, m->name);
-		return new_addr;
-	}
-	return addr;
-}
-
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 static struct module *find_module(const char *name)
 {
@@ -2826,6 +2807,25 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
 		return -1;
 	}
+}
+
+static unsigned long follow_trampolines(struct ksplice_pack *pack,
+					unsigned long addr)
+{
+	unsigned long new_addr;
+	struct module *m;
+
+	if (trampoline_target(pack, addr, &new_addr) != OK)
+		return addr;
+
+	/* Confirm that it is a jump into a ksplice module */
+	m = __module_text_address(new_addr);
+	if (m != NULL && m != pack->target && starts_with(m->name, "ksplice")) {
+		ksdebug(pack, "Following trampoline %lx %lx(%s)\n", addr,
+			new_addr, m->name);
+		return new_addr;
+	}
+	return addr;
 }
 
 static bool starts_with(const char *str, const char *prefix)
