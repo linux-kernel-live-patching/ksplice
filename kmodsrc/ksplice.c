@@ -514,7 +514,8 @@ static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* Architecture-specific functions defined in arch/ARCH/kernel/ksplice-arch.c */
-static abort_t prepare_trampoline(struct ksplice_trampoline *t);
+static abort_t prepare_trampoline(struct ksplice_pack *pack,
+				  struct ksplice_trampoline *t);
 static unsigned long trampoline_target(unsigned long addr);
 static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
@@ -760,7 +761,7 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 		else
 			rec->first_byte_safe = true;
 
-		ret = prepare_trampoline(&p->trampoline);
+		ret = prepare_trampoline(pack, &p->trampoline);
 		if (ret != OK)
 			return ret;
 
@@ -769,7 +770,7 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 			   a reverse trampoline to install there */
 			p->reverse_trampoline.oldaddr = rec->addr;
 			p->reverse_trampoline.repladdr = p->trampoline.oldaddr;
-			ret = prepare_trampoline(&p->reverse_trampoline);
+			ret = prepare_trampoline(pack, &p->reverse_trampoline);
 			if (ret != OK)
 				return ret;
 		} else {

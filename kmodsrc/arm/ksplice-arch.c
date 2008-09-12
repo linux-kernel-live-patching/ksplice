@@ -38,7 +38,8 @@ static unsigned long trampoline_target(unsigned long addr)
 	return addr;
 }
 
-static abort_t prepare_trampoline(struct ksplice_trampoline *t)
+static abort_t prepare_trampoline(struct ksplice_pack *pack,
+				  struct ksplice_trampoline *t)
 {
 	int32_t tmp = t->repladdr - (t->oldaddr + 8);
 	tmp >>= 2;
