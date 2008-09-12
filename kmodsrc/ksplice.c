@@ -427,11 +427,11 @@ add_system_map_candidates(struct ksplice_pack *pack,
 			  const char *label, struct list_head *vals);
 #endif /* KSPLICE_STANDALONE */
 #ifdef CONFIG_KALLSYMS
+static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
+				      const char *name, struct list_head *vals);
 static int accumulate_matching_names(void *data, const char *sym_name,
 				     struct module *sym_owner,
 				     unsigned long sym_val);
-static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
-				      const char *name, struct list_head *vals);
 #endif /* CONFIG_KALLSYMS */
 static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
 static abort_t new_export_lookup(struct update *update,
@@ -2355,6 +2355,28 @@ add_system_map_candidates(struct ksplice_pack *pack,
 }
 #endif /* !KSPLICE_STANDALONE */
 
+#ifdef CONFIG_KALLSYMS
+static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
+				      const char *name, struct list_head *vals)
+{
+	struct accumulate_struct acc = { pack, name, vals };
+	return (__force abort_t)
+	    kallsyms_on_each_symbol(accumulate_matching_names, &acc);
+}
+
+static int accumulate_matching_names(void *data, const char *sym_name,
+				     struct module *sym_owner,
+				     unsigned long sym_val)
+{
+	struct accumulate_struct *acc = data;
+	if (strcmp(sym_name, acc->desired_name) == 0 &&
+	    patches_module(sym_owner, acc->pack->target) &&
+	    sym_owner != acc->pack->primary)
+		return (__force int)add_candidate_val(acc->vals, sym_val);
+	return (__force int)OK;
+}
+#endif /* CONFIG_KALLSYMS */
+
 static abort_t new_export_lookup(struct update *update,
 				 const char *name, struct list_head *vals)
 {
@@ -2587,28 +2609,6 @@ static bool patches_module(const struct module *a, const struct module *b)
 	return false;
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 }
-
-#ifdef CONFIG_KALLSYMS
-static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
-				      const char *name, struct list_head *vals)
-{
-	struct accumulate_struct acc = { pack, name, vals };
-	return (__force abort_t)
-	    kallsyms_on_each_symbol(accumulate_matching_names, &acc);
-}
-
-static int accumulate_matching_names(void *data, const char *sym_name,
-				     struct module *sym_owner,
-				     unsigned long sym_val)
-{
-	struct accumulate_struct *acc = data;
-	if (strcmp(sym_name, acc->desired_name) == 0 &&
-	    patches_module(sym_owner, acc->pack->target) &&
-	    sym_owner != acc->pack->primary)
-		return (__force int)add_candidate_val(acc->vals, sym_val);
-	return (__force int)OK;
-}
-#endif /* CONFIG_KALLSYMS */
 
 #if defined KSPLICE_NO_KERNEL_SUPPORT && defined CONFIG_KALLSYMS
 static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
