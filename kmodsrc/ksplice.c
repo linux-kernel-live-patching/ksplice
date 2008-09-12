@@ -2673,56 +2673,6 @@ static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT && CONFIG_KALLSYMS */
 
-static abort_t add_candidate_val(struct list_head *vals, unsigned long val)
-{
-	struct candidate_val *tmp, *new;
-
-	list_for_each_entry(tmp, vals, list) {
-		if (tmp->val == val)
-			return OK;
-	}
-	new = kmalloc(sizeof(*new), GFP_KERNEL);
-	if (new == NULL)
-		return OUT_OF_MEMORY;
-	new->val = val;
-	list_add(&new->list, vals);
-	return OK;
-}
-
-/* If there are only two candidates and their addresses are related by
-   a trampoline, then we have successfully found a function patched by a
-   previous update.  We remove the endpoint of the trampoline from the vals
-   list, so that this update uses the patched function's original address. */
-static void prune_trampoline_vals(struct ksplice_pack *pack,
-				  struct list_head *vals)
-{
-	struct candidate_val *val1, *val2;
-
-	if (list_empty(vals) || singular(vals))
-		return;
-	if (vals->next->next->next != vals)
-		return;
-
-	val1 = list_entry(vals->next, struct candidate_val, list);
-	val2 = list_entry(vals->next->next, struct candidate_val, list);
-
-	if (val1->val == follow_trampolines(pack, val2->val)) {
-		list_del(&val1->list);
-		kfree(val1);
-		return;
-	}
-	if (val2->val == follow_trampolines(pack, val1->val)) {
-		list_del(&val2->list);
-		kfree(val2);
-		return;
-	}
-}
-
-static void release_vals(struct list_head *vals)
-{
-	clear_list(vals, struct candidate_val, list);
-}
-
 static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
 					  const char *label)
 {
@@ -2787,6 +2737,56 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 
 	list_add(&rec->list, record_list);
 	return OK;
+}
+
+static abort_t add_candidate_val(struct list_head *vals, unsigned long val)
+{
+	struct candidate_val *tmp, *new;
+
+	list_for_each_entry(tmp, vals, list) {
+		if (tmp->val == val)
+			return OK;
+	}
+	new = kmalloc(sizeof(*new), GFP_KERNEL);
+	if (new == NULL)
+		return OUT_OF_MEMORY;
+	new->val = val;
+	list_add(&new->list, vals);
+	return OK;
+}
+
+/* If there are only two candidates and their addresses are related by
+   a trampoline, then we have successfully found a function patched by a
+   previous update.  We remove the endpoint of the trampoline from the vals
+   list, so that this update uses the patched function's original address. */
+static void prune_trampoline_vals(struct ksplice_pack *pack,
+				  struct list_head *vals)
+{
+	struct candidate_val *val1, *val2;
+
+	if (list_empty(vals) || singular(vals))
+		return;
+	if (vals->next->next->next != vals)
+		return;
+
+	val1 = list_entry(vals->next, struct candidate_val, list);
+	val2 = list_entry(vals->next->next, struct candidate_val, list);
+
+	if (val1->val == follow_trampolines(pack, val2->val)) {
+		list_del(&val1->list);
+		kfree(val1);
+		return;
+	}
+	if (val2->val == follow_trampolines(pack, val1->val)) {
+		list_del(&val2->list);
+		kfree(val2);
+		return;
+	}
+}
+
+static void release_vals(struct list_head *vals)
+{
+	clear_list(vals, struct candidate_val, list);
 }
 
 static void set_temp_namevals(struct ksplice_pack *pack, int status)
