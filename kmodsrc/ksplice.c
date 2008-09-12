@@ -768,34 +768,6 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 	return OK;
 }
 
-static abort_t finalize_exports(struct ksplice_pack *pack)
-{
-	struct ksplice_export *exp;
-	struct module *m;
-	const struct kernel_symbol *sym;
-
-	for (exp = pack->exports; exp < pack->exports_end; exp++) {
-		sym = find_symbol(exp->name, &m, NULL, true, false);
-		if (sym == NULL) {
-			ksdebug(pack, "Could not find kernel_symbol struct for "
-				"%s\n", exp->name);
-			return MISSING_EXPORT;
-		}
-
-		/* Cast away const since we are planning to mutate the
-		 * kernel_symbol structure. */
-		exp->sym = (struct kernel_symbol *)sym;
-		exp->saved_name = exp->sym->name;
-		if (m != pack->primary && use_module(pack->primary, m) != 1) {
-			ksdebug(pack, "Aborted.  Could not add dependency on "
-				"symbol %s from module %s.\n", sym->name,
-				m->name);
-			return UNEXPECTED;
-		}
-	}
-	return OK;
-}
-
 static void insert_trampoline(struct ksplice_trampoline *t)
 {
 	mm_segment_t old_fs = get_fs();
@@ -1476,6 +1448,34 @@ static abort_t finalize_pack(struct ksplice_pack *pack)
 	if (ret != OK)
 		return ret;
 
+	return OK;
+}
+
+static abort_t finalize_exports(struct ksplice_pack *pack)
+{
+	struct ksplice_export *exp;
+	struct module *m;
+	const struct kernel_symbol *sym;
+
+	for (exp = pack->exports; exp < pack->exports_end; exp++) {
+		sym = find_symbol(exp->name, &m, NULL, true, false);
+		if (sym == NULL) {
+			ksdebug(pack, "Could not find kernel_symbol struct for "
+				"%s\n", exp->name);
+			return MISSING_EXPORT;
+		}
+
+		/* Cast away const since we are planning to mutate the
+		 * kernel_symbol structure. */
+		exp->sym = (struct kernel_symbol *)sym;
+		exp->saved_name = exp->sym->name;
+		if (m != pack->primary && use_module(pack->primary, m) != 1) {
+			ksdebug(pack, "Aborted.  Could not add dependency on "
+				"symbol %s from module %s.\n", sym->name,
+				m->name);
+			return UNEXPECTED;
+		}
+	}
 	return OK;
 }
 
