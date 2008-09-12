@@ -20,22 +20,22 @@
 #define KSPLICE_IP(x) thread_saved_pc(x)
 #define KSPLICE_SP(x) thread_saved_fp(x)
 
-static unsigned long trampoline_target(unsigned long addr)
+static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
+				 unsigned long *new_addr)
 {
 	uint32_t word;
-	unsigned long new_addr;
-
 	if (probe_kernel_read(&word, (void *)addr, sizeof(word)) == -EFAULT)
-		return addr;
+		return NO_MATCH;
 
-	if ((word & 0xff000000) == 0xea000000) {
-		new_addr = word & 0x00ffffff;
-		new_addr |= -(new_addr & (0x00ffffff & ~(0x00ffffff >> 1)));
-		new_addr <<= 2;
-		new_addr += addr + 8;
-		return new_addr;
-	}
-	return addr;
+	if ((word & 0xff000000) != 0xea000000)
+		return NO_MATCH;
+
+	word &= 0x00ffffff;
+	word |= -(word & (0x00ffffff & ~(0x00ffffff >> 1)));
+	word <<= 2;
+	word += addr + 8;
+	*new_addr = word;
+	return OK;
 }
 
 static abort_t prepare_trampoline(struct ksplice_pack *pack,

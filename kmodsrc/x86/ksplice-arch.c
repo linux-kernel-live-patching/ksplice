@@ -557,16 +557,19 @@ static int next_run_byte(struct ud *ud)
 }
 #endif /* !CONFIG_FUNCTION_DATA_SECTIONS */
 
-static unsigned long trampoline_target(unsigned long addr)
+static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
+				 unsigned long *new_addr)
 {
 	unsigned char bytes[5];
 
 	if (probe_kernel_read(bytes, (void *)addr, sizeof(bytes)) == -EFAULT)
-		return addr;
+		return NO_MATCH;
 
-	if (bytes[0] == 0xE9)
-		return addr + 5 + *(int32_t *)(&bytes[1]);
-	return addr;
+	if (bytes[0] != 0xE9)
+		return NO_MATCH;
+
+	*new_addr = addr + 5 + *(int32_t *)(&bytes[1]);
+	return OK;
 }
 
 static abort_t prepare_trampoline(struct ksplice_pack *pack,

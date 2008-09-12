@@ -516,7 +516,8 @@ static struct module *__module_data_address(unsigned long addr);
 /* Architecture-specific functions defined in arch/ARCH/kernel/ksplice-arch.c */
 static abort_t prepare_trampoline(struct ksplice_pack *pack,
 				  struct ksplice_trampoline *t);
-static unsigned long trampoline_target(unsigned long addr);
+static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
+				 unsigned long *new_addr);
 static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
 static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
@@ -834,10 +835,10 @@ static void remove_trampoline(const struct ksplice_trampoline *t)
 static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr)
 {
-	unsigned long new_addr = trampoline_target(addr);
+	unsigned long new_addr;
 	struct module *m;
 
-	if (addr == new_addr)
+	if (trampoline_target(pack, addr, &new_addr) != OK)
 		return addr;
 
 	/* Confirm that it is a jump into a ksplice module */
