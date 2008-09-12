@@ -358,7 +358,7 @@ static int ksplice_sysfs_init(struct update *update);
 
 /* Preparing the relocations and patches for application */
 static abort_t apply_update(struct update *update);
-static abort_t activate_pack(struct ksplice_pack *pack);
+static abort_t prepare_pack(struct ksplice_pack *pack);
 static abort_t finalize_pack(struct ksplice_pack *pack);
 static abort_t finalize_exports(struct ksplice_pack *pack);
 static abort_t finalize_patches(struct ksplice_pack *pack);
@@ -735,7 +735,7 @@ static abort_t apply_update(struct update *update)
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
 	list_for_each_entry(pack, &update->packs, list) {
-		ret = activate_pack(pack);
+		ret = prepare_pack(pack);
 		if (ret != OK)
 			goto out;
 	}
@@ -752,7 +752,7 @@ out:
 }
 
 
-static abort_t activate_pack(struct ksplice_pack *pack)
+static abort_t prepare_pack(struct ksplice_pack *pack)
 {
 	abort_t ret;
 
