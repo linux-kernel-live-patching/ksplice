@@ -20,9 +20,25 @@
 #define KSPLICE_IP(x) thread_saved_pc(x)
 #define KSPLICE_SP(x) thread_saved_fp(x)
 
+static const struct ksplice_symbol trampoline_symbol = {
+	.name = NULL,
+	.label = "<trampoline>",
+};
+
+static const struct ksplice_reloc trampoline_reloc = {
+	.symbol = &trampoline_symbol,
+	.pcrel = 1,
+	.addend = -8,
+	.size = 4,
+	.dst_mask = 0x00ffffffL,
+	.rightshift = 2,
+	.signed_addend = 1,
+};
+
 static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
 				 unsigned long *new_addr)
 {
+	abort_t ret;
 	uint32_t word;
 	if (probe_kernel_read(&word, (void *)addr, sizeof(word)) == -EFAULT)
 		return NO_MATCH;
@@ -30,23 +46,22 @@ static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
 	if ((word & 0xff000000) != 0xea000000)
 		return NO_MATCH;
 
-	word &= 0x00ffffff;
-	word |= -(word & (0x00ffffff & ~(0x00ffffff >> 1)));
-	word <<= 2;
-	word += addr + 8;
-	*new_addr = word;
+	ret = read_reloc_value(pack, &trampoline_reloc, addr, new_addr);
+	if (ret != OK)
+		return ret;
+
+	*new_addr += addr;
 	return OK;
 }
 
 static abort_t prepare_trampoline(struct ksplice_pack *pack,
 				  struct ksplice_trampoline *t)
 {
-	int32_t tmp = t->repladdr - (t->oldaddr + 8);
-	tmp >>= 2;
-	tmp &= 0x00ffffff;
-	*(uint32_t *)t->trampoline = 0xea000000 | tmp;
 	t->size = 4;
-	return OK;
+	*(uint32_t *)t->trampoline = 0xea000000;
+	return write_reloc_value(pack, &trampoline_reloc,
+				 (unsigned long)t->trampoline,
+				 t->repladdr - t->oldaddr);
 }
 
 static abort_t handle_paravirt(struct ksplice_pack *pack,
