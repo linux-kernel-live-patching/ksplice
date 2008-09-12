@@ -1824,6 +1824,84 @@ static abort_t find_section(struct ksplice_pack *pack,
 	return NO_MATCH;
 }
 
+static abort_t try_addr(struct ksplice_pack *pack,
+			const struct ksplice_section *sect,
+			unsigned long run_addr,
+			struct list_head *safety_records,
+			enum run_pre_mode mode)
+{
+	abort_t ret;
+	const struct module *run_module;
+
+	if ((sect->flags & KSPLICE_SECTION_RODATA) != 0 ||
+	    (sect->flags & KSPLICE_SECTION_DATA) != 0)
+		run_module = __module_data_address(run_addr);
+	else
+		run_module = __module_text_address(run_addr);
+	if (!patches_module(run_module, pack->target)) {
+		ksdebug(pack, "run-pre: ignoring address %lx in other module "
+			"%s for sect %s\n", run_addr, run_module == NULL ?
+			"vmlinux" : run_module->name, sect->symbol->label);
+		return NO_MATCH;
+	}
+
+	ret = create_nameval(pack, sect->symbol->label, run_addr, TEMP);
+	if (ret != OK)
+		return ret;
+
+#ifdef CONFIG_FUNCTION_DATA_SECTIONS
+	ret = run_pre_cmp(pack, sect, run_addr, safety_records, mode);
+#else /* !CONFIG_FUNCTION_DATA_SECTIONS */
+	if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
+		ret = arch_run_pre_cmp(pack, sect, run_addr, safety_records,
+				       mode);
+	else
+		ret = run_pre_cmp(pack, sect, run_addr, safety_records, mode);
+#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
+	if (ret == NO_MATCH && mode != RUN_PRE_FINAL) {
+		set_temp_namevals(pack, NOVAL);
+		ksdebug(pack, "run-pre: %s sect %s does not match (r_a=%lx "
+			"p_a=%lx s=%lx)\n",
+			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "data" :
+			"text", sect->symbol->label, run_addr,
+			sect->thismod_addr, sect->size);
+		ksdebug(pack, "run-pre: ");
+		if (pack->update->debug >= 1) {
+#ifdef CONFIG_FUNCTION_DATA_SECTIONS
+			ret = run_pre_cmp(pack, sect, run_addr, safety_records,
+					  RUN_PRE_DEBUG);
+#else /* !CONFIG_FUNCTION_DATA_SECTIONS */
+			if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
+				ret = arch_run_pre_cmp(pack, sect, run_addr,
+						       safety_records,
+						       RUN_PRE_DEBUG);
+			else
+				ret = run_pre_cmp(pack, sect, run_addr,
+						  safety_records,
+						  RUN_PRE_DEBUG);
+#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
+			set_temp_namevals(pack, NOVAL);
+		}
+		ksdebug(pack, "\n");
+		return ret;
+	} else if (ret != OK) {
+		set_temp_namevals(pack, NOVAL);
+		return ret;
+	}
+
+	if (mode != RUN_PRE_FINAL) {
+		set_temp_namevals(pack, NOVAL);
+		ksdebug(pack, "run-pre: candidate for sect %s=%lx\n",
+			sect->symbol->label, run_addr);
+		return OK;
+	}
+
+	set_temp_namevals(pack, VAL);
+	ksdebug(pack, "run-pre: found sect %s=%lx\n", sect->symbol->label,
+		run_addr);
+	return OK;
+}
+
 static void print_bytes(struct ksplice_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec)
@@ -1940,84 +2018,6 @@ static struct module *__module_data_address(unsigned long addr)
 	return NULL;
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
-
-static abort_t try_addr(struct ksplice_pack *pack,
-			const struct ksplice_section *sect,
-			unsigned long run_addr,
-			struct list_head *safety_records,
-			enum run_pre_mode mode)
-{
-	abort_t ret;
-	const struct module *run_module;
-
-	if ((sect->flags & KSPLICE_SECTION_RODATA) != 0 ||
-	    (sect->flags & KSPLICE_SECTION_DATA) != 0)
-		run_module = __module_data_address(run_addr);
-	else
-		run_module = __module_text_address(run_addr);
-	if (!patches_module(run_module, pack->target)) {
-		ksdebug(pack, "run-pre: ignoring address %lx in other module "
-			"%s for sect %s\n", run_addr, run_module == NULL ?
-			"vmlinux" : run_module->name, sect->symbol->label);
-		return NO_MATCH;
-	}
-
-	ret = create_nameval(pack, sect->symbol->label, run_addr, TEMP);
-	if (ret != OK)
-		return ret;
-
-#ifdef CONFIG_FUNCTION_DATA_SECTIONS
-	ret = run_pre_cmp(pack, sect, run_addr, safety_records, mode);
-#else /* !CONFIG_FUNCTION_DATA_SECTIONS */
-	if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
-		ret = arch_run_pre_cmp(pack, sect, run_addr, safety_records,
-				       mode);
-	else
-		ret = run_pre_cmp(pack, sect, run_addr, safety_records, mode);
-#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
-	if (ret == NO_MATCH && mode != RUN_PRE_FINAL) {
-		set_temp_namevals(pack, NOVAL);
-		ksdebug(pack, "run-pre: %s sect %s does not match (r_a=%lx "
-			"p_a=%lx s=%lx)\n",
-			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "data" :
-			"text", sect->symbol->label, run_addr,
-			sect->thismod_addr, sect->size);
-		ksdebug(pack, "run-pre: ");
-		if (pack->update->debug >= 1) {
-#ifdef CONFIG_FUNCTION_DATA_SECTIONS
-			ret = run_pre_cmp(pack, sect, run_addr, safety_records,
-					  RUN_PRE_DEBUG);
-#else /* !CONFIG_FUNCTION_DATA_SECTIONS */
-			if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
-				ret = arch_run_pre_cmp(pack, sect, run_addr,
-						       safety_records,
-						       RUN_PRE_DEBUG);
-			else
-				ret = run_pre_cmp(pack, sect, run_addr,
-						  safety_records,
-						  RUN_PRE_DEBUG);
-#endif /* CONFIG_FUNCTION_DATA_SECTIONS */
-			set_temp_namevals(pack, NOVAL);
-		}
-		ksdebug(pack, "\n");
-		return ret;
-	} else if (ret != OK) {
-		set_temp_namevals(pack, NOVAL);
-		return ret;
-	}
-
-	if (mode != RUN_PRE_FINAL) {
-		set_temp_namevals(pack, NOVAL);
-		ksdebug(pack, "run-pre: candidate for sect %s=%lx\n",
-			sect->symbol->label, run_addr);
-		return OK;
-	}
-
-	set_temp_namevals(pack, VAL);
-	ksdebug(pack, "run-pre: found sect %s=%lx\n", sect->symbol->label,
-		run_addr);
-	return OK;
-}
 
 static abort_t create_safety_record(struct ksplice_pack *pack,
 				    const struct ksplice_section *sect,
