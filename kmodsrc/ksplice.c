@@ -401,6 +401,10 @@ static void print_bytes(struct ksplice_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec);
 #ifdef KSPLICE_STANDALONE
+static abort_t brute_search(struct ksplice_pack *pack,
+			    const struct ksplice_section *sect,
+			    const void *start, unsigned long len,
+			    struct list_head *vals);
 static abort_t brute_search_all(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
 				struct list_head *vals);
