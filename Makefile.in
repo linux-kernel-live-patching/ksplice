@@ -90,8 +90,8 @@ install: default $(addprefix install-,$(objutils)) $(addprefix install-,$(kmodsr
 	install -m755 -D ksplice-apply $(DESTDIR)$(sbindir)/ksplice-apply
 	install -m755 -D ksplice-undo $(DESTDIR)$(sbindir)/ksplice-undo
 	install -m755 -D $(srcdir)/gendiff-reversed $(DESTDIR)$(libexecdir)/ksplice-gendiff-reversed
-	install -m755 -D $(srcdir)/Makefile.ksplice $(DESTDIR)$(datadir)/ksplice/Makefile.ksplice
 	install -m755 -D $(srcdir)/ksplice-obj.pl $(DESTDIR)$(datadir)/ksplice/ksplice-obj.pl
+	install -m644 -D $(srcdir)/Makefile.ksplice $(DESTDIR)$(datadir)/ksplice/Makefile.ksplice
 	install -m644 -D Ksplice.pm $(DESTDIR)$(datadir)/ksplice/Ksplice.pm
 	install -m644 -D Verbose.pm $(DESTDIR)$(datadir)/ksplice/Verbose.pm
 
