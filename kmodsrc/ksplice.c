@@ -2078,6 +2078,35 @@ out:
 }
 #endif /* KSPLICE_STANDALONE */
 
+static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
+			    const struct ksplice_reloc **relocp)
+{
+	const struct ksplice_reloc *r;
+	int canary_ret;
+	for (r = pack->helper_relocs; r < pack->helper_relocs_end; r++) {
+		if (addr >= r->blank_addr && addr < r->blank_addr + r->size) {
+			canary_ret = contains_canary(pack, r->blank_addr,
+						     r->size, r->dst_mask);
+			if (canary_ret < 0)
+				return UNEXPECTED;
+			if (canary_ret == 0) {
+				ksdebug(pack, "reloc: skipped %s:%lx "
+					"(altinstr)\n", r->symbol->label,
+					r->blank_offset);
+				return NO_MATCH;
+			}
+			if (addr != r->blank_addr) {
+				ksdebug(pack, "Invalid nonzero relocation "
+					"offset\n");
+				return UNEXPECTED;
+			}
+			*relocp = r;
+			return OK;
+		}
+	}
+	return NO_MATCH;
+}
+
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 static struct module *__module_data_address(unsigned long addr)
 {
@@ -2758,35 +2787,6 @@ static abort_t create_nameval(struct ksplice_pack *pack, const char *label,
 	nv->status = status;
 	list_add(&nv->list, &pack->reloc_namevals);
 	return OK;
-}
-
-static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
-			    const struct ksplice_reloc **relocp)
-{
-	const struct ksplice_reloc *r;
-	int canary_ret;
-	for (r = pack->helper_relocs; r < pack->helper_relocs_end; r++) {
-		if (addr >= r->blank_addr && addr < r->blank_addr + r->size) {
-			canary_ret = contains_canary(pack, r->blank_addr,
-						     r->size, r->dst_mask);
-			if (canary_ret < 0)
-				return UNEXPECTED;
-			if (canary_ret == 0) {
-				ksdebug(pack, "reloc: skipped %s:%lx "
-					"(altinstr)\n", r->symbol->label,
-					r->blank_offset);
-				return NO_MATCH;
-			}
-			if (addr != r->blank_addr) {
-				ksdebug(pack, "Invalid nonzero relocation "
-					"offset\n");
-				return UNEXPECTED;
-			}
-			*relocp = r;
-			return OK;
-		}
-	}
-	return NO_MATCH;
 }
 
 static void set_temp_namevals(struct ksplice_pack *pack, int status)
