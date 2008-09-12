@@ -73,8 +73,6 @@ struct ksplice_section {
  * @saved:		The bytes of the original function which were
  * 			overwritten by the trampoline
  * @size:		The size of the trampoline
- *
- * Any value put into a private field by user space will be ignored.
  **/
 struct ksplice_trampoline {
 	unsigned long repladdr;
@@ -90,8 +88,6 @@ struct ksplice_trampoline {
  * @label:		The unique Ksplice name for the obsolete function
  * @trampoline:		A trampoline to insert over the obsolete function
  * @reverse_trampoline:	Used to simplify Ksplice internal bookkeeping
- *
- * Any value put into a private field by user space will be ignored.
  **/
 struct ksplice_patch {
 	const char *label;
@@ -106,8 +102,6 @@ struct ksplice_patch {
  * @new_name:		The new name of the exported symbol
  * @sym:		The kernel_symbol being changed
  * @saved_name:		The pointer to the original name of the kernel_symbol
- *
- * Any value put into a private field by user space will be ignored.
  **/
 struct ksplice_export {
 	const char *name;
@@ -229,8 +223,10 @@ struct ksplice_pack {
 
 /**
  * init_ksplice_pack() - Initializes a pack
- * @pack:	The pack to be initialized.  The non-private fields should
- * 		already be filled when this is called.
+ * @pack:	The pack to be initialized.  All of the public fields of the
+ * 		pack and its associated data structures should be populated
+ * 		before this function is called.  The values of the private
+ * 		fields will be ignored.
  **/
 int init_ksplice_pack(struct ksplice_pack *pack);
 
