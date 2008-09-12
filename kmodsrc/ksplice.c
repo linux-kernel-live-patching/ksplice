@@ -709,25 +709,6 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 #endif
 }
 
-static void insert_trampoline(struct ksplice_trampoline *t)
-{
-	mm_segment_t old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	memcpy((void *)t->saved, (void *)t->oldaddr, t->size);
-	memcpy((void *)t->oldaddr, (void *)t->trampoline, t->size);
-	flush_icache_range(t->oldaddr, t->oldaddr + t->size);
-	set_fs(old_fs);
-}
-
-static void remove_trampoline(const struct ksplice_trampoline *t)
-{
-	mm_segment_t old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	memcpy((void *)t->oldaddr, (void *)t->saved, t->size);
-	flush_icache_range(t->oldaddr, t->oldaddr + t->size);
-	set_fs(old_fs);
-}
-
 static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr)
 {
@@ -2402,6 +2383,25 @@ static void print_conflicts(struct update *update)
 		}
 		_ksdebug(update, "\n");
 	}
+}
+
+static void insert_trampoline(struct ksplice_trampoline *t)
+{
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	memcpy((void *)t->saved, (void *)t->oldaddr, t->size);
+	memcpy((void *)t->oldaddr, (void *)t->trampoline, t->size);
+	flush_icache_range(t->oldaddr, t->oldaddr + t->size);
+	set_fs(old_fs);
+}
+
+static void remove_trampoline(const struct ksplice_trampoline *t)
+{
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	memcpy((void *)t->oldaddr, (void *)t->saved, t->size);
+	flush_icache_range(t->oldaddr, t->oldaddr + t->size);
+	set_fs(old_fs);
 }
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
