@@ -1902,24 +1902,6 @@ static abort_t try_addr(struct ksplice_pack *pack,
 	return OK;
 }
 
-static void print_bytes(struct ksplice_pack *pack,
-			const unsigned char *run, int runc,
-			const unsigned char *pre, int prec)
-{
-	int o;
-	int matched = min(runc, prec);
-	for (o = 0; o < matched; o++) {
-		if (run[o] == pre[o])
-			ksdebug(pack, "%02x ", run[o]);
-		else
-			ksdebug(pack, "%02x/%02x ", run[o], pre[o]);
-	}
-	for (o = matched; o < runc; o++)
-		ksdebug(pack, "%02x/ ", run[o]);
-	for (o = matched; o < prec; o++)
-		ksdebug(pack, "/%02x ", pre[o]);
-}
-
 static abort_t run_pre_cmp(struct ksplice_pack *pack,
 			   const struct ksplice_section *sect,
 			   unsigned long run_addr,
@@ -2002,6 +1984,24 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 	}
 	return create_safety_record(pack, sect, safety_records, run_addr,
 				    run - run_start);
+}
+
+static void print_bytes(struct ksplice_pack *pack,
+			const unsigned char *run, int runc,
+			const unsigned char *pre, int prec)
+{
+	int o;
+	int matched = min(runc, prec);
+	for (o = 0; o < matched; o++) {
+		if (run[o] == pre[o])
+			ksdebug(pack, "%02x ", run[o]);
+		else
+			ksdebug(pack, "%02x/%02x ", run[o], pre[o]);
+	}
+	for (o = matched; o < runc; o++)
+		ksdebug(pack, "%02x/ ", run[o]);
+	for (o = matched; o < prec; o++)
+		ksdebug(pack, "/%02x ", pre[o]);
 }
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
