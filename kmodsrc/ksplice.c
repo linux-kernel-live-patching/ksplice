@@ -1734,44 +1734,6 @@ static struct module *__module_data_address(unsigned long addr)
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-static abort_t create_safety_record(struct ksplice_pack *pack,
-				    const struct ksplice_section *sect,
-				    struct list_head *record_list,
-				    unsigned long run_addr,
-				    unsigned long run_size)
-{
-	struct safety_record *rec;
-	struct ksplice_patch *p;
-
-	if (record_list == NULL)
-		return OK;
-
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		if (strcmp(sect->symbol->label, p->label) == 0)
-			break;
-	}
-	if (p >= pack->patches_end)
-		return OK;
-
-	if ((sect->flags & KSPLICE_SECTION_TEXT) == 0 &&
-	    p->trampoline.repladdr != 0) {
-		ksdebug(pack, "Error: ksplice_patch %s is matched to a "
-			"non-deleted non-text section!\n", sect->symbol->label);
-		return UNEXPECTED;
-	}
-
-	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
-	if (rec == NULL)
-		return OUT_OF_MEMORY;
-	rec->addr = run_addr;
-	rec->size = run_size;
-	rec->label = sect->symbol->label;
-	rec->first_byte_safe = false;
-
-	list_add(&rec->list, record_list);
-	return OK;
-}
-
 static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode)
@@ -2786,6 +2748,44 @@ static abort_t create_nameval(struct ksplice_pack *pack, const char *label,
 	nv->val = val;
 	nv->status = status;
 	list_add(&nv->list, &pack->reloc_namevals);
+	return OK;
+}
+
+static abort_t create_safety_record(struct ksplice_pack *pack,
+				    const struct ksplice_section *sect,
+				    struct list_head *record_list,
+				    unsigned long run_addr,
+				    unsigned long run_size)
+{
+	struct safety_record *rec;
+	struct ksplice_patch *p;
+
+	if (record_list == NULL)
+		return OK;
+
+	for (p = pack->patches; p < pack->patches_end; p++) {
+		if (strcmp(sect->symbol->label, p->label) == 0)
+			break;
+	}
+	if (p >= pack->patches_end)
+		return OK;
+
+	if ((sect->flags & KSPLICE_SECTION_TEXT) == 0 &&
+	    p->trampoline.repladdr != 0) {
+		ksdebug(pack, "Error: ksplice_patch %s is matched to a "
+			"non-deleted non-text section!\n", sect->symbol->label);
+		return UNEXPECTED;
+	}
+
+	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
+	if (rec == NULL)
+		return OUT_OF_MEMORY;
+	rec->addr = run_addr;
+	rec->size = run_size;
+	rec->label = sect->symbol->label;
+	rec->first_byte_safe = false;
+
+	list_add(&rec->list, record_list);
 	return OK;
 }
 
