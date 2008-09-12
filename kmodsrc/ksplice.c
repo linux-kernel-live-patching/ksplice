@@ -505,8 +505,7 @@ static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 					     struct module *, unsigned long),
 				   void *data);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
-						    char *result);
+static unsigned int kallsyms_expand_symbol(unsigned int off, char *result);
 #endif /* LINUX_VERSION_CODE */
 static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 						    struct module *,
@@ -2450,7 +2449,7 @@ static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 	char namebuf[KSYM_NAME_LEN];
 	unsigned long i;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-	unsigned long off;
+	unsigned int off;
 #endif /* LINUX_VERSION_CODE */
 	int ret;
 
@@ -2459,7 +2458,7 @@ static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
  */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 	for (i = 0, off = 0; i < kallsyms_num_syms; i++) {
-		off = ksplice_kallsyms_expand_symbol(off, namebuf);
+		off = kallsyms_expand_symbol(off, namebuf);
 		ret = fn(data, namebuf, NULL, kallsyms_addresses[i]);
 		if (ret != 0)
 			return ret;
@@ -2488,9 +2487,8 @@ static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 extern u8 kallsyms_token_table[];
 extern u16 kallsyms_token_index[];
-/* Modified version of Linux's kallsyms_expand_symbol */
-static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
-						    char *result)
+
+static unsigned int kallsyms_expand_symbol(unsigned int off, char *result)
 {
 	long len, skipped_first = 0;
 	const u8 *tptr, *data;
