@@ -695,25 +695,6 @@ static struct kobj_type ksplice_ktype = {
 	.default_attrs = ksplice_attrs,
 };
 
-static abort_t finalize_pack(struct ksplice_pack *pack)
-{
-	abort_t ret;
-	ret = apply_relocs(pack, pack->primary_relocs,
-			   pack->primary_relocs_end);
-	if (ret != OK)
-		return ret;
-
-	ret = finalize_patches(pack);
-	if (ret != OK)
-		return ret;
-
-	ret = finalize_exports(pack);
-	if (ret != OK)
-		return ret;
-
-	return OK;
-}
-
 static void __attribute__((noreturn)) ksplice_deleted(void)
 {
 	printk(KERN_CRIT "Called a kernel function deleted by Ksplice!\n");
@@ -1477,6 +1458,25 @@ static abort_t activate_pack(struct ksplice_pack *pack)
 	}
 
 	return finalize_pack(pack);
+}
+
+static abort_t finalize_pack(struct ksplice_pack *pack)
+{
+	abort_t ret;
+	ret = apply_relocs(pack, pack->primary_relocs,
+			   pack->primary_relocs_end);
+	if (ret != OK)
+		return ret;
+
+	ret = finalize_patches(pack);
+	if (ret != OK)
+		return ret;
+
+	ret = finalize_exports(pack);
+	if (ret != OK)
+		return ret;
+
+	return OK;
 }
 
 static abort_t match_pack_sections(struct ksplice_pack *pack,
