@@ -148,6 +148,7 @@ struct candidate_val {
 };
 
 struct accumulate_struct {
+	struct ksplice_pack *pack;
 	const char *desired_name;
 	struct list_head *vals;
 };
@@ -423,6 +424,7 @@ add_system_map_candidates(struct ksplice_pack *pack,
 #endif /* KSPLICE_STANDALONE */
 #ifdef CONFIG_KALLSYMS
 static int accumulate_matching_names(void *data, const char *sym_name,
+				     struct module *sym_owner,
 				     unsigned long sym_val);
 static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
 				      const char *name, struct list_head *vals);
@@ -492,15 +494,15 @@ _ksdebug(struct update *update, const char *fmt, ...);
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 /* Functions defined here that will be exported in later kernels */
 #ifdef CONFIG_KALLSYMS
-static int kernel_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
-						    unsigned long),
-					  void *data);
+static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
+					     struct module *, unsigned long),
+				   void *data);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 						    char *result);
 #endif /* LINUX_VERSION_CODE */
-static int module_kallsyms_on_each_symbol(const struct module *mod,
-					  int (*fn)(void *, const char *,
+static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
+						    struct module *,
 						    unsigned long),
 					  void *data);
 #endif /* CONFIG_KALLSYMS */
@@ -2484,74 +2486,24 @@ static bool patches_module(const struct module *a, const struct module *b)
 }
 
 #ifdef CONFIG_KALLSYMS
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
 static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
 				      const char *name, struct list_head *vals)
 {
-	abort_t ret = OK;
-	struct accumulate_struct acc = { name, vals };
-	const struct module *m;
-
-	list_for_each_entry(m, &modules, list) {
-		if (starts_with(m->name, pack->name) ||
-		    !patches_module(m, pack->target))
-			continue;
-		ret = (__force abort_t)
-		    module_kallsyms_on_each_symbol(m, accumulate_matching_names,
-						   &acc);
-		if (ret != OK)
-			return ret;
-	}
-
-	if (pack->target == NULL)
-		ret = (__force abort_t)
-		    kernel_kallsyms_on_each_symbol(accumulate_matching_names,
-						   &acc);
-	else
-		ret = OK;
-	return ret;
+	struct accumulate_struct acc = { pack, name, vals };
+	return (__force abort_t)
+	    kallsyms_on_each_symbol(accumulate_matching_names, &acc);
 }
-#else /* !KSPLICE_NO_KERNEL_SUPPORT */
-static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
-				      const char *name, struct list_head *vals)
-{
-	struct accumulate_struct acc = { name, vals };
-	struct ksplice_module_list_entry *entry;
-	abort_t ret;
-
-	list_for_each_entry(entry, &ksplice_module_list, list) {
-		if (entry->target != pack->target ||
-		    entry->primary == pack->primary)
-			continue;
-		ret = (__force abort_t)
-		    module_kallsyms_on_each_symbol(entry->primary,
-						   accumulate_matching_names,
-						   &acc);
-		if (ret != OK)
-			return ret;
-	}
-	if (pack->target == NULL)
-		ret = (__force abort_t)
-		    kernel_kallsyms_on_each_symbol(accumulate_matching_names,
-						   &acc);
-	else
-		ret = (__force abort_t)
-		    module_kallsyms_on_each_symbol(pack->target,
-						   accumulate_matching_names,
-						   &acc);
-	return ret;
-}
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static int accumulate_matching_names(void *data, const char *sym_name,
+				     struct module *sym_owner,
 				     unsigned long sym_val)
 {
-	abort_t ret = OK;
 	struct accumulate_struct *acc = data;
-
-	if (strcmp(sym_name, acc->desired_name) == 0)
-		ret = add_candidate_val(acc->vals, sym_val);
-	return (__force int)ret;
+	if (strcmp(sym_name, acc->desired_name) == 0 &&
+	    patches_module(sym_owner, acc->pack->target) &&
+	    sym_owner != acc->pack->primary)
+		return (__force int)add_candidate_val(acc->vals, sym_val);
+	return (__force int)OK;
 }
 #endif /* CONFIG_KALLSYMS */
 
@@ -2626,9 +2578,9 @@ out:
 #endif /* KSPLICE_STANDALONE */
 
 #if defined KSPLICE_NO_KERNEL_SUPPORT && defined CONFIG_KALLSYMS
-static int kernel_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
-						    unsigned long),
-					  void *data)
+static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
+					     struct module *, unsigned long),
+				   void *data)
 {
 	char namebuf[KSYM_NAME_LEN];
 	unsigned long i;
@@ -2643,7 +2595,7 @@ static int kernel_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 	for (i = 0, off = 0; i < kallsyms_num_syms; i++) {
 		off = ksplice_kallsyms_expand_symbol(off, namebuf);
-		ret = fn(data, namebuf, kallsyms_addresses[i]);
+		ret = fn(data, namebuf, NULL, kallsyms_addresses[i]);
 		if (ret != 0)
 			return ret;
 	}
@@ -2655,14 +2607,14 @@ static int kernel_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 
 		strlcpy(namebuf + prefix, knames, KSYM_NAME_LEN - prefix);
 
-		ret = fn(data, namebuf, kallsyms_addresses[i]);
+		ret = fn(data, namebuf, NULL, kallsyms_addresses[i]);
 		if (ret != OK)
 			return ret;
 
 		knames += strlen(knames) + 1;
 	}
 #endif /* LINUX_VERSION_CODE */
-	return 0;
+	return module_kallsyms_on_each_symbol(fn, data);
 }
 
 /*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
@@ -2705,19 +2657,22 @@ static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
 }
 #endif /* LINUX_VERSION_CODE */
 
-static int module_kallsyms_on_each_symbol(const struct module *mod,
-					  int (*fn)(void *, const char *,
+static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
+						    struct module *,
 						    unsigned long),
 					  void *data)
 {
+	struct module *mod;
 	unsigned int i;
 	int ret;
 
-	for (i = 0; i < mod->num_symtab; i++) {
-		if ((ret =
-		     fn(data, mod->strtab + mod->symtab[i].st_name,
-			mod->symtab[i].st_value) != 0))
-			return ret;
+	list_for_each_entry(mod, &modules, list) {
+		for (i = 0; i < mod->num_symtab; i++) {
+			ret = fn(data, mod->strtab + mod->symtab[i].st_name,
+				 mod, mod->symtab[i].st_value);
+			if (ret != 0)
+				return ret;
+		}
 	}
 	return 0;
 }
