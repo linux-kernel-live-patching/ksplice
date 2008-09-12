@@ -2869,17 +2869,6 @@ static struct dentry *debugfs_create_blob(const char *name, mode_t mode,
 }
 #endif /* LINUX_VERSION_CODE */
 
-static void clear_debug_buf(struct update *update)
-{
-	if (update->debugfs_dentry == NULL)
-		return;
-	debugfs_remove(update->debugfs_dentry);
-	update->debugfs_dentry = NULL;
-	update->debug_blob.size = 0;
-	vfree(update->debug_blob.data);
-	update->debug_blob.data = NULL;
-}
-
 static abort_t init_debug_buf(struct update *update)
 {
 	update->debug_blob.size = 0;
@@ -2890,6 +2879,17 @@ static abort_t init_debug_buf(struct update *update)
 	if (update->debugfs_dentry == NULL)
 		return OUT_OF_MEMORY;
 	return OK;
+}
+
+static void clear_debug_buf(struct update *update)
+{
+	if (update->debugfs_dentry == NULL)
+		return;
+	debugfs_remove(update->debugfs_dentry);
+	update->debugfs_dentry = NULL;
+	update->debug_blob.size = 0;
+	vfree(update->debug_blob.data);
+	update->debug_blob.data = NULL;
 }
 
 static int _ksdebug(struct update *update, const char *fmt, ...)
