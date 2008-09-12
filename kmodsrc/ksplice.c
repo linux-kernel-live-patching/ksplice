@@ -709,19 +709,6 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 #endif
 }
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
-static struct module *find_module(const char *name)
-{
-	struct module *mod;
-
-	list_for_each_entry(mod, &modules, list) {
-		if (strcmp(mod->name, name) == 0)
-			return mod;
-	}
-	return NULL;
-}
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
-
 int init_ksplice_pack(struct ksplice_pack *pack)
 {
 	struct update *update;
@@ -2862,7 +2849,8 @@ static int _ksdebug(struct update *update, const char *fmt, ...)
 }
 #endif /* CONFIG_DEBUG_FS */
 
-#if defined KSPLICE_NO_KERNEL_SUPPORT && defined CONFIG_KALLSYMS
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+#ifdef CONFIG_KALLSYMS
 static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 					     struct module *, unsigned long),
 				   void *data)
@@ -2961,7 +2949,19 @@ static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 	}
 	return 0;
 }
-#endif /* KSPLICE_NO_KERNEL_SUPPORT && CONFIG_KALLSYMS */
+#endif /* CONFIG_KALLSYMS */
+
+static struct module *find_module(const char *name)
+{
+	struct module *mod;
+
+	list_for_each_entry(mod, &modules, list) {
+		if (strcmp(mod->name, name) == 0)
+			return mod;
+	}
+	return NULL;
+}
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 #ifdef KSPLICE_STANDALONE
 static int debug;
