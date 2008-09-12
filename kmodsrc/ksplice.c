@@ -1880,6 +1880,8 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	ret = read_reloc_value(pack, r, run_addr, &val);
 	if (ret != OK)
 		return ret;
+	if (r->pcrel)
+		val += run_addr;
 
 	if (mode == RUN_PRE_INITIAL)
 		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx to %s+%lx: "
@@ -1940,8 +1942,6 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 	if (r->signed_addend)
 		val |= -(val & (r->dst_mask & ~(r->dst_mask >> 1)));
 	val <<= r->rightshift;
-	if (r->pcrel)
-		val += (unsigned long)addr;
 	val -= r->addend;
 	*valp = val;
 	return OK;
@@ -1952,8 +1952,6 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 unsigned long sym_addr)
 {
 	unsigned long val = sym_addr + r->addend;
-	if (r->pcrel)
-		val -= r->blank_addr;
 	val >>= r->rightshift;
 	switch (r->size) {
 	case 1:
@@ -2048,7 +2046,8 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
 
-	ret = write_reloc_value(pack, r, sym_addr);
+	ret = write_reloc_value(pack, r,
+				r->pcrel ? sym_addr - r->blank_addr : sym_addr);
 	if (ret != OK)
 		return ret;
 
