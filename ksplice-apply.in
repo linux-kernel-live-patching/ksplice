@@ -26,7 +26,7 @@ my ($help, $wantversion, $debug) = (0, 0, 0);
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
 	"verbose|v:+" => \$Verbose::level,
-	"debug=i" => \$debug) or pod2usage(1);
+	"debug" => \$debug) or pod2usage(1);
 
 if($wantversion) {
 	print $version_str;
@@ -237,35 +237,10 @@ running kernel's version.
 
 =over 8
 
-=item B<--debug=>I<DEBUG_LEVEL>
+=item B<--debug>
 
 Applies the update with debugging output enabled.  Recommended only for
-debugging.  I<DEBUG_LEVEL> should be an integer between 0 and 4.  B<--debug=4>
-provides the most debugging information.
-
-=over
-
-=item Z<> B<0>
-
-No debugging output.
-
-=item Z<> B<1>
-
-Provides basic (pre-run matching and kernel stack check) debugging output.
-
-=item Z<> B<2>
-
-Also provides full kernel stack check debugging output.
-
-=item Z<> B<3>
-
-Also provides full pre-run matching debugging output.
-
-=item Z<> B<4>
-
-Also provides full Ksplice relocation debugging output.
-
-=back
+debugging.
 
 =back
 
