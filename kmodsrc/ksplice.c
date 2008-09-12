@@ -460,6 +460,8 @@ static bool is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update *update);
 static void print_conflicts(struct update *update);
 static void insert_trampoline(struct ksplice_trampoline *t);
+static abort_t verify_trampoline(struct ksplice_pack *pack,
+				 const struct ksplice_trampoline *t);
 static void remove_trampoline(const struct ksplice_trampoline *t);
 
 static struct labelval *find_labelval(struct ksplice_pack *pack,
@@ -1897,6 +1899,17 @@ static int __reverse_patches(void *updateptr)
 	if (ret != OK)
 		return (__force int)ret;
 
+	list_for_each_entry(pack, &update->packs, list) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			ret = verify_trampoline(pack, &p->trampoline);
+			if (ret != OK)
+				return (__force int)ret;
+			ret = verify_trampoline(pack, &p->reverse_trampoline);
+			if (ret != OK)
+				return (__force int)ret;
+		}
+	}
+
 	update->stage = STAGE_REVERSED;
 
 	list_for_each_entry(pack, &update->packs, list)
@@ -2092,6 +2105,17 @@ static void insert_trampoline(struct ksplice_trampoline *t)
 	memcpy((void *)t->oldaddr, (void *)t->trampoline, t->size);
 	flush_icache_range(t->oldaddr, t->oldaddr + t->size);
 	set_fs(old_fs);
+}
+
+static abort_t verify_trampoline(struct ksplice_pack *pack,
+				 const struct ksplice_trampoline *t)
+{
+	if (memcmp((void *)t->oldaddr, (void *)t->trampoline, t->size) != 0) {
+		ksdebug(pack, "Aborted.  Trampoline at %lx has been "
+			"overwritten.\n", t->oldaddr);
+		return CODE_BUSY;
+	}
+	return OK;
 }
 
 static void remove_trampoline(const struct ksplice_trampoline *t)
