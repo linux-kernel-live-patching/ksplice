@@ -368,7 +368,7 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 			   const struct ksplice_reloc *r);
 static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
-				 unsigned long sym_addr);
+				 unsigned long addr, unsigned long sym_addr);
 static abort_t read_reloc_value(struct ksplice_pack *pack,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp);
@@ -1949,31 +1949,27 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 
 static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
-				 unsigned long sym_addr)
+				 unsigned long addr, unsigned long sym_addr)
 {
 	unsigned long val = sym_addr + r->addend;
 	val >>= r->rightshift;
 	switch (r->size) {
 	case 1:
-		*(uint8_t *)r->blank_addr =
-		    (*(uint8_t *)r->blank_addr & ~r->dst_mask) |
-		    (val & r->dst_mask);
+		*(uint8_t *)addr =
+		    (*(uint8_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
 		break;
 	case 2:
-		*(uint16_t *)r->blank_addr =
-		    (*(uint16_t *)r->blank_addr & ~r->dst_mask) |
-		    (val & r->dst_mask);
+		*(uint16_t *)addr =
+		    (*(uint16_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
 		break;
 	case 4:
-		*(uint32_t *)r->blank_addr =
-		    (*(uint32_t *)r->blank_addr & ~r->dst_mask) |
-		    (val & r->dst_mask);
+		*(uint32_t *)addr =
+		    (*(uint32_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
 		break;
 #if BITS_PER_LONG >= 64
 	case 8:
-		*(uint64_t *)r->blank_addr =
-		    (*(uint64_t *)r->blank_addr & ~r->dst_mask) |
-		    (val & r->dst_mask);
+		*(uint64_t *)addr =
+		    (*(uint64_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
 		break;
 #endif /* BITS_PER_LONG */
 	default:
@@ -1981,8 +1977,7 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 		return UNEXPECTED;
 	}
 
-	if (read_reloc_value(pack, r, r->blank_addr, &val) != OK ||
-	    val != sym_addr) {
+	if (read_reloc_value(pack, r, addr, &val) != OK || val != sym_addr) {
 		ksdebug(pack, "Aborted.  Relocation overflow.\n");
 		return UNEXPECTED;
 	}
@@ -2046,7 +2041,7 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
 
-	ret = write_reloc_value(pack, r,
+	ret = write_reloc_value(pack, r, r->blank_addr,
 				r->pcrel ? sym_addr - r->blank_addr : sym_addr);
 	if (ret != OK)
 		return ret;
