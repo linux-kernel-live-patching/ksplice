@@ -1,3 +1,5 @@
+#include <linux/types.h>
+
 /**
  * struct ksplice_symbol - Ksplice's analogue of an ELF symbol
  * @name:	The ELF name of the symbol
@@ -36,6 +38,12 @@ struct ksplice_reloc {
 	unsigned int rightshift;
 	int signed_addend;
 };
+
+#if BITS_PER_LONG == 32
+#define KSPLICE_CANARY 0x77777777UL
+#elif BITS_PER_LONG == 64
+#define KSPLICE_CANARY 0x7777777777777777UL
+#endif /* BITS_PER_LONG */
 
 /**
  * struct ksplice_section - Ksplice's analogue of an ELF section

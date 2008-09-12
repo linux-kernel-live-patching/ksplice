@@ -2859,17 +2859,17 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 	switch (size) {
 	case 1:
 		return (*(uint8_t *)blank_addr & dst_mask) ==
-		    (0x77 & dst_mask);
+		    (KSPLICE_CANARY & dst_mask);
 	case 2:
 		return (*(uint16_t *)blank_addr & dst_mask) ==
-		    (0x7777 & dst_mask);
+		    (KSPLICE_CANARY & dst_mask);
 	case 4:
 		return (*(uint32_t *)blank_addr & dst_mask) ==
-		    (0x77777777 & dst_mask);
+		    (KSPLICE_CANARY & dst_mask);
 #if BITS_PER_LONG >= 64
 	case 8:
 		return (*(uint64_t *)blank_addr & dst_mask) ==
-		    (0x7777777777777777l & dst_mask);
+		    (KSPLICE_CANARY & dst_mask);
 #endif /* BITS_PER_LONG */
 	default:
 		ksdebug(pack, "Aborted.  Invalid relocation size.\n");

@@ -621,7 +621,7 @@ void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto)
 	void *address = ss->contents.data + offset;
 	bfd_vma x = bfd_get(bits, ss->parent->abfd, address);
 	x = (x & ~howto->dst_mask) |
-	    ((bfd_vma)0x7777777777777777LL & howto->dst_mask);
+	    ((bfd_vma)KSPLICE_CANARY & howto->dst_mask);
 	bfd_put(bits, ss->parent->abfd, x, address);
 }
 
