@@ -373,6 +373,7 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long addr, unsigned long sym_addr);
+static void __attribute__((noreturn)) ksplice_deleted(void);
 
 /* run-pre matching */
 static abort_t match_pack_sections(struct ksplice_pack *pack,
@@ -698,16 +699,6 @@ static struct kobj_type ksplice_ktype = {
 	.release = ksplice_release,
 	.default_attrs = ksplice_attrs,
 };
-
-static void __attribute__((noreturn)) ksplice_deleted(void)
-{
-	printk(KERN_CRIT "Called a kernel function deleted by Ksplice!\n");
-	BUG();
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
-/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
-	for (;;);
-#endif
-}
 
 int init_ksplice_pack(struct ksplice_pack *pack)
 {
@@ -1244,6 +1235,16 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 	}
 
 	return OK;
+}
+
+static void __attribute__((noreturn)) ksplice_deleted(void)
+{
+	printk(KERN_CRIT "Called a kernel function deleted by Ksplice!\n");
+	BUG();
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
+	for (;;);
+#endif
 }
 
 static abort_t match_pack_sections(struct ksplice_pack *pack,
