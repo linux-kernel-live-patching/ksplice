@@ -2526,107 +2526,6 @@ static const struct kernel_symbol *find_symbol(const char *name,
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-#if defined KSPLICE_NO_KERNEL_SUPPORT && defined CONFIG_KALLSYMS
-static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
-					     struct module *, unsigned long),
-				   void *data)
-{
-	char namebuf[KSYM_NAME_LEN];
-	unsigned long i;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-	unsigned long off;
-#endif /* LINUX_VERSION_CODE */
-	int ret;
-
-/*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
- *  2.6.10 was the first release after this commit
- */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-	for (i = 0, off = 0; i < kallsyms_num_syms; i++) {
-		off = ksplice_kallsyms_expand_symbol(off, namebuf);
-		ret = fn(data, namebuf, NULL, kallsyms_addresses[i]);
-		if (ret != 0)
-			return ret;
-	}
-#else /* LINUX_VERSION_CODE < */
-	char *knames;
-
-	for (i = 0, knames = kallsyms_names; i < kallsyms_num_syms; i++) {
-		unsigned prefix = *knames++;
-
-		strlcpy(namebuf + prefix, knames, KSYM_NAME_LEN - prefix);
-
-		ret = fn(data, namebuf, NULL, kallsyms_addresses[i]);
-		if (ret != OK)
-			return ret;
-
-		knames += strlen(knames) + 1;
-	}
-#endif /* LINUX_VERSION_CODE */
-	return module_kallsyms_on_each_symbol(fn, data);
-}
-
-/*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
- *  2.6.10 was the first release after this commit
- */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-extern u8 kallsyms_token_table[];
-extern u16 kallsyms_token_index[];
-/* Modified version of Linux's kallsyms_expand_symbol */
-static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
-						    char *result)
-{
-	long len, skipped_first = 0;
-	const u8 *tptr, *data;
-
-	data = &kallsyms_names[off];
-	len = *data;
-	data++;
-
-	off += len + 1;
-
-	while (len) {
-		tptr = &kallsyms_token_table[kallsyms_token_index[*data]];
-		data++;
-		len--;
-
-		while (*tptr) {
-			if (skipped_first) {
-				*result = *tptr;
-				result++;
-			} else
-				skipped_first = 1;
-			tptr++;
-		}
-	}
-
-	*result = '\0';
-
-	return off;
-}
-#endif /* LINUX_VERSION_CODE */
-
-static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
-						    struct module *,
-						    unsigned long),
-					  void *data)
-{
-	struct module *mod;
-	unsigned int i;
-	int ret;
-
-	list_for_each_entry(mod, &modules, list) {
-		for (i = 0; i < mod->num_symtab; i++) {
-			ret = fn(data, mod->strtab + mod->symtab[i].st_name,
-				 mod, mod->symtab[i].st_value);
-			if (ret != 0)
-				return ret;
-		}
-	}
-	return 0;
-}
-#endif /* KSPLICE_NO_KERNEL_SUPPORT && CONFIG_KALLSYMS */
-
 static struct reloc_nameval *find_nameval(struct ksplice_pack *pack,
 					  const char *label)
 {
@@ -2962,6 +2861,107 @@ static int _ksdebug(struct update *update, const char *fmt, ...)
 	return 0;
 }
 #endif /* CONFIG_DEBUG_FS */
+
+#if defined KSPLICE_NO_KERNEL_SUPPORT && defined CONFIG_KALLSYMS
+static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
+					     struct module *, unsigned long),
+				   void *data)
+{
+	char namebuf[KSYM_NAME_LEN];
+	unsigned long i;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+	unsigned long off;
+#endif /* LINUX_VERSION_CODE */
+	int ret;
+
+/*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
+ *  2.6.10 was the first release after this commit
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+	for (i = 0, off = 0; i < kallsyms_num_syms; i++) {
+		off = ksplice_kallsyms_expand_symbol(off, namebuf);
+		ret = fn(data, namebuf, NULL, kallsyms_addresses[i]);
+		if (ret != 0)
+			return ret;
+	}
+#else /* LINUX_VERSION_CODE < */
+	char *knames;
+
+	for (i = 0, knames = kallsyms_names; i < kallsyms_num_syms; i++) {
+		unsigned prefix = *knames++;
+
+		strlcpy(namebuf + prefix, knames, KSYM_NAME_LEN - prefix);
+
+		ret = fn(data, namebuf, NULL, kallsyms_addresses[i]);
+		if (ret != OK)
+			return ret;
+
+		knames += strlen(knames) + 1;
+	}
+#endif /* LINUX_VERSION_CODE */
+	return module_kallsyms_on_each_symbol(fn, data);
+}
+
+/*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
+ *  2.6.10 was the first release after this commit
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+extern u8 kallsyms_token_table[];
+extern u16 kallsyms_token_index[];
+/* Modified version of Linux's kallsyms_expand_symbol */
+static unsigned long ksplice_kallsyms_expand_symbol(unsigned long off,
+						    char *result)
+{
+	long len, skipped_first = 0;
+	const u8 *tptr, *data;
+
+	data = &kallsyms_names[off];
+	len = *data;
+	data++;
+
+	off += len + 1;
+
+	while (len) {
+		tptr = &kallsyms_token_table[kallsyms_token_index[*data]];
+		data++;
+		len--;
+
+		while (*tptr) {
+			if (skipped_first) {
+				*result = *tptr;
+				result++;
+			} else
+				skipped_first = 1;
+			tptr++;
+		}
+	}
+
+	*result = '\0';
+
+	return off;
+}
+#endif /* LINUX_VERSION_CODE */
+
+static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
+						    struct module *,
+						    unsigned long),
+					  void *data)
+{
+	struct module *mod;
+	unsigned int i;
+	int ret;
+
+	list_for_each_entry(mod, &modules, list) {
+		for (i = 0; i < mod->num_symtab; i++) {
+			ret = fn(data, mod->strtab + mod->symtab[i].st_name,
+				 mod, mod->symtab[i].st_value);
+			if (ret != 0)
+				return ret;
+		}
+	}
+	return 0;
+}
+#endif /* KSPLICE_NO_KERNEL_SUPPORT && CONFIG_KALLSYMS */
 
 #ifdef KSPLICE_STANDALONE
 static int debug;
