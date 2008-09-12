@@ -2198,50 +2198,6 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	return ret;
 }
 
-#ifdef KSPLICE_STANDALONE
-static abort_t
-add_system_map_candidates(struct ksplice_pack *pack,
-			  const struct ksplice_system_map *start,
-			  const struct ksplice_system_map *end,
-			  const char *label, struct list_head *vals)
-{
-	abort_t ret;
-	long off;
-	int i;
-	const struct ksplice_system_map *smap;
-
-	/* Some Fedora kernel releases have System.map files whose symbol
-	 * addresses disagree with the running kernel by a constant address
-	 * offset because of the CONFIG_PHYSICAL_START and CONFIG_PHYSICAL_ALIGN
-	 * values used to compile these kernels.  This constant address offset
-	 * is always a multiple of 0x100000.
-	 *
-	 * If we observe an offset that is NOT a multiple of 0x100000, then the
-	 * user provided us with an incorrect System.map file, and we should
-	 * abort.
-	 * If we observe an offset that is a multiple of 0x100000, then we can
-	 * adjust the System.map address values accordingly and proceed.
-	 */
-	off = (unsigned long)printk - pack->map_printk;
-	if (off & 0xfffff) {
-		ksdebug(pack, "Aborted.  System.map does not match kernel.\n");
-		return BAD_SYSTEM_MAP;
-	}
-	for (smap = start; smap < end; smap++) {
-		if (strcmp(smap->label, label) == 0)
-			break;
-	}
-	if (smap >= end)
-		return OK;
-	for (i = 0; i < smap->nr_candidates; i++) {
-		ret = add_candidate_val(vals, smap->candidates[i] + off);
-		if (ret != OK)
-			return ret;
-	}
-	return OK;
-}
-#endif /* !KSPLICE_STANDALONE */
-
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 #ifdef CONFIG_MODULE_UNLOAD
 struct module_use {
@@ -2354,6 +2310,50 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 
 	return OK;
 }
+
+#ifdef KSPLICE_STANDALONE
+static abort_t
+add_system_map_candidates(struct ksplice_pack *pack,
+			  const struct ksplice_system_map *start,
+			  const struct ksplice_system_map *end,
+			  const char *label, struct list_head *vals)
+{
+	abort_t ret;
+	long off;
+	int i;
+	const struct ksplice_system_map *smap;
+
+	/* Some Fedora kernel releases have System.map files whose symbol
+	 * addresses disagree with the running kernel by a constant address
+	 * offset because of the CONFIG_PHYSICAL_START and CONFIG_PHYSICAL_ALIGN
+	 * values used to compile these kernels.  This constant address offset
+	 * is always a multiple of 0x100000.
+	 *
+	 * If we observe an offset that is NOT a multiple of 0x100000, then the
+	 * user provided us with an incorrect System.map file, and we should
+	 * abort.
+	 * If we observe an offset that is a multiple of 0x100000, then we can
+	 * adjust the System.map address values accordingly and proceed.
+	 */
+	off = (unsigned long)printk - pack->map_printk;
+	if (off & 0xfffff) {
+		ksdebug(pack, "Aborted.  System.map does not match kernel.\n");
+		return BAD_SYSTEM_MAP;
+	}
+	for (smap = start; smap < end; smap++) {
+		if (strcmp(smap->label, label) == 0)
+			break;
+	}
+	if (smap >= end)
+		return OK;
+	for (i = 0; i < smap->nr_candidates; i++) {
+		ret = add_candidate_val(vals, smap->candidates[i] + off);
+		if (ret != OK)
+			return ret;
+	}
+	return OK;
+}
+#endif /* !KSPLICE_STANDALONE */
 
 static abort_t new_export_lookup(struct update *update,
 				 const char *name, struct list_head *vals)
