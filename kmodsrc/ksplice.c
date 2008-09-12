@@ -191,6 +191,8 @@ EXPORT_SYMBOL_GPL(ksplice_module_list);
 static struct kobject *ksplice_kobj;
 #endif /* KSPLICE_STANDALONE */
 
+static struct kobj_type ksplice_ktype;
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* Old kernels do not have kcalloc
  * e629946abd0bb8266e9c3d0fd1bff2ef8dec5443 was after 2.6.8
@@ -545,160 +547,6 @@ static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 			kfree(list_entry(_pos, type, member));	\
 		}						\
 	} while (0)
-
-struct ksplice_attribute {
-	struct attribute attr;
-	ssize_t (*show)(struct update *update, char *buf);
-	ssize_t (*store)(struct update *update, const char *buf, size_t len);
-};
-
-static ssize_t ksplice_attr_show(struct kobject *kobj, struct attribute *attr,
-				 char *buf)
-{
-	struct ksplice_attribute *attribute =
-	    container_of(attr, struct ksplice_attribute, attr);
-	struct update *update = container_of(kobj, struct update, kobj);
-	if (attribute->show == NULL)
-		return -EIO;
-	return attribute->show(update, buf);
-}
-
-static ssize_t ksplice_attr_store(struct kobject *kobj, struct attribute *attr,
-				  const char *buf, size_t len)
-{
-	struct ksplice_attribute *attribute =
-	    container_of(attr, struct ksplice_attribute, attr);
-	struct update *update = container_of(kobj, struct update, kobj);
-	if (attribute->store == NULL)
-		return -EIO;
-	return attribute->store(update, buf, len);
-}
-
-static struct sysfs_ops ksplice_sysfs_ops = {
-	.show = ksplice_attr_show,
-	.store = ksplice_attr_store,
-};
-
-static void ksplice_release(struct kobject *kobj)
-{
-	struct update *update;
-	update = container_of(kobj, struct update, kobj);
-	cleanup_ksplice_update(update);
-}
-
-static ssize_t stage_show(struct update *update, char *buf)
-{
-	switch (update->stage) {
-	case STAGE_PREPARING:
-		return snprintf(buf, PAGE_SIZE, "preparing\n");
-	case STAGE_APPLIED:
-		return snprintf(buf, PAGE_SIZE, "applied\n");
-	case STAGE_REVERSED:
-		return snprintf(buf, PAGE_SIZE, "reversed\n");
-	}
-	return 0;
-}
-
-static ssize_t abort_cause_show(struct update *update, char *buf)
-{
-	switch (update->abort_cause) {
-	case OK:
-		return snprintf(buf, PAGE_SIZE, "ok\n");
-	case NO_MATCH:
-		return snprintf(buf, PAGE_SIZE, "no_match\n");
-#ifdef KSPLICE_STANDALONE
-	case BAD_SYSTEM_MAP:
-		return snprintf(buf, PAGE_SIZE, "bad_system_map\n");
-#endif /* KSPLICE_STANDALONE */
-	case CODE_BUSY:
-		return snprintf(buf, PAGE_SIZE, "code_busy\n");
-	case MODULE_BUSY:
-		return snprintf(buf, PAGE_SIZE, "module_busy\n");
-	case OUT_OF_MEMORY:
-		return snprintf(buf, PAGE_SIZE, "out_of_memory\n");
-	case FAILED_TO_FIND:
-		return snprintf(buf, PAGE_SIZE, "failed_to_find\n");
-	case ALREADY_REVERSED:
-		return snprintf(buf, PAGE_SIZE, "already_reversed\n");
-	case MISSING_EXPORT:
-		return snprintf(buf, PAGE_SIZE, "missing_export\n");
-	case UNEXPECTED_RUNNING_TASK:
-		return snprintf(buf, PAGE_SIZE, "unexpected_running_task\n");
-	case UNEXPECTED:
-		return snprintf(buf, PAGE_SIZE, "unexpected\n");
-	}
-	return 0;
-}
-
-static ssize_t conflict_show(struct update *update, char *buf)
-{
-	const struct conflict *conf;
-	const struct conflict_addr *ca;
-	int used = 0;
-	list_for_each_entry(conf, &update->conflicts, list) {
-		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
-				 conf->process_name, conf->pid);
-		list_for_each_entry(ca, &conf->stack, list) {
-			if (!ca->has_conflict)
-				continue;
-			used += snprintf(buf + used, PAGE_SIZE - used, " %s",
-					 ca->label);
-		}
-		used += snprintf(buf + used, PAGE_SIZE - used, "\n");
-	}
-	return used;
-}
-
-static ssize_t stage_store(struct update *update, const char *buf, size_t len)
-{
-	if ((strncmp(buf, "applied", len) == 0 ||
-	     strncmp(buf, "applied\n", len) == 0) &&
-	    update->stage == STAGE_PREPARING)
-		update->abort_cause = apply_update(update);
-	else if ((strncmp(buf, "reversed", len) == 0 ||
-		  strncmp(buf, "reversed\n", len) == 0) &&
-		 update->stage == STAGE_APPLIED)
-		update->abort_cause = reverse_patches(update);
-	return len;
-}
-
-static ssize_t debug_show(struct update *update, char *buf)
-{
-	return snprintf(buf, PAGE_SIZE, "%d\n", update->debug);
-}
-
-static ssize_t debug_store(struct update *update, const char *buf, size_t len)
-{
-	unsigned long l;
-	int ret = strict_strtoul(buf, 10, &l);
-	if (ret != 0)
-		return ret;
-	update->debug = l;
-	return len;
-}
-
-static struct ksplice_attribute stage_attribute =
-	__ATTR(stage, 0600, stage_show, stage_store);
-static struct ksplice_attribute abort_cause_attribute =
-	__ATTR(abort_cause, 0400, abort_cause_show, NULL);
-static struct ksplice_attribute debug_attribute =
-	__ATTR(debug, 0600, debug_show, debug_store);
-static struct ksplice_attribute conflict_attribute =
-	__ATTR(conflicts, 0400, conflict_show, NULL);
-
-static struct attribute *ksplice_attrs[] = {
-	&stage_attribute.attr,
-	&abort_cause_attribute.attr,
-	&debug_attribute.attr,
-	&conflict_attribute.attr,
-	NULL
-};
-
-static struct kobj_type ksplice_ktype = {
-	.sysfs_ops = &ksplice_sysfs_ops,
-	.release = ksplice_release,
-	.default_attrs = ksplice_attrs,
-};
 
 int init_ksplice_pack(struct ksplice_pack *pack)
 {
@@ -2957,6 +2805,160 @@ static struct module *__module_data_address(unsigned long addr)
 	return NULL;
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
+
+struct ksplice_attribute {
+	struct attribute attr;
+	ssize_t (*show)(struct update *update, char *buf);
+	ssize_t (*store)(struct update *update, const char *buf, size_t len);
+};
+
+static ssize_t ksplice_attr_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct ksplice_attribute *attribute =
+	    container_of(attr, struct ksplice_attribute, attr);
+	struct update *update = container_of(kobj, struct update, kobj);
+	if (attribute->show == NULL)
+		return -EIO;
+	return attribute->show(update, buf);
+}
+
+static ssize_t ksplice_attr_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buf, size_t len)
+{
+	struct ksplice_attribute *attribute =
+	    container_of(attr, struct ksplice_attribute, attr);
+	struct update *update = container_of(kobj, struct update, kobj);
+	if (attribute->store == NULL)
+		return -EIO;
+	return attribute->store(update, buf, len);
+}
+
+static struct sysfs_ops ksplice_sysfs_ops = {
+	.show = ksplice_attr_show,
+	.store = ksplice_attr_store,
+};
+
+static void ksplice_release(struct kobject *kobj)
+{
+	struct update *update;
+	update = container_of(kobj, struct update, kobj);
+	cleanup_ksplice_update(update);
+}
+
+static ssize_t stage_show(struct update *update, char *buf)
+{
+	switch (update->stage) {
+	case STAGE_PREPARING:
+		return snprintf(buf, PAGE_SIZE, "preparing\n");
+	case STAGE_APPLIED:
+		return snprintf(buf, PAGE_SIZE, "applied\n");
+	case STAGE_REVERSED:
+		return snprintf(buf, PAGE_SIZE, "reversed\n");
+	}
+	return 0;
+}
+
+static ssize_t abort_cause_show(struct update *update, char *buf)
+{
+	switch (update->abort_cause) {
+	case OK:
+		return snprintf(buf, PAGE_SIZE, "ok\n");
+	case NO_MATCH:
+		return snprintf(buf, PAGE_SIZE, "no_match\n");
+#ifdef KSPLICE_STANDALONE
+	case BAD_SYSTEM_MAP:
+		return snprintf(buf, PAGE_SIZE, "bad_system_map\n");
+#endif /* KSPLICE_STANDALONE */
+	case CODE_BUSY:
+		return snprintf(buf, PAGE_SIZE, "code_busy\n");
+	case MODULE_BUSY:
+		return snprintf(buf, PAGE_SIZE, "module_busy\n");
+	case OUT_OF_MEMORY:
+		return snprintf(buf, PAGE_SIZE, "out_of_memory\n");
+	case FAILED_TO_FIND:
+		return snprintf(buf, PAGE_SIZE, "failed_to_find\n");
+	case ALREADY_REVERSED:
+		return snprintf(buf, PAGE_SIZE, "already_reversed\n");
+	case MISSING_EXPORT:
+		return snprintf(buf, PAGE_SIZE, "missing_export\n");
+	case UNEXPECTED_RUNNING_TASK:
+		return snprintf(buf, PAGE_SIZE, "unexpected_running_task\n");
+	case UNEXPECTED:
+		return snprintf(buf, PAGE_SIZE, "unexpected\n");
+	}
+	return 0;
+}
+
+static ssize_t conflict_show(struct update *update, char *buf)
+{
+	const struct conflict *conf;
+	const struct conflict_addr *ca;
+	int used = 0;
+	list_for_each_entry(conf, &update->conflicts, list) {
+		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
+				 conf->process_name, conf->pid);
+		list_for_each_entry(ca, &conf->stack, list) {
+			if (!ca->has_conflict)
+				continue;
+			used += snprintf(buf + used, PAGE_SIZE - used, " %s",
+					 ca->label);
+		}
+		used += snprintf(buf + used, PAGE_SIZE - used, "\n");
+	}
+	return used;
+}
+
+static ssize_t stage_store(struct update *update, const char *buf, size_t len)
+{
+	if ((strncmp(buf, "applied", len) == 0 ||
+	     strncmp(buf, "applied\n", len) == 0) &&
+	    update->stage == STAGE_PREPARING)
+		update->abort_cause = apply_update(update);
+	else if ((strncmp(buf, "reversed", len) == 0 ||
+		  strncmp(buf, "reversed\n", len) == 0) &&
+		 update->stage == STAGE_APPLIED)
+		update->abort_cause = reverse_patches(update);
+	return len;
+}
+
+static ssize_t debug_show(struct update *update, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", update->debug);
+}
+
+static ssize_t debug_store(struct update *update, const char *buf, size_t len)
+{
+	unsigned long l;
+	int ret = strict_strtoul(buf, 10, &l);
+	if (ret != 0)
+		return ret;
+	update->debug = l;
+	return len;
+}
+
+static struct ksplice_attribute stage_attribute =
+	__ATTR(stage, 0600, stage_show, stage_store);
+static struct ksplice_attribute abort_cause_attribute =
+	__ATTR(abort_cause, 0400, abort_cause_show, NULL);
+static struct ksplice_attribute debug_attribute =
+	__ATTR(debug, 0600, debug_show, debug_store);
+static struct ksplice_attribute conflict_attribute =
+	__ATTR(conflicts, 0400, conflict_show, NULL);
+
+static struct attribute *ksplice_attrs[] = {
+	&stage_attribute.attr,
+	&abort_cause_attribute.attr,
+	&debug_attribute.attr,
+	&conflict_attribute.attr,
+	NULL
+};
+
+static struct kobj_type ksplice_ktype = {
+	.sysfs_ops = &ksplice_sysfs_ops,
+	.release = ksplice_release,
+	.default_attrs = ksplice_attrs,
+};
 
 #ifdef KSPLICE_STANDALONE
 static int debug;
