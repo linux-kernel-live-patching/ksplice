@@ -89,10 +89,7 @@ struct ksplice_trampoline {
  * struct ksplice_patch - A function replacement that Ksplice should perform
  * @label:		The unique Ksplice name for the obsolete function
  * @trampoline:		A trampoline to insert over the obsolete function
- * @reverse_trampoline:	A trampoline to insert over the repladdr of any
- * 			trampoline previously installed at the start of the
- * 			obsolete function (if the function has been previously
- * 			patched)
+ * @reverse_trampoline:	Used to simplify Ksplice internal bookkeeping
  *
  * Any value put into a private field by user space will be ignored.
  **/
