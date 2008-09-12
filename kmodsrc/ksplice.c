@@ -1740,69 +1740,6 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	return ret;
 }
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
-#ifdef CONFIG_MODULE_UNLOAD
-struct module_use {
-	struct list_head list;
-	struct module *module_which_uses;
-};
-
-/* I'm not yet certain whether we need the strong form of this. */
-static inline int strong_try_module_get(struct module *mod)
-{
-	if (mod && mod->state != MODULE_STATE_LIVE)
-		return -EBUSY;
-	if (try_module_get(mod))
-		return 0;
-	return -ENOENT;
-}
-
-/* Does a already use b? */
-static int already_uses(struct module *a, struct module *b)
-{
-	struct module_use *use;
-	list_for_each_entry(use, &b->modules_which_use_me, list) {
-		if (use->module_which_uses == a)
-			return 1;
-	}
-	return 0;
-}
-
-/* Make it so module a uses b.  Must be holding module_mutex */
-static int use_module(struct module *a, struct module *b)
-{
-	struct module_use *use;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
-/* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
-	int no_warn;
-#endif /* LINUX_VERSION_CODE */
-	if (b == NULL || already_uses(a, b))
-		return 1;
-
-	if (strong_try_module_get(b) < 0)
-		return 0;
-
-	use = kmalloc(sizeof(*use), GFP_ATOMIC);
-	if (!use) {
-		module_put(b);
-		return 0;
-	}
-	use->module_which_uses = a;
-	list_add(&use->list, &b->modules_which_use_me);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
-/* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
-	no_warn = sysfs_create_link(b->holders_dir, &a->mkobj.kobj, a->name);
-#endif /* LINUX_VERSION_CODE */
-	return 1;
-}
-#else /* CONFIG_MODULE_UNLOAD */
-static int use_module(struct module *a, struct module *b)
-{
-	return 1;
-}
-#endif /* CONFIG_MODULE_UNLOAD */
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
-
 static abort_t lookup_symbol(struct ksplice_pack *pack,
 			     const struct ksplice_symbol *ksym,
 			     struct list_head *vals)
@@ -2961,6 +2898,67 @@ static struct module *find_module(const char *name)
 	}
 	return NULL;
 }
+
+#ifdef CONFIG_MODULE_UNLOAD
+struct module_use {
+	struct list_head list;
+	struct module *module_which_uses;
+};
+
+/* I'm not yet certain whether we need the strong form of this. */
+static inline int strong_try_module_get(struct module *mod)
+{
+	if (mod && mod->state != MODULE_STATE_LIVE)
+		return -EBUSY;
+	if (try_module_get(mod))
+		return 0;
+	return -ENOENT;
+}
+
+/* Does a already use b? */
+static int already_uses(struct module *a, struct module *b)
+{
+	struct module_use *use;
+	list_for_each_entry(use, &b->modules_which_use_me, list) {
+		if (use->module_which_uses == a)
+			return 1;
+	}
+	return 0;
+}
+
+/* Make it so module a uses b.  Must be holding module_mutex */
+static int use_module(struct module *a, struct module *b)
+{
+	struct module_use *use;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
+/* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
+	int no_warn;
+#endif /* LINUX_VERSION_CODE */
+	if (b == NULL || already_uses(a, b))
+		return 1;
+
+	if (strong_try_module_get(b) < 0)
+		return 0;
+
+	use = kmalloc(sizeof(*use), GFP_ATOMIC);
+	if (!use) {
+		module_put(b);
+		return 0;
+	}
+	use->module_which_uses = a;
+	list_add(&use->list, &b->modules_which_use_me);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
+/* 270a6c4cad809e92d7b81adde92d0b3d94eeb8ee was after 2.6.20 */
+	no_warn = sysfs_create_link(b->holders_dir, &a->mkobj.kobj, a->name);
+#endif /* LINUX_VERSION_CODE */
+	return 1;
+}
+#else /* CONFIG_MODULE_UNLOAD */
+static int use_module(struct module *a, struct module *b)
+{
+	return 1;
+}
+#endif /* CONFIG_MODULE_UNLOAD */
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 #ifdef KSPLICE_STANDALONE
