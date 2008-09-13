@@ -384,7 +384,8 @@ void rm_some_relocs(struct supersect *ss)
 		bool rm_reloc = false;
 		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
 
-		if (mode("rmsyms") && str_in_set(sym_ptr->name, &rmsyms))
+		if (mode("rmsyms") && str_in_set(sym_ptr->name, &rmsyms) &&
+		    bfd_is_und_section(sym_ptr->section))
 			rm_reloc = true;
 
 		if (mode("keep"))
