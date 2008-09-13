@@ -1,0 +1,38 @@
+2008-09-12 : 0.9.0
+ - Added support for ARM architecture (requires an -ffunction-sections kernel)
+ - Rewrote the relocation handling code to ease porting to other architectures
+ - Modified the update build system so that it uses the kernel build system
+ - Switched the module control interface from /proc to /sys
+ - Switched the preferred debugging interface from printk to debugfs
+ - Restructured the kernel code to make it easier to merge Ksplice into Linux
+ - Simplified ksplice-create by moving all ELF manipulation to objmanip
+ - Added libudis86 for enhanced run-pre matching
+ - Added support for automatically modifying the exported symbol table
+ - Various safety improvements
+
+2008-06-22 : 0.8.7
+ - Updated the nop table for binutils 2.18
+ - Improved relocation handling on x86-64
+
+2008-05-25 : 0.8.6
+ - Removed some compiler warnings
+
+2008-05-24 : 0.8.5
+ - Added a workaround for Fedora System.map problem
+ - Improved the page table code
+ - Improved kernel stack check debugging
+
+2008-04-29 : 0.8.4
+ - Fixed architecture detection on ASP Linux
+
+2008-04-28 : 0.8.3
+ - Improved kernel stack check
+
+2008-04-27 : 0.8.2
+ - Improved kernel stack check
+
+2008-04-24 : 0.8.1
+ - Fixed 2.6.25 init_mm problem
+
+2008-04-22 : 0.8.0
+ - Initial release
