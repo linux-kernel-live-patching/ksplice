@@ -51,8 +51,11 @@
 #if defined(KSPLICE_STANDALONE) && \
     LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22) && defined(CONFIG_DEBUG_RODATA)
 /* 6fb14755a676282a4e6caa05a08c92db8e45cfff was after 2.6.21 */
+#if !defined(CONFIG_KPROBES) || LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
+/* 4e4eee0e0139811b36a07854dcfa9746bc8b16d3 was after 2.6.25 */
 #error "This version of Ksplice does not support your kernel."
 #error "Future versions of Ksplice will fix this problem."
+#endif /* !CONFIG_KPROBES || LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26) */
 #endif /* KSPLICE_STANDALONE && LINUX_VERSION_CODE && CONFIG_DEBUG_RODATA */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
