@@ -48,6 +48,13 @@
 #include <asm/alternative.h>
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
+#if defined(KSPLICE_STANDALONE) && \
+    LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22) && defined(CONFIG_DEBUG_RODATA)
+/* 6fb14755a676282a4e6caa05a08c92db8e45cfff was after 2.6.21 */
+#error "This version of Ksplice does not support your kernel."
+#error "Future versions of Ksplice will fix this problem."
+#endif /* KSPLICE_STANDALONE && LINUX_VERSION_CODE && CONFIG_DEBUG_RODATA */
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
 /* 6e21828743247270d09a86756a0c11702500dbfb was after 2.6.18 */
 #define bool _Bool
