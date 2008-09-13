@@ -1725,6 +1725,17 @@ static abort_t apply_patches(struct update *update)
 	struct ksplice_pack *pack;
 	const struct ksplice_section *sect;
 
+	list_for_each_entry(pack, &update->packs, list) {
+		for (sect = pack->primary_sections;
+		     sect < pack->primary_sections_end; sect++) {
+			ret = create_safety_record(pack, sect,
+						   &pack->safety_records,
+						   sect->address, sect->size);
+			if (ret != OK)
+				return ret;
+		}
+	}
+
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(update);
 #ifdef KSPLICE_STANDALONE
@@ -1758,17 +1769,6 @@ static abort_t apply_patches(struct update *update)
 
 	if (ret != OK)
 		return ret;
-
-	list_for_each_entry(pack, &update->packs, list) {
-		for (sect = pack->primary_sections;
-		     sect < pack->primary_sections_end; sect++) {
-			ret = create_safety_record(pack, sect,
-						   &pack->safety_records,
-						   sect->address, sect->size);
-			if (ret != OK)
-				return ret;
-		}
-	}
 
 	_ksdebug(update, "Update %s applied successfully\n", update->kid);
 	return OK;
