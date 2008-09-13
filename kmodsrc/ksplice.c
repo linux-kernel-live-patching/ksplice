@@ -1870,6 +1870,9 @@ static int __apply_patches(void *updateptr)
 	}
 
 	update->stage = STAGE_APPLIED;
+#ifdef TAINT_KSPLICE
+	add_taint(TAINT_KSPLICE);
+#endif
 
 	list_for_each_entry(pack, &update->packs, list)
 		list_add(&pack->module_list_entry.list, &ksplice_module_list);
