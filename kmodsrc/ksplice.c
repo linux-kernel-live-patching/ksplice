@@ -486,8 +486,6 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 				    unsigned long run_size);
 static abort_t add_candidate_val(struct ksplice_pack *pack,
 				 struct list_head *vals, unsigned long val);
-static void prune_trampoline_vals(struct ksplice_pack *pack,
-				  struct list_head *vals);
 static void release_vals(struct list_head *vals);
 static void set_temp_labelvals(struct ksplice_pack *pack, int status_val);
 
@@ -1206,7 +1204,6 @@ static abort_t find_section(struct ksplice_pack *pack,
 		}
 		/* Make sure run-pre matching output is displayed if
 		   brute_search succeeds */
-		prune_trampoline_vals(pack, &vals);
 		if (singular(&vals)) {
 			run_addr = list_entry(vals.next, struct candidate_val,
 					      list)->val;
@@ -1222,7 +1219,6 @@ static abort_t find_section(struct ksplice_pack *pack,
 	}
 #endif /* KSPLICE_STANDALONE */
 
-	prune_trampoline_vals(pack, &vals);
 	if (singular(&vals)) {
 		LIST_HEAD(safety_records);
 		run_addr = list_entry(vals.next, struct candidate_val,
@@ -2207,35 +2203,6 @@ static abort_t add_candidate_val(struct ksplice_pack *pack,
 	new->val = val;
 	list_add(&new->list, vals);
 	return OK;
-}
-
-/* If there are only two candidates and their addresses are related by
-   a trampoline, then we have successfully found a function patched by a
-   previous update.  We remove the endpoint of the trampoline from the vals
-   list, so that this update uses the patched function's original address. */
-static void prune_trampoline_vals(struct ksplice_pack *pack,
-				  struct list_head *vals)
-{
-	struct candidate_val *val1, *val2;
-
-	if (list_empty(vals) || singular(vals))
-		return;
-	if (vals->next->next->next != vals)
-		return;
-
-	val1 = list_entry(vals->next, struct candidate_val, list);
-	val2 = list_entry(vals->next->next, struct candidate_val, list);
-
-	if (val1->val == follow_trampolines(pack, val2->val)) {
-		list_del(&val1->list);
-		kfree(val1);
-		return;
-	}
-	if (val2->val == follow_trampolines(pack, val1->val)) {
-		list_del(&val2->list);
-		kfree(val2);
-		return;
-	}
 }
 
 static void release_vals(struct list_head *vals)
