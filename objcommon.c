@@ -341,6 +341,8 @@ asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
 	for (csymp = sbfd->syms.data; csymp < sbfd->syms.data + sbfd->syms.size;
 	     csymp++) {
 		asymbol *csymtemp = *csymp;
+		if (bfd_is_const_section(sym->section) && sym == csymtemp)
+			return csymp;
 		if ((csymtemp->flags & BSF_DEBUGGING) != 0 ||
 		    sym->section != csymtemp->section ||
 		    sym->value != csymtemp->value)
@@ -432,8 +434,6 @@ static void init_label_map(struct superbfd *sbfd)
 	     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
 		asymbol *csym = canonical_symbol(sbfd, *symp);
 		if (csym == NULL)
-			continue;
-		if (bfd_is_const_section((*symp)->section))
 			continue;
 		for (map = sbfd->maps.data;
 		     map < sbfd->maps.data + sbfd->maps.size; map++) {
