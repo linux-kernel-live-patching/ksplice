@@ -1048,6 +1048,13 @@ void ss_mark_symbols_used_in_relocations(struct supersect *ss)
 		      sym == sym->section->symbol))
 			sym->flags |= BSF_KEEP;
 	}
+	for (relocp = ss->new_relocs.data;
+	     relocp < ss->new_relocs.data + ss->new_relocs.size; relocp++) {
+		asymbol *sym = *(*relocp)->sym_ptr_ptr;
+		if (!(bfd_is_const_section(sym->section) &&
+		      sym == sym->section->symbol))
+			sym->flags |= BSF_KEEP;
+	}
 }
 
 static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym)
