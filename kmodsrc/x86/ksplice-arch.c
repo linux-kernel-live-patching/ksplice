@@ -178,8 +178,6 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	if (sect->size == 0)
 		return NO_MATCH;
 
-	run_addr = follow_trampolines(pack, run_addr);
-
 	pre_start = (const unsigned char *)sect->address;
 	run_start = (const unsigned char *)run_addr;
 

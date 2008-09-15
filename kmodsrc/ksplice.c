@@ -1360,9 +1360,6 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 	const unsigned char *pre, *run, *pre_start, *run_start;
 	unsigned char runval;
 
-	if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
-		run_addr = follow_trampolines(pack, run_addr);
-
 	pre_start = (const unsigned char *)sect->address;
 	run_start = (const unsigned char *)run_addr;
 
@@ -2161,6 +2158,7 @@ static abort_t create_labelval(struct ksplice_pack *pack, const char *label,
 			       unsigned long val, int status)
 {
 	struct labelval *lv = find_labelval(pack, label);
+	val = follow_trampolines(pack, val);
 	if (lv != NULL)
 		return lv->val == val ? OK : NO_MATCH;
 
@@ -2216,6 +2214,7 @@ static abort_t add_candidate_val(struct ksplice_pack *pack,
 				 struct list_head *vals, unsigned long val)
 {
 	struct candidate_val *tmp, *new;
+	val = follow_trampolines(pack, val);
 
 	list_for_each_entry(tmp, vals, list) {
 		if (tmp->val == val)
@@ -2308,17 +2307,17 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 	unsigned long new_addr;
 	struct module *m;
 
-	if (trampoline_target(pack, addr, &new_addr) != OK)
-		return addr;
-
-	/* Confirm that it is a jump into a ksplice module */
-	m = __module_text_address(new_addr);
-	if (m != NULL && m != pack->target && starts_with(m->name, "ksplice")) {
+	while (1) {
+		if (trampoline_target(pack, addr, &new_addr) != OK)
+			return addr;
+		m = __module_text_address(new_addr);
+		if (m == NULL || m == pack->target ||
+		    !starts_with(m->name, "ksplice"))
+			return addr;
 		ksdebug(pack, "Following trampoline %lx %lx(%s)\n", addr,
 			new_addr, m->name);
-		return new_addr;
+		addr = new_addr;
 	}
-	return addr;
 }
 
 /* Does module a patch module b? */
