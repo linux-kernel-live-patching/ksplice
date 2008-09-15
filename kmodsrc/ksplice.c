@@ -896,18 +896,6 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 		if (ret != OK)
 			return ret;
 
-		if (p->trampoline.oldaddr != rec->addr) {
-			/* If there's already a trampoline at oldaddr, prepare
-			   a reverse trampoline to install there */
-			p->reverse_trampoline.oldaddr = rec->addr;
-			p->reverse_trampoline.repladdr = p->trampoline.oldaddr;
-			ret = prepare_trampoline(pack, &p->reverse_trampoline);
-			if (ret != OK)
-				return ret;
-		} else {
-			p->reverse_trampoline.size = 0;
-		}
-
 		ret = add_dependency_on_address(pack, p->trampoline.oldaddr);
 		if (ret != OK)
 			return ret;
@@ -1885,10 +1873,8 @@ static int __apply_patches(void *updateptr)
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
+		for (p = pack->patches; p < pack->patches_end; p++)
 			insert_trampoline(&p->trampoline);
-			insert_trampoline(&p->reverse_trampoline);
-		}
 	}
 	return (__force int)OK;
 }
@@ -1920,9 +1906,6 @@ static int __reverse_patches(void *updateptr)
 			ret = verify_trampoline(pack, &p->trampoline);
 			if (ret != OK)
 				return (__force int)ret;
-			ret = verify_trampoline(pack, &p->reverse_trampoline);
-			if (ret != OK)
-				return (__force int)ret;
 		}
 	}
 
@@ -1940,10 +1923,8 @@ static int __reverse_patches(void *updateptr)
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
+		for (p = pack->patches; p < pack->patches_end; p++)
 			remove_trampoline(&p->trampoline);
-			remove_trampoline(&p->reverse_trampoline);
-		}
 	}
 	return (__force int)OK;
 }
