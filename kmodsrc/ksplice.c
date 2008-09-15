@@ -446,8 +446,9 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 				     struct module *sym_owner,
 				     unsigned long sym_val);
 #endif /* CONFIG_KALLSYMS */
-static abort_t exported_symbol_lookup(const char *name, struct list_head *vals);
-static abort_t new_export_lookup(struct update *update,
+static abort_t exported_symbol_lookup(struct ksplice_pack *pack,
+				      const char *name, struct list_head *vals);
+static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
 				 const char *name, struct list_head *vals);
 
 /* Atomic update insertion and removal */
@@ -483,7 +484,8 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 				    struct list_head *record_list,
 				    unsigned long run_addr,
 				    unsigned long run_size);
-static abort_t add_candidate_val(struct list_head *vals, unsigned long val);
+static abort_t add_candidate_val(struct ksplice_pack *pack,
+				 struct list_head *vals, unsigned long val);
 static void prune_trampoline_vals(struct ksplice_pack *pack,
 				  struct list_head *vals);
 static void release_vals(struct list_head *vals);
@@ -1473,7 +1475,7 @@ static abort_t brute_search(struct ksplice_pack *pack,
 
 		ret = try_addr(pack, sect, addr, NULL, RUN_PRE_INITIAL);
 		if (ret == OK) {
-			ret = add_candidate_val(vals, addr);
+			ret = add_candidate_val(pack, vals, addr);
 			if (ret != OK)
 				return ret;
 		} else if (ret != NO_MATCH) {
@@ -1602,7 +1604,7 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 		release_vals(vals);
 		ksdebug(pack, "using detected sym %s=%lx\n", ksym->label,
 			lv->val);
-		return add_candidate_val(vals, lv->val);
+		return add_candidate_val(pack, vals, lv->val);
 	}
 
 	if (starts_with(ksym->label, ".rodata.str"))
@@ -1611,18 +1613,18 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 #ifdef CONFIG_MODULE_UNLOAD
 	if (strcmp(ksym->label, "cleanup_module") == 0 && pack->target != NULL
 	    && pack->target->exit != NULL) {
-		ret = add_candidate_val(vals,
+		ret = add_candidate_val(pack, vals,
 					(unsigned long)pack->target->exit);
 		if (ret != OK)
 			return ret;
 	}
 #endif
 
-	ret = exported_symbol_lookup(ksym->name, vals);
+	ret = exported_symbol_lookup(pack, ksym->name, vals);
 	if (ret != OK)
 		return ret;
 
-	ret = new_export_lookup(pack->update, ksym->name, vals);
+	ret = new_export_lookup(pack, pack->update, ksym->name, vals);
 	if (ret != OK)
 		return ret;
 
@@ -1671,7 +1673,7 @@ add_system_map_candidates(struct ksplice_pack *pack,
 	if (smap >= end)
 		return OK;
 	for (i = 0; i < smap->nr_candidates; i++) {
-		ret = add_candidate_val(vals, smap->candidates[i] + off);
+		ret = add_candidate_val(pack, vals, smap->candidates[i] + off);
 		if (ret != OK)
 			return ret;
 	}
@@ -1696,21 +1698,23 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 	if (strcmp(sym_name, acc->desired_name) == 0 &&
 	    patches_module(sym_owner, acc->pack->target) &&
 	    sym_owner != acc->pack->primary)
-		return (__force int)add_candidate_val(acc->vals, sym_val);
+		return (__force int)add_candidate_val(acc->pack, acc->vals,
+						      sym_val);
 	return (__force int)OK;
 }
 #endif /* CONFIG_KALLSYMS */
 
-static abort_t exported_symbol_lookup(const char *name, struct list_head *vals)
+static abort_t exported_symbol_lookup(struct ksplice_pack *pack,
+				      const char *name, struct list_head *vals)
 {
 	const struct kernel_symbol *sym;
 	sym = find_symbol(name, NULL, NULL, true, false);
 	if (sym == NULL)
 		return OK;
-	return add_candidate_val(vals, sym->value);
+	return add_candidate_val(pack, vals, sym->value);
 }
 
-static abort_t new_export_lookup(struct update *update,
+static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
 				 const char *name, struct list_head *vals)
 {
 	struct ksplice_pack *pack;
@@ -1722,7 +1726,8 @@ static abort_t new_export_lookup(struct update *update,
 			    contains_canary(pack,
 					    (unsigned long)&exp->sym->value,
 					    sizeof(unsigned long), -1) == 0)
-				return add_candidate_val(vals, exp->sym->value);
+				return add_candidate_val(p, vals,
+							 exp->sym->value);
 		}
 	}
 	return OK;
@@ -2207,7 +2212,8 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 	return OK;
 }
 
-static abort_t add_candidate_val(struct list_head *vals, unsigned long val)
+static abort_t add_candidate_val(struct ksplice_pack *pack,
+				 struct list_head *vals, unsigned long val)
 {
 	struct candidate_val *tmp, *new;
 
