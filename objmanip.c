@@ -584,6 +584,8 @@ void print_new_section(struct superbfd *sbfd, asection *sect)
 
 void print_deleted_section(struct superbfd *sbfd, asection *sect)
 {
+	if (!starts_with(sect->name, ".text"))
+		return;
 	const char *label = label_lookup(sbfd, sect->symbol);
 	*vec_grow(&delsects, 1) = label;
 	printf("%s ", label);
@@ -853,10 +855,16 @@ void write_ksplice_symbol(struct supersect *ss,
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
-
 	reloc_howto_type *howto = orig_reloc->howto;
-
 	bfd_vma addend = get_reloc_offset(ss, orig_reloc, false);
+
+	if (mode("finalize") && starts_with(ss->name, ".ksplice_patches")) {
+		unsigned long *repladdr =
+		    ss->contents.data + orig_reloc->address;
+		*repladdr = 0;
+		return;
+	}
+
 	blot_section(ss, orig_reloc->address, howto);
 
 	struct supersect *kreloc_ss = make_section(ss->parent,
@@ -934,7 +942,20 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label)
 						 struct ksplice_patch);
 
 	write_string(kpatch_ss, &kpatch->label, "%s", label);
-	kpatch->trampoline.repladdr = 0;
+	const char *orig_label = lookup_orig_label(sbfd, label);
+	if (orig_label == NULL)
+		return;
+	asymbol **symp;
+	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
+	     symp++) {
+		asymbol *sym = *symp;
+		if (bfd_is_und_section(sym->section) &&
+		    strcmp(orig_label, sym->name) == 0)
+			break;
+	}
+	if (symp >= sbfd->syms.data + sbfd->syms.size)
+		DIE;
+	write_reloc(kpatch_ss, &kpatch->trampoline.repladdr, symp, 0);
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
