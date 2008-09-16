@@ -283,12 +283,13 @@ int main(int argc, char *argv[])
 			if (symp == NULL)
 				continue;
 			asymbol *sym = *symp;
-			if (!want_section(isbfd, sect))
-				continue;
 			if ((sym->flags & BSF_WEAK) != 0)
 				continue;
-			if ((sym->flags & BSF_FUNCTION) != 0 ||
-			    matchable_data_section(isbfd, sect))
+			if (bfd_get_section_size(sect) == 0)
+				continue;
+			if (want_section(isbfd, sect) &&
+			    (matchable_text_section(isbfd, sect) ||
+			     matchable_data_section(isbfd, sect)))
 				write_ksplice_section(isbfd, symp);
 		}
 	}
