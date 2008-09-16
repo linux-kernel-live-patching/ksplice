@@ -53,10 +53,7 @@ sub do_diff {
 		return empty_diff($out);
 	}
 
-	my $objdiff = runsuc("objdiff", $obj_old, $obj);
-	return empty_diff($out) if($objdiff !~ m/\S/);
-
-	runsuc_in($objdiff, "objmanip", $obj, "$obj.KSPLICE_primary", "keep-primary", $ENV{KSPLICE_KID});
+	runsuc("objmanip", $obj, "$obj.KSPLICE_primary", "keep-primary", "$obj.KSPLICE_pre", $ENV{KSPLICE_KID});
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
@@ -121,7 +118,7 @@ sub do_finalize {
 
 sub do_rmsyms {
 	my ($in, $out, @rmsyms) = @_;
-	my $relocs = runsuc_in("@rmsyms\n", "objmanip", $in, $out, "rmsyms");
+	runsuc_in("@rmsyms\n", "objmanip", $in, $out, "rmsyms");
 }
 
 sub do_system_map_lookup {

@@ -89,28 +89,20 @@ sub runstr_err {
 
 sub runsuc {
 	my ($cmd, @args) = @_;
-	my $output = runstr("$libexecdir/ksplice-$cmd", @args);
-	if(child_error()) {
-		print "Output: $output\n";
-		die "Failed during: $libexecdir/ksplice-$cmd @args";
-	}
-	return $output;
+	return runval("$libexecdir/ksplice-$cmd", @args);
 }
 
 sub runsuc_in {
 	my ($in, $cmd, @args) = @_;
 	my @cmd = ("$libexecdir/ksplice-$cmd", @args);
 	print "+ @cmd <<'EOF'\n${in}EOF\n" if($Verbose::level >= 1);
-	local (*READ, *WRITE);
-	my $pid = open2(\*READ, \*WRITE, @cmd);
+	local (*WRITE);
+	open(WRITE, '|-', @cmd) or die "Can't run @cmd: $!";
 	print WRITE $in;
-	close(WRITE);
-	waitpid($pid, 0);
+	close(WRITE) or $! == 0 or die "Can't run @cmd: $!";
 	if(child_error()) {
 		die "Failed during: $libexecdir/ksplice-$cmd @args";
 	}
-	local $/;
-	return <READ>;
 }
 
 sub unpack_update {

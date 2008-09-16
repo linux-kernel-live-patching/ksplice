@@ -48,7 +48,7 @@ AC_CHECK_MEMBER(struct bfd_hash_table.entsize,
   [[#include <bfd.h>]]
 )
 
-if ! test -e "objdiff-static" || ! test -e "objmanip-static"; then
+if ! test -e "objmanip-static"; then
   if test "$ac_libbfd" = "NONE" || test "$ac_libiberty" = "NONE"; then
     echo
     echo "Ksplice could not locate libbfd.a and/or libiberty.a on your system."
