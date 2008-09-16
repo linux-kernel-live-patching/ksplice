@@ -612,7 +612,7 @@ out:
 	mutex_unlock(&module_mutex);
 	return ret;
 }
-EXPORT_SYMBOL(init_ksplice_pack);
+EXPORT_SYMBOL_GPL(init_ksplice_pack);
 
 void cleanup_ksplice_pack(struct ksplice_pack *pack)
 {
