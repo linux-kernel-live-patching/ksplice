@@ -55,13 +55,13 @@ static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
 }
 
 static abort_t prepare_trampoline(struct ksplice_pack *pack,
-				  struct ksplice_trampoline *t)
+				  struct ksplice_patch *p)
 {
-	t->size = 4;
-	*(uint32_t *)t->trampoline = 0xea000000;
+	p->size = 4;
+	*(uint32_t *)p->trampoline = 0xea000000;
 	return write_reloc_value(pack, &trampoline_reloc,
-				 (unsigned long)t->trampoline,
-				 t->repladdr - t->oldaddr);
+				 (unsigned long)p->trampoline,
+				 p->repladdr - p->oldaddr);
 }
 
 static abort_t handle_paravirt(struct ksplice_pack *pack,

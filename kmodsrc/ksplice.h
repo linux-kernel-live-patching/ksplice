@@ -66,7 +66,8 @@ struct ksplice_section {
 #define MAX_TRAMPOLINE_SIZE 5
 
 /**
- * struct ksplice_trampoline - A trampoline Ksplice should insert
+ * struct ksplice_patch - A function replacement that Ksplice should perform
+ * @label:		The unique Ksplice name for the obsolete function
  * @repladdr:		The address of the replacement function
  * @oldaddr:		The address of the obsolete function
  * @trampoline:		The bytes of the trampoline itself
@@ -74,23 +75,14 @@ struct ksplice_section {
  * 			overwritten by the trampoline
  * @size:		The size of the trampoline
  **/
-struct ksplice_trampoline {
+struct ksplice_patch {
+	const char *label;
 	unsigned long repladdr;
 /* private: */
 	unsigned long oldaddr;
 	char trampoline[MAX_TRAMPOLINE_SIZE];
 	char saved[MAX_TRAMPOLINE_SIZE];
 	unsigned int size;
-};
-
-/**
- * struct ksplice_patch - A function replacement that Ksplice should perform
- * @label:		The unique Ksplice name for the obsolete function
- * @trampoline:		A trampoline to insert over the obsolete function
- **/
-struct ksplice_patch {
-	const char *label;
-	struct ksplice_trampoline trampoline;
 };
 
 /**
