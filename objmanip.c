@@ -252,28 +252,6 @@ int main(int argc, char *argv[])
 		read_str_set(&rmsyms);
 	}
 
-	if (mode("keep-primary")) {
-		/* Create export_desc structures for all export sections */
-		asection *sect;
-		for (sect = isbfd->abfd->sections; sect != NULL;
-		     sect = sect->next) {
-			struct export_desc *ed;
-			if (!starts_with(sect->name, "__ksymtab") ||
-			    ends_with(sect->name, "_strings"))
-				continue;
-			for (ed = exports.data;
-			     ed < exports.data + exports.size; ed++) {
-				if (strcmp(ed->sectname, sect->name) == 0)
-					break;
-			}
-			if (ed < exports.data + exports.size)
-				continue;
-			ed = vec_grow(&exports, 1);
-			ed->sectname = sect->name;
-			vec_init(&ed->names);
-		}
-	}
-
 	if (mode("keep") || mode("rmsyms"))
 		load_system_map();
 
@@ -409,17 +387,17 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 				}
 			}
 		}
+		if (last_sect != new->sect) {
+			last_sect = new->sect;
+			ed = vec_grow(&exports, 1);
+			char *sectname;
+			assert(asprintf(&sectname, "%s%s", addstr,
+					new->sect->name) >= 0);
+			ed->sectname = sectname;
+			vec_init(&ed->names);
+			printf("\n%s", sectname);
+		}
 		if (!found) {
-			if (last_sect != new->sect) {
-				last_sect = new->sect;
-				ed = vec_grow(&exports, 1);
-				char *sectname;
-				assert(asprintf(&sectname, "%s%s", addstr,
-						new->sect->name) >= 0);
-				ed->sectname = sectname;
-				vec_init(&ed->names);
-				printf("\n%s", sectname);
-			}
 			*vec_grow(&ed->names, 1) = new->name;
 			printf(" %s", new->name);
 		}
