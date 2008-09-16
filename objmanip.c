@@ -305,12 +305,10 @@ int main(int argc, char *argv[])
 	}
 
 	if (mode("keep-primary")) {
-		asection *sect;
-		for (sect = isbfd->abfd->sections; sect != NULL;
-		     sect = sect->next) {
-			if (str_in_set(sect->name, &chsects))
-				write_ksplice_patch(isbfd, sect->name);
-		}
+		const char **sectname;
+		for (sectname = chsects.data;
+		     sectname < chsects.data + chsects.size; sectname++)
+			write_ksplice_patch(isbfd, *sectname);
 
 		const char **label;
 		for (label = delsects.data;
