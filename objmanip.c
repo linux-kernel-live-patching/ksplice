@@ -145,7 +145,7 @@ void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		      bfd_vma offset);
 
-struct str_vec sections, newsects, delsects, rmsyms;
+struct str_vec chsects, newsects, delsects, rmsyms;
 struct export_desc_vec exports;
 
 const char *modestr, *kid;
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
 		handle_section_symbol_renames(presbfd, isbfd);
 		print_label_map(isbfd);
 		printf("\n");
-		vec_init(&sections);
+		vec_init(&chsects);
 		foreach_nonmatching(presbfd, isbfd, print_changed_section);
 		printf("\n");
 		vec_init(&newsects);
@@ -308,7 +308,7 @@ int main(int argc, char *argv[])
 		asection *sect;
 		for (sect = isbfd->abfd->sections; sect != NULL;
 		     sect = sect->next) {
-			if (str_in_set(sect->name, &sections) ||
+			if (str_in_set(sect->name, &chsects) ||
 			    (starts_with(sect->name, ".text") &&
 			     want_section(sect) &&
 			     !str_in_set(sect->name, &newsects)))
@@ -580,7 +580,7 @@ bool relocs_equal(struct superbfd *oldsbfd, asection *oldp,
 
 void print_changed_section(struct superbfd *sbfd, asection *sect)
 {
-	*vec_grow(&sections, 1) = sect->name;
+	*vec_grow(&chsects, 1) = sect->name;
 	printf("%s ", sect->name);
 }
 
@@ -1478,7 +1478,7 @@ bool want_section(asection *sect)
 	if (mode("keep-helper") && starts_with(sect->name, ".exit.text")
 	    && bfd_get_section_by_name(sect->owner, ".exitcall.exit") == NULL)
 		return true;
-	if (mode("keep-primary") && str_in_set(sect->name, &sections))
+	if (mode("keep-primary") && str_in_set(sect->name, &chsects))
 		return true;
 	if (mode("keep-primary") && str_in_set(sect->name, &newsects))
 		return true;
