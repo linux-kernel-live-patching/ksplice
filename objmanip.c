@@ -188,11 +188,14 @@ void load_system_map()
 	fclose(fp);
 }
 
-bool needed_data_section(struct superbfd *sbfd, asection *isection)
+bool matchable_data_section(struct superbfd *sbfd, asection *isection)
 {
 	struct supersect *ss = fetch_supersect(sbfd, isection);
-	if (starts_with(isection->name, ".rodata"))
+	if (starts_with(isection->name, ".rodata")) {
+		if (starts_with(isection->name, ".rodata.str"))
+			return false;
 		return true;
+	}
 	if (starts_with(isection->name, ".data")) {
 		/* Ignore .data.percpu sections */
 		if (starts_with(isection->name, ".data.percpu"))
@@ -272,12 +275,10 @@ int main(int argc, char *argv[])
 			asymbol *sym = *symp;
 			if (!want_section(sect))
 				continue;
-			if (starts_with(sect->name, ".rodata.str"))
-				continue;
 			if ((sym->flags & BSF_WEAK) != 0)
 				continue;
 			if ((sym->flags & BSF_FUNCTION) != 0 ||
-			    needed_data_section(isbfd, sect))
+			    matchable_data_section(isbfd, sect))
 				write_ksplice_section(isbfd, symp);
 		}
 	}
