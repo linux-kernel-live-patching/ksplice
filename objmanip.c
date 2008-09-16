@@ -205,6 +205,16 @@ bool matchable_data_section(struct superbfd *sbfd, asection *isection)
 	return false;
 }
 
+bool matchable_text_section(struct superbfd *sbfd, asection *isection)
+{
+	if (starts_with(isection->name, ".text"))
+		return true;
+	if (starts_with(isection->name, ".exit.text")
+	    && bfd_get_section_by_name(sbfd->abfd, ".exitcall.exit") == NULL)
+		return true;
+	return false;
+}
+
 int main(int argc, char *argv[])
 {
 	bfd_init();
@@ -1451,10 +1461,7 @@ bool want_section(struct superbfd *sbfd, asection *sect)
 
 	if (starts_with(sect->name, ".ksplice"))
 		return true;
-	if (mode("keep-helper") && starts_with(sect->name, ".text"))
-		return true;
-	if (mode("keep-helper") && starts_with(sect->name, ".exit.text")
-	    && bfd_get_section_by_name(sect->owner, ".exitcall.exit") == NULL)
+	if (mode("keep-helper") && matchable_text_section(sbfd, sect))
 		return true;
 	if (mode("keep-primary") && str_in_set(sect->name, &chsects))
 		return true;
