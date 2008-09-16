@@ -168,6 +168,7 @@ struct addr_vec_hash system_map;
 
 struct bool_hash system_map_written;
 struct ulong_hash ksplice_symbol_offset;
+struct ulong_hash ksplice_string_offset;
 
 void load_system_map()
 {
@@ -218,6 +219,7 @@ int main(int argc, char *argv[])
 
 	bool_hash_init(&system_map_written);
 	ulong_hash_init(&ksplice_symbol_offset);
+	ulong_hash_init(&ksplice_string_offset);
 
 	modestr = argv[3];
 	if (mode("keep-primary")) {
@@ -734,17 +736,23 @@ void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 void write_string(struct supersect *ss, const char **addr, const char *fmt, ...)
 {
 	va_list ap;
-	va_start(ap, fmt);
-	int len = vsnprintf(NULL, 0, fmt, ap);
-	va_end(ap);
 	struct supersect *str_ss = make_section(ss->parent, ".ksplice_str");
-	char *buf = sect_grow(str_ss, len + 1, char);
+	char *str;
 	va_start(ap, fmt);
-	vsnprintf(buf, len + 1, fmt, ap);
+	int len = vasprintf(&str, fmt, ap);
+	assert(len >= 0);
 	va_end(ap);
 
-	write_reloc(ss, addr, &str_ss->symbol,
-		    (void *)buf - str_ss->contents.data);
+	unsigned long *str_offp = ulong_hash_lookup(&ksplice_string_offset, str,
+						    FALSE);
+	if (str_offp == NULL) {
+		char *buf = sect_grow(str_ss, len + 1, char);
+		memcpy(buf, str, len + 1);
+		str_offp = ulong_hash_lookup(&ksplice_string_offset, str, TRUE);
+		*str_offp = (void *)buf - str_ss->contents.data;
+	}
+
+	write_reloc(ss, addr, &str_ss->symbol, *str_offp);
 }
 
 void lookup_system_map(struct addr_vec *addrs, const char *name, long offset)
