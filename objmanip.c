@@ -308,10 +308,7 @@ int main(int argc, char *argv[])
 		asection *sect;
 		for (sect = isbfd->abfd->sections; sect != NULL;
 		     sect = sect->next) {
-			if (str_in_set(sect->name, &chsects) ||
-			    (starts_with(sect->name, ".text") &&
-			     want_section(sect) &&
-			     !str_in_set(sect->name, &newsects)))
+			if (str_in_set(sect->name, &chsects))
 				write_ksplice_patch(isbfd, sect->name);
 		}
 
@@ -1170,16 +1167,19 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 	for (relocp = ss->relocs.data;
 	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 		asymbol *sym = *(*relocp)->sym_ptr_ptr;
-		if (sym->section == (asection *)looking_for &&
-		    (!starts_with(sym->section->name, ".text") ||
-		     (get_reloc_offset(ss, *relocp, true) != 0 &&
-		      strcmp(looking_at->name, ".fixup") != 0))) {
-			struct wsect *w = malloc(sizeof(*w));
-			w->sect = looking_for;
-			w->next = wanted_sections;
-			wanted_sections = w;
-			break;
-		}
+		if (sym->section != (asection *)looking_for)
+			continue;
+		if (starts_with(sym->section->name, ".text") &&
+		    (get_reloc_offset(ss, *relocp, true) == 0 ||
+		     strcmp(looking_at->name, ".fixup") == 0))
+			continue;
+		struct wsect *w = malloc(sizeof(*w));
+		w->sect = looking_for;
+		w->next = wanted_sections;
+		wanted_sections = w;
+		if (starts_with(sym->section->name, ".text"))
+			*vec_grow(&chsects, 1) = sym->section->name;
+		break;
 	}
 }
 
