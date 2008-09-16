@@ -1352,7 +1352,7 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 	for (symp = isyms->data; symp < isyms->data + isyms->size; symp++) {
 		asymbol *sym = *symp;
 
-		bool keep;
+		bool keep = false;
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
 		    !(mode("keep-primary") &&
@@ -1363,34 +1363,24 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
 		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
-		    || ((sym->flags & BSF_SECTION_SYM) != 0
-			&& ((*(sym->section)->symbol_ptr_ptr)->flags
-			    & BSF_KEEP) != 0))
+		    || ((sym->flags & BSF_SECTION_SYM) != 0 &&
+			want_section(fetch_superbfd(ibfd), sym->section)))
 			keep = true;
-		else if ((sym->flags & (BSF_GLOBAL | BSF_WEAK)) != 0)
+		else if ((sym->flags & (BSF_GLOBAL | BSF_WEAK)) != 0 &&
+			 want_section(sym->section))
 			keep = true;
-		else if (bfd_decode_symclass(sym) == 'I')
-			/* Global symbols in $idata sections need to be retained.
-			   External users of the  library containing the $idata
-			   section may reference these symbols.  */
+		else if (mode("keep-primary") &&
+			 starts_with(sym->section->name, "__ksymtab"))
 			keep = true;
-		else if ((sym->flags & BSF_GLOBAL) != 0
-			 || (sym->flags & BSF_WEAK) != 0
-			 || bfd_is_com_section(sym->section))
-			keep = true;
-		else if ((sym->flags & BSF_DEBUGGING) != 0)
-			keep = true;
-		else
-			keep = !bfd_is_local_label(ibfd, sym);
-
-		if (!want_section(sym->section))
-			keep = false;
 
 		if (deleted_table_section_symbol(ibfd, sym))
 			keep = false;
 
-		if (mode("rmsyms") && str_in_set(sym->name, &rmsyms))
+		if (bfd_is_com_section(sym->section))
 			keep = false;
+
+		if (mode("rmsyms"))
+			keep = !str_in_set(sym->name, &rmsyms);
 
 		if (keep)
 			*vec_grow(osyms, 1) = sym;
