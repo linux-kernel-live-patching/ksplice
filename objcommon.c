@@ -523,37 +523,6 @@ void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 	DIE;
 }
 
-void read_label_map(struct superbfd *sbfd)
-{
-	char *buf = NULL;
-	size_t n = 0;
-	assert(getline(&buf, &n, stdin) >= 0);
-	char *saveptr, *saveptr2;
-	while (1) {
-		char *str = strtok_r(buf, ";\n", &saveptr);
-		buf = NULL;
-		if (str == NULL)
-			break;
-		char *oldlabel = strtok_r(str, " ", &saveptr2);
-		if (oldlabel == NULL)
-			break;
-		str = NULL;
-		char *newlabel = strtok_r(str, " ", &saveptr2);
-		if (newlabel == NULL)
-			break;
-		str = NULL;
-		struct label_map *map;
-		for (map = sbfd->maps.data;
-		     map < sbfd->maps.data + sbfd->maps.size; map++) {
-			if (strcmp(map->orig_label, oldlabel) == 0) {
-				map->label = newlabel;
-				break;
-			}
-		}
-		assert(map < sbfd->maps.data + sbfd->maps.size);
-	}
-}
-
 bool is_special(asection *sect)
 {
 	static const char *static_want[] = {

@@ -223,7 +223,6 @@ asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym);
 asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
 const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
 void print_label_map(struct superbfd *sbfd);
-void read_label_map(struct superbfd *sbfd);
 void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 		   const char *label);
 const char *lookup_orig_label(struct superbfd *sbfd, const char *label);
