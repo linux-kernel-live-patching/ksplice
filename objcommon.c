@@ -502,7 +502,7 @@ void print_label_map(struct superbfd *sbfd)
 	     map < sbfd->maps.data + sbfd->maps.size; map++) {
 		if (strcmp(map->orig_label, map->label) == 0)
 			continue;
-		printf("%s %s;", map->orig_label, map->label);
+		printf("  %s -> %s\n", map->label, map->orig_label);
 	}
 }
 

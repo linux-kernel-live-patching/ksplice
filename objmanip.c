@@ -245,20 +245,15 @@ int main(int argc, char *argv[])
 		struct superbfd *presbfd = fetch_superbfd(prebfd);
 
 		handle_section_symbol_renames(presbfd, isbfd);
-		print_label_map(isbfd);
-		printf("\n");
 		vec_init(&chsects);
 		foreach_nonmatching(presbfd, isbfd, print_changed_section);
-		printf("\n");
 		vec_init(&newsects);
 		foreach_new_section(presbfd, isbfd, print_new_section);
-		printf("\n");
 		vec_init(&delsects);
 		foreach_new_section(isbfd, presbfd, print_deleted_section);
 		vec_init(&exports);
 		compare_exported_symbols(presbfd, isbfd, "");
 		compare_exported_symbols(isbfd, presbfd, "del_");
-		printf("\n");
 
 		assert(bfd_close(prebfd));
 	} else if (mode("rmsyms")) {
@@ -276,7 +271,50 @@ int main(int argc, char *argv[])
 			if (tmp == wanted_sections)
 				break;
 		}
+	}
 
+	if (mode("keep-primary")) {
+		const char **sectname;
+		printf("Label name changes:\n");
+		print_label_map(isbfd);
+		if (chsects.size != 0) {
+			printf("Changed text sections:\n");
+			for (sectname = chsects.data;
+			     sectname < chsects.data + chsects.size; sectname++)
+				printf("  %s\n", *sectname);
+		}
+		if (newsects.size != 0) {
+			printf("New sections:\n");
+			for (sectname = newsects.data;
+			     sectname < newsects.data + newsects.size;
+			     sectname++)
+				printf("  %s\n", *sectname);
+		}
+		if (delsects.size != 0) {
+			printf("Deleted section labels:\n");
+			for (sectname = delsects.data;
+			     sectname < delsects.data + delsects.size;
+			     sectname++)
+				printf("  %s\n", *sectname);
+		}
+		const struct export_desc *ed;
+		for (ed = exports.data; ed < exports.data + exports.size; ed++) {
+			const char **symname;
+			bool del = starts_with(ed->sectname, "del___ksymtab");
+			const char *export_type =
+			    ed->sectname + strlen("__ksymtab");
+			if (del)
+				export_type += strlen("_del");
+			for (symname = ed->names.data;
+			     symname < ed->names.data + ed->names.size;
+			     symname++)
+				printf("Export %s(%s): %s\n",
+				       del ? "deletion" : "addition",
+				       export_type, *symname);
+		}
+	}
+
+	if (mode("keep")) {
 		asection *sect;
 		for (sect = ibfd->sections; sect != NULL; sect = sect->next) {
 			asymbol **symp = canonical_symbolp(isbfd, sect->symbol);
@@ -407,12 +445,9 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 					new->sect->name) >= 0);
 			ed->sectname = sectname;
 			vec_init(&ed->names);
-			printf("\n%s", sectname);
 		}
-		if (!found) {
+		if (!found)
 			*vec_grow(&ed->names, 1) = new->name;
-			printf(" %s", new->name);
-		}
 	}
 }
 
@@ -566,13 +601,11 @@ bool relocs_equal(struct superbfd *oldsbfd, asection *oldp,
 void print_changed_section(struct superbfd *sbfd, asection *sect)
 {
 	*vec_grow(&chsects, 1) = sect->name;
-	printf("%s ", sect->name);
 }
 
 void print_new_section(struct superbfd *sbfd, asection *sect)
 {
 	*vec_grow(&newsects, 1) = sect->name;
-	printf("%s ", sect->name);
 }
 
 void print_deleted_section(struct superbfd *sbfd, asection *sect)
@@ -581,7 +614,6 @@ void print_deleted_section(struct superbfd *sbfd, asection *sect)
 		return;
 	const char *label = label_lookup(sbfd, sect->symbol);
 	*vec_grow(&delsects, 1) = label;
-	printf("%s ", label);
 }
 
 void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed)
