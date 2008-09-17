@@ -90,18 +90,10 @@ DEFINE_HASH_TYPE(bool, bool_hash, bool_hash_init, bool_hash_free,
 DEFINE_HASH_TYPE(unsigned long, ulong_hash, ulong_hash_init,
 		 ulong_hash_free, ulong_hash_lookup, ulong_init);
 
-void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-			 void (*s_fn)(struct superbfd *, asection *));
-void foreach_new_section(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-			 void (*s_fn)(struct superbfd *, asection *));
-void print_changed_section(struct superbfd *sbfd, asection *sect);
-void print_new_section(struct superbfd *sbfd, asection *sect);
-void print_deleted_section(struct superbfd *sbfd, asection *sect);
 struct export_vec *get_export_syms(struct superbfd *sbfd);
 void compare_exported_symbols(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd, char *addstr);
-bool relocs_equal(struct superbfd *oldsbfd, asection *oldp,
-		  struct superbfd *newsbfd, asection *newp);
+bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss);
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 					  struct superbfd *newsbfd);
 
@@ -139,9 +131,23 @@ void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		 bfd_vma offset);
 arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		      bfd_vma offset);
+static void match_global_symbol_sections(struct superbfd *oldsbfd,
+				  struct superbfd *newsbfd);
+static void match_sections_by_name(struct superbfd *oldsbfd,
+				   struct superbfd *newsbfd);
+static void match_sections_by_contents(struct superbfd *oldsbfd,
+				       struct superbfd *newsbfd);
+static void match_sections_by_label(struct superbfd *oldsbfd,
+				    struct superbfd *newsbfd);
+static void mark_new_sections(struct superbfd *sbfd);
+static void mark_deleted_sections(struct superbfd *sbfd);
+static void compare_matched_sections(struct superbfd *sbfd);
+static void update_nonzero_offsets(struct superbfd *sbfd);
+static void handle_nonzero_offset_relocs(struct supersect *ss);
 
 struct str_vec chsects, newsects, delsects, rmsyms;
 struct export_desc_vec exports;
+bool changed;
 
 const char *modestr, *kid;
 
@@ -235,13 +241,24 @@ int main(int argc, char *argv[])
 
 		struct superbfd *presbfd = fetch_superbfd(prebfd);
 
-		handle_section_symbol_renames(presbfd, isbfd);
+		match_global_symbol_sections(presbfd, isbfd);
+		match_sections_by_name(presbfd, isbfd);
+		match_sections_by_label(presbfd, isbfd);
+		match_sections_by_contents(presbfd, isbfd);
+
 		vec_init(&chsects);
-		foreach_nonmatching(presbfd, isbfd, print_changed_section);
 		vec_init(&newsects);
-		foreach_new_section(presbfd, isbfd, print_new_section);
+		do {
+			changed = false;
+			compare_matched_sections(isbfd);
+			update_nonzero_offsets(isbfd);
+			mark_new_sections(isbfd);
+		} while (changed);
 		vec_init(&delsects);
-		foreach_new_section(isbfd, presbfd, print_deleted_section);
+		mark_deleted_sections(presbfd);
+
+		handle_section_symbol_renames(presbfd, isbfd);
+
 		vec_init(&exports);
 		compare_exported_symbols(presbfd, isbfd, "");
 		compare_exported_symbols(isbfd, presbfd, "del_");
@@ -265,7 +282,7 @@ int main(int argc, char *argv[])
 		offsets_sbfd = fetch_superbfd(offsets_bfd);
 	}
 
-	if (mode("keep")) {
+	if (mode("keep-helper")) {
 		while (1) {
 			const struct wsect *tmp = wanted_sections;
 			bfd_map_over_sections(ibfd, mark_wanted_if_referenced,
@@ -464,57 +481,202 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 	}
 }
 
-void foreach_new_section(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-			 void (*s_fn)(struct superbfd *, asection *))
+void match_sections(struct supersect *oldss, struct supersect *newss)
 {
-	asection *oldsect, *newsect;
-	struct supersect *old_ss, *new_ss;
-	for (newsect = newsbfd->abfd->sections; newsect != NULL;
-	     newsect = newsect->next) {
-		if (starts_with(newsect->name, ".rodata.str") ||
-		    is_special(newsect))
+	if (oldss->match == newss && newss->match == oldss)
+		return;
+	if (oldss->match != NULL)
+		DIE;
+	if (newss->match != NULL)
+		DIE;
+	oldss->match = newss;
+	newss->match = oldss;
+}
+
+static void match_global_symbol_sections(struct superbfd *oldsbfd,
+					 struct superbfd *newsbfd)
+{
+	asymbol **oldsymp, **newsymp;
+	for (oldsymp = oldsbfd->syms.data;
+	     oldsymp < oldsbfd->syms.data + oldsbfd->syms.size; oldsymp++) {
+		asymbol *oldsym = *oldsymp;
+		if ((oldsym->flags & BSF_GLOBAL) == 0 ||
+		    bfd_is_const_section(oldsym->section))
 			continue;
-		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
-		     oldsect = oldsect->next) {
-			if (strcmp(newsect->name, oldsect->name) != 0 &&
-			    strcmp(label_lookup(newsbfd, newsect->symbol),
-				   label_lookup(oldsbfd, oldsect->symbol))
-			    != 0)
+		for (newsymp = newsbfd->syms.data;
+		     newsymp < newsbfd->syms.data + newsbfd->syms.size;
+		     newsymp++) {
+			asymbol *newsym = *newsymp;
+			if ((newsym->flags & BSF_GLOBAL) == 0 ||
+			    bfd_is_const_section(oldsym->section))
 				continue;
-			if (!starts_with(newsect->name, ".rodata"))
-				break;
-			new_ss = fetch_supersect(oldsbfd, oldsect);
-			old_ss = fetch_supersect(oldsbfd, oldsect);
-			if (old_ss->contents.size != new_ss->contents.size ||
-			    memcmp(old_ss->contents.data, new_ss->contents.data,
-				   old_ss->contents.size) != 0)
-				oldsect = NULL;
-			break;
+			if (strcmp(oldsym->name, newsym->name) != 0)
+				continue;
+			struct supersect *oldss =
+			    fetch_supersect(oldsbfd, oldsym->section);
+			struct supersect *newss =
+			    fetch_supersect(newsbfd, newsym->section);
+			match_sections(oldss, newss);
 		}
-		if (oldsect == NULL)
-			s_fn(newsbfd, newsect);
 	}
 }
 
-void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-			 void (*s_fn)(struct superbfd *, asection *))
+static void match_sections_by_name(struct superbfd *oldsbfd,
+				   struct superbfd *newsbfd)
 {
 	asection *newp, *oldp;
+	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
+		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
+		if (oldp == NULL || is_special(newp))
+			continue;
+		if (static_local_symbol(newsbfd,
+					canonical_symbol(newsbfd,
+							 newp->symbol)))
+			continue;
+
+		struct supersect *oldss = fetch_supersect(oldsbfd, oldp);
+		struct supersect *newss = fetch_supersect(newsbfd, newp);
+		match_sections(oldss, newss);
+	}
+}
+
+static void match_sections_by_label(struct superbfd *oldsbfd,
+				    struct superbfd *newsbfd)
+{
+	asection *oldsect, *newsect;
+	struct supersect *oldss, *newss;
+	for (newsect = newsbfd->abfd->sections; newsect != NULL;
+	     newsect = newsect->next) {
+		if (is_special(newsect))
+			continue;
+		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
+		     oldsect = oldsect->next) {
+			if (strcmp(label_lookup(newsbfd, newsect->symbol),
+				   label_lookup(oldsbfd, oldsect->symbol)) != 0)
+				continue;
+			oldss = fetch_supersect(oldsbfd, oldsect);
+			newss = fetch_supersect(newsbfd, newsect);
+			match_sections(oldss, newss);
+		}
+	}
+}
+
+static void match_sections_by_contents(struct superbfd *oldsbfd,
+				       struct superbfd *newsbfd)
+{
+	asection *oldsect, *newsect;
+	struct supersect *oldss, *newss;
+	for (newsect = newsbfd->abfd->sections; newsect != NULL;
+	     newsect = newsect->next) {
+		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
+		     oldsect = oldsect->next) {
+			oldss = fetch_supersect(oldsbfd, oldsect);
+			newss = fetch_supersect(newsbfd, newsect);
+			if (!matchable_data_section(newsbfd, newsect) ||
+			    !matchable_data_section(oldsbfd, oldsect))
+				continue;
+			if (oldss->relocs.size != 0 || newss->relocs.size != 0)
+				continue;
+			if (oldss->contents.size != newss->contents.size)
+				continue;
+			if (memcmp(oldss->contents.data, newss->contents.data,
+				   oldss->contents.size) != 0)
+				continue;
+			match_sections(oldss, newss);
+		}
+	}
+}
+
+static void mark_new_sections(struct superbfd *sbfd)
+{
+	asection *sect;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		if (is_special(sect) || starts_with(sect->name, ".init") ||
+		    starts_with(sect->name, ".debug"))
+			continue;
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (ss->match == NULL && !str_in_set(sect->name, &newsects))
+			*vec_grow(&newsects, 1) = sect->name;
+	}
+}
+
+static void mark_deleted_sections(struct superbfd *sbfd)
+{
+	asection *sect;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		if (is_special(sect) || starts_with(sect->name, ".init") ||
+		    starts_with(sect->name, ".debug"))
+			continue;
+		if (!matchable_text_section(sbfd, sect))
+			continue;
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (ss->match == NULL)
+			*vec_grow(&delsects, 1) = label_lookup(sbfd,
+							       sect->symbol);
+	}
+}
+
+static void handle_nonzero_offset_relocs(struct supersect *ss)
+{
+	int i;
+	for (i = 0; i < ss->relocs.size; i++) {
+		asymbol *sym = *ss->relocs.data[i]->sym_ptr_ptr;
+		bfd_vma offset = get_reloc_offset(ss, ss->relocs.data[i], true);
+		if (sym->value + offset == 0)
+			continue;
+		if (!matchable_text_section(ss->parent, sym->section))
+			continue;
+		if (!str_in_set(sym->section->name, &chsects)) {
+			changed = true;
+			*vec_grow(&chsects, 1) = sym->section->name;
+		}
+	}
+}
+
+static void update_nonzero_offsets(struct superbfd *sbfd)
+{
+	const char **sectname;
+	asection *sect;
+	struct supersect *ss;
+	for (sectname = chsects.data;
+	     sectname < chsects.data + chsects.size; sectname++) {
+		sect = bfd_get_section_by_name(sbfd->abfd, *sectname);
+		ss = fetch_supersect(sbfd, sect);
+		handle_nonzero_offset_relocs(ss);
+	}
+
+	for (sectname = newsects.data;
+	     sectname < newsects.data + newsects.size; sectname++) {
+		sect = bfd_get_section_by_name(sbfd->abfd, *sectname);
+		ss = fetch_supersect(sbfd, sect);
+		handle_nonzero_offset_relocs(ss);
+	}
+}
+
+static void compare_matched_sections(struct superbfd *newsbfd)
+{
+	asection *newp;
 	struct supersect *old_ss, *new_ss;
 	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
-		if (!matchable_text_section(newsbfd, newp))
-			continue;
 		new_ss = fetch_supersect(newsbfd, newp);
-		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
-		if (oldp == NULL)
+		if (new_ss->match == NULL)
 			continue;
-		old_ss = fetch_supersect(oldsbfd, oldp);
+		old_ss = new_ss->match;
+
 		if (new_ss->contents.size == old_ss->contents.size &&
 		    memcmp(new_ss->contents.data, old_ss->contents.data,
 			   new_ss->contents.size) == 0 &&
-		    relocs_equal(oldsbfd, oldp, newsbfd, newp))
+		    relocs_equal(old_ss, new_ss))
 			continue;
-		s_fn(newsbfd, newp);
+		if (matchable_text_section(newsbfd, newp)) {
+			if (str_in_set(newp->name, &chsects))
+				continue;
+			*vec_grow(&chsects, 1) = newp->name;
+		} else {
+			new_ss->match = NULL;
+			old_ss->match = NULL;
+		}
+		changed = true;
 	}
 }
 
@@ -523,12 +685,11 @@ static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 {
 	asection *newp, *oldp;
 	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
-		if (!starts_with(newp->name, ".text") &&
-		    !starts_with(newp->name, ".data") &&
-		    !starts_with(newp->name, ".rodata") &&
-		    !starts_with(newp->name, ".bss"))
+		struct supersect *newss = fetch_supersect(newsbfd, newp);
+		if (newss->match == NULL)
 			continue;
-		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
+		oldp = bfd_get_section_by_name(oldsbfd->abfd,
+					       newss->match->name);
 		if (oldp == NULL)
 			continue;
 
@@ -547,14 +708,11 @@ static void handle_section_symbol_renames(struct superbfd *oldsbfd,
  * string has been changed between the old file and the new file, relocs_equal
  * will detect the difference.
  */
-bool relocs_equal(struct superbfd *oldsbfd, asection *oldp,
-		  struct superbfd *newsbfd, asection *newp)
+bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 {
 	int i;
-	struct supersect *old_ss, *new_ss;
-
-	old_ss = fetch_supersect(oldsbfd, oldp);
-	new_ss = fetch_supersect(newsbfd, newp);
+	struct superbfd *oldsbfd = old_ss->parent;
+	struct superbfd *newsbfd = new_ss->parent;
 
 	if (old_ss->relocs.size != new_ss->relocs.size)
 		return false;
@@ -565,68 +723,63 @@ bool relocs_equal(struct superbfd *oldsbfd, asection *oldp,
 		asymbol *old_sym = *old_ss->relocs.data[i]->sym_ptr_ptr;
 		asymbol *new_sym = *new_ss->relocs.data[i]->sym_ptr_ptr;
 
-		ro_old_ss = fetch_supersect(oldsbfd, old_sym->section);
-		ro_new_ss = fetch_supersect(newsbfd, new_sym->section);
-
 		bfd_vma old_offset =
 		    get_reloc_offset(old_ss, old_ss->relocs.data[i], true);
 		bfd_vma new_offset =
 		    get_reloc_offset(new_ss, new_ss->relocs.data[i], true);
 
-		if (strcmp(ro_old_ss->name, ro_new_ss->name) != 0)
-			return false;
-
-		if (!starts_with(ro_old_ss->name, ".rodata")) {
-			/* for non-rodata, we just compare that the two
-			   relocations are to the same offset within the same
-			   section. */
-			if (old_sym->value + old_offset !=
-			    new_sym->value + new_offset)
+		if (bfd_is_und_section(old_sym->section) ||
+		    bfd_is_und_section(new_sym->section)) {
+			if (!bfd_is_und_section(new_sym->section) &&
+			    matchable_text_section(newsbfd, new_sym->section) &&
+			    old_offset != 0)
 				return false;
-			continue;
+
+			if (!bfd_is_und_section(old_sym->section) &&
+			    matchable_text_section(oldsbfd, old_sym->section) &&
+			    new_offset != 0)
+				return false;
+
+			if (strcmp(old_sym->name, new_sym->name) == 0 &&
+			    old_offset == new_offset)
+				continue;
+			return false;
 		}
+
+		if (bfd_is_const_section(old_sym->section) ||
+		    bfd_is_const_section(new_sym->section))
+			DIE;
+
+		ro_old_ss = fetch_supersect(oldsbfd, old_sym->section);
+		ro_new_ss = fetch_supersect(newsbfd, new_sym->section);
 
 		if (starts_with(ro_old_ss->name, ".rodata.str") &&
 		    /* check it's not an out-of-range relocation to a string;
 		       we'll just compare entire sections for them */
 		    !(old_offset >= ro_old_ss->contents.size ||
 		      new_offset >= ro_new_ss->contents.size)) {
-			if (strcmp
-			    (ro_old_ss->contents.data + old_sym->value +
-			     old_offset,
-			     ro_new_ss->contents.data + new_sym->value +
-			     new_offset) != 0)
+			if (strcmp(ro_old_ss->contents.data + old_sym->value +
+				   old_offset,
+				   ro_new_ss->contents.data + new_sym->value +
+				   new_offset) != 0)
 				return false;
 			continue;
 		}
 
-		if (ro_old_ss->contents.size != ro_new_ss->contents.size)
+		if (ro_old_ss->match != ro_new_ss ||
+		    ro_new_ss->match != ro_old_ss)
 			return false;
 
-		if (memcmp(ro_old_ss->contents.data, ro_new_ss->contents.data,
-			   ro_old_ss->contents.size) != 0)
+		if (old_sym->value + old_offset != new_sym->value + new_offset)
+			return false;
+
+		if ((old_sym->value + old_offset != 0 ||
+		     new_sym->value + new_offset != 0) &&
+		    str_in_set(new_sym->section->name, &chsects))
 			return false;
 	}
 
 	return true;
-}
-
-void print_changed_section(struct superbfd *sbfd, asection *sect)
-{
-	*vec_grow(&chsects, 1) = sect->name;
-}
-
-void print_new_section(struct superbfd *sbfd, asection *sect)
-{
-	*vec_grow(&newsects, 1) = sect->name;
-}
-
-void print_deleted_section(struct superbfd *sbfd, asection *sect)
-{
-	if (!matchable_text_section(sbfd, sect))
-		return;
-	const char *label = label_lookup(sbfd, sect->symbol);
-	*vec_grow(&delsects, 1) = label;
 }
 
 void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed)
@@ -1136,24 +1289,21 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 	struct superbfd *sbfd = fetch_superbfd(abfd);
 	if (want_section(sbfd, sect))
 		return;
-	if (!matchable_text_section(sbfd, sect)
-	    && !starts_with(sect->name, ".rodata")
-	    && !(starts_with(sect->name, ".data") && mode("keep-helper")))
+	if (!matchable_text_section(sbfd, sect) &&
+	    !starts_with(sect->name, ".rodata") &&
+	    !starts_with(sect->name, ".data"))
 		return;
 
-	if (mode("keep-helper")) {
-		asymbol **symp;
-		for (symp = sbfd->syms.data;
-		     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
-			asymbol *sym = *symp;
-			if (sym->section == sect &&
-			    (sym->flags & BSF_GLOBAL) != 0) {
-				struct wsect *w = malloc(sizeof(*w));
-				w->sect = sect;
-				w->next = wanted_sections;
-				wanted_sections = w;
-				return;
-			}
+	asymbol **symp;
+	for (symp = sbfd->syms.data;
+	     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
+		asymbol *sym = *symp;
+		if (sym->section == sect && (sym->flags & BSF_GLOBAL) != 0) {
+			struct wsect *w = malloc(sizeof(*w));
+			w->sect = sect;
+			w->next = wanted_sections;
+			wanted_sections = w;
+			return;
 		}
 	}
 
@@ -1164,7 +1314,8 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for)
 {
 	struct superbfd *sbfd = fetch_superbfd(abfd);
-	if (!want_section(sbfd, looking_at) || is_table_section(looking_at))
+	if (!want_section(sbfd, looking_at) || is_table_section(looking_at)
+	    || strcmp(looking_at->name, ".fixup") == 0)
 		return;
 
 	struct supersect *ss = fetch_supersect(sbfd, looking_at);
@@ -1174,16 +1325,10 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 		asymbol *sym = *(*relocp)->sym_ptr_ptr;
 		if (sym->section != (asection *)looking_for)
 			continue;
-		if (matchable_text_section(sbfd, sym->section) &&
-		    (get_reloc_offset(ss, *relocp, true) == 0 ||
-		     strcmp(looking_at->name, ".fixup") == 0))
-			continue;
 		struct wsect *w = malloc(sizeof(*w));
 		w->sect = looking_for;
 		w->next = wanted_sections;
 		wanted_sections = w;
-		if (matchable_text_section(sbfd, sym->section))
-			*vec_grow(&chsects, 1) = sym->section->name;
 		break;
 	}
 }

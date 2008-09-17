@@ -76,6 +76,7 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	new->parent = sbfd;
 	new->name = sect->name;
 	new->flags = bfd_get_section_flags(sbfd->abfd, sect);
+	new->match = NULL;
 
 	vec_init(&new->contents);
 	vec_resize(&new->contents, bfd_get_section_size(sect));
@@ -368,7 +369,7 @@ asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
 	return symp != NULL ? *symp : NULL;
 }
 
-static const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
+const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
 {
 	struct supersect *ss = fetch_supersect(sbfd, sym->section);
 	if ((sym->flags & BSF_LOCAL) == 0 || (sym->flags & BSF_OBJECT) == 0)
@@ -541,6 +542,8 @@ bool is_special(asection *sect)
 			return true;
 	}
 
+	if (starts_with(sect->name, ".rodata.str"))
+		return true;
 	if (starts_with(sect->name, "__ksymtab"))
 		return true;
 	if (starts_with(sect->name, "__kcrctab"))

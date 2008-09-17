@@ -176,6 +176,7 @@ struct supersect {
 	struct supersect *next;
 	struct asymbolp_vec syms;
 	asymbol *symbol;
+	struct supersect *match;
 };
 
 struct kernel_symbol {
@@ -222,5 +223,6 @@ void print_label_map(struct superbfd *sbfd);
 void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 		   const char *label);
 const char *lookup_orig_label(struct superbfd *sbfd, const char *label);
+const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym);
 
 bool is_special(asection *sect);
