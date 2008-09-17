@@ -453,7 +453,7 @@ void foreach_nonmatching(struct superbfd *oldsbfd, struct superbfd *newsbfd,
 	asection *newp, *oldp;
 	struct supersect *old_ss, *new_ss;
 	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
-		if (!starts_with(newp->name, ".text"))
+		if (!matchable_text_section(newsbfd, newp))
 			continue;
 		new_ss = fetch_supersect(newsbfd, newp);
 		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
@@ -576,7 +576,7 @@ void print_new_section(struct superbfd *sbfd, asection *sect)
 
 void print_deleted_section(struct superbfd *sbfd, asection *sect)
 {
-	if (!starts_with(sect->name, ".text"))
+	if (!matchable_text_section(sbfd, sect))
 		return;
 	const char *label = label_lookup(sbfd, sect->symbol);
 	*vec_grow(&delsects, 1) = label;
@@ -924,8 +924,7 @@ void write_ksplice_section(struct superbfd *sbfd, asymbol **symp)
 		ksect->flags |= KSPLICE_SECTION_RODATA;
 	if (starts_with(sym->section->name, ".data"))
 		ksect->flags |= KSPLICE_SECTION_DATA;
-	if (starts_with(sym->section->name, ".text") ||
-	    starts_with(sym->section->name, ".exit.text"))
+	if (matchable_text_section(sbfd, sym->section))
 		ksect->flags |= KSPLICE_SECTION_TEXT;
 	assert(ksect->flags != 0);
 	write_reloc(ksect_ss, &ksect->address, symp, 0);
@@ -1118,8 +1117,7 @@ void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 	struct superbfd *sbfd = fetch_superbfd(abfd);
 	if (want_section(sbfd, sect))
 		return;
-	if (!starts_with(sect->name, ".text")
-	    && !starts_with(sect->name, ".exit.text")
+	if (!matchable_text_section(sbfd, sect)
 	    && !starts_with(sect->name, ".rodata")
 	    && !(starts_with(sect->name, ".data") && mode("keep-helper")))
 		return;
@@ -1157,7 +1155,7 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 		asymbol *sym = *(*relocp)->sym_ptr_ptr;
 		if (sym->section != (asection *)looking_for)
 			continue;
-		if (starts_with(sym->section->name, ".text") &&
+		if (matchable_text_section(sbfd, sym->section) &&
 		    (get_reloc_offset(ss, *relocp, true) == 0 ||
 		     strcmp(looking_at->name, ".fixup") == 0))
 			continue;
@@ -1165,7 +1163,7 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 		w->sect = looking_for;
 		w->next = wanted_sections;
 		wanted_sections = w;
-		if (starts_with(sym->section->name, ".text"))
+		if (matchable_text_section(sbfd, sym->section))
 			*vec_grow(&chsects, 1) = sym->section->name;
 		break;
 	}
