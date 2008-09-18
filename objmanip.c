@@ -333,7 +333,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (mode("keep")) {
+	if (mode("keep-helper")) {
 		asection *sect;
 		for (sect = ibfd->sections; sect != NULL; sect = sect->next) {
 			asymbol **symp = canonical_symbolp(isbfd, sect->symbol);
@@ -356,6 +356,17 @@ int main(int argc, char *argv[])
 		for (sectname = chsects.data;
 		     sectname < chsects.data + chsects.size; sectname++)
 			write_ksplice_patch(isbfd, *sectname);
+
+		asection *sect;
+		for (sect = ibfd->sections; sect != NULL; sect = sect->next) {
+			if (!str_in_set(sect->name, &chsects) &&
+			    !str_in_set(sect->name, &newsects))
+				continue;
+			asymbol **symp = canonical_symbolp(isbfd, sect->symbol);
+			if (symp == NULL)
+				DIE;
+			write_ksplice_section(isbfd, symp);
+		}
 
 		const char **label;
 		for (label = delsects.data;
