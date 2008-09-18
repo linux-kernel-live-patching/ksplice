@@ -52,13 +52,6 @@ pod2usage(1) if($actions != 1);
 
 my ($linuxtree) = (abs_path($ARGV[0]));
 
-my $tmpdir = tempdir('ksplice-tmp-XXXXXX', TMPDIR => 1, CLEANUP => 1);
-copy($patchfile, "$tmpdir/patch") if(defined $patchfile);
-$patchfile = "$tmpdir/patch";
-
-$patch_opt = "-p0" if(defined $diffext);
-$patch_opt = join(" ", @$patch_opt) if(ref $patch_opt);
-
 if(!defined $orig_config_dir) {
 	$orig_config_dir = "$linuxtree/ksplice";
 }
@@ -110,11 +103,10 @@ if($Verbose::level < 1) {
 	print "For output during this process, run ksplice-create with the option -v\n";
 }
 
+$patchfile = abs_path($patchfile) if(defined $patchfile);
+
 my $origdir = getcwd();
 chdir($linuxtree);
-if(defined $diffext) {
-	runval("$libexecdir/ksplice-gendiff-reversed >$patchfile . $diffext");
-}
 
 my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : ());
 @jlevel = ("-j$jobs") if(defined $jobs);
@@ -144,6 +136,17 @@ if(!$skip_prebuild) {
 	sleep(1);
 }
 exit(0) if($prebuild);
+
+my $tmpdir = tempdir('ksplice-tmp-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+copy($patchfile, "$tmpdir/patch") if(defined $patchfile);
+$patchfile = "$tmpdir/patch";
+
+if(defined $diffext) {
+	runval("$libexecdir/ksplice-gendiff-reversed >$patchfile . $diffext");
+}
+
+$patch_opt = "-p0" if(defined $diffext);
+$patch_opt = join(" ", @$patch_opt) if(ref $patch_opt);
 
 if (!defined($standalone)) {
 	$standalone = (runval_raw(qw(grep -q ^CONFIG_KSPLICE=[ym]$), "$linuxtree/.config") != 0);
