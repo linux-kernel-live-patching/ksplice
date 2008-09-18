@@ -148,11 +148,15 @@ if(defined $diffext) {
 $patch_opt = "-p0" if(defined $diffext);
 $patch_opt = join(" ", @$patch_opt) if(ref $patch_opt);
 
+my $kmodsrc = "$tmpdir/kmodsrc";
+runval("cp", "-a", "--", "$datadir/kmodsrc", $kmodsrc);
+
+my @make_kmodsrc = ("make", "-C", $kernel_headers_dir, "M=$kmodsrc", "-rR", @jlevel, "KSPLICE_KID=$kid", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk");
+
 if (!defined($standalone)) {
 	$standalone = (runval_raw(qw(grep -q ^CONFIG_KSPLICE=[ym]$), "$linuxtree/.config") != 0);
 }
-my @standalone_flag;
-@standalone_flag = qw(KSPLICE_STANDALONE=1) if ($standalone);
+push(@make_kmodsrc, "KSPLICE_STANDALONE=1") if ($standalone);
 
 runval("patch $patch_opt -bz .KSPLICE_pre < $patchfile");
 push @make_ksplice, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
@@ -177,9 +181,6 @@ for (split(/\0/, runstr(qw(find -name *.KSPLICE* ! ( -name *.KSPLICE -empty ) ! 
 	copy_debug($1) if (m/^(.*)\.KSPLICE_pre$/);
 }
 
-my $kmodsrc = "$tmpdir/kmodsrc";
-runval("cp", "-a", "--", "$datadir/kmodsrc", $kmodsrc);
-
 my @modules = ();
 foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
 	open MOD, '<', $_;
@@ -199,7 +200,7 @@ if(!@modules) {
 
 revert_orig();
 
-runval("make", "-C", $kernel_headers_dir, "M=$kmodsrc", "-rR", @jlevel, "modules", "KSPLICE_KID=$kid", "KSPLICE_MODULES=@modules", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk", @standalone_flag);
+runval(@make_kmodsrc, "modules", "KSPLICE_MODULES=@modules");
 
 chdir($tmpdir);
 mkdir($ksplice);
