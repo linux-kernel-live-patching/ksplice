@@ -253,9 +253,13 @@ int main(int argc, char *argv[])
 		struct superbfd *presbfd = fetch_superbfd(prebfd);
 
 		match_global_symbol_sections(presbfd, isbfd);
+		printf("Matched global\n");
 		match_sections_by_name(presbfd, isbfd);
+		printf("Matched by name\n");
 		match_sections_by_label(presbfd, isbfd);
+		printf("Matched by label\n");
 		match_sections_by_contents(presbfd, isbfd);
+		printf("Matched by contents\n");
 
 		vec_init(&chsects);
 		vec_init(&newsects);
@@ -509,12 +513,19 @@ void match_sections(struct supersect *oldss, struct supersect *newss)
 {
 	if (oldss->match == newss && newss->match == oldss)
 		return;
-	if (oldss->match != NULL)
+	if (oldss->match != NULL) {
+		fprintf(stderr, "Matching conflict: old %s: %s != %s\n",
+			oldss->name, oldss->match->name, newss->name);
 		DIE;
-	if (newss->match != NULL)
+	}
+	if (newss->match != NULL) {
+		fprintf(stderr, "Matching conflict: new %s: %s != %s\n",
+			newss->name, newss->match->name, oldss->name);
 		DIE;
+	}
 	oldss->match = newss;
 	newss->match = oldss;
+	printf("Matched old %s to new %s\n", oldss->name, newss->name);
 }
 
 static void match_global_symbol_sections(struct superbfd *oldsbfd,
@@ -655,6 +666,11 @@ static void handle_nonzero_offset_relocs(struct supersect *ss)
 		if (!str_in_set(sym->section->name, &chsects)) {
 			changed = true;
 			*vec_grow(&chsects, 1) = sym->section->name;
+			printf("Changing %s because a relocation from sect %s "
+			       "has a nonzero offset %lx+%lx into it\n",
+			       sym->section->name, ss->name,
+			       (unsigned long)sym->value,
+			       (unsigned long)offset);
 		}
 	}
 }
@@ -698,10 +714,20 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 			if (str_in_set(newp->name, &chsects))
 				continue;
 			*vec_grow(&chsects, 1) = newp->name;
+			printf("Changing %s due to ", new_ss->name);
 		} else {
+			printf("Unmatching %s and %s due to ", old_ss->name,
+			       new_ss->name);
 			new_ss->match = NULL;
 			old_ss->match = NULL;
 		}
+		if (new_ss->contents.size != old_ss->contents.size)
+			printf("differing sizes\n");
+		else if (memcmp(new_ss->contents.data, old_ss->contents.data,
+				new_ss->contents.size) != 0)
+			printf("differing contents\n");
+		else
+			printf("differing relocations\n");
 		changed = true;
 	}
 }
@@ -740,8 +766,11 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 	struct superbfd *oldsbfd = old_ss->parent;
 	struct superbfd *newsbfd = new_ss->parent;
 
-	if (old_ss->relocs.size != new_ss->relocs.size)
+	if (old_ss->relocs.size != new_ss->relocs.size) {
+		printf("Different reloc count between %s and %s\n",
+		       old_ss->name, new_ss->name);
 		return false;
+	}
 
 	for (i = 0; i < old_ss->relocs.size; i++) {
 		struct supersect *ro_old_ss, *ro_new_ss;
@@ -787,22 +816,44 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 			if (strcmp(ro_old_ss->contents.data + old_sym->value +
 				   old_offset,
 				   ro_new_ss->contents.data + new_sym->value +
-				   new_offset) != 0)
+				   new_offset) != 0) {
+				printf("Strings differ between %s and %s\n",
+				       old_ss->name, new_ss->name);
 				return false;
+			}
 			continue;
 		}
 
 		if (ro_old_ss->match != ro_new_ss ||
-		    ro_new_ss->match != ro_old_ss)
+		    ro_new_ss->match != ro_old_ss) {
+			printf("Nonmatching relocs from %s to %s/%s\n",
+			       new_ss->name, ro_new_ss->name, ro_old_ss->name);
 			return false;
+		}
 
-		if (old_sym->value + old_offset != new_sym->value + new_offset)
+		if (old_sym->value + old_offset != new_sym->value + new_offset) {
+			printf("Offsets to %s/%s differ between %s and %s: "
+			       "%lx+%lx/%lx+%lx\n", ro_old_ss->name,
+			       ro_new_ss->name, old_ss->name, new_ss->name,
+			       (unsigned long)old_sym->value,
+			       (unsigned long)old_offset,
+			       (unsigned long)new_sym->value,
+			       (unsigned long)new_offset);
 			return false;
+		}
 
 		if ((old_sym->value + old_offset != 0 ||
 		     new_sym->value + new_offset != 0) &&
-		    str_in_set(new_sym->section->name, &chsects))
+		    str_in_set(new_sym->section->name, &chsects)) {
+			printf("Relocation from %s to nonzero offsets %lx+%lx/"
+			       "%lx+%lx in changed section %s\n", new_ss->name,
+			       (unsigned long)old_sym->value,
+			       (unsigned long)old_offset,
+			       (unsigned long)new_sym->value,
+			       (unsigned long)new_offset,
+			       new_sym->section->name);
 			return false;
+		}
 	}
 
 	return true;
