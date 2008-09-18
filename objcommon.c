@@ -58,6 +58,7 @@ struct superbfd *fetch_superbfd(bfd *abfd)
 	abfd->usrdata = sbfd;
 	sbfd->abfd = abfd;
 	get_syms(abfd, &sbfd->syms);
+	vec_init(&sbfd->new_syms);
 	sbfd->new_supersects = NULL;
 	init_label_map(sbfd);
 	return sbfd;
@@ -483,17 +484,6 @@ const char *label_lookup(struct superbfd *sbfd, asymbol *sym)
 			return map->label;
 	}
 	return symbol_label(sbfd, sym);
-}
-
-const char *lookup_orig_label(struct superbfd *sbfd, const char *label)
-{
-	struct label_map *map;
-	for (map = sbfd->maps.data;
-	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		if (strcmp(map->label, label) == 0)
-			return map->orig_label;
-	}
-	return NULL;
 }
 
 void print_label_map(struct superbfd *sbfd)

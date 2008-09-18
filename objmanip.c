@@ -102,7 +102,8 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 void write_ksplice_section(struct superbfd *sbfd, asymbol **symp);
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
-void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label);
+void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
+				 const char *label);
 void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
@@ -140,7 +141,8 @@ static void match_sections_by_contents(struct superbfd *oldsbfd,
 static void match_sections_by_label(struct superbfd *oldsbfd,
 				    struct superbfd *newsbfd);
 static void mark_new_sections(struct superbfd *sbfd);
-static void mark_deleted_sections(struct superbfd *sbfd);
+static void handle_deleted_sections(struct superbfd *oldsbfd,
+				    struct superbfd *newsbfd);
 static void compare_matched_sections(struct superbfd *sbfd);
 static void update_nonzero_offsets(struct superbfd *sbfd);
 static void handle_nonzero_offset_relocs(struct supersect *ss);
@@ -255,8 +257,8 @@ int main(int argc, char *argv[])
 			mark_new_sections(isbfd);
 		} while (changed);
 		vec_init(&delsects);
-		mark_deleted_sections(presbfd);
 
+		handle_deleted_sections(presbfd, isbfd);
 		handle_section_symbol_renames(presbfd, isbfd);
 
 		vec_init(&exports);
@@ -268,7 +270,7 @@ int main(int argc, char *argv[])
 		read_str_set(&rmsyms);
 	}
 
-	if (mode("keep") || mode("rmsyms"))
+	if (mode("keep") || mode("rmsyms") || mode("finalize"))
 		load_system_map();
 
 	if (mode("keep") || mode("finalize")) {
@@ -310,7 +312,7 @@ int main(int argc, char *argv[])
 				printf("  %s\n", *sectname);
 		}
 		if (delsects.size != 0) {
-			printf("Deleted section labels:\n");
+			printf("Deleted section names:\n");
 			for (sectname = delsects.data;
 			     sectname < delsects.data + delsects.size;
 			     sectname++)
@@ -368,11 +370,6 @@ int main(int argc, char *argv[])
 			write_ksplice_section(isbfd, symp);
 		}
 
-		const char **label;
-		for (label = delsects.data;
-		     label < delsects.data + delsects.size; label++)
-			write_ksplice_deleted_patch(isbfd, *label);
-
 		const struct export_desc *ed;
 		for (ed = exports.data; ed < exports.data + exports.size;
 		     ed++) {
@@ -399,6 +396,13 @@ int main(int argc, char *argv[])
 			continue;
 		if (want_section(isbfd, p) || mode("rmsyms"))
 			rm_some_relocs(ss);
+	}
+	if (mode("finalize")) {
+		asection *p = bfd_get_section_by_name(ibfd, ".ksplice_patches");
+		if (p != NULL) {
+			struct supersect *ss = fetch_supersect(isbfd, p);
+			rm_some_relocs(ss);
+		}
 	}
 
 	if (mode("keep")) {
@@ -611,19 +615,23 @@ static void mark_new_sections(struct superbfd *sbfd)
 	}
 }
 
-static void mark_deleted_sections(struct superbfd *sbfd)
+static void handle_deleted_sections(struct superbfd *oldsbfd,
+				    struct superbfd *newsbfd)
 {
 	asection *sect;
-	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+	for (sect = oldsbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		if (is_special(sect) || starts_with(sect->name, ".init") ||
 		    starts_with(sect->name, ".debug"))
 			continue;
-		if (!matchable_text_section(sbfd, sect))
+		if (!matchable_text_section(oldsbfd, sect))
 			continue;
-		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (ss->match == NULL)
-			*vec_grow(&delsects, 1) = label_lookup(sbfd,
-							       sect->symbol);
+		struct supersect *ss = fetch_supersect(oldsbfd, sect);
+		if (ss->match != NULL)
+			continue;
+		const char *label = label_lookup(oldsbfd, sect->symbol);
+		*vec_grow(&delsects, 1) = label;
+		asymbol *csym = canonical_symbol(oldsbfd, sect->symbol);
+		write_ksplice_deleted_patch(newsbfd, csym->name, label);
 	}
 }
 
@@ -862,7 +870,6 @@ void rm_some_relocs(struct supersect *ss)
 			rm_reloc = true;
 
 		if (mode("keep-primary") &&
-		    want_section(ss->parent, sym_ptr->section) &&
 		    (str_in_set(sym_ptr->section->name, &newsects) ||
 		     bfd_is_const_section(sym_ptr->section) ||
 		     starts_with(sym_ptr->section->name, ".rodata.str")))
@@ -1153,26 +1160,32 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
 	write_reloc(kpatch_ss, &kpatch->repladdr, &sect->symbol, 0);
 }
 
-void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label)
+void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
+				 const char *label)
 {
 	struct supersect *kpatch_ss = make_section(sbfd, ".ksplice_patches");
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
 
 	write_string(kpatch_ss, &kpatch->label, "%s", label);
-	const char *orig_label = lookup_orig_label(sbfd, label);
-	if (orig_label == NULL)
-		return;
 	asymbol **symp;
 	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
 	     symp++) {
 		asymbol *sym = *symp;
 		if (bfd_is_und_section(sym->section) &&
-		    strcmp(orig_label, sym->name) == 0)
+		    strcmp(name, sym->name) == 0)
 			break;
 	}
-	if (symp >= sbfd->syms.data + sbfd->syms.size)
-		DIE;
+	if (symp >= sbfd->syms.data + sbfd->syms.size) {
+		symp = malloc(sizeof(*symp));
+		*symp = bfd_make_empty_symbol(sbfd->abfd);
+		asymbol *sym = *symp;
+		sym->name = strdup(name);
+		sym->section = bfd_und_section_ptr;
+		sym->flags = 0;
+		sym->value = 0;
+		*vec_grow(&sbfd->new_syms, 1) = symp;
+	}
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
 }
 
@@ -1344,6 +1357,13 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 	}
 }
 
+void copy_symbols(struct asymbolp_vec *osyms, struct asymbolpp_vec *isyms)
+{
+	asymbol ***sympp;
+	for (sympp = isyms->data; sympp < isyms->data + isyms->size; sympp++)
+		*vec_grow(osyms, 1) = **sympp;
+}
+
 /* Modified function from GNU Binutils objcopy.c */
 bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 {
@@ -1386,6 +1406,7 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd)
 	struct asymbolp_vec osyms;
 	vec_init(&osyms);
 	filter_symbols(ibfd, obfd, &osyms, &fetch_superbfd(ibfd)->syms);
+	copy_symbols(&osyms, &fetch_superbfd(ibfd)->new_syms);
 
 	bfd_set_symtab(obfd, osyms.data, osyms.size);
 

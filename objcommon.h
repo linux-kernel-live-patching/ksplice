@@ -67,6 +67,7 @@ void vec_do_reserve(void **data, size_t *mem_size, size_t newsize);
 DECLARE_VEC_TYPE(void, void_vec);
 DECLARE_VEC_TYPE(arelent *, arelentp_vec);
 DECLARE_VEC_TYPE(asymbol *, asymbolp_vec);
+DECLARE_VEC_TYPE(asymbol **, asymbolpp_vec);
 
 #define DECLARE_HASH_TYPE(elt_t, hashtype,				\
 			  hashtype_init, hashtype_free,			\
@@ -163,6 +164,7 @@ struct superbfd {
 	struct asymbolp_vec syms;
 	struct supersect *new_supersects;
 	struct label_map_vec maps;
+	struct asymbolpp_vec new_syms;
 };
 
 struct supersect {
@@ -222,7 +224,6 @@ const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
 void print_label_map(struct superbfd *sbfd);
 void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 		   const char *label);
-const char *lookup_orig_label(struct superbfd *sbfd, const char *label);
 const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym);
 
 bool is_special(asection *sect);
