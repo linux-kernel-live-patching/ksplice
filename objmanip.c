@@ -76,8 +76,12 @@ struct wsect {
 };
 
 struct table_section {
-	const char *sectname;
+	const char *sect;
 	int entry_size;
+	int entry_align;
+	int addr_offset;
+	const char *other_sect;
+	int other_offset;
 };
 
 struct export_desc {
@@ -116,7 +120,6 @@ void write_ksplice_section(struct superbfd *sbfd, asymbol **symp);
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *label);
 void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
-void filter_ex_table_section(struct superbfd *sbfd);
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored);
 void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 			      void *looking_for);
@@ -153,9 +156,32 @@ const char *modestr, *kid;
 struct wsect *wanted_sections = NULL;
 
 const struct table_section table_sections[] = {
-	{".altinstructions", 2 * sizeof(void *) + 4},
-	{".smp_locks", sizeof(void *)},
-	{".parainstructions", sizeof(void *) + 4},
+	{
+		.sect = ".altinstructions",
+		.entry_size = 2 * sizeof(void *) + 4,
+		.entry_align = __alignof__(void *),
+		.addr_offset = 0,
+	},
+	{
+		.sect = "__ex_table",
+		.entry_size = 2 * sizeof(void *),
+		.entry_align = __alignof__(void *),
+		.addr_offset = 0,
+		.other_sect = ".fixup",
+		.other_offset = sizeof(void *),
+	},
+	{
+		.sect = ".parainstructions",
+		.entry_size = sizeof(void *) + 4,
+		.entry_align = __alignof__(void *),
+		.addr_offset = 0,
+	},
+	{
+		.sect = ".smp_locks",
+		.entry_size = sizeof(void *),
+		.entry_align = __alignof__(void *),
+		.addr_offset = 0,
+	},
 }, *const end_table_sections = *(&table_sections + 1);
 
 #define mode(str) starts_with(modestr, str)
@@ -371,11 +397,10 @@ int main(int argc, char *argv[])
 			rm_some_relocs(ss);
 	}
 
-	const struct table_section *ss;
 	if (mode("keep")) {
-		for (ss = table_sections; ss != end_table_sections; ss++)
-			filter_table_section(isbfd, ss);
-		filter_ex_table_section(isbfd);
+		const struct table_section *s;
+		for (s = table_sections; s < end_table_sections; s++)
+			filter_table_section(isbfd, s);
 	}
 
 	copy_object(ibfd, obfd);
@@ -1017,37 +1042,6 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 	}
 }
 
-void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
-{
-	asection *isection = bfd_get_section_by_name(sbfd->abfd, s->sectname);
-	if (isection == NULL)
-		return;
-
-	struct supersect *ss = fetch_supersect(sbfd, isection), orig_ss;
-	supersect_move(&orig_ss, ss);
-
-	const void *orig_entry;
-	for (orig_entry = orig_ss.contents.data;
-	     orig_entry < orig_ss.contents.data + orig_ss.contents.size;
-	     orig_entry += align(s->entry_size, 1 << ss->alignment)) {
-		asymbol *sym;
-		read_reloc(&orig_ss, orig_entry, sizeof(void *), &sym);
-
-		asection *p;
-		for (p = sbfd->abfd->sections; p != NULL; p = p->next) {
-			if (sym->section == p
-			    && !is_table_section(p) && !want_section(sbfd, p))
-				break;
-		}
-		if (p != NULL)
-			continue;
-
-		sect_copy(ss, sect_do_grow(ss, 1, s->entry_size,
-					   1 << ss->alignment),
-			  &orig_ss, orig_entry, s->entry_size);
-	}
-}
-
 struct fixup_entry {
 	bfd_vma offset;
 	bool used;
@@ -1066,12 +1060,14 @@ int compare_fixups(const void *aptr, const void *bptr)
 		return (int)a->used - (int)b->used;
 }
 
-void filter_ex_table_section(struct superbfd *sbfd)
+void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 {
-	asection *isection = bfd_get_section_by_name(sbfd->abfd, "__ex_table");
+	asection *isection = bfd_get_section_by_name(sbfd->abfd, s->sect);
 	if (isection == NULL)
 		return;
-	asection *fixup_sect = bfd_get_section_by_name(sbfd->abfd, ".fixup");
+	asection *fixup_sect = NULL;
+	if (s->other_sect != NULL)
+		fixup_sect = bfd_get_section_by_name(sbfd->abfd, s->other_sect);
 
 	struct supersect *ss = fetch_supersect(sbfd, isection), orig_ss;
 	supersect_move(&orig_ss, ss);
@@ -1083,23 +1079,25 @@ void filter_ex_table_section(struct superbfd *sbfd)
 	struct fixup_entry_vec fixups;
 	vec_init(&fixups);
 
-	const struct exception_table_entry *orig_entry;
+	void *orig_entry;
 	for (orig_entry = orig_ss.contents.data;
-	     (void *)orig_entry < orig_ss.contents.data + orig_ss.contents.size;
-	     orig_entry++) {
+	     orig_entry < orig_ss.contents.data + orig_ss.contents.size;
+	     orig_entry += s->entry_size) {
 		asymbol *sym, *fixup_sym;
-		read_reloc(&orig_ss, &orig_entry->insn,
-			   sizeof(orig_entry->insn), &sym);
+		read_reloc(&orig_ss, orig_entry + s->addr_offset,
+			   sizeof(void *), &sym);
 
 		struct fixup_entry *f;
-		bfd_vma fixup_offset = read_reloc(&orig_ss, &orig_entry->fixup,
-						  sizeof(orig_entry->fixup),
-						  &fixup_sym);
-		if (fixup_sym->section == fixup_sect) {
-			assert(fixup_offset < fixup_ss->contents.size);
-			f = vec_grow(&fixups, 1);
-			f->offset = fixup_offset;
-			f->used = false;
+		if (fixup_sect != NULL) {
+			bfd_vma fixup_offset =
+			    read_reloc(&orig_ss, orig_entry + s->other_offset,
+				       sizeof(void *), &fixup_sym);
+			if (fixup_sym->section == fixup_sect) {
+				assert(fixup_offset < fixup_ss->contents.size);
+				f = vec_grow(&fixups, 1);
+				f->offset = fixup_offset;
+				f->used = false;
+			}
 		}
 
 		asection *p;
@@ -1111,13 +1109,13 @@ void filter_ex_table_section(struct superbfd *sbfd)
 		if (p != NULL)
 			continue;
 
-		if (fixup_sym->section == fixup_sect) {
+		if (fixup_sect != NULL && fixup_sym->section == fixup_sect) {
 			f->used = true;
-			f->ex_offset = ss->contents.size +
-			    offsetof(struct exception_table_entry, fixup);
+			f->ex_offset = ss->contents.size + s->other_offset;
 		}
-		sect_copy(ss, sect_grow(ss, 1, struct exception_table_entry),
-			  &orig_ss, orig_entry, 1);
+		sect_copy(ss, sect_do_grow(ss, 1, s->entry_size,
+					   s->entry_align),
+			  &orig_ss, orig_entry, s->entry_size);
 	}
 
 	if (fixup_sect == NULL)
@@ -1512,12 +1510,10 @@ bool want_section(struct superbfd *sbfd, asection *sect)
 
 bool is_table_section(asection *sect)
 {
-	const struct table_section *ss;
-	for (ss = table_sections; ss != end_table_sections; ss++) {
-		if (strcmp(ss->sectname, sect->name) == 0)
+	const struct table_section *s;
+	for (s = table_sections; s < end_table_sections; s++) {
+		if (strcmp(sect->name, s->sect) == 0)
 			return true;
 	}
-	if (strcmp(sect->name, "__ex_table") == 0)
-		return true;
 	return false;
 }
