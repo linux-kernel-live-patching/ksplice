@@ -214,6 +214,15 @@ bool matchable_text_section(struct superbfd *sbfd, asection *isection)
 	return false;
 }
 
+bool ignored_section(struct superbfd *sbfd, asection *isection)
+{
+	if (starts_with(isection->name, ".init"))
+		return true;
+	if (starts_with(isection->name, ".debug"))
+		return true;
+	return false;
+}
+
 int main(int argc, char *argv[])
 {
 	bfd_init();
@@ -606,8 +615,7 @@ static void mark_new_sections(struct superbfd *sbfd)
 {
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		if (is_special(sect) || starts_with(sect->name, ".init") ||
-		    starts_with(sect->name, ".debug"))
+		if (is_special(sect) || ignored_section(sbfd, sect))
 			continue;
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		if (ss->match == NULL && !str_in_set(sect->name, &newsects))
@@ -620,8 +628,7 @@ static void handle_deleted_sections(struct superbfd *oldsbfd,
 {
 	asection *sect;
 	for (sect = oldsbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		if (is_special(sect) || starts_with(sect->name, ".init") ||
-		    starts_with(sect->name, ".debug"))
+		if (is_special(sect) || ignored_section(oldsbfd, sect))
 			continue;
 		if (!matchable_text_section(oldsbfd, sect))
 			continue;
@@ -1311,11 +1318,7 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 void mark_wanted_if_referenced(bfd *abfd, asection *sect, void *ignored)
 {
 	struct superbfd *sbfd = fetch_superbfd(abfd);
-	if (want_section(sbfd, sect))
-		return;
-	if (!matchable_text_section(sbfd, sect) &&
-	    !starts_with(sect->name, ".rodata") &&
-	    !starts_with(sect->name, ".data"))
+	if (want_section(sbfd, sect) || ignored_section(sbfd, sect))
 		return;
 
 	asymbol **symp;
