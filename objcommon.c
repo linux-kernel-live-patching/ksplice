@@ -533,6 +533,7 @@ bool is_special(asection *sect)
 		".parainstructions",
 		"__ex_table",
 		".fixup",
+		"__bug_table",
 		NULL
 	};
 

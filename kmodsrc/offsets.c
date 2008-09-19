@@ -24,6 +24,16 @@ const struct table_section table_sections[]
 		.other_offset = offsetof(struct alt_instr, replacement),
 	},
 #endif /* CONFIG_X86 */
+#if defined CONFIG_GENERIC_BUG && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+	{
+		.sect = "__bug_table",
+		.entry_size = sizeof(struct bug_entry),
+		.entry_align = __alignof__(struct bug_entry),
+		.addr_offset = offsetof(struct bug_entry, bug_addr),
+	},
+#else /* !CONFIG_GENERIC_BUG || LINUX_VERSION_CODE < */
+/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
+#endif /* CONFIG_GENERIC_BUG && LINUX_VERSION_CODE */
 	{
 		.sect = "__ex_table",
 		.entry_size = sizeof(struct exception_table_entry),
