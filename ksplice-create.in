@@ -150,6 +150,7 @@ $patch_opt = join(" ", @$patch_opt) if(ref $patch_opt);
 
 my $kmodsrc = "$tmpdir/kmodsrc";
 runval("cp", "-a", "--", "$datadir/kmodsrc", $kmodsrc);
+$ENV{KSPLICE_KMODSRC} = $kmodsrc;
 
 my @make_kmodsrc = ("make", "-C", $kernel_headers_dir, "M=$kmodsrc", "-rR", @jlevel, "KSPLICE_KID=$kid", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk");
 
@@ -157,6 +158,8 @@ if (!defined($standalone)) {
 	$standalone = (runval_raw(qw(grep -q ^CONFIG_KSPLICE=[ym]$), "$linuxtree/.config") != 0);
 }
 push(@make_kmodsrc, "KSPLICE_STANDALONE=1") if ($standalone);
+
+runval(@make_kmodsrc);
 
 runval("patch $patch_opt -bz .KSPLICE_pre < $patchfile");
 push @make_ksplice, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);

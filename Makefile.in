@@ -62,6 +62,8 @@ kmodsrcfiles = \
 	kmodsrc/Makefile \
 	kmodsrc/ld-script \
 	kmodsrc/ksplice.lds \
+	kmodsrc/offsets.c \
+	kmodsrc/offsets.h \
 	kmodsrc/x86/udis86.h \
 	kmodsrc/x86/libudis86/decode.c \
 	kmodsrc/x86/libudis86/itab.c \

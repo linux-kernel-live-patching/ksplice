@@ -70,9 +70,12 @@ $(obj)/collect-primary-%.o: $(obj)/%.o.KSPLICE_primary FORCE
 $(obj)/collect-helper-%.o: $(obj)/%.o.KSPLICE_helper FORCE
 	$(call if_changed,ksplice-collect)
 
+CFLAGS_offsets.o += $(KSPLICE_CFLAGS)
+extra-y += offsets.o
+
 ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
-extra-y = ksplice.o
+extra-y += ksplice.o
 
 RMSYMS = \
 	apply_paravirt \

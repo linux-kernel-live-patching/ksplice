@@ -52,6 +52,7 @@
 #define _GNU_SOURCE
 #include "objcommon.h"
 #include "kmodsrc/ksplice.h"
+#include "kmodsrc/offsets.h"
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -73,15 +74,6 @@ DECLARE_VEC_TYPE(const char *, str_vec);
 struct wsect {
 	asection *sect;
 	struct wsect *next;
-};
-
-struct table_section {
-	const char *sect;
-	int entry_size;
-	int entry_align;
-	int addr_offset;
-	const char *other_sect;
-	int other_offset;
 };
 
 struct export_desc {
@@ -155,34 +147,7 @@ const char *modestr, *kid;
 
 struct wsect *wanted_sections = NULL;
 
-const struct table_section table_sections[] = {
-	{
-		.sect = ".altinstructions",
-		.entry_size = 2 * sizeof(void *) + 4,
-		.entry_align = __alignof__(void *),
-		.addr_offset = 0,
-	},
-	{
-		.sect = "__ex_table",
-		.entry_size = 2 * sizeof(void *),
-		.entry_align = __alignof__(void *),
-		.addr_offset = 0,
-		.other_sect = ".fixup",
-		.other_offset = sizeof(void *),
-	},
-	{
-		.sect = ".parainstructions",
-		.entry_size = sizeof(void *) + 4,
-		.entry_align = __alignof__(void *),
-		.addr_offset = 0,
-	},
-	{
-		.sect = ".smp_locks",
-		.entry_size = sizeof(void *),
-		.entry_align = __alignof__(void *),
-		.addr_offset = 0,
-	},
-}, *const end_table_sections = *(&table_sections + 1);
+struct superbfd *offsets_sbfd;
 
 #define mode(str) starts_with(modestr, str)
 
@@ -288,6 +253,17 @@ int main(int argc, char *argv[])
 
 	if (mode("keep") || mode("rmsyms"))
 		load_system_map();
+
+	if (mode("keep") || mode("finalize")) {
+		char *kmodsrc = getenv("KSPLICE_KMODSRC"), *offsets_file;
+		assert(kmodsrc != NULL);
+		assert(asprintf(&offsets_file, "%s/offsets.o", kmodsrc) >= 0);
+		bfd *offsets_bfd = bfd_openr(offsets_file, NULL);
+		assert(offsets_bfd != NULL);
+		assert(bfd_check_format_matches(offsets_bfd, bfd_object,
+						&matching));
+		offsets_sbfd = fetch_superbfd(offsets_bfd);
+	}
 
 	if (mode("keep")) {
 		while (1) {
@@ -398,12 +374,24 @@ int main(int argc, char *argv[])
 	}
 
 	if (mode("keep")) {
-		const struct table_section *s;
-		for (s = table_sections; s < end_table_sections; s++)
-			filter_table_section(isbfd, s);
+		struct supersect *tables_ss =
+		    fetch_supersect(offsets_sbfd, bfd_get_section_by_name(
+			offsets_sbfd->abfd, ".ksplice_table_sections"));
+		const struct table_section *ts;
+		for (ts = tables_ss->contents.data;
+		     (void *)ts < tables_ss->contents.data +
+		     tables_ss->contents.size; ts++) {
+			struct table_section s = *ts;
+			s.sect = read_string(tables_ss, &ts->sect);
+			s.other_sect = read_string(tables_ss, &ts->other_sect);
+			filter_table_section(isbfd, &s);
+		}
 	}
 
 	copy_object(ibfd, obfd);
+
+	if (mode("keep") || mode("finalize"))
+		assert(bfd_close(offsets_sbfd->abfd));
 	assert(bfd_close(obfd));
 	assert(bfd_close(ibfd));
 	return EXIT_SUCCESS;
@@ -1510,9 +1498,17 @@ bool want_section(struct superbfd *sbfd, asection *sect)
 
 bool is_table_section(asection *sect)
 {
-	const struct table_section *s;
-	for (s = table_sections; s < end_table_sections; s++) {
-		if (strcmp(sect->name, s->sect) == 0)
+	if (!mode("keep") && !mode("finalize"))
+		return false;
+
+	struct supersect *tables_ss =
+	    fetch_supersect(offsets_sbfd, bfd_get_section_by_name(
+		    offsets_sbfd->abfd, ".ksplice_table_sections"));
+	const struct table_section *ts;
+	for (ts = tables_ss->contents.data;
+	     (void *)ts < tables_ss->contents.data + tables_ss->contents.size;
+	     ts++) {
+		if (strcmp(sect->name, read_string(tables_ss, &ts->sect)) == 0)
 			return true;
 	}
 	return false;
