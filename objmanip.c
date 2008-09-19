@@ -785,7 +785,8 @@ void filter_ex_table_section(struct superbfd *sbfd)
 
 		if (fixup_sym->section == fixup_sect) {
 			f->used = true;
-			f->ex_offset = ss->contents.size;
+			f->ex_offset = ss->contents.size +
+			    offsetof(struct exception_table_entry, fixup);
 		}
 		sect_copy(ss, sect_grow(ss, 1, struct exception_table_entry),
 			  &orig_ss, orig_entry, 1);
