@@ -20,6 +20,8 @@ const struct table_section table_sections[]
 		.entry_size = sizeof(struct alt_instr),
 		.entry_align = __alignof__(struct alt_instr),
 		.addr_offset = offsetof(struct alt_instr, instr),
+		.other_sect = ".altinstr_replacement",
+		.other_offset = offsetof(struct alt_instr, replacement),
 	},
 #endif /* CONFIG_X86 */
 	{
