@@ -1268,6 +1268,12 @@ static abort_t try_addr(struct ksplice_pack *pack,
 		run_module = __module_data_address(run_addr);
 	else
 		run_module = __module_text_address(run_addr);
+	if (run_module == pack->primary) {
+		ksdebug(pack, "run-pre: unexpected address %lx in primary "
+			"module %s for sect %s\n", run_addr, run_module->name,
+			sect->symbol->label);
+		return UNEXPECTED;
+	}
 	if (!patches_module(run_module, pack->target)) {
 		ksdebug(pack, "run-pre: ignoring address %lx in other module "
 			"%s for sect %s\n", run_addr, run_module == NULL ?
@@ -1480,7 +1486,7 @@ static abort_t brute_search_all(struct ksplice_pack *pack,
 	pack->update->debug = 0;
 
 	list_for_each_entry(m, &modules, list) {
-		if (!patches_module(m, pack->target))
+		if (!patches_module(m, pack->target) || m == pack->primary)
 			continue;
 		ret = brute_search(pack, sect, m->module_core, m->core_size,
 				   vals);
