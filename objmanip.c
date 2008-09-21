@@ -225,6 +225,15 @@ bool ignored_section(struct superbfd *sbfd, asection *isection)
 	return false;
 }
 
+bool unchangeable_section(struct superbfd *sbfd, asection *isection)
+{
+	if (starts_with(isection->name, ".bss"))
+		return true;
+	if (starts_with(isection->name, ".data"))
+		return true;
+	return false;
+}
+
 int main(int argc, char *argv[])
 {
 	bfd_init();
@@ -729,6 +738,8 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 		else
 			printf("differing relocations\n");
 		changed = true;
+		if (unchangeable_section(newsbfd, newp))
+			DIE;
 	}
 }
 
