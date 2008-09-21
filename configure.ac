@@ -15,6 +15,12 @@ AC_ARG_WITH(libiberty,
   [ ac_libiberty=NONE ]
 )
 
+AC_ARG_WITH(libz,
+  [  --with-libz=FILE        path to libz.a ],
+  [ ac_libz=$withval ],
+  [ ac_libz=NONE ]
+)
+
 AC_ARG_WITH(bfd-include-dir,
   [  --with-bfd-include-dir=DIR
                           path to directory containing bfd.h ],
@@ -25,6 +31,12 @@ AC_ARG_WITH(bfd-include-dir,
 AC_PROG_CC
 AC_CHECK_HEADERS(bfd.h,, BFD_H="no")
 
+if test "$ac_libz" = "NONE"; then
+  AC_CHECK_LIB(z, zlibVersion)
+  ac_libz=auto
+else
+  LIBS="$ac_libz $LIBS"
+fi
 if test "$ac_libiberty" = "NONE"; then
   AC_CHECK_LIB(iberty, objalloc_create)
   ac_libiberty=auto
@@ -62,6 +74,10 @@ if ! test -e "objmanip-static"; then
     echo "to tell Ksplice where to find them by running configure again:"
     echo
     echo "  ./configure --with-libbfd=<libbfd.a> --with-libiberty=<libiberty.a>"
+    echo
+    echo "Depending on the host system you may also need to provide zlib:"
+    echo
+    echo "  ./configure ... --with-libz=<libz.a>"
     echo
     exit 1
   fi
