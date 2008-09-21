@@ -94,6 +94,8 @@ struct export_vec *get_export_syms(struct superbfd *sbfd);
 void compare_exported_symbols(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd, char *addstr);
 bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss);
+static bool part_of_reloc(struct supersect *ss, unsigned long addr);
+static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss);
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 					  struct superbfd *newsbfd);
 
@@ -705,9 +707,7 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 			continue;
 		old_ss = new_ss->match;
 
-		if (new_ss->contents.size == old_ss->contents.size &&
-		    memcmp(new_ss->contents.data, old_ss->contents.data,
-			   new_ss->contents.size) == 0 &&
+		if (nonrelocs_equal(old_ss, new_ss) &&
 		    relocs_equal(old_ss, new_ss))
 			continue;
 		if (matchable_text_section(newsbfd, newp)) {
@@ -752,6 +752,34 @@ static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 			continue;
 		label_map_set(newsbfd, new_label, old_label);
 	}
+}
+
+static bool part_of_reloc(struct supersect *ss, unsigned long addr)
+{
+	arelent **relocp;
+	for (relocp = ss->relocs.data;
+	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+		arelent *reloc = *relocp;
+		if (addr >= reloc->address &&
+		    addr < reloc->address + reloc->howto->size)
+			return true;
+	}
+	return false;
+}
+
+static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss)
+{
+	int i;
+	if (old_ss->contents.size != new_ss->contents.size)
+		return false;
+	const unsigned char *old = old_ss->contents.data;
+	const unsigned char *new = new_ss->contents.data;
+	for (i = 0; i < old_ss->contents.size; i++) {
+		if (old[i] != new[i] &&
+		    !(part_of_reloc(old_ss, i) && part_of_reloc(new_ss, i)))
+			return false;
+	}
+	return true;
 }
 
 /*
