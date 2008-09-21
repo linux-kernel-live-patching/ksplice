@@ -110,6 +110,7 @@ struct ksplice_system_map {
 
 #ifdef __KERNEL__
 #include <linux/module.h>
+#include <linux/stringify.h>
 #include <linux/version.h>
 
 #if defined(CONFIG_PARAVIRT) && defined(CONFIG_X86_64) &&	\
@@ -123,10 +124,6 @@ struct ksplice_system_map {
 #define KSPLICE_NEED_PARAINSTRUCTIONS 1
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
-#undef _STR
-#define _STR(x) #x
-#undef STR
-#define STR(x) _STR(x)
 #define _PASTE(x, y) x##y
 #define PASTE(x, y) _PASTE(x, y)
 #define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_MID)

@@ -2965,8 +2965,8 @@ MODULE_PARM_DESC(debug, "Debug level");
 extern struct ksplice_system_map ksplice_system_map[], ksplice_system_map_end[];
 
 static struct ksplice_pack bootstrap_pack = {
-	.name = "ksplice_" STR(KSPLICE_KID),
-	.kid = "init_" STR(KSPLICE_KID),
+	.name = "ksplice_" __stringify(KSPLICE_KID),
+	.kid = "init_" __stringify(KSPLICE_KID),
 	.target_name = NULL,
 	.target = NULL,
 	.map_printk = MAP_PRINTK,

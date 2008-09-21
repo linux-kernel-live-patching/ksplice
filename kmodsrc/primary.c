@@ -36,9 +36,9 @@ extern struct ksplice_system_map ksplice_system_map[],
 
 #define pack KSPLICE_UNIQ(pack)
 struct ksplice_pack pack = {
-	.name = "ksplice_" STR(KSPLICE_MID),
-	.kid = STR(KSPLICE_KID),
-	.target_name = STR(KSPLICE_TARGET),
+	.name = "ksplice_" __stringify(KSPLICE_MID),
+	.kid = __stringify(KSPLICE_KID),
+	.target_name = __stringify(KSPLICE_TARGET),
 #ifdef KSPLICE_STANDALONE
 	.map_printk = MAP_PRINTK,
 #endif /* KSPLICE_STANDALONE */
