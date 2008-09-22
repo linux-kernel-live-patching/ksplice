@@ -181,6 +181,7 @@ struct supersect {
 	struct supersect *match;
 	bool new;
 	bool patch;
+	bool keep;
 };
 
 struct kernel_symbol {
