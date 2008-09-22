@@ -67,6 +67,7 @@ struct superbfd *fetch_superbfd(bfd *abfd)
 struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 {
 	assert(sect != NULL);
+	assert(!bfd_is_const_section(sect));
 	if (sect->userdata != NULL)
 		return sect->userdata;
 
