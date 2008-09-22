@@ -131,6 +131,7 @@ void read_str_set(struct str_vec *strs);
 bool str_in_set(const char *str, const struct str_vec *strs);
 bool want_section(struct superbfd *sbfd, asection *sect);
 bool is_table_section(asection *sect);
+bool is_special(asection *sect);
 struct supersect *make_section(struct superbfd *sbfd, const char *name);
 void __attribute__((format(printf, 3, 4)))
 write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
@@ -1814,5 +1815,33 @@ bool is_table_section(asection *sect)
 		if (strcmp(sect->name, read_string(tables_ss, &ts->sect)) == 0)
 			return true;
 	}
+	return false;
+}
+
+bool is_special(asection *sect)
+{
+	static const char *static_want[] = {
+		".altinstructions",
+		".altinstr_replacement",
+		".smp_locks",
+		".parainstructions",
+		"__ex_table",
+		".fixup",
+		"__bug_table",
+		NULL
+	};
+
+	int i;
+	for (i = 0; static_want[i] != NULL; i++) {
+		if (strcmp(sect->name, static_want[i]) == 0)
+			return true;
+	}
+
+	if (starts_with(sect->name, ".rodata.str"))
+		return true;
+	if (starts_with(sect->name, "__ksymtab"))
+		return true;
+	if (starts_with(sect->name, "__kcrctab"))
+		return true;
 	return false;
 }

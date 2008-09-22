@@ -225,5 +225,3 @@ void print_label_map(struct superbfd *sbfd);
 void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 		   const char *label);
 const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym);
-
-bool is_special(asection *sect);

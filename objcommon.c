@@ -513,32 +513,3 @@ void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 	}
 	DIE;
 }
-
-bool is_special(asection *sect)
-{
-	static const char *static_want[] = {
-		".altinstructions",
-		".altinstr_replacement",
-		".smp_locks",
-		".parainstructions",
-		"__ex_table",
-		".fixup",
-		"__bug_table",
-		NULL
-	};
-
-	int i;
-	for (i = 0; static_want[i] != NULL; i++) {
-		if (strcmp(sect->name, static_want[i]) == 0)
-			return true;
-	}
-
-	if (starts_with(sect->name, ".rodata.str"))
-		return true;
-	if (starts_with(sect->name, "__ksymtab"))
-		return true;
-	if (starts_with(sect->name, "__kcrctab"))
-		return true;
-	return false;
-}
-
