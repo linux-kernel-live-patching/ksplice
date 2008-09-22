@@ -157,7 +157,7 @@ static void compare_matched_sections(struct superbfd *sbfd);
 static void update_nonzero_offsets(struct superbfd *sbfd);
 static void handle_nonzero_offset_relocs(struct supersect *ss);
 
-struct str_vec chsects, delsects, rmsyms;
+struct str_vec delsects, rmsyms;
 struct export_desc_vec exports;
 bool changed;
 
@@ -312,7 +312,6 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	match_sections_by_contents(presbfd, isbfd);
 	printf("Matched by contents\n");
 
-	vec_init(&chsects);
 	do {
 		changed = false;
 		compare_matched_sections(isbfd);
@@ -336,14 +335,14 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	const char **sectname;
 	printf("Label name changes:\n");
 	print_label_map(isbfd);
-	if (chsects.size != 0) {
-		printf("Changed text sections:\n");
-		for (sectname = chsects.data;
-		     sectname < chsects.data + chsects.size; sectname++)
-			printf("  %s\n", *sectname);
+	asection *sect;
+	printf("Changed text sections:\n");
+	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (ss->patch)
+			printf("  %s\n", sect->name);
 	}
 
-	asection *sect;
 	printf("New sections:\n");
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
@@ -370,18 +369,16 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 			       export_type, *symname);
 	}
 
-	for (sectname = chsects.data;
-	     sectname < chsects.data + chsects.size; sectname++)
-		write_ksplice_patch(isbfd, *sectname);
-
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
-		if (!str_in_set(sect->name, &chsects) && !ss->new)
+		if (!ss->patch && !ss->new)
 			continue;
 		asymbol **symp = canonical_symbolp(isbfd, sect->symbol);
 		if (symp == NULL)
 			DIE;
 		write_ksplice_section(isbfd, symp);
+		if (ss->patch)
+			write_ksplice_patch(isbfd, sect->name);
 	}
 
 	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
@@ -671,33 +668,28 @@ static void handle_nonzero_offset_relocs(struct supersect *ss)
 			continue;
 		if (!matchable_text_section(ss->parent, sym->section))
 			continue;
-		if (!str_in_set(sym->section->name, &chsects)) {
+		struct supersect *sym_ss = fetch_supersect(ss->parent,
+							   sym->section);
+		if (!sym_ss->patch) {
 			changed = true;
-			*vec_grow(&chsects, 1) = sym->section->name;
 			printf("Changing %s because a relocation from sect %s "
 			       "has a nonzero offset %lx+%lx into it\n",
-			       sym->section->name, ss->name,
+			       sym_ss->name, ss->name,
 			       (unsigned long)sym->value,
 			       (unsigned long)offset);
 		}
+		sym_ss->patch = true;
 	}
 }
 
 static void update_nonzero_offsets(struct superbfd *sbfd)
 {
-	const char **sectname;
 	asection *sect;
 	struct supersect *ss;
-	for (sectname = chsects.data;
-	     sectname < chsects.data + chsects.size; sectname++) {
-		sect = bfd_get_section_by_name(sbfd->abfd, *sectname);
-		ss = fetch_supersect(sbfd, sect);
-		handle_nonzero_offset_relocs(ss);
-	}
 
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		ss = fetch_supersect(sbfd, sect);
-		if (ss->new)
+		if (ss->new || ss->patch)
 			handle_nonzero_offset_relocs(ss);
 	}
 }
@@ -716,9 +708,9 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 		    relocs_equal(old_ss, new_ss))
 			continue;
 		if (matchable_text_section(newsbfd, newp)) {
-			if (str_in_set(newp->name, &chsects))
+			if (new_ss->patch)
 				continue;
-			*vec_grow(&chsects, 1) = newp->name;
+			new_ss->patch = true;
 			printf("Changing %s due to ", new_ss->name);
 		} else {
 			printf("Unmatching %s and %s due to ", old_ss->name,
@@ -878,8 +870,7 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 		}
 
 		if ((old_sym->value + old_offset != 0 ||
-		     new_sym->value + new_offset != 0) &&
-		    str_in_set(new_sym->section->name, &chsects)) {
+		     new_sym->value + new_offset != 0) && ro_new_ss->patch) {
 			printf("Relocation from %s to nonzero offsets %lx+%lx/"
 			       "%lx+%lx in changed section %s\n", new_ss->name,
 			       (unsigned long)old_sym->value,
@@ -1785,9 +1776,7 @@ bool want_section(struct superbfd *sbfd, asection *sect)
 		return true;
 	if (mode("keep-helper") && matchable_text_section(sbfd, sect))
 		return true;
-	if (mode("keep-primary") && str_in_set(sect->name, &chsects))
-		return true;
-	if (mode("keep-primary") && ss->new)
+	if (mode("keep-primary") && (ss->new || ss->patch))
 		return true;
 
 	if (mode("keep-helper") && starts_with(sect->name, "__ksymtab"))

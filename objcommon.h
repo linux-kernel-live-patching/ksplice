@@ -180,6 +180,7 @@ struct supersect {
 	asymbol *symbol;
 	struct supersect *match;
 	bool new;
+	bool patch;
 };
 
 struct kernel_symbol {
