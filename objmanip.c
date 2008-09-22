@@ -208,6 +208,8 @@ void load_offsets()
 
 bool matchable_data_section(struct superbfd *sbfd, asection *isection)
 {
+	if (bfd_is_const_section(isection))
+		return false;
 	struct supersect *ss = fetch_supersect(sbfd, isection);
 	if (starts_with(isection->name, ".rodata")) {
 		if (starts_with(isection->name, ".rodata.str"))
@@ -225,6 +227,8 @@ bool matchable_data_section(struct superbfd *sbfd, asection *isection)
 
 bool matchable_text_section(struct superbfd *sbfd, asection *isection)
 {
+	if (bfd_is_const_section(isection))
+		return false;
 	if (starts_with(isection->name, ".text"))
 		return true;
 	if (starts_with(isection->name, ".exit.text")
@@ -235,6 +239,8 @@ bool matchable_text_section(struct superbfd *sbfd, asection *isection)
 
 bool ignored_section(struct superbfd *sbfd, asection *isection)
 {
+	if (bfd_is_const_section(isection))
+		return false;
 	if (starts_with(isection->name, ".init"))
 		return true;
 	if (starts_with(isection->name, ".debug"))
@@ -244,6 +250,8 @@ bool ignored_section(struct superbfd *sbfd, asection *isection)
 
 bool unchangeable_section(struct superbfd *sbfd, asection *isection)
 {
+	if (bfd_is_const_section(isection))
+		return false;
 	if (starts_with(isection->name, ".bss"))
 		return true;
 	if (starts_with(isection->name, ".data"))
@@ -1677,10 +1685,9 @@ void ss_mark_symbols_used_in_relocations(struct supersect *ss)
 static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym)
 {
 	struct superbfd *sbfd = fetch_superbfd(abfd);
-	struct supersect *ss = fetch_supersect(sbfd, sym->section);
-
 	if (bfd_is_const_section(sym->section))
 		return false;
+	struct supersect *ss = fetch_supersect(sbfd, sym->section);
 
 	asymbol **symp;
 	for (symp = ss->syms.data; symp < ss->syms.data + ss->syms.size; symp++) {
@@ -1703,22 +1710,25 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 	struct superbfd *sbfd = fetch_superbfd(ibfd);
 	for (symp = isyms->data; symp < isyms->data + isyms->size; symp++) {
 		asymbol *sym = *symp;
-		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
+		struct supersect *sym_ss = NULL;
+		if (!bfd_is_const_section(sym->section))
+			sym_ss = fetch_supersect(sbfd, sym->section);
 
 		bool keep = false;
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
-		    !(mode("keep-primary") && sym_ss->new))
+		    !(mode("keep-primary") && sym_ss != NULL && sym_ss->new))
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
 		if (mode("finalize") && (sym->flags & BSF_GLOBAL) != 0)
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
 		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
-		    || ((sym->flags & BSF_SECTION_SYM) != 0 && sym_ss->keep))
+		    || ((sym->flags & BSF_SECTION_SYM) != 0 && sym_ss != NULL &&
+			sym_ss->keep))
 			keep = true;
 		else if ((sym->flags & (BSF_GLOBAL | BSF_WEAK)) != 0 &&
-			 sym_ss->keep)
+			 sym_ss != NULL && sym_ss->keep)
 			keep = true;
 		else if (mode("keep-primary") &&
 			 starts_with(sym->section->name, "__ksymtab"))
