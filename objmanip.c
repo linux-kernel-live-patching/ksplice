@@ -157,7 +157,7 @@ const char *modestr, *kid;
 
 struct wsect *wanted_sections = NULL;
 
-struct superbfd *offsets_sbfd;
+struct superbfd *offsets_sbfd = NULL;
 
 #define mode(str) starts_with(modestr, str)
 
@@ -187,6 +187,18 @@ void load_system_map()
 		*vec_grow(addr_vec_hash_lookup(&system_map, sym, TRUE),
 			  1) = addr;
 	fclose(fp);
+}
+
+void load_offsets()
+{
+	char *kmodsrc = getenv("KSPLICE_KMODSRC"), *offsets_file;
+	assert(kmodsrc != NULL);
+	assert(asprintf(&offsets_file, "%s/offsets.o", kmodsrc) >= 0);
+	bfd *offsets_bfd = bfd_openr(offsets_file, NULL);
+	assert(offsets_bfd != NULL);
+	char **matching;
+	assert(bfd_check_format_matches(offsets_bfd, bfd_object, &matching));
+	offsets_sbfd = fetch_superbfd(offsets_bfd);
 }
 
 bool matchable_data_section(struct superbfd *sbfd, asection *isection)
@@ -297,16 +309,8 @@ int main(int argc, char *argv[])
 	if (mode("keep") || mode("rmsyms") || mode("finalize"))
 		load_system_map();
 
-	if (mode("keep") || mode("finalize")) {
-		char *kmodsrc = getenv("KSPLICE_KMODSRC"), *offsets_file;
-		assert(kmodsrc != NULL);
-		assert(asprintf(&offsets_file, "%s/offsets.o", kmodsrc) >= 0);
-		bfd *offsets_bfd = bfd_openr(offsets_file, NULL);
-		assert(offsets_bfd != NULL);
-		assert(bfd_check_format_matches(offsets_bfd, bfd_object,
-						&matching));
-		offsets_sbfd = fetch_superbfd(offsets_bfd);
-	}
+	if (mode("keep") || mode("finalize"))
+		load_offsets();
 
 	if (mode("keep-helper")) {
 		while (1) {
@@ -446,7 +450,7 @@ int main(int argc, char *argv[])
 
 	copy_object(ibfd, obfd);
 
-	if (mode("keep") || mode("finalize"))
+	if (offsets_sbfd != NULL)
 		assert(bfd_close(offsets_sbfd->abfd));
 	assert(bfd_close(obfd));
 	assert(bfd_close(ibfd));
