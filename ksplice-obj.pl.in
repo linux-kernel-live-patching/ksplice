@@ -53,14 +53,14 @@ sub do_diff {
 		return empty_diff($out);
 	}
 
-	runsuc("objmanip", $obj, "$obj.KSPLICE_primary", "keep-primary", "$obj.KSPLICE_pre", $ENV{KSPLICE_KID});
+	runval("$libexecdir/ksplice-objmanip", $obj, "$obj.KSPLICE_primary", "keep-primary", "$obj.KSPLICE_pre", $ENV{KSPLICE_KID});
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
 	close OUT;
 	rename "$out.tmp", $out;
 
-	runsuc("objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
+	runval("$libexecdir/ksplice-objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
 }
 
 sub do_helper {
@@ -68,7 +68,7 @@ sub do_helper {
 	my ($obj) = $out =~ /^(.*)\.KSPLICE_helper$/ or die;
 	my $obj_old = "$obj.KSPLICE_pre";
 	-e $obj_old or $obj_old = $obj;
-	runsuc("objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
+	runval("$libexecdir/ksplice-objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
 }
 
 sub link_objs {
@@ -113,12 +113,12 @@ sub do_combine {
 
 sub do_finalize {
 	my ($in, $out) = @_;
-	runsuc("objmanip", $in, $out, "finalize");
+	runval("$libexecdir/ksplice-objmanip", $in, $out, "finalize");
 }
 
 sub do_rmsyms {
 	my ($in, $out, @rmsyms) = @_;
-	runsuc_in("@rmsyms\n", "objmanip", $in, $out, "rmsyms");
+	runval_in("@rmsyms\n", "$libexecdir/ksplice-objmanip", $in, $out, "rmsyms");
 }
 
 sub do_system_map_lookup {

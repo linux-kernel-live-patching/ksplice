@@ -19,7 +19,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	Verbose GetOptions pod2usage shellwords
 	$datadir $libexecdir $version_str
-	child_error runval runval_raw runstr runstr_err runsuc runsuc_in unpack_update
+	child_error runval runval_raw runstr runstr_err runval_in unpack_update
 	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
 	get_debug_output get_conflicts
 	abs_path getcwd basename dirname tmpdir
@@ -87,21 +87,15 @@ sub runstr_err {
 	return <ERROR>;
 }
 
-sub runsuc {
-	my ($cmd, @args) = @_;
-	return runval("$libexecdir/ksplice-$cmd", @args);
-}
-
-sub runsuc_in {
-	my ($in, $cmd, @args) = @_;
-	my @cmd = ("$libexecdir/ksplice-$cmd", @args);
+sub runval_in {
+	my ($in, @cmd) = @_;
 	print "+ @cmd <<'EOF'\n${in}EOF\n" if($Verbose::level >= 1);
 	local (*WRITE);
 	open(WRITE, '|-', @cmd) or die "Can't run @cmd: $!";
 	print WRITE $in;
 	close(WRITE) or $! == 0 or die "Can't run @cmd: $!";
 	if(child_error()) {
-		die "Failed during: $libexecdir/ksplice-$cmd @args";
+		die "Failed during: @cmd";
 	}
 }
 
