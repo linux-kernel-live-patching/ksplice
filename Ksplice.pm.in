@@ -20,7 +20,7 @@ our @EXPORT = qw(
 	Verbose GetOptions pod2usage shellwords
 	$datadir $libexecdir @common_options $help
 	child_error runval runval_raw runstr runstr_err runval_in runval_infile unpack_update
-	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
+	get_stage set_stage set_debug_level set_partial get_abort_cause get_patch update_loaded
 	get_debug_output get_conflicts get_short_description
 	abs_path getcwd basename dirname tmpdir
 	copy rename move utime chdir mkdir mkpath unlink rmtree tempfile tempdir
@@ -236,6 +236,11 @@ sub set_stage {
 sub set_debug_level {
 	my ($kid, $string) = @_;
 	write_sysfs($kid, "debug", "$string\n");
+}
+
+sub set_partial {
+	my ($kid, $string) = @_;
+	write_sysfs($kid, "partial", "$string\n");
 }
 
 END {

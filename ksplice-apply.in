@@ -23,7 +23,9 @@ use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
 my $debug = 0;
+my $partial = 0;
 GetOptions(@common_options,
+	"partial" => \$partial,
 	"debug" => \$debug) or pod2usage(1);
 
 pod2usage(1) if($help || scalar(@ARGV) != 1);
@@ -58,16 +60,21 @@ if (-e "ksplice-$kid.ko") {
 	}
 }
 
+my @helpers = ();
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
 	die unless(-e $primary && -e $helper);
 	(my $target = $primary) =~ s/^ksplice-[^_]+_(.*)\.ko/$1/;
 	if ($target ne 'vmlinux' && runstr("lsmod") !~ m/^${target}\s/m) {
-		cleanup_modules();
-		die "Module $target to be patched not loaded";
+		if (!$partial) {
+			cleanup_modules();
+			print_error("target_not_loaded");
+			die "Module $target to be patched not loaded";
+		}
 	}
+	push @helpers, $helper;
 }
-foreach my $helper (glob('ksplice-*-helper.ko')) {
+foreach my $helper (@helpers) {
 	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
 	if(!load_module($primary)) {
 		die "Error loading primary module $primary";
@@ -87,6 +94,7 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 }
 
 set_debug_level($kid, $debug);
+set_partial($kid, $partial);
 set_stage($kid, "applied");
 my $stage = get_stage($kid);
 if($stage ne 'applied') {
@@ -106,10 +114,14 @@ if($stage ne 'applied') {
 mkpath("/var/run/ksplice/updates/$kid");
 copy("patch", "/var/run/ksplice/updates/$kid/patch") if (-e "patch");
 copy("description", "/var/run/ksplice/updates/$kid/description") if (-e "description");
-foreach my $helper (glob('ksplice-*-helper.ko')) {
-	$helper =~ s/-/_/g;
-	$helper =~ s/\.ko$//;
-	runval('rmmod', $helper) if(!$nounload);
+if (!$nounload) {
+	foreach my $helper (@helpers) {
+		$helper =~ s/-/_/g;
+		$helper =~ s/\.ko$//;
+		(my $primary = $helper) =~ s/_helper$//;
+		runval('rmmod', $helper);
+		runval('rmmod', $primary) if ($partial && refcount($primary) == 0);
+	}
 }
 print "Done!\n";
 exit(0);
@@ -126,6 +138,16 @@ sub load_module {
 	$module =~ s/-/_/g;
 	push @modules_loaded, $module;
 	return 1;
+}
+
+sub refcount {
+	my ($module) = @_;
+	foreach(split(/\n/, runstr("lsmod"))) {
+		if (m/^(\S+)\s+[0-9]+\s+([0-9])+\s/) {
+			return $2 if ($1 eq $module);
+		}
+	}
+	return -1;
 }
 
 sub cleanup_modules {
@@ -174,6 +196,12 @@ END
 Ksplice has aborted the upgrade because of an unexpected failure during the
 kernel stack check.  Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
+		"target_not_loaded" => <<'END',
+Ksplice has aborted the upgrade because one of the modules to be
+patched by the update was not loaded.  If you want to apply this
+update only to those modules that are loaded, then you should use the
+--partial option.
+END
 		"out_of_memory" => <<'END',
 Ksplice has aborted the upgrade because the kernel ran out of memory.
 END
@@ -218,6 +246,13 @@ running kernel's version.
 
 Applies the update with debugging output enabled.  Recommended only for
 debugging.
+
+=item B<--partial>
+
+Applies the update only to those modules which are loaded.  Any
+modules patched by the update that are not loaded are ignored (without
+this option, Ksplice aborts if any modules patched by the update are
+not loaded).
 
 =back
 
