@@ -157,7 +157,7 @@ static void compare_matched_sections(struct superbfd *sbfd);
 static void update_nonzero_offsets(struct superbfd *sbfd);
 static void handle_nonzero_offset_relocs(struct supersect *ss);
 
-struct str_vec chsects, newsects, delsects, rmsyms;
+struct str_vec chsects, delsects, rmsyms;
 struct export_desc_vec exports;
 bool changed;
 
@@ -313,7 +313,6 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	printf("Matched by contents\n");
 
 	vec_init(&chsects);
-	vec_init(&newsects);
 	do {
 		changed = false;
 		compare_matched_sections(isbfd);
@@ -343,11 +342,13 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		     sectname < chsects.data + chsects.size; sectname++)
 			printf("  %s\n", *sectname);
 	}
-	if (newsects.size != 0) {
-		printf("New sections:\n");
-		for (sectname = newsects.data;
-		     sectname < newsects.data + newsects.size; sectname++)
-			printf("  %s\n", *sectname);
+
+	asection *sect;
+	printf("New sections:\n");
+	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (ss->new)
+			printf("  %s\n", sect->name);
 	}
 	if (delsects.size != 0) {
 		printf("Deleted section names:\n");
@@ -373,10 +374,9 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	     sectname < chsects.data + chsects.size; sectname++)
 		write_ksplice_patch(isbfd, *sectname);
 
-	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		if (!str_in_set(sect->name, &chsects) &&
-		    !str_in_set(sect->name, &newsects))
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (!str_in_set(sect->name, &chsects) && !ss->new)
 			continue;
 		asymbol **symp = canonical_symbolp(isbfd, sect->symbol);
 		if (symp == NULL)
@@ -637,8 +637,8 @@ static void mark_new_sections(struct superbfd *sbfd)
 		if (is_special(sect) || ignored_section(sbfd, sect))
 			continue;
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (ss->match == NULL && !str_in_set(sect->name, &newsects))
-			*vec_grow(&newsects, 1) = sect->name;
+		if (ss->match == NULL)
+			ss->new = true;
 	}
 }
 
@@ -695,11 +695,10 @@ static void update_nonzero_offsets(struct superbfd *sbfd)
 		handle_nonzero_offset_relocs(ss);
 	}
 
-	for (sectname = newsects.data;
-	     sectname < newsects.data + newsects.size; sectname++) {
-		sect = bfd_get_section_by_name(sbfd->abfd, *sectname);
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		ss = fetch_supersect(sbfd, sect);
-		handle_nonzero_offset_relocs(ss);
+		if (ss->new)
+			handle_nonzero_offset_relocs(ss);
 	}
 }
 
@@ -984,8 +983,8 @@ void rm_some_relocs(struct supersect *ss)
 			rm_reloc = true;
 
 		if (mode("keep-primary") &&
-		    (str_in_set(sym_ptr->section->name, &newsects) ||
-		     bfd_is_const_section(sym_ptr->section) ||
+		    (bfd_is_const_section(sym_ptr->section) ||
+		     fetch_supersect(ss->parent, sym_ptr->section)->new ||
 		     starts_with(sym_ptr->section->name, ".rodata.str")))
 			rm_reloc = false;
 
@@ -1703,14 +1702,15 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms)
 {
 	asymbol **symp;
+	struct superbfd *sbfd = fetch_superbfd(ibfd);
 	for (symp = isyms->data; symp < isyms->data + isyms->size; symp++) {
 		asymbol *sym = *symp;
+		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
 
 		bool keep = false;
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
-		    !(mode("keep-primary") &&
-		      str_in_set(sym->section->name, &newsects)))
+		    !(mode("keep-primary") && sym_ss->new))
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
 		if (mode("finalize") && (sym->flags & BSF_GLOBAL) != 0)
@@ -1718,10 +1718,10 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 
 		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
 		    || ((sym->flags & BSF_SECTION_SYM) != 0 &&
-			want_section(fetch_superbfd(ibfd), sym->section)))
+			want_section(sbfd, sym->section)))
 			keep = true;
 		else if ((sym->flags & (BSF_GLOBAL | BSF_WEAK)) != 0 &&
-			 want_section(fetch_superbfd(ibfd), sym->section))
+			 want_section(sbfd, sym->section))
 			keep = true;
 		else if (mode("keep-primary") &&
 			 starts_with(sym->section->name, "__ksymtab"))
@@ -1780,13 +1780,14 @@ bool want_section(struct superbfd *sbfd, asection *sect)
 			return true;
 	}
 
+	struct supersect *ss = fetch_supersect(sbfd, sect);
 	if (starts_with(sect->name, ".ksplice"))
 		return true;
 	if (mode("keep-helper") && matchable_text_section(sbfd, sect))
 		return true;
 	if (mode("keep-primary") && str_in_set(sect->name, &chsects))
 		return true;
-	if (mode("keep-primary") && str_in_set(sect->name, &newsects))
+	if (mode("keep-primary") && ss->new)
 		return true;
 
 	if (mode("keep-helper") && starts_with(sect->name, "__ksymtab"))

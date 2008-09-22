@@ -179,6 +179,7 @@ struct supersect {
 	struct asymbolp_vec syms;
 	asymbol *symbol;
 	struct supersect *match;
+	bool new;
 };
 
 struct kernel_symbol {
