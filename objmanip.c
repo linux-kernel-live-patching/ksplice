@@ -1400,13 +1400,7 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 		}
 
 		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
-		asection *p;
-		for (p = sbfd->abfd->sections; p != NULL; p = p->next) {
-			if (sym->section == p && !is_table_section(p) &&
-			    !sym_ss->keep)
-				break;
-		}
-		if (p != NULL)
+		if (!sym_ss->keep)
 			continue;
 
 		if (fixup_sect != NULL && fixup_sym->section == fixup_sect) {
