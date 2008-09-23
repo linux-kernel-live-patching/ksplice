@@ -182,12 +182,7 @@ sub get_debug_output {
 		$debug = read_file("$debugfsdir/$update");
 		runval(qw(umount), $debugfsdir);
 	} elsif ($? >> 8 == 32) {
-		my $dmesg = runstr("dmesg | grep ksplice");
-		while($dmesg =~ /ksplice: Preparing to reverse/) {
-			$dmesg = $';
-		}
-		$debug = '';
-		write_file($debugfs_out, $dmesg);
+		return ();
 	} else {
 		child_error();
 		die;

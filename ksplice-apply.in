@@ -84,8 +84,10 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 		(my $module = $primary) =~ s/-/_/g;
 		$module =~ s/\.ko//;
 		cleanup_modules();
-		print $debugout;
-		print("Debugging output saved to $debugfile\n");
+		if(defined $debugfile) {
+			print $debugout;
+			print("Debugging output saved to $debugfile\n");
+		}
 		die;
 	}
 }

@@ -78,7 +78,10 @@ unless($failed == 0) {
 	if ($abort_cause eq 'code_busy') {
 		print $conflicts;
 	}
-	print("Debugging output saved to $debugout\n");
+	if(defined $debugfile) {
+		print $debugout;
+		print("Debugging output saved to $debugfile\n");
+	}
 	die;
 }
 exit(0);
