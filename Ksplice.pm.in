@@ -81,10 +81,13 @@ sub runstr {
 sub runstr_err {
 	my @cmd = @_;
 	print "+ @cmd\n" if($Verbose::level >= 1);
-	my $pid = open3(\*WRITE, \*READ, \*ERROR, @cmd);
-	waitpid($pid, 0);
+	local (*ERROR);
+	my $pid = open3(fileno STDIN, '>&STDOUT', \*ERROR, @cmd);
 	local $/;
-	return <ERROR>;
+	my $error = <ERROR>;
+	waitpid($pid, 0);
+	print STDERR $error;
+	return $error;
 }
 
 sub runval_in {
