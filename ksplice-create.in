@@ -142,7 +142,12 @@ copy($patchfile, "$tmpdir/patch") if(defined $patchfile);
 $patchfile = "$tmpdir/patch";
 
 if(defined $diffext) {
-	runval("$libexecdir/ksplice-gendiff-reversed >$patchfile . $diffext");
+	open(PATCH, '>', $patchfile) or die;
+	for(split(/\0/, runstr("find", "-name", "*$diffext", "-print0"))) {
+		my ($file) = /^(.*)\Q$diffext\E/ or die;
+		print PATCH runstr("diff", "-u", "--", $file, $_);
+	}
+	close(PATCH) or die;
 }
 
 $patch_opt = "-p0" if(defined $diffext);
