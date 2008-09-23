@@ -129,8 +129,6 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym);
 void read_str_set(struct str_vec *strs);
 bool str_in_set(const char *str, const struct str_vec *strs);
-bool is_table_section(asection *sect);
-bool is_special(asection *sect);
 struct supersect *make_section(struct superbfd *sbfd, const char *name);
 void __attribute__((format(printf, 3, 4)))
 write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
@@ -206,55 +204,9 @@ void load_offsets()
 	offsets_sbfd = fetch_superbfd(offsets_bfd);
 }
 
-bool matchable_data_section(struct superbfd *sbfd, asection *isection)
+bool unchangeable_section(struct supersect *ss)
 {
-	if (bfd_is_const_section(isection))
-		return false;
-	struct supersect *ss = fetch_supersect(sbfd, isection);
-	if (starts_with(isection->name, ".rodata")) {
-		if (starts_with(isection->name, ".rodata.str"))
-			return false;
-		return true;
-	}
-	if (starts_with(isection->name, ".data")) {
-		/* Ignore .data.percpu sections */
-		if (starts_with(isection->name, ".data.percpu"))
-			return false;
-		return ss->relocs.size != 0;
-	}
-	return false;
-}
-
-bool matchable_text_section(struct superbfd *sbfd, asection *isection)
-{
-	if (bfd_is_const_section(isection))
-		return false;
-	if (starts_with(isection->name, ".text"))
-		return true;
-	if (starts_with(isection->name, ".exit.text")
-	    && bfd_get_section_by_name(sbfd->abfd, ".exitcall.exit") == NULL)
-		return true;
-	return false;
-}
-
-bool ignored_section(struct superbfd *sbfd, asection *isection)
-{
-	if (bfd_is_const_section(isection))
-		return false;
-	if (starts_with(isection->name, ".init"))
-		return true;
-	if (starts_with(isection->name, ".debug"))
-		return true;
-	return false;
-}
-
-bool unchangeable_section(struct superbfd *sbfd, asection *isection)
-{
-	if (bfd_is_const_section(isection))
-		return false;
-	if (starts_with(isection->name, ".bss"))
-		return true;
-	if (starts_with(isection->name, ".data"))
+	if (ss->type == SS_TYPE_DATA || ss->type == SS_TYPE_BSS)
 		return true;
 	return false;
 }
@@ -341,7 +293,8 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
 		ss->keep = false;
-		if (is_special(sect))
+		if (ss->type == SS_TYPE_STRING || ss->type == SS_TYPE_SPECIAL ||
+		    ss->type == SS_TYPE_EXPORT)
 			ss->keep = true;
 		if (ss->new || ss->patch)
 			ss->keep = true;
@@ -424,10 +377,8 @@ void do_keep_helper(struct superbfd *isbfd)
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
 		ss->keep = false;
-		if (is_special(sect) && !starts_with(sect->name, "__ksymtab") &&
-		    !starts_with(sect->name, "__kcrctab"))
-			ss->keep = true;
-		if (matchable_text_section(isbfd, sect))
+		if (ss->type == SS_TYPE_STRING || ss->type == SS_TYPE_SPECIAL ||
+		    ss->type == SS_TYPE_TEXT)
 			ss->keep = true;
 	}
 	do {
@@ -445,8 +396,9 @@ void do_keep_helper(struct superbfd *isbfd)
 			continue;
 		if (bfd_get_section_size(sect) == 0)
 			continue;
-		if (ss->keep && (matchable_text_section(isbfd, sect) ||
-				 matchable_data_section(isbfd, sect)))
+		if (ss->keep && (ss->type == SS_TYPE_TEXT ||
+				 ss->type == SS_TYPE_RODATA ||
+				 ss->type == SS_TYPE_DATA))
 			write_ksplice_section(isbfd, symp);
 	}
 
@@ -587,8 +539,11 @@ static void match_sections_by_name(struct superbfd *oldsbfd,
 {
 	asection *newp, *oldp;
 	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
+		struct supersect *newss = fetch_supersect(newsbfd, newp);
 		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
-		if (oldp == NULL || is_special(newp))
+		if (oldp == NULL || newss->type == SS_TYPE_STRING ||
+		    newss->type == SS_TYPE_SPECIAL ||
+		    newss->type == SS_TYPE_EXPORT)
 			continue;
 		if (static_local_symbol(newsbfd,
 					canonical_symbol(newsbfd,
@@ -596,7 +551,6 @@ static void match_sections_by_name(struct superbfd *oldsbfd,
 			continue;
 
 		struct supersect *oldss = fetch_supersect(oldsbfd, oldp);
-		struct supersect *newss = fetch_supersect(newsbfd, newp);
 		match_sections(oldss, newss);
 	}
 }
@@ -608,7 +562,10 @@ static void match_sections_by_label(struct superbfd *oldsbfd,
 	struct supersect *oldss, *newss;
 	for (newsect = newsbfd->abfd->sections; newsect != NULL;
 	     newsect = newsect->next) {
-		if (is_special(newsect))
+		newss = fetch_supersect(newsbfd, newsect);
+		if (newss->type == SS_TYPE_STRING ||
+		    newss->type == SS_TYPE_SPECIAL ||
+		    newss->type == SS_TYPE_EXPORT)
 			continue;
 		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
 		     oldsect = oldsect->next) {
@@ -616,7 +573,6 @@ static void match_sections_by_label(struct superbfd *oldsbfd,
 				   label_lookup(oldsbfd, oldsect->symbol)) != 0)
 				continue;
 			oldss = fetch_supersect(oldsbfd, oldsect);
-			newss = fetch_supersect(newsbfd, newsect);
 			match_sections(oldss, newss);
 		}
 	}
@@ -633,8 +589,10 @@ static void match_sections_by_contents(struct superbfd *oldsbfd,
 		     oldsect = oldsect->next) {
 			oldss = fetch_supersect(oldsbfd, oldsect);
 			newss = fetch_supersect(newsbfd, newsect);
-			if (!matchable_data_section(newsbfd, newsect) ||
-			    !matchable_data_section(oldsbfd, oldsect))
+			if ((oldss->type != SS_TYPE_DATA &&
+			     oldss->type != SS_TYPE_RODATA) ||
+			    (newss->type != SS_TYPE_DATA &&
+			     newss->type != SS_TYPE_RODATA))
 				continue;
 			if (oldss->relocs.size != 0 || newss->relocs.size != 0)
 				continue;
@@ -652,9 +610,10 @@ static void mark_new_sections(struct superbfd *sbfd)
 {
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		if (is_special(sect) || ignored_section(sbfd, sect))
-			continue;
 		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (ss->type == SS_TYPE_STRING || ss->type == SS_TYPE_SPECIAL ||
+		    ss->type == SS_TYPE_IGNORED || ss->type == SS_TYPE_EXPORT)
+			continue;
 		if (ss->match == NULL)
 			ss->new = true;
 	}
@@ -665,11 +624,9 @@ static void handle_deleted_sections(struct superbfd *oldsbfd,
 {
 	asection *sect;
 	for (sect = oldsbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		if (is_special(sect) || ignored_section(oldsbfd, sect))
-			continue;
-		if (!matchable_text_section(oldsbfd, sect))
-			continue;
 		struct supersect *ss = fetch_supersect(oldsbfd, sect);
+		if (ss->type != SS_TYPE_TEXT)
+			continue;
 		if (ss->match != NULL)
 			continue;
 		const char *label = label_lookup(oldsbfd, sect->symbol);
@@ -687,10 +644,12 @@ static void handle_nonzero_offset_relocs(struct supersect *ss)
 		bfd_vma offset = get_reloc_offset(ss, ss->relocs.data[i], true);
 		if (sym->value + offset == 0)
 			continue;
-		if (!matchable_text_section(ss->parent, sym->section))
+		if (bfd_is_const_section(sym->section))
 			continue;
 		struct supersect *sym_ss = fetch_supersect(ss->parent,
 							   sym->section);
+		if (sym_ss->type != SS_TYPE_TEXT)
+			continue;
 		if (!sym_ss->patch) {
 			changed = true;
 			printf("Changing %s because a relocation from sect %s "
@@ -728,7 +687,7 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 		if (nonrelocs_equal(old_ss, new_ss) &&
 		    relocs_equal(old_ss, new_ss))
 			continue;
-		if (matchable_text_section(newsbfd, newp)) {
+		if (new_ss->type == SS_TYPE_TEXT) {
 			if (new_ss->patch)
 				continue;
 			new_ss->patch = true;
@@ -747,7 +706,7 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 		else
 			printf("differing relocations\n");
 		changed = true;
-		if (unchangeable_section(newsbfd, newp))
+		if (unchangeable_section(new_ss))
 			DIE;
 	}
 }
@@ -834,13 +793,13 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 		if (bfd_is_und_section(old_sym->section) ||
 		    bfd_is_und_section(new_sym->section)) {
 			if (!bfd_is_und_section(new_sym->section) &&
-			    matchable_text_section(newsbfd, new_sym->section) &&
-			    old_offset != 0)
+			    fetch_supersect(newsbfd, new_sym->section)->type
+			    == SS_TYPE_TEXT && old_offset != 0)
 				return false;
 
 			if (!bfd_is_und_section(old_sym->section) &&
-			    matchable_text_section(oldsbfd, old_sym->section) &&
-			    new_offset != 0)
+			    fetch_supersect(oldsbfd, old_sym->section)->type
+			    == SS_TYPE_TEXT && new_offset != 0)
 				return false;
 
 			if (strcmp(old_sym->name, new_sym->name) == 0 &&
@@ -856,7 +815,7 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 		ro_old_ss = fetch_supersect(oldsbfd, old_sym->section);
 		ro_new_ss = fetch_supersect(newsbfd, new_sym->section);
 
-		if (starts_with(ro_old_ss->name, ".rodata.str") &&
+		if (ro_old_ss->type == SS_TYPE_STRING &&
 		    /* check it's not an out-of-range relocation to a string;
 		       we'll just compare entire sections for them */
 		    !(old_offset >= ro_old_ss->contents.size ||
@@ -961,8 +920,7 @@ void rm_relocs(struct superbfd *isbfd)
 	asection *p;
 	for (p = isbfd->abfd->sections; p != NULL; p = p->next) {
 		struct supersect *ss = fetch_supersect(isbfd, p);
-		if (is_table_section(p) || starts_with(p->name, ".ksplice") ||
-		    strcmp(p->name, ".fixup") == 0)
+		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_KSPLICE)
 			continue;
 		if (ss->keep || mode("rmsyms"))
 			rm_some_relocs(ss);
@@ -997,7 +955,8 @@ void rm_some_relocs(struct supersect *ss)
 		if (mode("keep-primary") &&
 		    (bfd_is_const_section(sym_ptr->section) ||
 		     fetch_supersect(ss->parent, sym_ptr->section)->new ||
-		     starts_with(sym_ptr->section->name, ".rodata.str")))
+		     fetch_supersect(ss->parent, sym_ptr->section)->type ==
+		     SS_TYPE_STRING))
 			rm_reloc = false;
 
 		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
@@ -1262,11 +1221,12 @@ void write_ksplice_section(struct superbfd *sbfd, asymbol **symp)
 			     mode("keep-primary") ? "(post)" : "");
 	ksect->size = bfd_get_section_size(sym->section);
 	ksect->flags = 0;
-	if (starts_with(sym->section->name, ".rodata"))
+	struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
+	if (sym_ss->type == SS_TYPE_RODATA)
 		ksect->flags |= KSPLICE_SECTION_RODATA;
-	if (starts_with(sym->section->name, ".data"))
+	if (sym_ss->type == SS_TYPE_DATA)
 		ksect->flags |= KSPLICE_SECTION_DATA;
-	if (matchable_text_section(sbfd, sym->section))
+	if (sym_ss->type == SS_TYPE_TEXT)
 		ksect->flags |= KSPLICE_SECTION_TEXT;
 	assert(ksect->flags != 0);
 	write_reloc(ksect_ss, &ksect->address, symp, 0);
@@ -1449,7 +1409,7 @@ void keep_if_referenced(bfd *abfd, asection *sect, void *ignored)
 {
 	struct superbfd *sbfd = fetch_superbfd(abfd);
 	struct supersect *ss = fetch_supersect(sbfd, sect);
-	if (ss->keep || ignored_section(sbfd, sect))
+	if (ss->keep || ss->type == SS_TYPE_IGNORED)
 		return;
 
 	asymbol **symp;
@@ -1473,8 +1433,8 @@ void check_for_ref_to_section(bfd *abfd, asection *looking_at,
 	struct supersect *ss = fetch_supersect(sbfd, looking_at);
 	struct supersect *for_ss = fetch_supersect(sbfd,
 						   (asection *)looking_for);
-	if (!ss->keep || is_table_section(looking_at)
-	    || strcmp(looking_at->name, ".fixup") == 0)
+	if (!ss->keep || ss->type == SS_TYPE_STRING ||
+	    ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT)
 		return;
 
 	arelent **relocp;
@@ -1773,51 +1733,5 @@ bool str_in_set(const char *str, const struct str_vec *strs)
 		if (strcmp(str, *strp) == 0)
 			return true;
 	}
-	return false;
-}
-
-bool is_table_section(asection *sect)
-{
-	if (!mode("keep") && !mode("finalize"))
-		return false;
-
-	struct supersect *tables_ss =
-	    fetch_supersect(offsets_sbfd, bfd_get_section_by_name(
-		    offsets_sbfd->abfd, ".ksplice_table_sections"));
-	const struct table_section *ts;
-	for (ts = tables_ss->contents.data;
-	     (void *)ts < tables_ss->contents.data + tables_ss->contents.size;
-	     ts++) {
-		if (strcmp(sect->name, read_string(tables_ss, &ts->sect)) == 0)
-			return true;
-	}
-	return false;
-}
-
-bool is_special(asection *sect)
-{
-	static const char *static_want[] = {
-		".altinstructions",
-		".altinstr_replacement",
-		".smp_locks",
-		".parainstructions",
-		"__ex_table",
-		".fixup",
-		"__bug_table",
-		NULL
-	};
-
-	int i;
-	for (i = 0; static_want[i] != NULL; i++) {
-		if (strcmp(sect->name, static_want[i]) == 0)
-			return true;
-	}
-
-	if (starts_with(sect->name, ".rodata.str"))
-		return true;
-	if (starts_with(sect->name, "__ksymtab"))
-		return true;
-	if (starts_with(sect->name, "__kcrctab"))
-		return true;
 	return false;
 }

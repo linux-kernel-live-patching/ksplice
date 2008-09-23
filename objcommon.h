@@ -167,6 +167,12 @@ struct superbfd {
 	struct asymbolpp_vec new_syms;
 };
 
+enum supersect_type {
+	SS_TYPE_TEXT, SS_TYPE_DATA, SS_TYPE_RODATA, SS_TYPE_STRING,
+	SS_TYPE_SPECIAL, SS_TYPE_IGNORED, SS_TYPE_KSPLICE, SS_TYPE_BSS,
+	SS_TYPE_EXPORT, SS_TYPE_UNKNOWN
+};
+
 struct supersect {
 	struct superbfd *parent;
 	const char *name;
@@ -182,6 +188,7 @@ struct supersect {
 	bool new;
 	bool patch;
 	bool keep;
+	enum supersect_type type;
 };
 
 struct kernel_symbol {
