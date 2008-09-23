@@ -26,7 +26,8 @@ my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
 my @only_targets;
 my @extra_match;
 my $standalone;
-my ($help, $wantversion, $prebuild, $skip_prebuild, $patch_opt) = (0, 0, 0, 0, "-p1");
+my ($help, $wantversion, $prebuild, $skip_prebuild) = (0, 0, 0, 0);
+my @patch_opt = "-p1";
 GetOptions("help|?" => \$help,
 	"version" => \$wantversion,
 	"verbose|v:+" => \$Verbose::level,
@@ -40,7 +41,7 @@ GetOptions("help|?" => \$help,
 	"skip-prebuild" => \$skip_prebuild,
 	"jobs|j:i" => \$jobs,
 	"config=s" => \$orig_config_dir,
-	"patch-opt=s@" => \$patch_opt) or pod2usage(1);
+	"patch-opt=s" => \@patch_opt) or pod2usage(1);
 
 if($wantversion) {
 	print $version_str;
@@ -148,10 +149,8 @@ if(defined $diffext) {
 		print PATCH runstr("diff", "-u", "--", $file, $_);
 	}
 	close(PATCH) or die;
+	@patch_opt = ("-p0");
 }
-
-$patch_opt = "-p0" if(defined $diffext);
-$patch_opt = join(" ", @$patch_opt) if(ref $patch_opt);
 
 my $kmodsrc = "$tmpdir/kmodsrc";
 runval("cp", "-a", "--", "$datadir/kmodsrc", $kmodsrc);
@@ -166,7 +165,7 @@ push(@make_kmodsrc, "KSPLICE_STANDALONE=1") if ($standalone);
 
 runval(@make_kmodsrc);
 
-runval("patch $patch_opt -bz .KSPLICE_pre < $patchfile");
+runval_infile($patchfile, "patch", @patch_opt, "-bz", ".KSPLICE_pre");
 push @make_ksplice, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
 push @make_ksplice, "KSPLICE_ONLY_TARGETS=@only_targets" if (@only_targets);
 if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
