@@ -278,15 +278,15 @@ const void *read_pointer(struct supersect *ss, void *const *addr,
 {
 	asymbol *sym;
 	bfd_vma offset = read_reloc(ss, addr, sizeof(*addr), &sym);
-	struct supersect *data_ss = fetch_supersect(ss->parent, sym->section);
 	if (bfd_is_abs_section(sym->section) && sym->value + offset == 0)
 		return NULL;
 	if (bfd_is_const_section(sym->section)) {
 		fprintf(stderr, "warning: unexpected relocation to const "
-			"section at %s+%lx\n", data_ss->name,
-			(unsigned long)addr_offset(data_ss, addr));
+			"section at %s+%lx\n", ss->name,
+			(unsigned long)addr_offset(ss, addr));
 		return NULL;
 	}
+	struct supersect *data_ss = fetch_supersect(ss->parent, sym->section);
 	if (data_ssp != NULL)
 		*data_ssp = data_ss;
 	return data_ss->contents.data + sym->value + offset;
