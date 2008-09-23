@@ -64,69 +64,6 @@ struct superbfd *fetch_superbfd(bfd *abfd)
 	return sbfd;
 }
 
-enum supersect_type supersect_type(struct supersect *ss)
-{
-	if (starts_with(ss->name, ".ksplice"))
-		return SS_TYPE_KSPLICE;
-
-	if (starts_with(ss->name, ".init"))
-		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".debug"))
-		return SS_TYPE_IGNORED;
-
-	if (starts_with(ss->name, ".text"))
-		return SS_TYPE_TEXT;
-	if (starts_with(ss->name, ".exit.text")) {
-		if (bfd_get_section_by_name(ss->parent->abfd, ".exitcall.exit")
-		    == NULL)
-			return SS_TYPE_TEXT;
-		return SS_TYPE_IGNORED;
-	}
-
-	if (starts_with(ss->name, ".rodata")) {
-		int n = -1;
-		if (sscanf(ss->name, ".rodata.str%*u.%*u%n", &n) >= 0 &&
-		    n == strlen(ss->name))
-			return SS_TYPE_STRING;
-		return SS_TYPE_RODATA;
-	}
-
-	if (starts_with(ss->name, ".bss"))
-		return SS_TYPE_BSS;
-
-	if (starts_with(ss->name, ".data")) {
-		/* Ignore .data.percpu sections */
-		if (starts_with(ss->name, ".data.percpu"))
-			return SS_TYPE_IGNORED;
-		if (ss->relocs.size != 0)
-			return SS_TYPE_DATA;
-	}
-
-	if (starts_with(ss->name, "__ksymtab"))
-		return SS_TYPE_EXPORT;
-	if (starts_with(ss->name, "__kcrctab"))
-		return SS_TYPE_EXPORT;
-
-	static const char *special_sections[] = {
-		".altinstructions",
-		".altinstr_replacement",
-		".smp_locks",
-		".parainstructions",
-		"__ex_table",
-		".fixup",
-		"__bug_table",
-		NULL
-	};
-	int i;
-	for (i = 0; special_sections[i] != NULL; i++) {
-		if (strcmp(ss->name, special_sections[i]) == 0)
-			return SS_TYPE_SPECIAL;
-	}
-	if (starts_with(ss->name, ".ARM."))
-		return SS_TYPE_SPECIAL;
-	return SS_TYPE_UNKNOWN;
-}
-
 struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 {
 	assert(sect != NULL);
@@ -169,7 +106,6 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 			*vec_grow(&new->syms, 1) = sym;
 	}
 
-	new->type = supersect_type(new);
 	return new;
 }
 
@@ -196,7 +132,7 @@ struct supersect *new_supersect(struct superbfd *sbfd, const char *name)
 	vec_init(&new->relocs);
 	vec_init(&new->new_relocs);
 
-	new->type = supersect_type(new);
+	new->type = SS_TYPE_KSPLICE;
 	return new;
 }
 

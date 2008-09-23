@@ -104,6 +104,9 @@ static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss);
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 					  struct superbfd *newsbfd);
 
+enum supersect_type supersect_type(struct supersect *ss);
+void initialize_supersect_types(struct superbfd *sbfd);
+
 void rm_relocs(struct superbfd *isbfd);
 void rm_some_relocs(struct supersect *ss);
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
@@ -259,6 +262,10 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	assert(bfd_check_format_matches(prebfd, bfd_object, &matching));
 
 	struct superbfd *presbfd = fetch_superbfd(prebfd);
+	load_system_map();
+	load_offsets();
+	initialize_supersect_types(isbfd);
+	initialize_supersect_types(presbfd);
 
 	match_global_symbol_sections(presbfd, isbfd);
 	printf("Matched global\n");
@@ -285,9 +292,6 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	compare_exported_symbols(isbfd, presbfd, "del_");
 
 	assert(bfd_close(prebfd));
-
-	load_system_map();
-	load_offsets();
 
 	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
@@ -372,6 +376,7 @@ void do_keep_helper(struct superbfd *isbfd)
 {
 	load_system_map();
 	load_offsets();
+	initialize_supersect_types(isbfd);
 
 	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
@@ -410,6 +415,7 @@ void do_finalize(struct superbfd *isbfd)
 {
 	load_system_map();
 	load_offsets();
+	initialize_supersect_types(isbfd);
 	rm_relocs(isbfd);
 }
 
@@ -417,6 +423,8 @@ void do_rmsyms(struct superbfd *isbfd)
 {
 	read_str_set(&rmsyms);
 	load_system_map();
+	load_offsets();
+	initialize_supersect_types(isbfd);
 	rm_relocs(isbfd);
 }
 
@@ -1734,4 +1742,76 @@ bool str_in_set(const char *str, const struct str_vec *strs)
 			return true;
 	}
 	return false;
+}
+
+enum supersect_type supersect_type(struct supersect *ss)
+{
+	if (starts_with(ss->name, ".ksplice"))
+		return SS_TYPE_KSPLICE;
+
+	if (starts_with(ss->name, ".init"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".debug"))
+		return SS_TYPE_IGNORED;
+
+	if (starts_with(ss->name, ".text"))
+		return SS_TYPE_TEXT;
+	if (starts_with(ss->name, ".exit.text")) {
+		if (bfd_get_section_by_name(ss->parent->abfd, ".exitcall.exit")
+		    == NULL)
+			return SS_TYPE_TEXT;
+		return SS_TYPE_IGNORED;
+	}
+
+	if (starts_with(ss->name, ".rodata")) {
+		int n = -1;
+		if (sscanf(ss->name, ".rodata.str%*u.%*u%n", &n) >= 0 &&
+		    n == strlen(ss->name))
+			return SS_TYPE_STRING;
+		return SS_TYPE_RODATA;
+	}
+
+	if (starts_with(ss->name, ".bss"))
+		return SS_TYPE_BSS;
+
+	if (starts_with(ss->name, ".data")) {
+		/* Ignore .data.percpu sections */
+		if (starts_with(ss->name, ".data.percpu"))
+			return SS_TYPE_IGNORED;
+		if (ss->relocs.size != 0)
+			return SS_TYPE_DATA;
+	}
+
+	if (starts_with(ss->name, "__ksymtab"))
+		return SS_TYPE_EXPORT;
+	if (starts_with(ss->name, "__kcrctab"))
+		return SS_TYPE_EXPORT;
+
+	static const char *special_sections[] = {
+		".altinstructions",
+		".altinstr_replacement",
+		".smp_locks",
+		".parainstructions",
+		"__ex_table",
+		".fixup",
+		"__bug_table",
+		NULL
+	};
+	int i;
+	for (i = 0; special_sections[i] != NULL; i++) {
+		if (strcmp(ss->name, special_sections[i]) == 0)
+			return SS_TYPE_SPECIAL;
+	}
+	if (starts_with(ss->name, ".ARM."))
+		return SS_TYPE_SPECIAL;
+	return SS_TYPE_UNKNOWN;
+}
+
+void initialize_supersect_types(struct superbfd *sbfd)
+{
+	asection *sect;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		ss->type = supersect_type(ss);
+	}
 }
