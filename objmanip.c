@@ -106,6 +106,7 @@ static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 
 enum supersect_type supersect_type(struct supersect *ss);
 void initialize_supersect_types(struct superbfd *sbfd);
+bool is_table_section(const char *name, bool consider_other);
 
 void rm_relocs(struct superbfd *isbfd);
 void rm_some_relocs(struct supersect *ss);
@@ -228,6 +229,8 @@ bool matchable_data_section(struct supersect *ss)
 bool unchangeable_section(struct supersect *ss)
 {
 	if (ss->type == SS_TYPE_DATA)
+		return true;
+	if (ss->type == SS_TYPE_IGNORED && !starts_with(ss->name, ".debug"))
 		return true;
 	return false;
 }
@@ -731,7 +734,8 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 			printf("differing relocations\n");
 		changed = true;
 		if (unchangeable_section(new_ss))
-			DIE;
+			fprintf(stderr, "WARNING: ignoring change to "
+				"nonpatchable section %s\n", new_ss->name);
 	}
 }
 
@@ -1760,6 +1764,27 @@ bool str_in_set(const char *str, const struct str_vec *strs)
 	return false;
 }
 
+bool is_table_section(const char *name, bool consider_other)
+{
+	struct supersect *tables_ss =
+	    fetch_supersect(offsets_sbfd,
+			    bfd_get_section_by_name(offsets_sbfd->abfd,
+						    ".ksplice_table_sections"));
+	const struct table_section *ts;
+	for (ts = tables_ss->contents.data;
+	     (void *)ts < tables_ss->contents.data + tables_ss->contents.size;
+	     ts++) {
+		if (strcmp(name, read_string(tables_ss, &ts->sect)) == 0)
+			return true;
+		const char *osect_name = read_string(tables_ss,
+						     &ts->other_sect);
+		if (consider_other && osect_name != NULL &&
+		    strcmp(name, osect_name) == 0)
+			return true;
+	}
+	return false;
+}
+
 enum supersect_type supersect_type(struct supersect *ss)
 {
 	if (starts_with(ss->name, ".ksplice"))
@@ -1834,23 +1859,12 @@ enum supersect_type supersect_type(struct supersect *ss)
 	if (starts_with(ss->name, "__kcrctab"))
 		return SS_TYPE_EXPORT;
 
-	static const char *special_sections[] = {
-		".altinstructions",
-		".altinstr_replacement",
-		".smp_locks",
-		".parainstructions",
-		"__ex_table",
-		".fixup",
-		"__bug_table",
-		NULL
-	};
-	int i;
-	for (i = 0; special_sections[i] != NULL; i++) {
-		if (strcmp(ss->name, special_sections[i]) == 0)
-			return SS_TYPE_SPECIAL;
-	}
+	if (is_table_section(ss->name, true))
+		return SS_TYPE_SPECIAL;
+
 	if (starts_with(ss->name, ".ARM."))
 		return SS_TYPE_SPECIAL;
+
 	return SS_TYPE_UNKNOWN;
 }
 

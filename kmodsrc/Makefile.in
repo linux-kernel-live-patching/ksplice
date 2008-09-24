@@ -116,6 +116,6 @@ quiet_cmd_ksplice-rmsyms = RMSYMS  $@
 cmd_ksplice-rmsyms = \
 	$(ksplice-script) rmsyms $< $<.rmsyms $(RMSYMS) && \
 	$(LD) -r -o $@ $<.rmsyms $(src)/ksplice.lds
-$(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o FORCE
+$(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o $(obj)/offsets.o FORCE
 	$(call if_changed,ksplice-rmsyms)
 endif # KSPLICE_STANDALONE
