@@ -1936,5 +1936,9 @@ void initialize_supersect_types(struct superbfd *sbfd)
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		ss->type = supersect_type(ss);
+		if (ss->type == SS_TYPE_UNKNOWN) {
+			fprintf(stderr, "Unknown section type: %s\n", ss->name);
+			DIE;
+		}
 	}
 }
