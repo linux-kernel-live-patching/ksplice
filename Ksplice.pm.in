@@ -33,6 +33,7 @@ our @common_options = (
 	"help|?" => \$help,
 	"version" => sub { print "Ksplice version PACKAGE_VERSION\n"; exit(0); },
 	"verbose|v:+" => \$Verbose::level,
+	"quiet|q:+" => sub { $Verbose::level -= $_[1]; },
 );
 
 sub child_error {
