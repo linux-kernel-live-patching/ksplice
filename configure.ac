@@ -1,50 +1,46 @@
-AC_INIT(Ksplice, 0.9.0, ksplice@mit.edu)
+AC_INIT([Ksplice], [0.9.0], [ksplice@mit.edu])
 
 dnl The author of Ksplice learned how to configure libbfd by looking at
 dnl elf2flt, which is available under the GNU General Public License.
 
-AC_ARG_WITH(libbfd,
-  [  --with-libbfd=FILE      path to libbfd.a ],
-  [ ac_libbfd=$withval ],
-  [ ac_libbfd=NONE ]
-)
+AC_ARG_WITH([libbfd],
+  [  --with-libbfd=FILE      path to libbfd.a],
+  [ac_libbfd=$withval],
+  [ac_libbfd=NONE])
 
-AC_ARG_WITH(libiberty,
-  [  --with-libiberty=FILE   path to libiberty.a ],
-  [ ac_libiberty=$withval ],
-  [ ac_libiberty=NONE ]
-)
+AC_ARG_WITH([libiberty],
+  [  --with-libiberty=FILE   path to libiberty.a],
+  [ac_libiberty=$withval],
+  [ac_libiberty=NONE])
 
-AC_ARG_WITH(libz,
-  [  --with-libz=FILE        path to libz.a ],
-  [ ac_libz=$withval ],
-  [ ac_libz=NONE ]
-)
+AC_ARG_WITH([libz],
+  [  --with-libz=FILE        path to libz.a],
+  [ac_libz=$withval],
+  [ac_libz=NONE])
 
-AC_ARG_WITH(bfd-include-dir,
+AC_ARG_WITH([bfd-include-dir],
   [  --with-bfd-include-dir=DIR
-                          path to directory containing bfd.h ],
-  [ ac_bfd_include_dir=$withval ],
-  [ ac_bfd_include_dir=NONE ]
-)
+                          path to directory containing bfd.h],
+  [ac_bfd_include_dir=$withval],
+  [ac_bfd_include_dir=NONE])
 
 AC_PROG_CC
-AC_CHECK_HEADERS(bfd.h,, BFD_H="no")
+AC_CHECK_HEADERS([bfd.h], , [BFD_H="no"])
 
 if test "$ac_libz" = "NONE"; then
-  AC_CHECK_LIB(z, zlibVersion)
+  AC_CHECK_LIB([z], [zlibVersion])
   ac_libz=auto
 else
   LIBS="$ac_libz $LIBS"
 fi
 if test "$ac_libiberty" = "NONE"; then
-  AC_CHECK_LIB(iberty, objalloc_create)
+  AC_CHECK_LIB([iberty], [objalloc_create])
   ac_libiberty=auto
 else
   LIBS="$ac_libiberty $LIBS"
 fi
 if test "$ac_libbfd" = "NONE"; then
-  AC_CHECK_LIB(bfd, bfd_openr)
+  AC_CHECK_LIB([bfd], [bfd_openr])
   ac_libbfd=auto
 else
   LIBS="$ac_libbfd $LIBS"
@@ -54,11 +50,10 @@ if test "$ac_bfd_include_dir" != "NONE"; then
   CPPFLAGS="$CPPFLAGS -I$ac_bfd_include_dir"
 fi
 
-AC_CHECK_MEMBER(struct bfd_hash_table.entsize,
+AC_CHECK_MEMBER([struct bfd_hash_table.entsize],
   [CPPFLAGS="$CPPFLAGS -DBFD_HASH_TABLE_HAS_ENTSIZE"],
   [],
-  [[#include <bfd.h>]]
-)
+  [[#include <bfd.h>]])
 
 if ! test -e "objmanip-static"; then
   if test "$ac_libbfd" = "NONE" || test "$ac_libiberty" = "NONE"; then
@@ -94,8 +89,8 @@ if ! test -e "objmanip-static"; then
   fi
 fi
 
-AC_PATH_PROG(PATCH, patch)
-AC_PATH_PROG(POD2MAN, pod2man)
+AC_PATH_PROG([PATCH], [patch])
+AC_PATH_PROG([POD2MAN], [pod2man])
 if test "$PATCH" = ""; then
   echo
   echo "Ksplice could not locate patch on your system."
@@ -109,9 +104,12 @@ if test "$POD2MAN" = ""; then
   exit 1
 fi
 
-AC_PROG_PERL_MODULES(Cwd,,AC_MSG_ERROR(Required perl module Cwd not found))
-AC_PROG_PERL_MODULES(Pod::Usage,,AC_MSG_ERROR(Required perl module Pod::Usage not found))
-AC_PROG_PERL_MODULES(File::Temp,,AC_MSG_ERROR(Required perl module File::Temp not found))
+AC_PROG_PERL_MODULES([Cwd], ,
+  [AC_MSG_ERROR([Required perl module Cwd not found])])
+AC_PROG_PERL_MODULES([Pod::Usage], ,
+  [AC_MSG_ERROR([Required perl module Pod::Usage not found])])
+AC_PROG_PERL_MODULES([File::Temp], ,
+  [AC_MSG_ERROR([Required perl module File::Temp not found])])
 
 AC_CONFIG_FILES([Makefile kmodsrc/Makefile])
 AC_OUTPUT
