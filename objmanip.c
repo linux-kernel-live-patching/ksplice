@@ -948,7 +948,8 @@ void rm_relocs(struct superbfd *isbfd)
 	asection *p;
 	for (p = isbfd->abfd->sections; p != NULL; p = p->next) {
 		struct supersect *ss = fetch_supersect(isbfd, p);
-		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_KSPLICE)
+		if ((mode("keep") && ss->type == SS_TYPE_SPECIAL) ||
+		    ss->type == SS_TYPE_KSPLICE)
 			continue;
 		if (ss->keep || mode("rmsyms"))
 			rm_some_relocs(ss);
