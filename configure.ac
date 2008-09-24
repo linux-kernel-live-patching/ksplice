@@ -1,8 +1,5 @@
 AC_INIT([Ksplice], [0.9.0], [ksplice@mit.edu])
 
-dnl The author of Ksplice learned how to configure libbfd by looking at
-dnl elf2flt, which is available under the GNU General Public License.
-
 AC_ARG_WITH([libbfd],
   [  --with-libbfd=FILE      path to libbfd.a],
   [ac_libbfd=$withval],
@@ -29,19 +26,17 @@ AC_CHECK_HEADERS([bfd.h], , [BFD_H="no"])
 
 if test "$ac_libz" = "NONE"; then
   AC_CHECK_LIB([z], [zlibVersion])
-  ac_libz=auto
 else
   LIBS="$ac_libz $LIBS"
 fi
 if test "$ac_libiberty" = "NONE"; then
   AC_CHECK_LIB([iberty], [objalloc_create])
-  ac_libiberty=auto
 else
   LIBS="$ac_libiberty $LIBS"
 fi
 if test "$ac_libbfd" = "NONE"; then
-  AC_CHECK_LIB([bfd], [bfd_openr])
   ac_libbfd=auto
+  AC_CHECK_LIB([bfd], [bfd_openr], , [ac_libbfd=NONE])
 else
   LIBS="$ac_libbfd $LIBS"
 fi
@@ -56,7 +51,7 @@ AC_CHECK_MEMBER([struct bfd_hash_table.entsize],
   [[#include <bfd.h>]])
 
 if ! test -e "objmanip-static"; then
-  if test "$ac_libbfd" = "NONE" || test "$ac_libiberty" = "NONE"; then
+  if test "$ac_libbfd" = "NONE"; then
     echo
     echo "Ksplice could not locate libbfd.a and/or libiberty.a on your system."
     echo "You can obtain these libraries from the GNU binutils collection."
