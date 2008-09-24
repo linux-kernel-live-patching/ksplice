@@ -61,18 +61,7 @@ sub runval_raw {
 	my (@cmd) = @_;
 	my ($out, $err);
 	print "+ @cmd\n" if($Verbose::level >= 1);
-	if($Verbose::level < 1) {
-		open $out, ">&STDOUT" or die "Can't dup STDOUT: $!";
-		open $err, ">&STDERR" or die "Can't dup STDERR: $!";
-		open STDOUT, '>', "/dev/null" or die "Can't hide STDOUT: $!";
-		open STDERR, '>', "/dev/null" or die "Can't hide STDERR: $!";
-	}
-	my $val = system(@cmd);
-	if($Verbose::level < 1) {
-		open STDOUT, ">&", $out or die "Can't restore STDOUT: $!";
-		open STDERR, ">&", $err or die "Can't restore STDERR: $!";
-	}
-	return $val;
+	return system(@cmd);
 }
 
 sub runstr {

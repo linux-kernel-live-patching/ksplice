@@ -93,10 +93,8 @@ $ENV{KSPLICE_KID} = $kid;
 # the user has provided an incorrect System.map file.
 my $map_printk = runstr("$datadir/ksplice-obj.pl", "system_map_lookup", "printk");
 
-print "Starting kernel builds (this process might take a long time)...\n";
-if($Verbose::level < 1) {
-	print "For output during this process, run ksplice-create with the option -v\n";
-}
+print "Starting kernel builds (this process might take a long time)...\n"
+    if($Verbose::level >= 0);
 
 $patchfile = abs_path($patchfile) if(defined $patchfile);
 
