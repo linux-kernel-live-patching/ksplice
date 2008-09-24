@@ -1856,6 +1856,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_IGNORED;
 
 	if (starts_with(ss->name, ".text") ||
+	    starts_with(ss->name, ".kernel.text") ||
 	    starts_with(ss->name, ".devinit.text") ||
 	    starts_with(ss->name, ".meminit.text") ||
 	    starts_with(ss->name, ".cpuinit.text") ||
@@ -1874,6 +1875,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_STRING;
 
 	if (starts_with(ss->name, ".rodata") ||
+	    starts_with(ss->name, ".kernel.rodata") ||
 	    starts_with(ss->name, ".devinit.rodata") ||
 	    starts_with(ss->name, ".meminit.rodata") ||
 	    starts_with(ss->name, ".cpuinit.rodata") ||
@@ -1888,9 +1890,11 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_DATA;
 
 	/* Ignore .data.percpu sections */
-	if (starts_with(ss->name, ".data.percpu"))
+	if (starts_with(ss->name, ".data.percpu") ||
+	    starts_with(ss->name, ".kernel.data.percpu"))
 		return SS_TYPE_IGNORED;
 	if (starts_with(ss->name, ".data") ||
+	    starts_with(ss->name, ".kernel.data") ||
 	    starts_with(ss->name, ".devinit.data") ||
 	    starts_with(ss->name, ".cpuinit.data") ||
 	    starts_with(ss->name, ".meminit.data") ||
