@@ -11,7 +11,7 @@ KSPLICE_ONLY_TARGETS ?= %
 PHONY := __ksplice
 __ksplice:
 
-ksplice-extra = $(filter $(KSPLICE_EXTRA_MATCH),$(lib-y) $(single-used-m) $(multi-objs-y) $(multi-objs-m))
+ksplice-extra = $(filter $(KSPLICE_EXTRA_MATCH),$(lib-y) $(real-objs-m) $(real-objs-y))
 ksplice-objs = $(foreach o,$(1),$(o:=.KSPLICE) $(addsuffix .KSPLICE_helper,$(filter $(ksplice-extra),$(o))))
 
 quiet_cmd_ksplice-combine = COMBINE $(@:.KSPLICE=)
