@@ -161,6 +161,8 @@ struct str_vec delsects, rmsyms;
 struct export_desc_vec exports;
 bool changed;
 
+struct ksplice_config *config;
+
 const char *modestr, *kid;
 
 struct superbfd *offsets_sbfd = NULL;
@@ -205,6 +207,13 @@ void load_offsets()
 	char **matching;
 	assert(bfd_check_format_matches(offsets_bfd, bfd_object, &matching));
 	offsets_sbfd = fetch_superbfd(offsets_bfd);
+
+	asection *config_sect = bfd_get_section_by_name(offsets_sbfd->abfd,
+							".ksplice_config");
+	struct supersect *config_ss =
+	    fetch_supersect(offsets_sbfd, config_sect);
+
+	config = config_ss->contents.data;
 }
 
 bool unchangeable_section(struct supersect *ss)
@@ -1753,8 +1762,27 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_IGNORED;
 	if (starts_with(ss->name, ".debug"))
 		return SS_TYPE_IGNORED;
+	if (config->ignore_devinit && starts_with(ss->name, ".devinit"))
+		return SS_TYPE_IGNORED;
+	if (config->ignore_meminit && starts_with(ss->name, ".meminit"))
+		return SS_TYPE_IGNORED;
+	if (config->ignore_cpuinit && starts_with(ss->name, ".cpuinit"))
+		return SS_TYPE_IGNORED;
+	if (config->ignore_devinit && starts_with(ss->name, ".devexit"))
+		return SS_TYPE_IGNORED;
+	if (config->ignore_meminit && starts_with(ss->name, ".memexit"))
+		return SS_TYPE_IGNORED;
+	if (config->ignore_cpuinit && starts_with(ss->name, ".cpuexit"))
+		return SS_TYPE_IGNORED;
 
-	if (starts_with(ss->name, ".text"))
+	if (starts_with(ss->name, ".text") ||
+	    starts_with(ss->name, ".devinit.text") ||
+	    starts_with(ss->name, ".meminit.text") ||
+	    starts_with(ss->name, ".cpuinit.text") ||
+	    starts_with(ss->name, ".devexit.text") ||
+	    starts_with(ss->name, ".memexit.text") ||
+	    starts_with(ss->name, ".cpuexit.text") ||
+	    starts_with(ss->name, ".ref.text"))
 		return SS_TYPE_TEXT;
 	if (starts_with(ss->name, ".exit.text")) {
 		if (bfd_get_section_by_name(ss->parent->abfd, ".exitcall.exit")
@@ -1763,21 +1791,35 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_IGNORED;
 	}
 
-	if (starts_with(ss->name, ".rodata")) {
-		int n = -1;
-		if (sscanf(ss->name, ".rodata.str%*u.%*u%n", &n) >= 0 &&
-		    n == strlen(ss->name))
-			return SS_TYPE_STRING;
+	int n = -1;
+	if (sscanf(ss->name, ".rodata.str%*u.%*u%n", &n) >= 0 &&
+	    n == strlen(ss->name))
+		return SS_TYPE_STRING;
+
+	if (starts_with(ss->name, ".rodata") ||
+	    starts_with(ss->name, ".devinit.rodata") ||
+	    starts_with(ss->name, ".meminit.rodata") ||
+	    starts_with(ss->name, ".cpuinit.rodata") ||
+	    starts_with(ss->name, ".devexit.rodata") ||
+	    starts_with(ss->name, ".memexit.rodata") ||
+	    starts_with(ss->name, ".cpuexit.rodata") ||
+	    starts_with(ss->name, ".ref.rodata"))
 		return SS_TYPE_RODATA;
-	}
 
 	if (starts_with(ss->name, ".bss"))
 		return SS_TYPE_BSS;
 
-	if (starts_with(ss->name, ".data")) {
-		/* Ignore .data.percpu sections */
-		if (starts_with(ss->name, ".data.percpu"))
-			return SS_TYPE_IGNORED;
+	/* Ignore .data.percpu sections */
+	if (starts_with(ss->name, ".data.percpu"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".data") ||
+	    starts_with(ss->name, ".devinit.data") ||
+	    starts_with(ss->name, ".cpuinit.data") ||
+	    starts_with(ss->name, ".meminit.data") ||
+	    starts_with(ss->name, ".devexit.data") ||
+	    starts_with(ss->name, ".memexit.data") ||
+	    starts_with(ss->name, ".cpuexit.data") ||
+	    starts_with(ss->name, ".ref.data")) {
 		if (ss->relocs.size != 0)
 			return SS_TYPE_DATA;
 	}

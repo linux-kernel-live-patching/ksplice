@@ -12,6 +12,23 @@
 #include <asm/uaccess.h>
 #include "offsets.h"
 
+const struct ksplice_config config
+    __attribute__((section(".ksplice_config"))) = {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+/* eb8f689046b857874e964463619f09df06d59fad was after 2.6.24 */
+/* Introduction of .cpuinit, .devinit, .meminit sections */
+#ifndef CONFIG_HOTPLUG
+	.ignore_devinit = 1,
+#endif /* !CONFIG_HOTPLUG */
+#ifndef CONFIG_HOTPLUG_CPU
+	.ignore_cpuinit = 1,
+#endif /* !CONFIG_HOTPLUG_CPU */
+#ifndef CONFIG_MEMORY_HOTPLUG
+	.ignore_meminit = 1,
+#endif /* !CONFIG_MEMORY_HOTPLUG */
+#endif /* LINUX_VERSION_CODE */
+};
+
 const struct table_section table_sections[]
     __attribute__((section(".ksplice_table_sections"))) = {
 #ifdef CONFIG_X86
