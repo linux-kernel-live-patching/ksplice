@@ -216,9 +216,18 @@ void load_offsets()
 	config = config_ss->contents.data;
 }
 
+bool matchable_data_section(struct supersect *ss)
+{
+	if (ss->type == SS_TYPE_RODATA)
+		return true;
+	if (ss->type == SS_TYPE_DATA && ss->relocs.size != 0)
+		return true;
+	return false;
+}
+
 bool unchangeable_section(struct supersect *ss)
 {
-	if (ss->type == SS_TYPE_DATA || ss->type == SS_TYPE_BSS)
+	if (ss->type == SS_TYPE_DATA)
 		return true;
 	return false;
 }
@@ -411,8 +420,7 @@ void do_keep_helper(struct superbfd *isbfd)
 		if (bfd_get_section_size(sect) == 0)
 			continue;
 		if (ss->keep && (ss->type == SS_TYPE_TEXT ||
-				 ss->type == SS_TYPE_RODATA ||
-				 ss->type == SS_TYPE_DATA))
+				 matchable_data_section(ss)))
 			write_ksplice_section(isbfd, symp);
 	}
 
@@ -602,14 +610,13 @@ static void match_sections_by_contents(struct superbfd *oldsbfd,
 	struct supersect *oldss, *newss;
 	for (newsect = newsbfd->abfd->sections; newsect != NULL;
 	     newsect = newsect->next) {
+		newss = fetch_supersect(newsbfd, newsect);
+		if (newss->type != SS_TYPE_RODATA)
+			continue;
 		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
 		     oldsect = oldsect->next) {
 			oldss = fetch_supersect(oldsbfd, oldsect);
-			newss = fetch_supersect(newsbfd, newsect);
-			if ((oldss->type != SS_TYPE_DATA &&
-			     oldss->type != SS_TYPE_RODATA) ||
-			    (newss->type != SS_TYPE_DATA &&
-			     newss->type != SS_TYPE_RODATA))
+			if (oldss->type != SS_TYPE_RODATA)
 				continue;
 			if (oldss->relocs.size != 0 || newss->relocs.size != 0)
 				continue;
@@ -1807,7 +1814,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_RODATA;
 
 	if (starts_with(ss->name, ".bss"))
-		return SS_TYPE_BSS;
+		return SS_TYPE_DATA;
 
 	/* Ignore .data.percpu sections */
 	if (starts_with(ss->name, ".data.percpu"))
@@ -1819,10 +1826,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    starts_with(ss->name, ".devexit.data") ||
 	    starts_with(ss->name, ".memexit.data") ||
 	    starts_with(ss->name, ".cpuexit.data") ||
-	    starts_with(ss->name, ".ref.data")) {
-		if (ss->relocs.size != 0)
-			return SS_TYPE_DATA;
-	}
+	    starts_with(ss->name, ".ref.data"))
+		return SS_TYPE_DATA;
 
 	if (starts_with(ss->name, "__ksymtab"))
 		return SS_TYPE_EXPORT;
