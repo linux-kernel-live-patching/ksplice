@@ -100,12 +100,8 @@ if test "$POD2MAN" = ""; then
   exit 1
 fi
 
-AC_PROG_PERL_MODULES([Cwd], ,
-  [AC_MSG_ERROR([Required perl module Cwd not found])])
-AC_PROG_PERL_MODULES([Pod::Usage], ,
-  [AC_MSG_ERROR([Required perl module Pod::Usage not found])])
-AC_PROG_PERL_MODULES([File::Temp], ,
-  [AC_MSG_ERROR([Required perl module File::Temp not found])])
+AC_PROG_PERL_MODULES([Cwd Getopt::Long File::Basename File::Copy File::Path File::Spec::Functions File::Temp Fatal IPC::Open2 IPC::Open3 Pod::Usage Text::ParseWords], ,
+  [AC_MSG_ERROR([Missing some required perl modules])])
 
 AC_CONFIG_FILES([Makefile kmodsrc/Makefile])
 AC_OUTPUT
