@@ -22,7 +22,6 @@ AC_ARG_WITH([bfd-include-dir],
   [ac_bfd_include_dir=NONE])
 
 AC_PROG_CC
-AC_CHECK_HEADERS([bfd.h], , [BFD_H="no"])
 
 if test "$ac_libz" = "NONE"; then
   AC_CHECK_LIB([z], [zlibVersion])
@@ -44,6 +43,8 @@ fi
 if test "$ac_bfd_include_dir" != "NONE"; then
   CPPFLAGS="$CPPFLAGS -I$ac_bfd_include_dir"
 fi
+
+AC_CHECK_HEADERS([bfd.h], , [BFD_H="no"])
 
 AC_CHECK_MEMBER([struct bfd_hash_table.entsize],
   [CPPFLAGS="$CPPFLAGS -DBFD_HASH_TABLE_HAS_ENTSIZE"],
