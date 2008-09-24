@@ -22,16 +22,10 @@ use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
-my ($help, $wantversion, $debug) = (0, 0, 0);
-GetOptions("help|?" => \$help,
-	"version" => \$wantversion,
-	"verbose|v:+" => \$Verbose::level,
+my $debug = 0;
+GetOptions(@common_options,
 	"debug" => \$debug) or pod2usage(1);
 
-if($wantversion) {
-	print $version_str;
-	exit(0);
-}
 pod2usage(1) if($help || scalar(@ARGV) != 1);
 
 my $kid = $ARGV[0];

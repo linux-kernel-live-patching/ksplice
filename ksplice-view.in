@@ -23,17 +23,10 @@ use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
 my ($kid, $mid, $module, $update, $file);
-my ($help, $wantversion) = (0, 0);
-GetOptions("help|?" => \$help,
-	"version" => \$wantversion,
-	"verbose|v:+" => \$Verbose::level,
+GetOptions(@common_options,
 	"id=s" => \$kid,
 	"file=s" => \$file) or pod2usage(1);
 
-if($wantversion) {
-	print $version_str;
-	exit(0);
-}
 pod2usage(1) if($help || scalar(@ARGV) != 0);
 my $actions = (defined $kid) + (defined $file);
 pod2usage(1) if($actions > 1);

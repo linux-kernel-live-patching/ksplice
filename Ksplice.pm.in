@@ -18,7 +18,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	Verbose GetOptions pod2usage shellwords
-	$datadir $libexecdir $version_str
+	$datadir $libexecdir @common_options $help
 	child_error runval runval_raw runstr runstr_err runval_in runval_infile unpack_update
 	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
 	get_debug_output get_conflicts
@@ -27,7 +27,13 @@ our @EXPORT = qw(
 );
 
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
-our $version_str = "Ksplice version PACKAGE_VERSION\n";
+
+our $help = 0;
+our @common_options = (
+	"help|?" => \$help,
+	"version" => sub { print "Ksplice version PACKAGE_VERSION\n"; exit(0); },
+	"verbose|v:+" => \$Verbose::level,
+);
 
 sub child_error {
 	if($? == -1) {

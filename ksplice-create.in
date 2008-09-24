@@ -26,11 +26,9 @@ my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
 my @only_targets;
 my @extra_match;
 my $standalone;
-my ($help, $wantversion, $prebuild, $skip_prebuild) = (0, 0, 0, 0);
+my ($prebuild, $skip_prebuild) = (0, 0);
 my @patch_opt = "-p1";
-GetOptions("help|?" => \$help,
-	"version" => \$wantversion,
-	"verbose|v:+" => \$Verbose::level,
+GetOptions(@common_options,
 	"id=s" => \$kid,
 	"patch=s" => \$patchfile,
 	"diffext=s" => \$diffext,
@@ -43,10 +41,6 @@ GetOptions("help|?" => \$help,
 	"config=s" => \$orig_config_dir,
 	"patch-opt=s" => \@patch_opt) or pod2usage(1);
 
-if($wantversion) {
-	print $version_str;
-	exit(0);
-}
 pod2usage(1) if($help || scalar(@ARGV) != 1);
 my $actions = (defined $patchfile) + (defined $diffext) + ($prebuild);
 pod2usage(1) if($actions != 1);
