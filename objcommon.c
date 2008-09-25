@@ -20,8 +20,6 @@
 #include "objcommon.h"
 #include <stdio.h>
 
-static void init_label_map(struct superbfd *sbfd);
-
 void vec_do_reserve(void **data, size_t *mem_size, size_t new_size)
 {
 	if (new_size > *mem_size || new_size * 2 < *mem_size) {
@@ -60,7 +58,6 @@ struct superbfd *fetch_superbfd(bfd *abfd)
 	get_syms(abfd, &sbfd->syms);
 	vec_init(&sbfd->new_syms);
 	sbfd->new_supersects = NULL;
-	init_label_map(sbfd);
 	return sbfd;
 }
 
@@ -378,7 +375,7 @@ asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
 	return symp != NULL ? *symp : NULL;
 }
 
-const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
+char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
 {
 	struct supersect *ss = fetch_supersect(sbfd, sym->section);
 	if ((sym->flags & BSF_LOCAL) == 0 || (sym->flags & BSF_OBJECT) == 0)
@@ -398,7 +395,7 @@ const char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
 	return mangled_name;
 }
 
-static char *symbol_label(struct superbfd *sbfd, asymbol *sym)
+char *symbol_label(struct superbfd *sbfd, asymbol *sym)
 {
 	const char *filename = sbfd->abfd->filename;
 	char *c = strstr(filename, ".KSPLICE");
@@ -432,92 +429,4 @@ static char *symbol_label(struct superbfd *sbfd, asymbol *sym)
 	}
 
 	return label;
-}
-
-static void init_label_map(struct superbfd *sbfd)
-{
-	vec_init(&sbfd->maps);
-	struct label_map *map, *map2;
-
-	asymbol **symp;
-	for (symp = sbfd->syms.data;
-	     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
-		asymbol *csym = canonical_symbol(sbfd, *symp);
-		if (csym == NULL)
-			continue;
-		for (map = sbfd->maps.data;
-		     map < sbfd->maps.data + sbfd->maps.size; map++) {
-			if (map->csym == csym)
-				break;
-		}
-		if (map < sbfd->maps.data + sbfd->maps.size)
-			continue;
-		map = vec_grow(&sbfd->maps, 1);
-		map->csym = csym;
-		map->count = 0;
-		map->index = 0;
-		map->label = symbol_label(sbfd, csym);
-	}
-	for (map = sbfd->maps.data;
-	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		for (map2 = sbfd->maps.data;
-		     map2 < sbfd->maps.data + sbfd->maps.size; map2++) {
-			if (strcmp(map->label, map2->label) != 0)
-				continue;
-			map->count++;
-			if (map2 < map)
-				map->index++;
-		}
-	}
-
-	for (map = sbfd->maps.data;
-	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		map->orig_label = map->label;
-		if (map->count > 1) {
-			char *buf;
-			assert(asprintf(&buf, "%s~%d", map->label,
-					map->index) >= 0);
-			map->label = buf;
-		}
-	}
-}
-
-const char *label_lookup(struct superbfd *sbfd, asymbol *sym)
-{
-	struct label_map *map;
-	asymbol *csym = canonical_symbol(sbfd, sym);
-	for (map = sbfd->maps.data;
-	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		if (csym == map->csym)
-			return map->label;
-	}
-	return symbol_label(sbfd, sym);
-}
-
-void print_label_map(struct superbfd *sbfd)
-{
-	struct label_map *map;
-	for (map = sbfd->maps.data;
-	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		if (strcmp(map->orig_label, map->label) == 0)
-			continue;
-		printf("  %s -> %s\n", map->label, map->orig_label);
-	}
-}
-
-void label_map_set(struct superbfd *sbfd, const char *oldlabel,
-		   const char *label)
-{
-	struct label_map *map;
-	for (map = sbfd->maps.data;
-	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		if (strcmp(map->orig_label, oldlabel) == 0) {
-			if (strcmp(map->orig_label, map->label) != 0 &&
-			    strcmp(map->label, label) != 0)
-				DIE;
-			map->label = label;
-			return;
-		}
-	}
-	DIE;
 }

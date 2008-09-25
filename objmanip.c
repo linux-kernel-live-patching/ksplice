@@ -158,6 +158,12 @@ static void compare_matched_sections(struct superbfd *sbfd);
 static void update_nonzero_offsets(struct superbfd *sbfd);
 static void handle_nonzero_offset_relocs(struct supersect *ss);
 
+static const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
+static void print_label_map(struct superbfd *sbfd);
+static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
+			  const char *label);
+static void init_label_map(struct superbfd *sbfd);
+
 int verbose = 0;
 #define debug1(fmt, ...)						\
 	do { if (verbose >= 1) printf(fmt, ## __VA_ARGS__); } while (0)
@@ -256,6 +262,7 @@ int main(int argc, char *argv[])
 	assert(obfd);
 
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
+	init_label_map(isbfd);
 
 	bool_hash_init(&system_map_written);
 	ulong_hash_init(&ksplice_symbol_offset);
@@ -290,6 +297,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	assert(bfd_check_format_matches(prebfd, bfd_object, &matching));
 
 	struct superbfd *presbfd = fetch_superbfd(prebfd);
+	init_label_map(presbfd);
 	load_system_map();
 	load_offsets();
 	initialize_supersect_types(isbfd);
@@ -1958,4 +1966,92 @@ void initialize_supersect_types(struct superbfd *sbfd)
 			DIE;
 		}
 	}
+}
+
+static void init_label_map(struct superbfd *sbfd)
+{
+	vec_init(&sbfd->maps);
+	struct label_map *map, *map2;
+
+	asymbol **symp;
+	for (symp = sbfd->syms.data;
+	     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
+		asymbol *csym = canonical_symbol(sbfd, *symp);
+		if (csym == NULL)
+			continue;
+		for (map = sbfd->maps.data;
+		     map < sbfd->maps.data + sbfd->maps.size; map++) {
+			if (map->csym == csym)
+				break;
+		}
+		if (map < sbfd->maps.data + sbfd->maps.size)
+			continue;
+		map = vec_grow(&sbfd->maps, 1);
+		map->csym = csym;
+		map->count = 0;
+		map->index = 0;
+		map->label = symbol_label(sbfd, csym);
+	}
+	for (map = sbfd->maps.data;
+	     map < sbfd->maps.data + sbfd->maps.size; map++) {
+		for (map2 = sbfd->maps.data;
+		     map2 < sbfd->maps.data + sbfd->maps.size; map2++) {
+			if (strcmp(map->label, map2->label) != 0)
+				continue;
+			map->count++;
+			if (map2 < map)
+				map->index++;
+		}
+	}
+
+	for (map = sbfd->maps.data;
+	     map < sbfd->maps.data + sbfd->maps.size; map++) {
+		map->orig_label = map->label;
+		if (map->count > 1) {
+			char *buf;
+			assert(asprintf(&buf, "%s~%d", map->label,
+					map->index) >= 0);
+			map->label = buf;
+		}
+	}
+}
+
+static const char *label_lookup(struct superbfd *sbfd, asymbol *sym)
+{
+	struct label_map *map;
+	asymbol *csym = canonical_symbol(sbfd, sym);
+	for (map = sbfd->maps.data;
+	     map < sbfd->maps.data + sbfd->maps.size; map++) {
+		if (csym == map->csym)
+			return map->label;
+	}
+	return symbol_label(sbfd, sym);
+}
+
+static void print_label_map(struct superbfd *sbfd)
+{
+	struct label_map *map;
+	for (map = sbfd->maps.data;
+	     map < sbfd->maps.data + sbfd->maps.size; map++) {
+		if (strcmp(map->orig_label, map->label) == 0)
+			continue;
+		printf("  %s -> %s\n", map->label, map->orig_label);
+	}
+}
+
+static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
+			  const char *label)
+{
+	struct label_map *map;
+	for (map = sbfd->maps.data;
+	     map < sbfd->maps.data + sbfd->maps.size; map++) {
+		if (strcmp(map->orig_label, oldlabel) == 0) {
+			if (strcmp(map->orig_label, map->label) != 0 &&
+			    strcmp(map->label, label) != 0)
+				DIE;
+			map->label = label;
+			return;
+		}
+	}
+	DIE;
 }
