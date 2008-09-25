@@ -170,6 +170,8 @@ push(@make_kmodsrc, "KSPLICE_STANDALONE=1") if ($standalone);
 
 runval(@make_kmodsrc);
 
+@patch_opt = ("-s", @patch_opt) if ($Verbose::level < 0);
+
 runval_infile($patchfile, "patch", @patch_opt, "-bz", ".KSPLICE_pre");
 push @make_ksplice, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
 push @make_ksplice, "KSPLICE_ONLY_TARGETS=@only_targets" if (@only_targets);
