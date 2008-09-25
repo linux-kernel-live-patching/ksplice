@@ -342,18 +342,15 @@ static const char *find_caller(struct supersect *ss, asymbol *sym)
 	return "*multiple_callers*";
 }
 
-asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
+asymbol **symbolp_scan(struct superbfd *sbfd, asection *sect, bfd_vma value)
 {
 	asymbol **csymp;
 	asymbol **ret = NULL;
 	for (csymp = sbfd->syms.data; csymp < sbfd->syms.data + sbfd->syms.size;
 	     csymp++) {
 		asymbol *csymtemp = *csymp;
-		if (bfd_is_const_section(sym->section) && sym == csymtemp)
-			return csymp;
 		if ((csymtemp->flags & BSF_DEBUGGING) != 0 ||
-		    sym->section != csymtemp->section ||
-		    sym->value != csymtemp->value)
+		    sect != csymtemp->section || value != csymtemp->value)
 			continue;
 		if ((csymtemp->flags & BSF_GLOBAL) != 0)
 			return csymp;
@@ -365,9 +362,23 @@ asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
 
 	/* For section symbols of sections containing no symbols, return the
 	   section symbol that relocations are generated against */
-	if ((sym->flags & BSF_SECTION_SYM) != 0)
-		return &sym->section->symbol;
-	return ret;
+	if (value == 0)
+		return &sect->symbol;
+	return NULL;
+}
+
+asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
+{
+	if (bfd_is_const_section(sym->section)) {
+		asymbol **csymp;
+		for (csymp = sbfd->syms.data;
+		     csymp < sbfd->syms.data + sbfd->syms.size; csymp++) {
+			if (sym == *csymp)
+				return csymp;
+		}
+		return NULL;
+	}
+	return symbolp_scan(sbfd, sym->section, sym->value);
 }
 
 asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)

@@ -1247,13 +1247,13 @@ void write_ksplice_symbol(struct supersect *ss,
 						    ".ksplice_symbols");
 	struct ksplice_symbol *ksymbol;
 	unsigned long *ksymbol_offp;
-	const char *label = label_lookup(ss->parent, sym);
+	const char *label;
 	char *output;
 	if (span != NULL && span->start != 0)
-		assert(asprintf(&output, "%s<span:%lx>%s", label,
-				(unsigned long)span->start, addstr_sect) >= 0);
+		label = span->label;
 	else
-		assert(asprintf(&output, "%s%s", label, addstr_sect) >= 0);
+		label = label_lookup(ss->parent, sym);
+	assert(asprintf(&output, "%s%s", label, addstr_sect) >= 0);
 
 	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, output, FALSE);
 	if (ksymbol_offp != NULL) {
@@ -1263,6 +1263,16 @@ void write_ksplice_symbol(struct supersect *ss,
 	ksymbol = sect_grow(ksymbol_ss, 1, struct ksplice_symbol);
 	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, output, TRUE);
 	*ksymbol_offp = addr_offset(ksymbol_ss, ksymbol);
+
+	write_reloc(ss, addr, &ksymbol_ss->symbol, *ksymbol_offp);
+	write_string(ksymbol_ss, &ksymbol->label, "%s", output);
+
+	if (span != NULL && span->symbol == NULL) {
+		ksymbol->name = NULL;
+		return;
+	}
+
+	write_ksplice_system_map(ksymbol_ss->parent, sym, addstr_sect);
 
 	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
 		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
@@ -1277,12 +1287,6 @@ void write_ksplice_symbol(struct supersect *ss,
 			write_string(ksymbol_ss, &ksymbol->name, "%s",
 				     gsym->name);
 	}
-
-	write_string(ksymbol_ss, &ksymbol->label, "%s", output);
-
-	write_ksplice_system_map(ksymbol_ss->parent, sym, addstr_sect);
-
-	write_reloc(ss, addr, &ksymbol_ss->symbol, *ksymbol_offp);
 }
 
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
@@ -1299,6 +1303,8 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	}
 
 	struct span *span = reloc_target_span(ss, orig_reloc);
+	if (span == ss->spans.data && span->start != addend)
+		span = NULL;
 	blot_section(ss, orig_reloc->address, howto);
 
 	struct supersect *kreloc_ss = make_section(ss->parent,
@@ -1338,7 +1344,7 @@ void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto)
 void write_ksplice_section(struct superbfd *sbfd, asymbol **symp,
 			   struct span *span)
 {
-	asymbol *sym = *symp;
+	asymbol *sym = span->symbol == NULL ? *symp : span->symbol;
 	struct supersect *ksect_ss = make_section(sbfd, ".ksplice_sections");
 	struct ksplice_section *ksect = sect_grow(ksect_ss, 1,
 						  struct ksplice_section);
@@ -2120,19 +2126,42 @@ static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 	DIE;
 }
 
+static struct span *new_span(struct superbfd *sbfd, asection *sect,
+			     bfd_vma start, bfd_vma size)
+{
+	struct supersect *ss = fetch_supersect(sbfd, sect);
+	struct span *span = vec_grow(&ss->spans, 1);
+	span->size = size;
+	span->start = start;
+	span->ss = ss;
+	span->keep = false;
+	span->shift = 0;
+	asymbol **symp = symbolp_scan(sbfd, sect, span->start);
+	if (symp != NULL) {
+		span->symbol = *symp;
+		span->label = label_lookup(sbfd, span->symbol);
+	} else {
+		span->symbol = NULL;
+		const char *label = label_lookup(sbfd, sect->symbol);
+		if (span->start != 0) {
+			char *buf;
+			assert(asprintf(&buf, "%s<span:%lx>", label,
+					(unsigned long)span->start) >= 0);
+			span->label = buf;
+		} else {
+			span->label = label;
+		}
+	}
+	return span;
+}
+
 static void initialize_spans(struct superbfd *sbfd)
 {
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT)
-			continue;
-		struct span *span = vec_grow(&ss->spans, 1);
-		span->size = ss->contents.size;
-		span->start = 0;
-		span->ss = ss;
-		span->keep = false;
-		span->shift = 0;
+		if (ss->type != SS_TYPE_SPECIAL && ss->type != SS_TYPE_EXPORT)
+			new_span(sbfd, sect, 0, ss->contents.size);
 	}
 }
 

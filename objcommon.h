@@ -161,6 +161,8 @@ DECLARE_VEC_TYPE(struct label_map, label_map_vec);
 
 struct span {
 	struct supersect *ss;
+	asymbol *symbol;
+	const char *label;
 	bfd_vma start;
 	bfd_vma size;
 	bool keep;
@@ -238,6 +240,7 @@ char *str_pointer(struct supersect *ss, void *const *addr);
 #define read_num(ss, addr) ((typeof(*(addr))) \
 			    read_reloc(ss, addr, sizeof(*(addr)), NULL))
 
+asymbol **symbolp_scan(struct superbfd *sbfd, asection *sect, bfd_vma value);
 asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym);
 asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
 char *static_local_symbol(struct superbfd *sbfd, asymbol *sym);
