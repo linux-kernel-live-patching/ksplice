@@ -110,6 +110,12 @@ if(defined $jobs) {
 	push @make, "-j$ENV{CONCURRENCY_LEVEL}";
 }
 
+if($Verbose::level >= 2) {
+	push @make, "V=1";
+} elsif($Verbose::level < 0) {
+	push @make, "-s";
+}
+
 my @make_ksplice = (@make, "-f", "$datadir/Makefile.ksplice", @kbuild_flags);
 
 sub revert_orig() {
