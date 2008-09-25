@@ -158,6 +158,10 @@ static void compare_matched_sections(struct superbfd *sbfd);
 static void update_nonzero_offsets(struct superbfd *sbfd);
 static void handle_nonzero_offset_relocs(struct supersect *ss);
 
+int verbose = 0;
+#define debug1(fmt, ...)						\
+	do { if (verbose >= 1) printf(fmt, ## __VA_ARGS__); } while (0)
+
 struct str_vec delsects, rmsyms;
 struct export_desc_vec exports;
 bool changed;
@@ -237,6 +241,9 @@ bool unchangeable_section(struct supersect *ss)
 
 int main(int argc, char *argv[])
 {
+	if (getenv("KSPLICE_VERBOSE") != NULL)
+		verbose = atoi(getenv("KSPLICE_VERBOSE"));
+
 	bfd_init();
 	bfd *ibfd = bfd_openr(argv[1], NULL);
 	assert(ibfd);
@@ -289,13 +296,13 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	initialize_supersect_types(presbfd);
 
 	match_global_symbol_sections(presbfd, isbfd);
-	printf("Matched global\n");
+	debug1("Matched global\n");
 	match_sections_by_name(presbfd, isbfd);
-	printf("Matched by name\n");
+	debug1("Matched by name\n");
 	match_sections_by_label(presbfd, isbfd);
-	printf("Matched by label\n");
+	debug1("Matched by label\n");
 	match_sections_by_contents(presbfd, isbfd);
-	printf("Matched by contents\n");
+	debug1("Matched by contents\n");
 
 	do {
 		changed = false;
@@ -325,41 +332,49 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 			ss->keep = true;
 	}
 
-	const char **sectname;
-	printf("Label name changes:\n");
-	print_label_map(isbfd);
+	if (verbose >= 0) {
+		const char **sectname;
+		printf("Label name changes:\n");
+		print_label_map(isbfd);
 
-	printf("Changed text sections:\n");
-	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		struct supersect *ss = fetch_supersect(isbfd, sect);
-		if (ss->patch)
-			printf("  %s\n", sect->name);
-	}
+		printf("Changed text sections:\n");
+		for (sect = isbfd->abfd->sections; sect != NULL;
+		     sect = sect->next) {
+			struct supersect *ss = fetch_supersect(isbfd, sect);
+			if (ss->patch)
+				printf("  %s\n", sect->name);
+		}
 
-	printf("New sections:\n");
-	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		struct supersect *ss = fetch_supersect(isbfd, sect);
-		if (ss->new)
-			printf("  %s\n", sect->name);
-	}
-	if (delsects.size != 0) {
-		printf("Deleted section names:\n");
-		for (sectname = delsects.data;
-		     sectname < delsects.data + delsects.size; sectname++)
-			printf("  %s\n", *sectname);
-	}
-	const struct export_desc *ed;
-	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
-		const char **symname;
-		bool del = starts_with(ed->sectname, "del___ksymtab");
-		const char *export_type = ed->sectname + strlen("__ksymtab");
-		if (del)
-			export_type += strlen("_del");
-		for (symname = ed->names.data;
-		     symname < ed->names.data + ed->names.size; symname++)
-			printf("Export %s(%s): %s\n",
-			       del ? "deletion" : "addition",
-			       export_type, *symname);
+		printf("New sections:\n");
+		for (sect = isbfd->abfd->sections; sect != NULL;
+		     sect = sect->next) {
+			struct supersect *ss = fetch_supersect(isbfd, sect);
+			if (ss->new)
+				printf("  %s\n", sect->name);
+		}
+		if (delsects.size != 0) {
+			printf("Deleted section names:\n");
+			for (sectname = delsects.data;
+			     sectname < delsects.data + delsects.size;
+			     sectname++)
+				printf("  %s\n", *sectname);
+		}
+		const struct export_desc *ed;
+		for (ed = exports.data; ed < exports.data + exports.size;
+		     ed++) {
+			const char **symname;
+			bool del = starts_with(ed->sectname, "del___ksymtab");
+			const char *export_type =
+			    ed->sectname + strlen("__ksymtab");
+			if (del)
+				export_type += strlen("_del");
+			for (symname = ed->names.data;
+			     symname < ed->names.data + ed->names.size;
+			     symname++)
+				printf("Export %s(%s): %s\n",
+				       del ? "deletion" : "addition",
+				       export_type, *symname);
+		}
 	}
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
@@ -374,6 +389,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 			write_ksplice_patch(isbfd, sect->name);
 	}
 
+	const struct export_desc *ed;
 	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
 		if (starts_with(ed->sectname, "del___ksymtab")) {
 			const char *export_type =
@@ -531,7 +547,7 @@ void match_sections(struct supersect *oldss, struct supersect *newss)
 	}
 	oldss->match = newss;
 	newss->match = oldss;
-	printf("Matched old %s to new %s\n", oldss->name, newss->name);
+	debug1("Matched old %s to new %s\n", oldss->name, newss->name);
 }
 
 static void match_global_symbol_sections(struct superbfd *oldsbfd,
@@ -679,7 +695,7 @@ static void handle_nonzero_offset_relocs(struct supersect *ss)
 			continue;
 		if (!sym_ss->patch) {
 			changed = true;
-			printf("Changing %s because a relocation from sect %s "
+			debug1("Changing %s because a relocation from sect %s "
 			       "has a nonzero offset %lx+%lx into it\n",
 			       sym_ss->name, ss->name,
 			       (unsigned long)sym->value,
@@ -718,20 +734,20 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 			if (new_ss->patch)
 				continue;
 			new_ss->patch = true;
-			printf("Changing %s due to ", new_ss->name);
+			debug1("Changing %s due to ", new_ss->name);
 		} else {
-			printf("Unmatching %s and %s due to ", old_ss->name,
+			debug1("Unmatching %s and %s due to ", old_ss->name,
 			       new_ss->name);
 			new_ss->match = NULL;
 			old_ss->match = NULL;
 		}
 		if (new_ss->contents.size != old_ss->contents.size)
-			printf("differing sizes\n");
+			debug1("differing sizes\n");
 		else if (memcmp(new_ss->contents.data, old_ss->contents.data,
 				new_ss->contents.size) != 0)
-			printf("differing contents\n");
+			debug1("differing contents\n");
 		else
-			printf("differing relocations\n");
+			debug1("differing relocations\n");
 		changed = true;
 		if (unchangeable_section(new_ss))
 			fprintf(stderr, "WARNING: ignoring change to "
@@ -802,7 +818,7 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 	struct superbfd *newsbfd = new_ss->parent;
 
 	if (old_ss->relocs.size != new_ss->relocs.size) {
-		printf("Different reloc count between %s and %s\n",
+		debug1("Different reloc count between %s and %s\n",
 		       old_ss->name, new_ss->name);
 		return false;
 	}
@@ -852,7 +868,7 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 				   old_offset,
 				   ro_new_ss->contents.data + new_sym->value +
 				   new_offset) != 0) {
-				printf("Strings differ between %s and %s\n",
+				debug1("Strings differ between %s and %s\n",
 				       old_ss->name, new_ss->name);
 				return false;
 			}
@@ -861,13 +877,13 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 
 		if (ro_old_ss->match != ro_new_ss ||
 		    ro_new_ss->match != ro_old_ss) {
-			printf("Nonmatching relocs from %s to %s/%s\n",
+			debug1("Nonmatching relocs from %s to %s/%s\n",
 			       new_ss->name, ro_new_ss->name, ro_old_ss->name);
 			return false;
 		}
 
 		if (old_sym->value + old_offset != new_sym->value + new_offset) {
-			printf("Offsets to %s/%s differ between %s and %s: "
+			debug1("Offsets to %s/%s differ between %s and %s: "
 			       "%lx+%lx/%lx+%lx\n", ro_old_ss->name,
 			       ro_new_ss->name, old_ss->name, new_ss->name,
 			       (unsigned long)old_sym->value,
@@ -879,7 +895,7 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 
 		if ((old_sym->value + old_offset != 0 ||
 		     new_sym->value + new_offset != 0) && ro_new_ss->patch) {
-			printf("Relocation from %s to nonzero offsets %lx+%lx/"
+			debug1("Relocation from %s to nonzero offsets %lx+%lx/"
 			       "%lx+%lx in changed section %s\n", new_ss->name,
 			       (unsigned long)old_sym->value,
 			       (unsigned long)old_offset,
