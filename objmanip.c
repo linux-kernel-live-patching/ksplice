@@ -2006,13 +2006,13 @@ static void init_label_map(struct superbfd *sbfd)
 
 	for (map = sbfd->maps.data;
 	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		map->orig_label = map->label;
 		if (map->count > 1) {
 			char *buf;
 			assert(asprintf(&buf, "%s~%d", map->label,
 					map->index) >= 0);
 			map->label = buf;
 		}
+		map->orig_label = map->label;
 	}
 }
 
