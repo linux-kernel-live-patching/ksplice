@@ -103,9 +103,14 @@ $patchfile = abs_path($patchfile) if(defined $patchfile);
 my $origdir = getcwd();
 chdir($linuxtree);
 
-my @jlevel = (defined $ENV{CONCURRENCY_LEVEL} ? ("-j$ENV{CONCURRENCY_LEVEL}") : ());
-@jlevel = ("-j$jobs") if(defined $jobs);
-my @make_ksplice = ("make", "-f", "$datadir/Makefile.ksplice", "-rR", @jlevel, @kbuild_flags);
+my @make = ("make", "-rR");
+if(defined $jobs) {
+	push @make, "-j$jobs";
+} elsif(defined $ENV{CONCURRENCY_LEVEL}) {
+	push @make, "-j$ENV{CONCURRENCY_LEVEL}";
+}
+
+my @make_ksplice = (@make, "-f", "$datadir/Makefile.ksplice", @kbuild_flags);
 
 sub revert_orig() {
 	for(split(/\0/, runstr(qw(find -name *.KSPLICE* -print0)))) {
@@ -150,7 +155,7 @@ my $kmodsrc = "$tmpdir/kmodsrc";
 runval("cp", "-a", "--", "$datadir/kmodsrc", $kmodsrc);
 $ENV{KSPLICE_KMODSRC} = $kmodsrc;
 
-my @make_kmodsrc = ("make", "-C", $kernel_headers_dir, "M=$kmodsrc", "-rR", @jlevel, "KSPLICE_KID=$kid", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk");
+my @make_kmodsrc = (@make, "-C", $kernel_headers_dir, "M=$kmodsrc", "KSPLICE_KID=$kid", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk");
 
 if (!defined($standalone)) {
 	$standalone = (runval_raw(qw(grep -q ^CONFIG_KSPLICE=[ym]$), "$linuxtree/.config") != 0);
