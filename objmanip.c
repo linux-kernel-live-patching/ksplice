@@ -1792,7 +1792,34 @@ enum supersect_type supersect_type(struct supersect *ss)
 
 	if (starts_with(ss->name, ".init"))
 		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".security_initcall.init"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".con_initcall.init"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".x86cpuvendor.init"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".early_param.init"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".taglist.init"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".arch.info.init"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".proc.info.init"))
+		return SS_TYPE_IGNORED;
+	/* .pci_fixup_* sections really should be treated as global rodata
+	   referenced only from quirks.c */
+	if (starts_with(ss->name, ".pci_fixup_"))
+		return SS_TYPE_IGNORED;
+	/* .builtin_fw sections are similar to .pci_fixup */
+	if (starts_with(ss->name, ".builtin_fw"))
+		return SS_TYPE_IGNORED;
+	/* same for .tracedata */
+	if (starts_with(ss->name, ".tracedata"))
+		return SS_TYPE_IGNORED;
 	if (starts_with(ss->name, ".debug"))
+		return SS_TYPE_IGNORED;
+	/* .eh_frame should probably be discarded, not ignored */
+	if (starts_with(ss->name, ".eh_frame"))
 		return SS_TYPE_IGNORED;
 	if (config->ignore_devinit && starts_with(ss->name, ".devinit"))
 		return SS_TYPE_IGNORED;
@@ -1806,6 +1833,27 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_IGNORED;
 	if (config->ignore_cpuinit && starts_with(ss->name, ".cpuexit"))
 		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".vgetcpu_mode") ||
+	    starts_with(ss->name, ".jiffies") ||
+	    starts_with(ss->name, ".wall_jiffies") ||
+	    starts_with(ss->name, ".vxtime") ||
+	    starts_with(ss->name, ".sys_tz") ||
+	    starts_with(ss->name, ".sysctl_vsyscall") ||
+	    starts_with(ss->name, ".xtime") ||
+	    starts_with(ss->name, ".xtime_lock") ||
+	    starts_with(ss->name, ".vsyscall"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".vdso"))
+		return SS_TYPE_IGNORED;
+
+	if (bfd_get_section_by_name(ss->parent->abfd, ".exitcall.exit") == NULL) {
+		if (starts_with(ss->name, ".exit.text"))
+			return SS_TYPE_TEXT;
+		if (starts_with(ss->name, ".exit.data"))
+			return SS_TYPE_DATA;
+	} else if (starts_with(ss->name, ".exit.text") ||
+		   starts_with(ss->name, ".exit.data"))
+		return SS_TYPE_IGNORED;
 
 	if (starts_with(ss->name, ".text") ||
 	    starts_with(ss->name, ".devinit.text") ||
@@ -1814,14 +1862,11 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    starts_with(ss->name, ".devexit.text") ||
 	    starts_with(ss->name, ".memexit.text") ||
 	    starts_with(ss->name, ".cpuexit.text") ||
-	    starts_with(ss->name, ".ref.text"))
+	    starts_with(ss->name, ".ref.text") ||
+	    starts_with(ss->name, ".spinlock.text") ||
+	    starts_with(ss->name, ".kprobes.text") ||
+	    starts_with(ss->name, ".sched.text"))
 		return SS_TYPE_TEXT;
-	if (starts_with(ss->name, ".exit.text")) {
-		if (bfd_get_section_by_name(ss->parent->abfd, ".exitcall.exit")
-		    == NULL)
-			return SS_TYPE_TEXT;
-		return SS_TYPE_IGNORED;
-	}
 
 	int n = -1;
 	if (sscanf(ss->name, ".rodata.str%*u.%*u%n", &n) >= 0 &&
@@ -1835,7 +1880,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    starts_with(ss->name, ".devexit.rodata") ||
 	    starts_with(ss->name, ".memexit.rodata") ||
 	    starts_with(ss->name, ".cpuexit.rodata") ||
-	    starts_with(ss->name, ".ref.rodata"))
+	    starts_with(ss->name, ".ref.rodata") ||
+	    starts_with(ss->name, "__markers_strings"))
 		return SS_TYPE_RODATA;
 
 	if (starts_with(ss->name, ".bss"))
@@ -1851,7 +1897,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    starts_with(ss->name, ".devexit.data") ||
 	    starts_with(ss->name, ".memexit.data") ||
 	    starts_with(ss->name, ".cpuexit.data") ||
-	    starts_with(ss->name, ".ref.data"))
+	    starts_with(ss->name, ".ref.data") ||
+	    starts_with(ss->name, "__markers"))
 		return SS_TYPE_DATA;
 
 	if (starts_with(ss->name, "__ksymtab"))
@@ -1864,6 +1911,17 @@ enum supersect_type supersect_type(struct supersect *ss)
 
 	if (starts_with(ss->name, ".ARM."))
 		return SS_TYPE_SPECIAL;
+
+	if (starts_with(ss->name, ".note"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".comment"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, "__param"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".exitcall.exit"))
+		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".modinfo"))
+		return SS_TYPE_IGNORED;
 
 	return SS_TYPE_UNKNOWN;
 }
