@@ -165,8 +165,19 @@ static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 static void init_label_map(struct superbfd *sbfd);
 
 int verbose = 0;
-#define debug1(fmt, ...)						\
-	do { if (verbose >= 1) printf(fmt, ## __VA_ARGS__); } while (0)
+#define debug_(sbfd, level, fmt, ...)					\
+	do {								\
+		if (verbose >= (level))					\
+			printf("%s: " fmt, (sbfd)->abfd->filename,	\
+			       ## __VA_ARGS__);				\
+	} while (0)
+#define debug0(sbfd, fmt, ...) debug_(sbfd, 0, fmt, ## __VA_ARGS__)
+#define debug1(sbfd, fmt, ...) debug_(sbfd, 1, fmt, ## __VA_ARGS__)
+#define err(sbfd, fmt, ...)						\
+	do {								\
+		fprintf(stderr, "%s: " fmt, (sbfd)->abfd->filename,	\
+			## __VA_ARGS__);				\
+	} while (0)
 
 struct str_vec delsects, rmsyms;
 struct export_desc_vec exports;
@@ -304,13 +315,13 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	initialize_supersect_types(presbfd);
 
 	match_global_symbol_sections(presbfd, isbfd);
-	debug1("Matched global\n");
+	debug1(isbfd, "Matched global\n");
 	match_sections_by_name(presbfd, isbfd);
-	debug1("Matched by name\n");
+	debug1(isbfd, "Matched by name\n");
 	match_sections_by_label(presbfd, isbfd);
-	debug1("Matched by label\n");
+	debug1(isbfd, "Matched by label\n");
 	match_sections_by_contents(presbfd, isbfd);
-	debug1("Matched by contents\n");
+	debug1(isbfd, "Matched by contents\n");
 
 	do {
 		changed = false;
@@ -340,49 +351,37 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 			ss->keep = true;
 	}
 
-	if (verbose >= 0) {
-		const char **sectname;
-		printf("Label name changes:\n");
-		print_label_map(isbfd);
+	print_label_map(isbfd);
 
-		printf("Changed text sections:\n");
-		for (sect = isbfd->abfd->sections; sect != NULL;
-		     sect = sect->next) {
-			struct supersect *ss = fetch_supersect(isbfd, sect);
-			if (ss->patch)
-				printf("  %s\n", sect->name);
-		}
+	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (ss->patch)
+			debug0(isbfd, "Patching section: %s\n", sect->name);
+	}
 
-		printf("New sections:\n");
-		for (sect = isbfd->abfd->sections; sect != NULL;
-		     sect = sect->next) {
-			struct supersect *ss = fetch_supersect(isbfd, sect);
-			if (ss->new)
-				printf("  %s\n", sect->name);
-		}
-		if (delsects.size != 0) {
-			printf("Deleted section names:\n");
-			for (sectname = delsects.data;
-			     sectname < delsects.data + delsects.size;
-			     sectname++)
-				printf("  %s\n", *sectname);
-		}
-		const struct export_desc *ed;
-		for (ed = exports.data; ed < exports.data + exports.size;
-		     ed++) {
-			const char **symname;
-			bool del = starts_with(ed->sectname, "del___ksymtab");
-			const char *export_type =
-			    ed->sectname + strlen("__ksymtab");
-			if (del)
-				export_type += strlen("_del");
-			for (symname = ed->names.data;
-			     symname < ed->names.data + ed->names.size;
-			     symname++)
-				printf("Export %s(%s): %s\n",
-				       del ? "deletion" : "addition",
-				       export_type, *symname);
-		}
+	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (ss->new)
+			debug0(isbfd, "New section: %s\n", sect->name);
+	}
+
+	const char **sectname;
+	for (sectname = delsects.data;
+	     sectname < delsects.data + delsects.size; sectname++)
+		debug0(isbfd, "Deleted section: %s\n", *sectname);
+
+	const struct export_desc *ed;
+	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
+		const char **symname;
+		bool del = starts_with(ed->sectname, "del___ksymtab");
+		const char *export_type = ed->sectname + strlen("__ksymtab");
+		if (del)
+			export_type += strlen("_del");
+		for (symname = ed->names.data;
+		     symname < ed->names.data + ed->names.size; symname++)
+			debug0(isbfd, "Export %s (%s): %s\n",
+			       del ? "deletion" : "addition",
+			       export_type, *symname);
 	}
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
@@ -397,7 +396,6 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 			write_ksplice_patch(isbfd, sect->name);
 	}
 
-	const struct export_desc *ed;
 	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
 		if (starts_with(ed->sectname, "del___ksymtab")) {
 			const char *export_type =
@@ -544,18 +542,19 @@ void match_sections(struct supersect *oldss, struct supersect *newss)
 	if (oldss->match == newss && newss->match == oldss)
 		return;
 	if (oldss->match != NULL) {
-		fprintf(stderr, "Matching conflict: old %s: %s != %s\n",
-			oldss->name, oldss->match->name, newss->name);
+		err(newss->parent, "Matching conflict: old %s: %s != %s\n",
+		    oldss->name, oldss->match->name, newss->name);
 		DIE;
 	}
 	if (newss->match != NULL) {
-		fprintf(stderr, "Matching conflict: new %s: %s != %s\n",
-			newss->name, newss->match->name, oldss->name);
+		err(newss->parent, "Matching conflict: new %s: %s != %s\n",
+		    newss->name, newss->match->name, oldss->name);
 		DIE;
 	}
 	oldss->match = newss;
 	newss->match = oldss;
-	debug1("Matched old %s to new %s\n", oldss->name, newss->name);
+	debug1(newss->parent, "Matched old %s to new %s\n",
+	       oldss->name, newss->name);
 }
 
 static void match_global_symbol_sections(struct superbfd *oldsbfd,
@@ -703,7 +702,8 @@ static void handle_nonzero_offset_relocs(struct supersect *ss)
 			continue;
 		if (!sym_ss->patch) {
 			changed = true;
-			debug1("Changing %s because a relocation from sect %s "
+			debug1(ss->parent,
+			       "Changing %s because a relocation from sect %s "
 			       "has a nonzero offset %lx+%lx into it\n",
 			       sym_ss->name, ss->name,
 			       (unsigned long)sym->value,
@@ -738,28 +738,31 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 		if (nonrelocs_equal(old_ss, new_ss) &&
 		    relocs_equal(old_ss, new_ss))
 			continue;
+
+		char *reason;
+		if (new_ss->contents.size != old_ss->contents.size)
+			reason = "differing sizes";
+		else if (memcmp(new_ss->contents.data, old_ss->contents.data,
+				new_ss->contents.size) != 0)
+			reason = "differing contents";
+		else
+			reason = "differing relocations";
 		if (new_ss->type == SS_TYPE_TEXT) {
 			if (new_ss->patch)
 				continue;
 			new_ss->patch = true;
-			debug1("Changing %s due to ", new_ss->name);
+			debug1(newsbfd, "Changing %s due to %s\n", new_ss->name,
+			       reason);
 		} else {
-			debug1("Unmatching %s and %s due to ", old_ss->name,
-			       new_ss->name);
+			debug1(newsbfd, "Unmatching %s and %s due to %s\n",
+			       old_ss->name, new_ss->name, reason);
 			new_ss->match = NULL;
 			old_ss->match = NULL;
 		}
-		if (new_ss->contents.size != old_ss->contents.size)
-			debug1("differing sizes\n");
-		else if (memcmp(new_ss->contents.data, old_ss->contents.data,
-				new_ss->contents.size) != 0)
-			debug1("differing contents\n");
-		else
-			debug1("differing relocations\n");
 		changed = true;
 		if (unchangeable_section(new_ss))
-			fprintf(stderr, "WARNING: ignoring change to "
-				"nonpatchable section %s\n", new_ss->name);
+			err(newsbfd, "warning: ignoring change to nonpatchable "
+			    "section %s\n", new_ss->name);
 	}
 }
 
@@ -826,7 +829,7 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 	struct superbfd *newsbfd = new_ss->parent;
 
 	if (old_ss->relocs.size != new_ss->relocs.size) {
-		debug1("Different reloc count between %s and %s\n",
+		debug1(newsbfd, "Different reloc count between %s and %s\n",
 		       old_ss->name, new_ss->name);
 		return false;
 	}
@@ -876,7 +879,8 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 				   old_offset,
 				   ro_new_ss->contents.data + new_sym->value +
 				   new_offset) != 0) {
-				debug1("Strings differ between %s and %s\n",
+				debug1(newsbfd,
+				       "Strings differ between %s and %s\n",
 				       old_ss->name, new_ss->name);
 				return false;
 			}
@@ -885,14 +889,14 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 
 		if (ro_old_ss->match != ro_new_ss ||
 		    ro_new_ss->match != ro_old_ss) {
-			debug1("Nonmatching relocs from %s to %s/%s\n",
+			debug1(newsbfd, "Nonmatching relocs from %s to %s/%s\n",
 			       new_ss->name, ro_new_ss->name, ro_old_ss->name);
 			return false;
 		}
 
 		if (old_sym->value + old_offset != new_sym->value + new_offset) {
-			debug1("Offsets to %s/%s differ between %s and %s: "
-			       "%lx+%lx/%lx+%lx\n", ro_old_ss->name,
+			debug1(newsbfd, "Offsets to %s/%s differ between %s "
+			       "and %s: %lx+%lx/%lx+%lx\n", ro_old_ss->name,
 			       ro_new_ss->name, old_ss->name, new_ss->name,
 			       (unsigned long)old_sym->value,
 			       (unsigned long)old_offset,
@@ -903,8 +907,9 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 
 		if ((old_sym->value + old_offset != 0 ||
 		     new_sym->value + new_offset != 0) && ro_new_ss->patch) {
-			debug1("Relocation from %s to nonzero offsets %lx+%lx/"
-			       "%lx+%lx in changed section %s\n", new_ss->name,
+			debug1(newsbfd, "Relocation from %s to nonzero offsets "
+			       "%lx+%lx/%lx+%lx in changed section %s\n",
+			       new_ss->name,
 			       (unsigned long)old_sym->value,
 			       (unsigned long)old_offset,
 			       (unsigned long)new_sym->value,
@@ -1638,8 +1643,8 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 		if (bfd_install_relocation(obfd, *relocp, ss->contents.data,
 					   0, osection, &error_message) !=
 		    bfd_reloc_ok) {
-			fprintf(stderr, "ksplice: error installing reloc: %s",
-				error_message);
+			err(ss->parent, "ksplice: error installing reloc: %s",
+			    error_message);
 			DIE;
 		}
 	}
@@ -1962,7 +1967,7 @@ void initialize_supersect_types(struct superbfd *sbfd)
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		ss->type = supersect_type(ss);
 		if (ss->type == SS_TYPE_UNKNOWN) {
-			fprintf(stderr, "Unknown section type: %s\n", ss->name);
+			err(sbfd, "Unknown section type: %s\n", ss->name);
 			DIE;
 		}
 	}
@@ -2035,7 +2040,8 @@ static void print_label_map(struct superbfd *sbfd)
 	     map < sbfd->maps.data + sbfd->maps.size; map++) {
 		if (strcmp(map->orig_label, map->label) == 0)
 			continue;
-		printf("  %s -> %s\n", map->label, map->orig_label);
+		debug1(sbfd, "Label change: %s -> %s\n",
+		       map->label, map->orig_label);
 	}
 }
 
