@@ -1594,9 +1594,6 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 		return add_candidate_val(pack, vals, lv->val);
 	}
 
-	if (starts_with(ksym->label, ".rodata.str"))
-		return OK;
-
 #ifdef CONFIG_MODULE_UNLOAD
 	if (strcmp(ksym->label, "cleanup_module") == 0 && pack->target != NULL
 	    && pack->target->exit != NULL) {

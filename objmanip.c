@@ -1189,7 +1189,7 @@ void write_ksplice_symbol(struct supersect *ss,
 	} else {
 		asymbol *gsym = canonical_symbol(ss->parent, sym);
 
-		if (gsym == NULL)
+		if (gsym == NULL || (gsym->flags & BSF_SECTION_SYM) != 0)
 			ksymbol->name = NULL;
 		else
 			write_string(ksymbol_ss, &ksymbol->name, "%s",
