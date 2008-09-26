@@ -879,6 +879,15 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 				   old_offset,
 				   ro_new_ss->contents.data + new_sym->value +
 				   new_offset) != 0) {
+				debug0(newsbfd, "Section %s/%s has string "
+				       "difference \"%s\"/\"%s\"\n",
+				       old_ss->name, new_ss->name,
+				       (const char *)(ro_old_ss->contents.data +
+						      old_sym->value +
+						      old_offset),
+				       (const char *)(ro_new_ss->contents.data +
+						      new_sym->value +
+						      new_offset));
 				debug1(newsbfd,
 				       "Strings differ between %s and %s\n",
 				       old_ss->name, new_ss->name);
