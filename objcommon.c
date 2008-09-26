@@ -122,6 +122,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 		if (strcmp(ss->name, special_sections[i]) == 0)
 			return SS_TYPE_SPECIAL;
 	}
+	if (starts_with(ss->name, ".ARM."))
+		return SS_TYPE_SPECIAL;
 	return SS_TYPE_UNKNOWN;
 }
 
