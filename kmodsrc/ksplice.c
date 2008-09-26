@@ -1542,6 +1542,8 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 {
 	unsigned long val;
 	abort_t ret;
+	unsigned int u;
+	int n = -1;
 
 	ret = read_reloc_value(pack, r, run_addr, &val);
 	if (ret != OK)
@@ -1554,7 +1556,8 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 			"found %s = %lx\n", run_addr, r->blank_addr,
 			r->symbol->label, r->addend, r->symbol->label, val);
 
-	if (starts_with(r->symbol->label, ".rodata.str"))
+	if (sscanf(r->symbol->label, ".rodata.str%u.%u<%n", &u, &u, &n) >= 0 &&
+	    n > 0)
 		return OK;
 
 	if (contains_canary(pack, run_addr, r->size, r->dst_mask) != 0) {
