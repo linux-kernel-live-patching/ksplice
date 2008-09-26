@@ -1739,8 +1739,10 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (mode("rmsyms"))
 			keep = !str_in_set(sym->name, &rmsyms);
 
-		if (keep)
+		if (keep) {
+			assert(sym_ss == NULL || sym_ss->keep);
 			*vec_grow(osyms, 1) = sym;
+		}
 	}
 }
 
