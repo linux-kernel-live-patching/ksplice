@@ -1607,19 +1607,21 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 	}
 #endif
 
-	ret = exported_symbol_lookup(pack, ksym->name, vals);
-	if (ret != OK)
-		return ret;
+	if (ksym->name != NULL) {
+		ret = exported_symbol_lookup(pack, ksym->name, vals);
+		if (ret != OK)
+			return ret;
 
-	ret = new_export_lookup(pack, pack->update, ksym->name, vals);
-	if (ret != OK)
-		return ret;
+		ret = new_export_lookup(pack, pack->update, ksym->name, vals);
+		if (ret != OK)
+			return ret;
 
 #ifdef CONFIG_KALLSYMS
-	ret = lookup_symbol_kallsyms(pack, ksym->name, vals);
-	if (ret != OK)
-		return ret;
+		ret = lookup_symbol_kallsyms(pack, ksym->name, vals);
+		if (ret != OK)
+			return ret;
 #endif /* CONFIG_KALLSYMS */
+	}
 
 	return OK;
 }
