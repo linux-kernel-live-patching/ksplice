@@ -1,4 +1,4 @@
-AC_INIT([Ksplice], [0.9.0], [ksplice@mit.edu])
+AC_INIT([Ksplice], [0.9.1], [ksplice@mit.edu])
 
 AC_ARG_WITH([libbfd],
   [  --with-libbfd=FILE      path to libbfd.a],

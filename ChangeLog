@@ -1,3 +1,8 @@
+2008-09-26 : 0.9.1
+ - Replaced objdiff with an improved matching algorithm in objmanip keep-primary
+ - Added support for moving functions between compilation units
+ - Various safety improvements
+
 2008-09-12 : 0.9.0
  - Added support for ARM architecture (requires an -ffunction-sections kernel)
  - Rewrote the relocation handling code to ease porting to other architectures
