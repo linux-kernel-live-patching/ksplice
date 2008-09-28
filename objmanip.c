@@ -109,6 +109,8 @@ void initialize_supersect_types(struct superbfd *sbfd);
 static void initialize_spans(struct superbfd *sbfd);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
 struct span *reloc_address_span(struct supersect *ss, arelent *reloc);
+void remove_unkept_spans(struct superbfd *sbfd);
+void compute_span_shifts(struct superbfd *sbfd);
 bool is_table_section(const char *name, bool consider_other);
 
 void rm_relocs(struct superbfd *isbfd);
@@ -466,6 +468,8 @@ void do_keep_helper(struct superbfd *isbfd)
 		keep_referenced_sections(isbfd);
 	} while (changed);
 
+	compute_span_shifts(isbfd);
+
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
 		asymbol **symp = canonical_symbolp(isbfd, sect->symbol);
@@ -491,6 +495,7 @@ void do_keep_helper(struct superbfd *isbfd)
 
 	rm_relocs(isbfd);
 	filter_table_sections(isbfd);
+	remove_unkept_spans(isbfd);
 }
 
 void do_finalize(struct superbfd *isbfd)
@@ -1350,7 +1355,7 @@ void write_ksplice_section(struct superbfd *sbfd, asymbol **symp,
 	if (sym_ss->type == SS_TYPE_TEXT)
 		ksect->flags |= KSPLICE_SECTION_TEXT;
 	assert(ksect->flags != 0);
-	write_reloc(ksect_ss, &ksect->address, symp, span->start);
+	write_reloc(ksect_ss, &ksect->address, symp, span->start + span->shift);
 }
 
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
@@ -2120,11 +2125,14 @@ static void initialize_spans(struct superbfd *sbfd)
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT)
+			continue;
 		struct span *span = vec_grow(&ss->spans, 1);
 		span->size = ss->contents.size;
 		span->start = 0;
 		span->ss = ss;
 		span->keep = false;
+		span->shift = 0;
 	}
 }
 
@@ -2156,4 +2164,76 @@ struct span *reloc_address_span(struct supersect *ss, arelent *reloc)
 			return span;
 	}
 	return NULL;
+}
+
+void compute_span_shifts(struct superbfd *sbfd)
+{
+	asection *sect;
+	struct span *span;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (!ss->keep || ss->type == SS_TYPE_SPECIAL ||
+		    ss->type == SS_TYPE_EXPORT)
+			continue;
+		bfd_size_type offset = 0;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (!span->keep)
+				continue;
+			span->shift = offset - span->start;
+			offset += span->size;
+		}
+	}
+}
+
+void remove_unkept_spans(struct superbfd *sbfd)
+{
+	asection *sect;
+	struct span *span;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		struct arelentp_vec orig_relocs;
+		vec_move(&orig_relocs, &ss->relocs);
+		arelent **relocp, *reloc;
+		for (relocp = orig_relocs.data;
+		     relocp < orig_relocs.data + orig_relocs.size; relocp++) {
+			reloc = *relocp;
+			asymbol *sym = *reloc->sym_ptr_ptr;
+			span = reloc_target_span(ss, reloc);
+			if ((span != NULL && span->keep && span->shift == 0) ||
+			    bfd_is_const_section(sym->section)) {
+				*vec_grow(&ss->relocs, 1) = reloc;
+				continue;
+			}
+			if (span != NULL && span->keep) {
+				arelent *new_reloc = malloc(sizeof(*new_reloc));
+				*new_reloc = *reloc;
+				new_reloc->addend =
+				    get_reloc_offset(ss, reloc, false);
+				new_reloc->addend += span->shift;
+				*vec_grow(&ss->new_relocs, 1) = new_reloc;
+			}
+		}
+	}
+
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect), orig_ss;
+		if (!ss->keep || ss->type == SS_TYPE_SPECIAL ||
+		    ss->type == SS_TYPE_EXPORT)
+			continue;
+		supersect_move(&orig_ss, ss);
+		vec_init(&ss->spans);
+		for (span = orig_ss.spans.data;
+		     span < orig_ss.spans.data + orig_ss.spans.size; span++) {
+			if (!span->keep)
+				continue;
+			struct span *new_span = vec_grow(&ss->spans, 1);
+			*new_span = *span;
+			new_span->start = span->start + span->shift;
+			new_span->shift = 0;
+			sect_copy(ss, sect_do_grow(ss, 1, span->size, 1),
+				  &orig_ss, orig_ss.contents.data + span->start,
+				  span->size);
+		}
+	}
 }
