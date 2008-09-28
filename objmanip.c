@@ -107,6 +107,7 @@ static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 enum supersect_type supersect_type(struct supersect *ss);
 void initialize_supersect_types(struct superbfd *sbfd);
 static void initialize_spans(struct superbfd *sbfd);
+static void initialize_string_spans(struct superbfd *sbfd, asection *sect);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
 struct span *reloc_address_span(struct supersect *ss, arelent *reloc);
 void remove_unkept_spans(struct superbfd *sbfd);
@@ -244,6 +245,8 @@ void load_offsets()
 
 bool matchable_data_section(struct supersect *ss)
 {
+	if (ss->type == SS_TYPE_STRING)
+		return true;
 	if (ss->type == SS_TYPE_RODATA)
 		return true;
 	if (ss->type == SS_TYPE_DATA && ss->relocs.size != 0)
@@ -342,9 +345,38 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	compare_exported_symbols(presbfd, isbfd, "");
 	compare_exported_symbols(isbfd, presbfd, "del_");
 
+	initialize_spans(isbfd);
+	initialize_spans(presbfd);
+	asection *sect;
+	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (ss->type != SS_TYPE_STRING)
+			continue;
+		asection *oldsect = bfd_get_section_by_name(prebfd, sect->name);
+		if (oldsect == NULL)
+			continue;
+		struct supersect *old_ss = fetch_supersect(presbfd, oldsect);
+		struct span *span, *old_span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			span->new = true;
+			for (old_span = old_ss->spans.data;
+			     old_span < old_ss->spans.data + old_ss->spans.size;
+			     old_span++) {
+				if (strcmp((char *)ss->contents.data +
+					   span->start,
+					   (char *)old_ss->contents.data +
+					   old_span->start) == 0) {
+					if (!span->new)
+						DIE;
+					span->label = old_span->label;
+					span->new = false;
+				}
+			}
+		}
+	}
 	assert(bfd_close(prebfd));
 
-	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
 		ss->keep = false;
@@ -388,7 +420,13 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 			       export_type, *symname);
 	}
 
-	initialize_spans(isbfd);
+	struct span *span;
+	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++)
+			span->keep = ss->keep;
+	}
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
@@ -437,8 +475,7 @@ void do_keep_helper(struct superbfd *isbfd)
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
 		ss->keep = false;
-		if (ss->type == SS_TYPE_STRING || ss->type == SS_TYPE_SPECIAL ||
-		    ss->type == SS_TYPE_TEXT)
+		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_TEXT)
 			ss->keep = true;
 	}
 
@@ -1073,8 +1110,8 @@ void rm_some_relocs(struct supersect *ss)
 		if (mode("keep-primary") &&
 		    (bfd_is_const_section(sym_ptr->section) ||
 		     fetch_supersect(ss->parent, sym_ptr->section)->new ||
-		     fetch_supersect(ss->parent, sym_ptr->section)->type ==
-		     SS_TYPE_STRING))
+		     reloc_target_span(ss, *relocp)->new ||
+		     !reloc_address_span(ss, *relocp)->keep))
 			rm_reloc = false;
 
 		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
@@ -1354,7 +1391,7 @@ void write_ksplice_section(struct superbfd *sbfd, asymbol **symp,
 	ksect->size = span->size;
 	ksect->flags = 0;
 	struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
-	if (sym_ss->type == SS_TYPE_RODATA)
+	if (sym_ss->type == SS_TYPE_RODATA || sym_ss->type == SS_TYPE_STRING)
 		ksect->flags |= KSPLICE_SECTION_RODATA;
 	if (sym_ss->type == SS_TYPE_DATA)
 		ksect->flags |= KSPLICE_SECTION_DATA;
@@ -1545,8 +1582,7 @@ void keep_referenced_sections(struct superbfd *sbfd)
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		ss = fetch_supersect(sbfd, sect);
 		arelent **relocp;
-		if (ss->type == SS_TYPE_STRING || ss->type == SS_TYPE_SPECIAL ||
-		    ss->type == SS_TYPE_EXPORT)
+		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT)
 			continue;
 		for (relocp = ss->relocs.data;
 		     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
@@ -2135,6 +2171,7 @@ static struct span *new_span(struct superbfd *sbfd, asection *sect,
 	span->start = start;
 	span->ss = ss;
 	span->keep = false;
+	span->new = false;
 	span->shift = 0;
 	asymbol **symp = symbolp_scan(sbfd, sect, span->start);
 	if (symp != NULL) {
@@ -2155,12 +2192,35 @@ static struct span *new_span(struct superbfd *sbfd, asection *sect,
 	return span;
 }
 
+static void initialize_string_spans(struct superbfd *sbfd, asection *sect)
+{
+	struct supersect *ss = fetch_supersect(sbfd, sect);
+	const char *str;
+	for (str = ss->contents.data;
+	     (void *)str < ss->contents.data + ss->contents.size;) {
+		bfd_vma start = (unsigned long)str -
+		    (unsigned long)ss->contents.data;
+		bfd_vma size = strlen(str) + 1;
+		while ((start + size) % (1 << ss->alignment) != 0 &&
+		       start + size < ss->contents.size) {
+			if (str[size] != '\0')
+				DIE;
+			size++;
+		}
+		new_span(sbfd, sect, start, size);
+		str += size;
+	}
+}
+
 static void initialize_spans(struct superbfd *sbfd)
 {
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (ss->type != SS_TYPE_SPECIAL && ss->type != SS_TYPE_EXPORT)
+		if (ss->type == SS_TYPE_STRING)
+			initialize_string_spans(sbfd, sect);
+		else if (ss->type != SS_TYPE_SPECIAL &&
+			 ss->type != SS_TYPE_EXPORT)
 			new_span(sbfd, sect, 0, ss->contents.size);
 	}
 }

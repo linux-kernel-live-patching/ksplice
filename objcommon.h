@@ -166,6 +166,7 @@ struct span {
 	bfd_vma start;
 	bfd_vma size;
 	bool keep;
+	bool new;
 	bfd_size_type shift;
 };
 DECLARE_VEC_TYPE(struct span, span_vec);
