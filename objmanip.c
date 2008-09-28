@@ -118,9 +118,7 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 				 const char *label);
 void filter_table_sections(struct superbfd *isbfd);
 void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
-void keep_if_referenced(bfd *abfd, asection *sect, void *ignored);
-void check_for_ref_to_section(bfd *abfd, asection *looking_at,
-			      void *looking_for);
+void keep_referenced_sections(struct superbfd *sbfd);
 bfd_boolean copy_object(bfd *ibfd, bfd *obfd);
 void setup_section(bfd *ibfd, asection *isection, void *obfdarg);
 static void setup_new_section(bfd *obfd, struct supersect *ss);
@@ -429,9 +427,23 @@ void do_keep_helper(struct superbfd *isbfd)
 		    ss->type == SS_TYPE_TEXT)
 			ss->keep = true;
 	}
+
+	asymbol **symp;
+	for (symp = isbfd->syms.data;
+	     symp < isbfd->syms.data + isbfd->syms.size; symp++) {
+		asymbol *sym = *symp;
+		if (!bfd_is_const_section(sym->section) &&
+		    (sym->flags & BSF_GLOBAL) != 0) {
+			struct supersect *sym_ss =
+			    fetch_supersect(isbfd, sym->section);
+			if (sym_ss->type != SS_TYPE_IGNORED)
+				sym_ss->keep = true;
+		}
+	}
+
 	do {
 		changed = false;
-		bfd_map_over_sections(isbfd->abfd, keep_if_referenced, NULL);
+		keep_referenced_sections(isbfd);
 	} while (changed);
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
@@ -1475,47 +1487,27 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	}
 }
 
-void keep_if_referenced(bfd *abfd, asection *sect, void *ignored)
+void keep_referenced_sections(struct superbfd *sbfd)
 {
-	struct superbfd *sbfd = fetch_superbfd(abfd);
-	struct supersect *ss = fetch_supersect(sbfd, sect);
-	if (ss->keep || ss->type == SS_TYPE_IGNORED)
-		return;
-
-	asymbol **symp;
-	for (symp = sbfd->syms.data;
-	     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
-		asymbol *sym = *symp;
-		if (sym->section == sect && (sym->flags & BSF_GLOBAL) != 0) {
-			ss->keep = true;
-			changed = true;
-			return;
-		}
-	}
-
-	bfd_map_over_sections(abfd, check_for_ref_to_section, sect);
-}
-
-void check_for_ref_to_section(bfd *abfd, asection *looking_at,
-			      void *looking_for)
-{
-	struct superbfd *sbfd = fetch_superbfd(abfd);
-	struct supersect *ss = fetch_supersect(sbfd, looking_at);
-	struct supersect *for_ss = fetch_supersect(sbfd,
-						   (asection *)looking_for);
-	if (!ss->keep || ss->type == SS_TYPE_STRING ||
-	    ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT)
-		return;
-
-	arelent **relocp;
-	for (relocp = ss->relocs.data;
-	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
-		asymbol *sym = *(*relocp)->sym_ptr_ptr;
-		if (sym->section != (asection *)looking_for)
+	asection *sect;
+	struct supersect *ss, *sym_ss;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		ss = fetch_supersect(sbfd, sect);
+		arelent **relocp;
+		if (!ss->keep || ss->type == SS_TYPE_STRING ||
+		    ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT)
 			continue;
-		for_ss->keep = true;
-		changed = true;
-		return;
+		for (relocp = ss->relocs.data;
+		     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+			asymbol *sym = *(*relocp)->sym_ptr_ptr;
+			if (bfd_is_const_section(sym->section))
+				continue;
+			sym_ss = fetch_supersect(sbfd, sym->section);
+			if (sym_ss->keep || sym_ss->type == SS_TYPE_IGNORED)
+				continue;
+			sym_ss->keep = true;
+			changed = true;
+		}
 	}
 }
 
