@@ -163,6 +163,7 @@ struct span {
 	struct supersect *ss;
 	bfd_vma start;
 	bfd_vma size;
+	bool keep;
 };
 DECLARE_VEC_TYPE(struct span, span_vec);
 
