@@ -413,7 +413,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 static void print_bytes(struct ksplice_pack *pack,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec);
-#ifdef KSPLICE_STANDALONE
+#if defined(KSPLICE_STANDALONE) && !defined(CONFIG_KALLSYMS)
 static abort_t brute_search(struct ksplice_pack *pack,
 			    const struct ksplice_section *sect,
 			    const void *start, unsigned long len,
@@ -421,7 +421,7 @@ static abort_t brute_search(struct ksplice_pack *pack,
 static abort_t brute_search_all(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
 				struct list_head *vals);
-#endif /* KSPLICE_STANDALONE */
+#endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
 static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 			    const struct ksplice_reloc **relocp);
 static abort_t handle_reloc(struct ksplice_pack *pack,
@@ -1198,7 +1198,7 @@ static abort_t find_section(struct ksplice_pack *pack,
 		}
 	}
 
-#ifdef KSPLICE_STANDALONE
+#if defined(KSPLICE_STANDALONE) && !defined(CONFIG_KALLSYMS)
 	if (list_empty(&vals) && (sect->flags & KSPLICE_SECTION_DATA) == 0) {
 		ret = brute_search_all(pack, sect, &vals);
 		if (ret != OK) {
@@ -1220,7 +1220,7 @@ static abort_t find_section(struct ksplice_pack *pack,
 			}
 		}
 	}
-#endif /* KSPLICE_STANDALONE */
+#endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
 
 	if (singular(&vals)) {
 		LIST_HEAD(safety_records);
@@ -1440,7 +1440,7 @@ static void print_bytes(struct ksplice_pack *pack,
 		ksdebug(pack, "/%02x ", pre[o]);
 }
 
-#ifdef KSPLICE_STANDALONE
+#if defined(KSPLICE_STANDALONE) && !defined(CONFIG_KALLSYMS)
 static abort_t brute_search(struct ksplice_pack *pack,
 			    const struct ksplice_section *sect,
 			    const void *start, unsigned long len,
@@ -1508,7 +1508,7 @@ out:
 	pack->update->debug = saved_debug;
 	return ret;
 }
-#endif /* KSPLICE_STANDALONE */
+#endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
 
 static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 			    const struct ksplice_reloc **relocp)
