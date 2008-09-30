@@ -67,13 +67,12 @@ char *str_ksplice_symbolp(struct supersect *ptr_ss,
 void show_ksplice_reloc(struct supersect *ss,
 			const struct ksplice_reloc *kreloc)
 {
-	printf("blank_addr: %s  blank_offset: %lx\n"
+	printf("blank_addr: %s\n"
 	       "symbol: %s\n"
 	       "addend: %lx\n"
 	       "pcrel: %x  size: %x  dst_mask: %lx  rightshift: %x\n"
 	       "\n",
 	       str_pointer(ss, (void *const *)&kreloc->blank_addr),
-	       read_num(ss, &kreloc->blank_offset),
 	       str_ksplice_symbolp(ss, &kreloc->symbol),
 	       read_num(ss, &kreloc->addend),
 	       read_num(ss, &kreloc->pcrel),

@@ -13,8 +13,6 @@ struct ksplice_symbol {
 /**
  * struct ksplice_reloc - Ksplice's analogue of an ELF relocation
  * @blank_addr:		The address of the relocation's storage unit
- * @blank_offset:	The offset (from the start of the section) of the
- * 			relocation's storage unit
  * @symbol:		The ksplice_symbol associated with this relocation
  * @pcrel:		Is the relocation PC relative?
  * @addend:		The ELF addend of the relocation
@@ -29,7 +27,6 @@ struct ksplice_symbol {
  **/
 struct ksplice_reloc {
 	unsigned long blank_addr;
-	long blank_offset;
 	const struct ksplice_symbol *symbol;
 	int pcrel;
 	long addend;

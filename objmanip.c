@@ -1253,7 +1253,6 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 
 	write_reloc(kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address);
-	kreloc->blank_offset = (unsigned long)orig_reloc->address;
 	write_ksplice_symbol(kreloc_ss, &kreloc->symbol, sym_ptr, "");
 	kreloc->pcrel = howto->pc_relative;
 	kreloc->addend = addend;

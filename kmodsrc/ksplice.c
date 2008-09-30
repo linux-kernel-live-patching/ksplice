@@ -941,8 +941,8 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	if (canary_ret < 0)
 		return UNEXPECTED;
 	if (canary_ret == 0) {
-		ksdebug(pack, "reloc: skipped %s:%lx (altinstr)\n",
-			r->symbol->label, r->blank_offset);
+		ksdebug(pack, "reloc: skipped %lx to %s+%lx (altinstr)\n",
+			r->blank_addr, r->symbol->label, r->addend);
 		return OK;
 	}
 
@@ -977,8 +977,8 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	if (ret != OK)
 		return ret;
 
-	ksdebug(pack, "reloc: %s:%lx", r->symbol->label, r->blank_offset);
-	ksdebug(pack, "(S=%lx A=%lx ", sym_addr, r->addend);
+	ksdebug(pack, "reloc: %lx to %s+%lx (S=%lx ", r->blank_addr,
+		r->symbol->label, r->addend, sym_addr);
 	switch (r->size) {
 	case 1:
 		ksdebug(pack, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
@@ -1522,9 +1522,10 @@ static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 			if (canary_ret < 0)
 				return UNEXPECTED;
 			if (canary_ret == 0) {
-				ksdebug(pack, "reloc: skipped %s:%lx "
-					"(altinstr)\n", r->symbol->label,
-					r->blank_offset);
+				ksdebug(pack, "run-pre: reloc skipped at "
+					"p_a=%lx to %s+%lx (altinstr)\n",
+					r->blank_addr, r->symbol->label,
+					r->addend);
 				return NO_MATCH;
 			}
 			if (addr != r->blank_addr) {
