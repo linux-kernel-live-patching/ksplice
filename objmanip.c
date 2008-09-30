@@ -1774,7 +1774,11 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 			keep = !str_in_set(sym->name, &rmsyms);
 
 		if (keep) {
-			assert(sym_ss == NULL || sym_ss->keep);
+			if (sym_ss != NULL && !sym_ss->keep) {
+				err(sbfd, "Kept symbol %s in unkept section "
+				    "%s\n", sym->name, sym->section->name);
+				DIE;
+			}
 			*vec_grow(osyms, 1) = sym;
 		}
 	}
