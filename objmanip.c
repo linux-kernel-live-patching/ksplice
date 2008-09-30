@@ -112,6 +112,8 @@ struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
 struct span *reloc_address_span(struct supersect *ss, arelent *reloc);
 void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
+static struct span *new_span(struct superbfd *sbfd, asection *sect,
+			     bfd_vma start, bfd_vma size);
 bool is_table_section(const char *name, bool consider_other);
 
 void rm_relocs(struct superbfd *isbfd);
@@ -428,6 +430,9 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 			span->keep = ss->keep;
 	}
 
+	filter_table_sections(isbfd);
+	compute_span_shifts(isbfd);
+
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
 		if (!ss->patch && !ss->new)
@@ -461,7 +466,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	}
 
 	rm_relocs(isbfd);
-	filter_table_sections(isbfd);
+	remove_unkept_spans(isbfd);
 }
 
 void do_keep_helper(struct superbfd *isbfd)
@@ -505,6 +510,7 @@ void do_keep_helper(struct superbfd *isbfd)
 		keep_referenced_sections(isbfd);
 	} while (changed);
 
+	filter_table_sections(isbfd);
 	compute_span_shifts(isbfd);
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
@@ -531,7 +537,6 @@ void do_keep_helper(struct superbfd *isbfd)
 	}
 
 	rm_relocs(isbfd);
-	filter_table_sections(isbfd);
 	remove_unkept_spans(isbfd);
 }
 
@@ -1464,7 +1469,6 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 struct fixup_entry {
 	bfd_vma offset;
 	bool used;
-	bfd_vma ex_offset;
 };
 DECLARE_VEC_TYPE(struct fixup_entry, fixup_entry_vec);
 
@@ -1505,8 +1509,9 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	if (s->other_sect != NULL)
 		fixup_sect = bfd_get_section_by_name(sbfd->abfd, s->other_sect);
 
-	struct supersect *ss = fetch_supersect(sbfd, isection), orig_ss;
-	supersect_move(&orig_ss, ss);
+	struct supersect *ss = fetch_supersect(sbfd, isection);
+	if (ss->alignment < ffs(s->entry_align) - 1)
+		ss->alignment = ffs(s->entry_align) - 1;
 
 	struct supersect *fixup_ss = NULL;
 	if (fixup_sect != NULL)
@@ -1515,62 +1520,45 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	struct fixup_entry_vec fixups;
 	vec_init(&fixups);
 
-	void *orig_entry;
-	for (orig_entry = orig_ss.contents.data;
-	     orig_entry < orig_ss.contents.data + orig_ss.contents.size;
-	     orig_entry += s->entry_size) {
+	void *entry;
+	for (entry = ss->contents.data;
+	     entry < ss->contents.data + ss->contents.size;
+	     entry += s->entry_size) {
 		asymbol *sym, *fixup_sym;
-		read_reloc(&orig_ss, orig_entry + s->addr_offset,
-			   sizeof(void *), &sym);
+		read_reloc(ss, entry + s->addr_offset, sizeof(void *), &sym);
+
+		struct span *span = new_span(sbfd, isection,
+					     addr_offset(ss, entry),
+					     s->entry_size);
+		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
+		span->keep = sym_ss->keep;
 
 		struct fixup_entry *f;
 		if (fixup_sect != NULL) {
 			bfd_vma fixup_offset =
-			    read_reloc(&orig_ss, orig_entry + s->other_offset,
+			    read_reloc(ss, entry + s->other_offset,
 				       sizeof(void *), &fixup_sym);
 			if (fixup_sym->section == fixup_sect) {
 				assert(fixup_offset < fixup_ss->contents.size);
 				f = vec_grow(&fixups, 1);
 				f->offset = fixup_offset;
-				f->used = false;
+				f->used = span->keep;
 			}
 		}
-
-		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
-		if (!sym_ss->keep)
-			continue;
-
-		if (fixup_sect != NULL && fixup_sym->section == fixup_sect) {
-			f->used = true;
-			f->ex_offset = ss->contents.size + s->other_offset;
-		}
-		sect_copy(ss, sect_do_grow(ss, 1, s->entry_size,
-					   s->entry_align),
-			  &orig_ss, orig_entry, s->entry_size);
 	}
 
 	if (fixup_sect == NULL)
 		return;
 
-	struct supersect orig_fixup_ss;
-	supersect_move(&orig_fixup_ss, fixup_ss);
-
 	qsort(fixups.data, fixups.size, sizeof(*fixups.data), compare_fixups);
 	*vec_grow(&fixups, 1) = (struct fixup_entry)
-	    { .offset = orig_fixup_ss.contents.size, .used = false };
+	    { .offset = fixup_ss->contents.size, .used = false };
 
 	struct fixup_entry *f;
 	for (f = fixups.data; f < fixups.data + fixups.size - 1; f++) {
-		if (!f->used)
-			continue;
-		write_reloc(ss, ss->contents.data + f->ex_offset,
-			    &fixup_ss->symbol, fixup_ss->contents.size);
-		sect_copy(fixup_ss,
-			  sect_grow(fixup_ss, (f + 1)->offset - f->offset,
-				    unsigned char),
-			  &orig_fixup_ss,
-			  orig_fixup_ss.contents.data + f->offset,
-			  (f + 1)->offset - f->offset);
+		struct span *span = new_span(sbfd, fixup_sect, f->offset,
+					     (f + 1)->offset - f->offset);
+		span->keep = f->used;
 	}
 }
 
@@ -2261,8 +2249,7 @@ void compute_span_shifts(struct superbfd *sbfd)
 	struct span *span;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (!ss->keep || ss->type == SS_TYPE_SPECIAL ||
-		    ss->type == SS_TYPE_EXPORT)
+		if (!ss->keep || ss->type == SS_TYPE_EXPORT)
 			continue;
 		bfd_size_type offset = 0;
 		for (span = ss->spans.data;
@@ -2281,6 +2268,8 @@ void remove_unkept_spans(struct superbfd *sbfd)
 	struct span *span;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (ss->type == SS_TYPE_EXPORT)
+			continue;
 		struct arelentp_vec orig_relocs;
 		vec_move(&orig_relocs, &ss->relocs);
 		arelent **relocp, *reloc;
@@ -2307,8 +2296,7 @@ void remove_unkept_spans(struct superbfd *sbfd)
 
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect), orig_ss;
-		if (!ss->keep || ss->type == SS_TYPE_SPECIAL ||
-		    ss->type == SS_TYPE_EXPORT)
+		if (!ss->keep || ss->type == SS_TYPE_EXPORT)
 			continue;
 		supersect_move(&orig_ss, ss);
 		vec_init(&ss->spans);
