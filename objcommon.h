@@ -159,6 +159,9 @@ DECLARE_VEC_TYPE(asymbol **, asymbolpp_vec);
 #define bfd_get_section_size(x) ((x)->_cooked_size)
 #endif
 
+DECLARE_HASH_TYPE(arelent *, arelentp_hash, arelentp_hash_init,
+		  arelentp_hash_free, arelentp_hash_lookup);
+
 struct label_map {
 	asymbol *csym;
 	const char *orig_label;
@@ -205,6 +208,7 @@ struct supersect {
 	struct supersect *next;
 	struct asymbolp_vec syms;
 	struct span_vec spans;
+	struct arelentp_hash reloc_hash;
 	asymbol *symbol;
 	struct supersect *match;
 	bool new;

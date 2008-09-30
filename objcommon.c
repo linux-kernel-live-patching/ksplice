@@ -20,6 +20,10 @@
 #include "objcommon.h"
 #include <stdio.h>
 
+#define arelentp_init(x) *(x) = NULL
+IMPLEMENT_HASH_TYPE(arelent *, arelentp_hash, arelentp_hash_init,
+		    arelentp_hash_free, arelentp_hash_lookup, arelentp_init);
+
 void vec_do_reserve(void **data, size_t *mem_size, size_t new_size)
 {
 	if (new_size > *mem_size || new_size * 2 < *mem_size) {
@@ -105,6 +109,20 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	}
 
 	vec_init(&new->spans);
+
+	arelentp_hash_init(&new->reloc_hash);
+	arelent **relocp;
+	for (relocp = new->relocs.data;
+	     relocp < new->relocs.data + new->relocs.size; relocp++) {
+		arelent *reloc = *relocp;
+		char *key;
+		assert(asprintf(&key, "%lx", (unsigned long)reloc->address)
+		       >= 0);
+		arelent **hash_relocp = arelentp_hash_lookup(&new->reloc_hash,
+							     key, TRUE);
+		free(key);
+		*hash_relocp = reloc;
+	}
 
 	return new;
 }
@@ -243,26 +261,26 @@ bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, bool adjust_pc)
 bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
 		   asymbol **symp)
 {
-	arelent **relocp;
 	bfd_vma val = bfd_get(size * 8, ss->parent->abfd, addr);
 	bfd_vma address = addr_offset(ss, addr);
-	for (relocp = ss->relocs.data;
-	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
-		arelent *reloc = *relocp;
-		if (reloc->address == address) {
-			if (symp != NULL)
-				*symp = *reloc->sym_ptr_ptr;
-			else if (*reloc->sym_ptr_ptr !=
-				 bfd_abs_section_ptr->symbol)
-				fprintf(stderr, "warning: unexpected "
-					"non-absolute relocation at %s+%lx\n",
-					ss->name, (unsigned long)address);
-			return get_reloc_offset(ss, reloc, false);
-		}
+	char *key;
+	assert(asprintf(&key, "%lx", (unsigned long)address) >= 0);
+	arelent **relocp = arelentp_hash_lookup(&ss->reloc_hash, key, FALSE);
+	free(key);
+	if (relocp == NULL) {
+		if (symp != NULL)
+			*symp = *bfd_abs_section_ptr->symbol_ptr_ptr;
+		return val;
 	}
+	arelent *reloc = *relocp;
+
 	if (symp != NULL)
-		*symp = *bfd_abs_section_ptr->symbol_ptr_ptr;
-	return val;
+		*symp = *reloc->sym_ptr_ptr;
+	else if (*reloc->sym_ptr_ptr != bfd_abs_section_ptr->symbol)
+		fprintf(stderr, "warning: unexpected "
+			"non-absolute relocation at %s+%lx\n",
+			ss->name, (unsigned long)address);
+	return get_reloc_offset(ss, reloc, false);
 }
 
 char *str_pointer(struct supersect *ss, void *const *addr)
