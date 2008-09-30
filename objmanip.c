@@ -260,7 +260,8 @@ bool unchangeable_section(struct supersect *ss)
 {
 	if (ss->type == SS_TYPE_DATA)
 		return true;
-	if (ss->type == SS_TYPE_IGNORED && !starts_with(ss->name, ".debug"))
+	if (ss->type == SS_TYPE_IGNORED && !starts_with(ss->name, ".debug") &&
+	    strcmp(ss->name, "__ksymtab_strings") != 0)
 		return true;
 	return false;
 }
@@ -431,6 +432,21 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	}
 
 	filter_table_sections(isbfd);
+	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
+		if (starts_with(ed->sectname, "del___ksymtab")) {
+			const char *export_type =
+			    ed->sectname + strlen("del___ksymtab");
+			const char **symname;
+			for (symname = ed->names.data;
+			     symname < ed->names.data + ed->names.size;
+			     symname++)
+				write_ksplice_export(isbfd, *symname,
+						     export_type, true);
+		} else {
+			rm_some_exports(isbfd, ed);
+		}
+	}
+
 	compute_span_shifts(isbfd);
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
@@ -448,21 +464,6 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 
 		if (ss->patch)
 			write_ksplice_patch(isbfd, sect->name);
-	}
-
-	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
-		if (starts_with(ed->sectname, "del___ksymtab")) {
-			const char *export_type =
-			    ed->sectname + strlen("del___ksymtab");
-			const char **symname;
-			for (symname = ed->names.data;
-			     symname < ed->names.data + ed->names.size;
-			     symname++)
-				write_ksplice_export(isbfd, *symname,
-						     export_type, true);
-		} else {
-			rm_some_exports(isbfd, ed);
-		}
 	}
 
 	rm_relocs(isbfd);
@@ -1043,34 +1044,34 @@ void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed)
 		assert(ss->contents.size * sizeof(unsigned long) ==
 		       crc_ss->contents.size * sizeof(struct kernel_symbol));
 
-	struct supersect orig_ss, orig_crc_ss;
-	supersect_move(&orig_ss, ss);
+	struct kernel_symbol *ksym;
+	unsigned long *crc = NULL;
 	if (crc_ss != NULL)
-		supersect_move(&orig_crc_ss, crc_ss);
-
-	struct kernel_symbol *orig_ksym;
-	unsigned long *orig_crc;
-	for (orig_ksym = orig_ss.contents.data,
-	     orig_crc = orig_crc_ss.contents.data;
-	     (void *)orig_ksym < orig_ss.contents.data + orig_ss.contents.size;
-	     orig_ksym++, orig_crc++) {
+		crc = crc_ss->contents.data;
+	struct span *span, *crc_span;
+	for (ksym = ss->contents.data;
+	     (void *)ksym < ss->contents.data + ss->contents.size;
+	     ksym++, crc++) {
 		asymbol *sym;
-		read_reloc(&orig_ss, &orig_ksym->value,
-			   sizeof(orig_ksym->value), &sym);
-		if (!str_in_set(sym->name, &ed->names))
-			continue;
+		read_reloc(ss, &ksym->value, sizeof(ksym->value), &sym);
+		span = new_span(ss->parent, sym_sect, addr_offset(ss, ksym),
+				sizeof(*ksym));
+		span->keep = str_in_set(sym->name, &ed->names);
 
-		struct kernel_symbol *ksym = sect_grow(ss, 1, typeof(*ksym));
-		sect_copy(ss, &ksym->value, &orig_ss, &orig_ksym->value, 1);
-		/* Replace name with a mangled name */
-		write_ksplice_export(ss->parent, sym->name, export_type, false);
-		write_string(ss, (const char **)&ksym->name,
-			     "DISABLED_%s_%s", sym->name, kid);
+		if (crc_ss != NULL) {
+			crc_span = new_span(ss->parent, crc_sect,
+					    addr_offset(crc_ss, crc),
+					    sizeof(*crc));
+			crc_span->keep = span->keep;
+		}
 
-		if (crc_ss != NULL)
-			sect_copy(crc_ss,
-				  sect_grow(crc_ss, 1, typeof(*orig_crc)),
-				  &orig_crc_ss, orig_crc, 1);
+		if (span->keep) {
+			write_ksplice_export(ss->parent, sym->name, export_type,
+					     false);
+			/* Replace name with a mangled name */
+			write_string(ss, (const char **)&ksym->name,
+				     "DISABLED_%s_%s", sym->name, kid);
+		}
 	}
 }
 
@@ -1356,8 +1357,9 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
 						 struct ksplice_reloc);
 
+	struct span *address_span = reloc_address_span(ss, orig_reloc);
 	write_reloc(kreloc_ss, &kreloc->blank_addr,
-		    &ss->symbol, orig_reloc->address);
+		    &ss->symbol, orig_reloc->address + address_span->shift);
 	write_ksplice_symbol(kreloc_ss, &kreloc->symbol, sym_ptr, span, "");
 	kreloc->pcrel = howto->pc_relative;
 	if (span != NULL && span->start != 0)
@@ -1832,9 +1834,6 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		else if ((sym->flags & (BSF_GLOBAL | BSF_WEAK)) != 0 &&
 			 sym_ss != NULL && sym_ss->keep)
 			keep = true;
-		else if (mode("keep-primary") &&
-			 starts_with(sym->section->name, "__ksymtab"))
-			keep = true;
 
 		if (deleted_table_section_symbol(ibfd, sym))
 			keep = false;
@@ -2023,6 +2022,9 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    starts_with(ss->name, "__markers"))
 		return SS_TYPE_DATA;
 
+	/* We replace all the ksymtab strings, so delete them */
+	if (strcmp(ss->name, "__ksymtab_strings") == 0)
+		return SS_TYPE_IGNORED;
 	if (starts_with(ss->name, "__ksymtab"))
 		return SS_TYPE_EXPORT;
 	if (starts_with(ss->name, "__kcrctab"))
@@ -2207,8 +2209,8 @@ static void initialize_spans(struct superbfd *sbfd)
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		if (ss->type == SS_TYPE_STRING)
 			initialize_string_spans(sbfd, sect);
-		else if (ss->type != SS_TYPE_SPECIAL &&
-			 ss->type != SS_TYPE_EXPORT)
+		else if (!mode("keep") || (ss->type != SS_TYPE_SPECIAL &&
+					   ss->type != SS_TYPE_EXPORT))
 			new_span(sbfd, sect, 0, ss->contents.size);
 	}
 }
@@ -2249,7 +2251,7 @@ void compute_span_shifts(struct superbfd *sbfd)
 	struct span *span;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (!ss->keep || ss->type == SS_TYPE_EXPORT)
+		if (!ss->keep)
 			continue;
 		bfd_size_type offset = 0;
 		for (span = ss->spans.data;
@@ -2268,8 +2270,6 @@ void remove_unkept_spans(struct superbfd *sbfd)
 	struct span *span;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (ss->type == SS_TYPE_EXPORT)
-			continue;
 		struct arelentp_vec orig_relocs;
 		vec_move(&orig_relocs, &ss->relocs);
 		arelent **relocp, *reloc;
@@ -2296,7 +2296,7 @@ void remove_unkept_spans(struct superbfd *sbfd)
 
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect), orig_ss;
-		if (!ss->keep || ss->type == SS_TYPE_EXPORT)
+		if (!ss->keep)
 			continue;
 		supersect_move(&orig_ss, ss);
 		vec_init(&ss->spans);
