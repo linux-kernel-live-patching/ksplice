@@ -192,10 +192,9 @@ void sect_do_copy(struct supersect *dest_ss, void *dest,
 		  struct supersect *src_ss, const void *src, size_t n)
 {
 	memcpy(dest, src, n);
-	bfd_size_type start = src - src_ss->contents.data;
+	bfd_size_type start = addr_offset(src_ss, src);
 	bfd_size_type end = start + n;
-	bfd_size_type mod = (dest - dest_ss->contents.data) -
-	    (src - src_ss->contents.data);
+	bfd_size_type mod = addr_offset(dest_ss, dest) - start;
 	mod_relocs(&dest_ss->relocs, &src_ss->relocs, start, end, mod);
 	mod_relocs(&dest_ss->new_relocs, &src_ss->new_relocs, start, end, mod);
 	mod_symbols(&dest_ss->syms, &src_ss->syms, start, end, mod);

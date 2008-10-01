@@ -1062,7 +1062,7 @@ arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 
 	arelent *reloc = malloc(sizeof(*reloc));
 	reloc->sym_ptr_ptr = symp;
-	reloc->address = addr - ss->contents.data;
+	reloc->address = addr_offset(ss, addr);
 	reloc->howto = bfd_reloc_type_lookup(ss->parent->abfd, code);
 	reloc->addend = offset;
 	return reloc;
@@ -1102,7 +1102,7 @@ void write_string(struct supersect *ss, const char **addr, const char *fmt, ...)
 		char *buf = sect_grow(str_ss, len + 1, char);
 		memcpy(buf, str, len + 1);
 		str_offp = ulong_hash_lookup(&ksplice_string_offset, str, TRUE);
-		*str_offp = (void *)buf - str_ss->contents.data;
+		*str_offp = addr_offset(str_ss, buf);
 	}
 
 	write_reloc(ss, addr, &str_ss->symbol, *str_offp);
@@ -1160,7 +1160,7 @@ void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 				      typeof(*addrs.data));
 		memcpy(buf, addrs.data, addrs.size * sizeof(*addrs.data));
 		write_reloc(ss, sym_addrs, &array_ss->symbol,
-			    buf - array_ss->contents.data);
+			    addr_offset(array_ss, buf));
 	} else {
 		*sym_addrs = NULL;
 	}
@@ -1206,7 +1206,7 @@ void write_ksplice_symbol(struct supersect *ss,
 	}
 	ksymbol = sect_grow(ksymbol_ss, 1, struct ksplice_symbol);
 	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, output, TRUE);
-	*ksymbol_offp = (void *)ksymbol - ksymbol_ss->contents.data;
+	*ksymbol_offp = addr_offset(ksymbol_ss, ksymbol);
 
 	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
 		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
