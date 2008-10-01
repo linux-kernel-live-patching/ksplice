@@ -77,8 +77,11 @@ struct wsect {
 };
 
 struct export_desc {
-	const char *sectname;
+	const char *export_type;
+	bool deletion;
 	struct str_vec names;
+	asection *sym_sect;
+	asection *crc_sect;
 };
 DECLARE_VEC_TYPE(struct export_desc, export_desc_vec);
 
@@ -97,7 +100,9 @@ void do_rmsyms(struct superbfd *isbfd);
 
 struct export_vec *get_export_syms(struct superbfd *sbfd);
 void compare_exported_symbols(struct superbfd *oldsbfd,
-			      struct superbfd *newsbfd, char *addstr);
+			      struct superbfd *newsbfd, bool deletion);
+struct export_desc *new_export_desc(struct superbfd *sbfd, asection *sect,
+				    bool deletion);
 bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss);
 static bool part_of_reloc(struct supersect *ss, unsigned long addr);
 static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss);
@@ -345,8 +350,8 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	handle_section_symbol_renames(presbfd, isbfd);
 
 	vec_init(&exports);
-	compare_exported_symbols(presbfd, isbfd, "");
-	compare_exported_symbols(isbfd, presbfd, "del_");
+	compare_exported_symbols(presbfd, isbfd, false);
+	compare_exported_symbols(isbfd, presbfd, true);
 
 	initialize_spans(isbfd);
 	initialize_spans(presbfd);
@@ -412,15 +417,11 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	const struct export_desc *ed;
 	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
 		const char **symname;
-		bool del = starts_with(ed->sectname, "del___ksymtab");
-		const char *export_type = ed->sectname + strlen("__ksymtab");
-		if (del)
-			export_type += strlen("_del");
 		for (symname = ed->names.data;
 		     symname < ed->names.data + ed->names.size; symname++)
 			debug0(isbfd, "Export %s (%s): %s\n",
-			       del ? "deletion" : "addition",
-			       export_type, *symname);
+			       ed->deletion ? "deletion" : "addition",
+			       ed->export_type, *symname);
 	}
 
 	struct span *span;
@@ -433,18 +434,13 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 
 	filter_table_sections(isbfd);
 	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
-		if (starts_with(ed->sectname, "del___ksymtab")) {
-			const char *export_type =
-			    ed->sectname + strlen("del___ksymtab");
-			const char **symname;
-			for (symname = ed->names.data;
-			     symname < ed->names.data + ed->names.size;
-			     symname++)
-				write_ksplice_export(isbfd, *symname,
-						     export_type, true);
-		} else {
+		const char **symname;
+		for (symname = ed->names.data;
+		     symname < ed->names.data + ed->names.size; symname++)
+			write_ksplice_export(isbfd, *symname,
+					     ed->export_type, ed->deletion);
+		if (!ed->deletion)
 			rm_some_exports(isbfd, ed);
-		}
 	}
 
 	compute_span_shifts(isbfd);
@@ -588,8 +584,22 @@ struct export_vec *get_export_syms(struct superbfd *sbfd)
 	return exports;
 }
 
+struct export_desc *new_export_desc(struct superbfd *sbfd, asection *sect,
+				    bool deletion)
+{
+	struct export_desc *ed = vec_grow(&exports, 1);
+	ed->deletion = deletion;
+	vec_init(&ed->names);
+	ed->export_type = strdup(sect->name) + strlen("__ksymtab");
+	ed->sym_sect = sect;
+	char *crc_sect_name;
+	assert(asprintf(&crc_sect_name, "__kcrctab%s", ed->export_type) >= 0);
+	ed->crc_sect = bfd_get_section_by_name(sbfd->abfd, crc_sect_name);
+	return ed;
+}
+
 void compare_exported_symbols(struct superbfd *oldsbfd,
-			      struct superbfd *newsbfd, char *addstr)
+			      struct superbfd *newsbfd, bool deletion)
 {
 	struct export_vec *new_exports, *old_exports;
 	new_exports = get_export_syms(newsbfd);
@@ -615,12 +625,7 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 		}
 		if (last_sect != new->sect) {
 			last_sect = new->sect;
-			ed = vec_grow(&exports, 1);
-			char *sectname;
-			assert(asprintf(&sectname, "%s%s", addstr,
-					new->sect->name) >= 0);
-			ed->sectname = sectname;
-			vec_init(&ed->names);
+			ed = new_export_desc(newsbfd, new->sect, deletion);
 		}
 		if (!found)
 			*vec_grow(&ed->names, 1) = new->name;
@@ -1025,24 +1030,15 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 	return true;
 }
 
-void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed)
+void rm_some_exports(struct superbfd *sbfd, const struct export_desc *ed)
 {
-	assert(starts_with(ed->sectname, "__ksymtab"));
-	const char *export_type = ed->sectname + strlen("__ksymtab");
-	asection *sym_sect = bfd_get_section_by_name(isbfd->abfd, ed->sectname);
-	assert(sym_sect != NULL);
-	char *export_crc_name;
-	assert(asprintf(&export_crc_name, "__kcrctab%s", export_type) >= 0);
-	asection *crc_sect = bfd_get_section_by_name(isbfd->abfd,
-						     export_crc_name);
-	struct supersect *ss, *crc_ss = NULL;
-	ss = fetch_supersect(isbfd, sym_sect);
-	if (crc_sect != NULL)
-		crc_ss = fetch_supersect(isbfd, crc_sect);
-
-	if (crc_ss != NULL)
+	struct supersect *ss = fetch_supersect(sbfd, ed->sym_sect);
+	struct supersect *crc_ss = NULL;
+	if (ed->crc_sect != NULL) {
+		crc_ss = fetch_supersect(sbfd, ed->crc_sect);
 		assert(ss->contents.size * sizeof(unsigned long) ==
 		       crc_ss->contents.size * sizeof(struct kernel_symbol));
+	}
 
 	struct kernel_symbol *ksym;
 	unsigned long *crc = NULL;
@@ -1054,20 +1050,18 @@ void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed)
 	     ksym++, crc++) {
 		asymbol *sym;
 		read_reloc(ss, &ksym->value, sizeof(ksym->value), &sym);
-		span = new_span(ss->parent, sym_sect, addr_offset(ss, ksym),
-				sizeof(*ksym));
+		span = new_span(ss->parent, ed->sym_sect,
+				addr_offset(ss, ksym), sizeof(*ksym));
 		span->keep = str_in_set(sym->name, &ed->names);
 
 		if (crc_ss != NULL) {
-			crc_span = new_span(ss->parent, crc_sect,
+			crc_span = new_span(ss->parent, ed->crc_sect,
 					    addr_offset(crc_ss, crc),
 					    sizeof(*crc));
 			crc_span->keep = span->keep;
 		}
 
 		if (span->keep) {
-			write_ksplice_export(ss->parent, sym->name, export_type,
-					     false);
 			/* Replace name with a mangled name */
 			write_string(ss, (const char **)&ksym->name,
 				     "DISABLED_%s_%s", sym->name, kid);
