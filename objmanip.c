@@ -837,6 +837,10 @@ bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 	for (i = 0; i < old_ss->relocs.size; i++) {
 		struct supersect *ro_old_ss, *ro_new_ss;
 
+		if (old_ss->relocs.data[i]->address !=
+		    new_ss->relocs.data[i]->address)
+			return false;
+
 		asymbol *old_sym = *old_ss->relocs.data[i]->sym_ptr_ptr;
 		asymbol *new_sym = *new_ss->relocs.data[i]->sym_ptr_ptr;
 
