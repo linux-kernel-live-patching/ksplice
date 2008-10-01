@@ -169,21 +169,21 @@ sub write_sysfs {
 sub get_debug_output {
 	my ($kid) = @_;
 	my $update = "ksplice_$kid";
-	my $debug;
 	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX', DIR => tmpdir());
 	my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX',
 				 TMPDIR => 1, CLEANUP => 1);
-	if (runval_raw(qw(mount -t debugfs debugfs), $debugfsdir) == 0) {
+	if (runval_raw("grep", "-qFx", "nodev\tdebugfs", "/proc/filesystems") == 0) {
+		runval(qw(mount -t debugfs debugfs), $debugfsdir);
 		copy("$debugfsdir/$update", "$debugfs_out");
-		$debug = read_file("$debugfsdir/$update");
+		my $debug = read_file("$debugfsdir/$update");
 		runval(qw(umount), $debugfsdir);
-	} elsif ($? >> 8 == 32) {
+		return ($debugfs_out, $debug);
+	} elsif ($? >> 8 == 1) {
 		return ();
 	} else {
 		child_error();
 		die;
 	}
-	return ($debugfs_out, $debug);
 }
 
 sub get_stage {
