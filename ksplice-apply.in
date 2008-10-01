@@ -95,12 +95,12 @@ if($stage ne 'applied') {
 	my $conflicts = get_conflicts($kid);
 	cleanup_modules();
 	print STDERR "Error applying Ksplice update $kid:\n";
-	print $debugout;
+	print $debugout if (defined $debugfile);
 	print_error($abort_cause);
 	if ($abort_cause eq 'code_busy') {
 		print $conflicts;
 	}
-	print("Debugging output saved to $debugfile\n");
+	print("Debugging output saved to $debugfile\n") if (defined $debugfile);
 	die;
 }
 mkpath("/var/run/ksplice/updates/$kid");
