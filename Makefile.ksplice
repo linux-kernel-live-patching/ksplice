@@ -30,6 +30,9 @@ cmd_ksplice-helper = $(ksplice-script) helper $@
 
 ifeq ($(KERNELRELEASE),)
 
+ifneq ($(wildcard include/linux/compile.h),)
+MAKE += --old-file=include/linux/compile.h
+endif
 # Makefile.lib must be included before Makefile because they contain
 # different filechk definitions in 2.6.12.
 include scripts/Makefile.lib
