@@ -82,6 +82,8 @@ enum run_pre_mode {
 	RUN_PRE_INITIAL, RUN_PRE_DEBUG, RUN_PRE_FINAL
 };
 
+enum { NOVAL, TEMP, VAL };
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* 5d7b32de9935c65ca8285ac6ec2382afdbb5d479 was after 2.6.8 */
 #define __bitwise__
@@ -151,7 +153,6 @@ struct labelval {
 	const char *label;
 	unsigned long val;
 	struct ksplice_symbol *symbol;
-	enum { NOVAL, TEMP, VAL } status;
 };
 
 struct safety_record {
@@ -696,6 +697,7 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 #endif /* KSPLICE_STANDALONE */
 
 	INIT_LIST_HEAD(&pack->labelvals);
+	INIT_LIST_HEAD(&pack->temp_labelvals);
 	INIT_LIST_HEAD(&pack->safety_records);
 
 	sort(pack->helper_relocs,
@@ -1952,9 +1954,8 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
 		struct labelval *lv = r->symbol->lv;
 		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx: labelval %s "
-			"= %lx(%d) does not match expected %lx\n", run_addr,
-			r->blank_addr, r->symbol->label, lv->val, lv->status,
-			val);
+			"= %lx does not match expected %lx\n", run_addr,
+			r->blank_addr, r->symbol->label, lv->val, val);
 	}
 	return ret;
 }
@@ -2510,9 +2511,11 @@ static abort_t create_labelval(struct ksplice_pack *pack,
 		return OUT_OF_MEMORY;
 	lv->label = ksym->label;
 	lv->val = val;
-	lv->status = status;
 	lv->symbol = ksym;
-	list_add(&lv->list, &pack->labelvals);
+	if (status == VAL)
+		list_add(&lv->list, &pack->labelvals);
+	else
+		list_add(&lv->list, &pack->temp_labelvals);
 	ksym->lv = lv;
 	return OK;
 }
@@ -2580,15 +2583,13 @@ static void release_vals(struct list_head *vals)
 static void set_temp_labelvals(struct ksplice_pack *pack, int status)
 {
 	struct labelval *lv, *n;
-	list_for_each_entry_safe(lv, n, &pack->labelvals, list) {
-		if (lv->status == TEMP) {
-			if (status == NOVAL) {
-				lv->symbol->lv = NULL;
-				list_del(&lv->list);
-				kfree(lv);
-			} else {
-				lv->status = status;
-			}
+	list_for_each_entry_safe(lv, n, &pack->temp_labelvals, list) {
+		list_del(&lv->list);
+		if (status == NOVAL) {
+			lv->symbol->lv = NULL;
+			kfree(lv);
+		} else {
+			list_add(&lv->list, &pack->labelvals);
 		}
 	}
 }

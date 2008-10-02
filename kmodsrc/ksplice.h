@@ -204,6 +204,7 @@ struct ksplice_pack {
 	struct update *update;
 	struct module *target;
 	struct list_head labelvals;
+	struct list_head temp_labelvals;
 	struct list_head safety_records;
 	struct list_head list;
 };
