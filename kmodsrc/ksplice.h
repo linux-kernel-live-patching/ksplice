@@ -180,7 +180,7 @@ struct ksplice_pack {
 	struct module *primary;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
 	const struct ksplice_section *primary_sections, *primary_sections_end;
-	const struct ksplice_reloc *helper_relocs, *helper_relocs_end;
+	struct ksplice_reloc *helper_relocs, *helper_relocs_end;
 	const struct ksplice_section *helper_sections, *helper_sections_end;
 	struct ksplice_patch *patches, *patches_end;
 	struct ksplice_export *exports, *exports_end;

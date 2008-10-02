@@ -29,6 +29,10 @@
 #include <linux/kthread.h>
 #include <linux/pagemap.h>
 #include <linux/sched.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
+/* 8c63b6d337534a6b5fb111dc27d0850f535118c0 was after 2.6.11 */
+#include <linux/sort.h>
+#endif /* LINUX_VERSION_CODE < */
 #include <linux/stop_machine.h>
 #include <linux/sysfs.h>
 #include <linux/time.h>
@@ -218,6 +222,80 @@ static void *kcalloc(size_t n, size_t size, typeof(GFP_KERNEL) flags)
 	return mem;
 }
 #endif /* LINUX_VERSION_CODE */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
+/* 8c63b6d337534a6b5fb111dc27d0850f535118c0 was after 2.6.11 */
+static void u32_swap(void *a, void *b, int size)
+{
+	u32 t = *(u32 *)a;
+	*(u32 *)a = *(u32 *)b;
+	*(u32 *)b = t;
+}
+
+static void generic_swap(void *a, void *b, int size)
+{
+	char t;
+
+	do {
+		t = *(char *)a;
+		*(char *)a++ = *(char *)b;
+		*(char *)b++ = t;
+	} while (--size > 0);
+}
+
+/**
+ * sort - sort an array of elements
+ * @base: pointer to data to sort
+ * @num: number of elements
+ * @size: size of each element
+ * @cmp: pointer to comparison function
+ * @swap: pointer to swap function or NULL
+ *
+ * This function does a heapsort on the given array. You may provide a
+ * swap function optimized to your element type.
+ *
+ * Sorting time is O(n log n) both on average and worst-case. While
+ * qsort is about 20% faster on average, it suffers from exploitable
+ * O(n*n) worst-case behavior and extra memory requirements that make
+ * it less suitable for kernel use.
+ */
+
+void sort(void *base, size_t num, size_t size,
+	  int (*cmp)(const void *, const void *),
+	  void (*swap)(void *, void *, int size))
+{
+	/* pre-scale counters for performance */
+	int i = (num / 2 - 1) * size, n = num * size, c, r;
+
+	if (!swap)
+		swap = (size == 4 ? u32_swap : generic_swap);
+
+	/* heapify */
+	for (; i >= 0; i -= size) {
+		for (r = i; r * 2 + size < n; r = c) {
+			c = r * 2 + size;
+			if (c < n - size && cmp(base + c, base + c + size) < 0)
+				c += size;
+			if (cmp(base + r, base + c) >= 0)
+				break;
+			swap(base + r, base + c, size);
+		}
+	}
+
+	/* sort */
+	for (i = n - size; i > 0; i -= size) {
+		swap(base, base + i, size);
+		for (r = 0; r * 2 + size < i; r = c) {
+			c = r * 2 + size;
+			if (c < i - size && cmp(base + c, base + c + size) < 0)
+				c += size;
+			if (cmp(base + r, base + c) >= 0)
+				break;
+			swap(base + r, base + c, size);
+		}
+	}
+}
+#endif /* LINUX_VERSION_CODE < */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,13)
 /* Old kernels do not have kstrdup
@@ -498,6 +576,8 @@ static bool starts_with(const char *str, const char *prefix);
 static bool singular(struct list_head *list);
 static void *bsearch(const void *key, const void *base, size_t n,
 		     size_t size, int (*cmp)(const void *key, const void *elt));
+static int compare_reloc_addresses(const void *a, const void *b);
+static int reloc_bsearch_compare(const void *key, const void *elt);
 
 /* Debugging */
 static abort_t init_debug_buf(struct update *update);
@@ -573,6 +653,10 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 
 	INIT_LIST_HEAD(&pack->labelvals);
 	INIT_LIST_HEAD(&pack->safety_records);
+
+	sort(pack->helper_relocs,
+	     (pack->helper_relocs_end - pack->helper_relocs),
+	     sizeof(struct ksplice_reloc), compare_reloc_addresses, NULL);
 
 	mutex_lock(&module_mutex);
 	if (strcmp(pack->target_name, "vmlinux") == 0) {
@@ -1517,34 +1601,43 @@ out:
 }
 #endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
 
+static int reloc_bsearch_compare(const void *key, const void *elt)
+{
+	unsigned long addr = (unsigned long)key;
+	const struct ksplice_reloc *r = elt;
+	if (addr < r->blank_addr)
+		return -1;
+	if (addr >= r->blank_addr + r->size)
+		return 1;
+	return 0;
+}
+
 static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
 			    const struct ksplice_reloc **relocp)
 {
 	const struct ksplice_reloc *r;
 	int canary_ret;
-	for (r = pack->helper_relocs; r < pack->helper_relocs_end; r++) {
-		if (addr >= r->blank_addr && addr < r->blank_addr + r->size) {
-			canary_ret = contains_canary(pack, r->blank_addr,
-						     r->size, r->dst_mask);
-			if (canary_ret < 0)
-				return UNEXPECTED;
-			if (canary_ret == 0) {
-				ksdebug(pack, "run-pre: reloc skipped at "
-					"p_a=%lx to %s+%lx (altinstr)\n",
-					r->blank_addr, r->symbol->label,
-					r->addend);
-				return NO_MATCH;
-			}
-			if (addr != r->blank_addr) {
-				ksdebug(pack, "Invalid nonzero relocation "
-					"offset\n");
-				return UNEXPECTED;
-			}
-			*relocp = r;
-			return OK;
-		}
+
+	r = bsearch((void *)addr, pack->helper_relocs, pack->helper_relocs_end -
+		    pack->helper_relocs, sizeof(*r), reloc_bsearch_compare);
+	if (r == NULL)
+		return NO_MATCH;
+
+	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
+	if (canary_ret < 0)
+		return UNEXPECTED;
+	if (canary_ret == 0) {
+		ksdebug(pack, "run-pre: reloc skipped at p_a=%lx to %s+%lx "
+			"(altinstr)\n", r->blank_addr, r->symbol->label,
+			r->addend);
+		return NO_MATCH;
 	}
-	return NO_MATCH;
+	if (addr != r->blank_addr) {
+		ksdebug(pack, "Invalid nonzero relocation offset\n");
+		return UNEXPECTED;
+	}
+	*relocp = r;
+	return OK;
 }
 
 static abort_t handle_reloc(struct ksplice_pack *pack,
@@ -2339,6 +2432,17 @@ static void *bsearch(const void *key, const void *base, size_t n,
 			return (void *)base + mid * size;
 	}
 	return NULL;
+}
+
+static int compare_reloc_addresses(const void *a, const void *b)
+{
+	const struct ksplice_reloc *ra = a, *rb = b;
+	if (ra->blank_addr > rb->blank_addr)
+		return 1;
+	else if (ra->blank_addr < rb->blank_addr)
+		return -1;
+	else
+		return 0;
 }
 
 #ifdef CONFIG_DEBUG_FS
