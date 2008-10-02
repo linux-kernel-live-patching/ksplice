@@ -103,7 +103,9 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd, bool deletion);
 struct export_desc *new_export_desc(struct superbfd *sbfd, asection *sect,
 				    bool deletion);
-bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss);
+bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
+		  arelent *old_reloc, arelent *new_reloc);
+bool all_relocs_equal(struct supersect *old_ss, struct supersect *new_ss);
 static bool part_of_reloc(struct supersect *ss, unsigned long addr);
 static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss);
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
@@ -831,7 +833,7 @@ static void compare_matched_sections(struct superbfd *newsbfd)
 		old_ss = new_ss->match;
 
 		if (nonrelocs_equal(old_ss, new_ss) &&
-		    relocs_equal(old_ss, new_ss))
+		    all_relocs_equal(old_ss, new_ss))
 			continue;
 
 		char *reason;
@@ -911,120 +913,104 @@ static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 	return true;
 }
 
-/*
- * relocs_equal checks to see whether the old section and the new section
- * reference different read-only data in their relocations -- if a hard-coded
- * string has been changed between the old file and the new file, relocs_equal
- * will detect the difference.
- */
-bool relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
+bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
+		  arelent *old_reloc, arelent *new_reloc)
 {
-	int i;
-	struct superbfd *oldsbfd = old_ss->parent;
-	struct superbfd *newsbfd = new_ss->parent;
+	if (old_reloc->address != new_reloc->address)
+		return false;
 
-	if (old_ss->relocs.size != new_ss->relocs.size) {
-		debug1(newsbfd, "Different reloc count between %s and %s\n",
-		       old_ss->name, new_ss->name);
+	struct superbfd *oldsbfd = old_src_ss->parent;
+	struct superbfd *newsbfd = new_src_ss->parent;
+	asymbol *old_sym = *old_reloc->sym_ptr_ptr;
+	asymbol *new_sym = *new_reloc->sym_ptr_ptr;
+	asection *old_sect = old_sym->section;
+	asection *new_sect = new_sym->section;
+
+	bfd_vma old_offset = get_reloc_offset(old_src_ss, old_reloc, true);
+	bfd_vma new_offset = get_reloc_offset(new_src_ss, new_reloc, true);
+
+	if (bfd_is_und_section(old_sect) || bfd_is_und_section(new_sect)) {
+		if (!bfd_is_und_section(new_sect) && old_offset != 0 &&
+		    fetch_supersect(newsbfd, new_sect)->type == SS_TYPE_TEXT)
+			return false;
+
+		if (!bfd_is_und_section(new_sect) && new_offset != 0 &&
+		    fetch_supersect(oldsbfd, old_sect)->type == SS_TYPE_TEXT)
+			return false;
+
+		return strcmp(old_sym->name, new_sym->name) == 0 &&
+		    old_offset == new_offset;
+	}
+
+	if (bfd_is_const_section(old_sect) || bfd_is_const_section(new_sect))
+		DIE;
+
+	struct supersect *old_ss = fetch_supersect(oldsbfd, old_sect);
+	struct supersect *new_ss = fetch_supersect(newsbfd, new_sect);
+
+	if (old_ss->type == SS_TYPE_STRING &&
+	    /* check it's not an out-of-range relocation to a string;
+	       we'll just compare entire sections for them */
+	    !(old_offset >= old_ss->contents.size ||
+	      new_offset >= new_ss->contents.size)) {
+		if (strcmp(old_ss->contents.data + old_sym->value + old_offset,
+			   new_ss->contents.data + new_sym->value + new_offset)
+		    != 0) {
+			debug0(newsbfd, "Section %s/%s has string difference "
+			       "\"%s\"/\"%s\"\n", old_src_ss->name,
+			       new_src_ss->name,
+			       (const char *)(old_ss->contents.data +
+					      old_sym->value + old_offset),
+			       (const char *)(new_ss->contents.data +
+					      new_sym->value + new_offset));
+			debug1(newsbfd, "Strings differ between %s and %s\n",
+			       old_src_ss->name, new_src_ss->name);
+			return false;
+		}
+		return true;
+	}
+
+	if (old_ss->match != new_ss || new_ss->match != old_ss) {
+		debug1(newsbfd, "Nonmatching relocs from %s to %s/%s\n",
+		       new_src_ss->name, new_ss->name, old_ss->name);
 		return false;
 	}
 
+	if (old_sym->value + old_offset != new_sym->value + new_offset) {
+		debug1(newsbfd, "Offsets to %s/%s differ between %s "
+		       "and %s: %lx+%lx/%lx+%lx\n", old_ss->name,
+		       new_ss->name, old_src_ss->name, new_src_ss->name,
+		       (unsigned long)old_sym->value, (unsigned long)old_offset,
+		       (unsigned long)new_sym->value,
+		       (unsigned long)new_offset);
+		return false;
+	}
+
+	if ((old_sym->value + old_offset != 0 ||
+	     new_sym->value + new_offset != 0) && new_ss->patch) {
+		debug1(newsbfd, "Relocation from %s to nonzero offsets "
+		       "%lx+%lx/%lx+%lx in changed section %s\n",
+		       new_src_ss->name, (unsigned long)old_sym->value,
+		       (unsigned long)old_offset, (unsigned long)new_sym->value,
+		       (unsigned long)new_offset, new_sym->section->name);
+		return false;
+	}
+	return true;
+}
+
+bool all_relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
+{
+	if (old_ss->relocs.size != new_ss->relocs.size) {
+		debug1(new_ss->parent, "Different reloc count between %s and "
+		       "%s\n", old_ss->name, new_ss->name);
+		return false;
+	}
+
+	int i;
 	for (i = 0; i < old_ss->relocs.size; i++) {
-		struct supersect *ro_old_ss, *ro_new_ss;
-
-		if (old_ss->relocs.data[i]->address !=
-		    new_ss->relocs.data[i]->address)
+		if (!relocs_equal(old_ss, new_ss, old_ss->relocs.data[i],
+				  new_ss->relocs.data[i]))
 			return false;
-
-		asymbol *old_sym = *old_ss->relocs.data[i]->sym_ptr_ptr;
-		asymbol *new_sym = *new_ss->relocs.data[i]->sym_ptr_ptr;
-
-		bfd_vma old_offset =
-		    get_reloc_offset(old_ss, old_ss->relocs.data[i], true);
-		bfd_vma new_offset =
-		    get_reloc_offset(new_ss, new_ss->relocs.data[i], true);
-
-		if (bfd_is_und_section(old_sym->section) ||
-		    bfd_is_und_section(new_sym->section)) {
-			if (!bfd_is_und_section(new_sym->section) &&
-			    fetch_supersect(newsbfd, new_sym->section)->type
-			    == SS_TYPE_TEXT && old_offset != 0)
-				return false;
-
-			if (!bfd_is_und_section(old_sym->section) &&
-			    fetch_supersect(oldsbfd, old_sym->section)->type
-			    == SS_TYPE_TEXT && new_offset != 0)
-				return false;
-
-			if (strcmp(old_sym->name, new_sym->name) == 0 &&
-			    old_offset == new_offset)
-				continue;
-			return false;
-		}
-
-		if (bfd_is_const_section(old_sym->section) ||
-		    bfd_is_const_section(new_sym->section))
-			DIE;
-
-		ro_old_ss = fetch_supersect(oldsbfd, old_sym->section);
-		ro_new_ss = fetch_supersect(newsbfd, new_sym->section);
-
-		if (ro_old_ss->type == SS_TYPE_STRING &&
-		    /* check it's not an out-of-range relocation to a string;
-		       we'll just compare entire sections for them */
-		    !(old_offset >= ro_old_ss->contents.size ||
-		      new_offset >= ro_new_ss->contents.size)) {
-			if (strcmp(ro_old_ss->contents.data + old_sym->value +
-				   old_offset,
-				   ro_new_ss->contents.data + new_sym->value +
-				   new_offset) != 0) {
-				debug0(newsbfd, "Section %s/%s has string "
-				       "difference \"%s\"/\"%s\"\n",
-				       old_ss->name, new_ss->name,
-				       (const char *)(ro_old_ss->contents.data +
-						      old_sym->value +
-						      old_offset),
-				       (const char *)(ro_new_ss->contents.data +
-						      new_sym->value +
-						      new_offset));
-				debug1(newsbfd,
-				       "Strings differ between %s and %s\n",
-				       old_ss->name, new_ss->name);
-				return false;
-			}
-			continue;
-		}
-
-		if (ro_old_ss->match != ro_new_ss ||
-		    ro_new_ss->match != ro_old_ss) {
-			debug1(newsbfd, "Nonmatching relocs from %s to %s/%s\n",
-			       new_ss->name, ro_new_ss->name, ro_old_ss->name);
-			return false;
-		}
-
-		if (old_sym->value + old_offset != new_sym->value + new_offset) {
-			debug1(newsbfd, "Offsets to %s/%s differ between %s "
-			       "and %s: %lx+%lx/%lx+%lx\n", ro_old_ss->name,
-			       ro_new_ss->name, old_ss->name, new_ss->name,
-			       (unsigned long)old_sym->value,
-			       (unsigned long)old_offset,
-			       (unsigned long)new_sym->value,
-			       (unsigned long)new_offset);
-			return false;
-		}
-
-		if ((old_sym->value + old_offset != 0 ||
-		     new_sym->value + new_offset != 0) && ro_new_ss->patch) {
-			debug1(newsbfd, "Relocation from %s to nonzero offsets "
-			       "%lx+%lx/%lx+%lx in changed section %s\n",
-			       new_ss->name,
-			       (unsigned long)old_sym->value,
-			       (unsigned long)old_offset,
-			       (unsigned long)new_sym->value,
-			       (unsigned long)new_offset,
-			       new_sym->section->name);
-			return false;
-		}
 	}
 
 	return true;
