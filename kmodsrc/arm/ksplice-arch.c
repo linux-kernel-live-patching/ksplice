@@ -20,7 +20,7 @@
 #define KSPLICE_IP(x) thread_saved_pc(x)
 #define KSPLICE_SP(x) thread_saved_fp(x)
 
-static const struct ksplice_symbol trampoline_symbol = {
+static struct ksplice_symbol trampoline_symbol = {
 	.name = NULL,
 	.label = "<trampoline>",
 };

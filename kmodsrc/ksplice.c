@@ -150,6 +150,7 @@ struct labelval {
 	struct list_head list;
 	const char *label;
 	unsigned long val;
+	struct ksplice_symbol *symbol;
 	enum { NOVAL, TEMP, VAL } status;
 };
 
@@ -547,6 +548,7 @@ static abort_t init_symbol_arrays(struct ksplice_pack *pack);
 static abort_t init_symbol_array(struct ksplice_pack *pack,
 				 struct ksplice_symbol *start,
 				 struct ksplice_symbol *end);
+static abort_t uniquify_symbols(struct ksplice_pack *pack);
 static abort_t add_matching_values(struct ksplice_lookup *lookup,
 				   const char *sym_name, unsigned long sym_val);
 static bool add_export_values(const struct symsearch *syms,
@@ -554,6 +556,7 @@ static bool add_export_values(const struct symsearch *syms,
 			      unsigned int symnum, void *data);
 static int symbolp_bsearch_compare(const void *key, const void *elt);
 static int compare_symbolp_names(const void *a, const void *b);
+static int compare_symbolp_labels(const void *a, const void *b);
 #ifdef CONFIG_KALLSYMS
 static int add_kallsyms_values(void *data, const char *name,
 			       struct module *owner, unsigned long val);
@@ -596,7 +599,8 @@ static void remove_trampoline(const struct ksplice_patch *p);
 
 static struct labelval *find_labelval(struct ksplice_pack *pack,
 				      const char *label);
-static abort_t create_labelval(struct ksplice_pack *pack, const char *label,
+static abort_t create_labelval(struct ksplice_pack *pack,
+			       struct ksplice_symbol *ksym,
 			       unsigned long val, int status);
 static abort_t create_safety_record(struct ksplice_pack *pack,
 				    const struct ksplice_section *sect,
@@ -915,6 +919,12 @@ static int compare_symbolp_names(const void *a, const void *b)
 	return strcmp((*sympa)->name, (*sympb)->name);
 }
 
+static int compare_symbolp_labels(const void *a, const void *b)
+{
+	const struct ksplice_symbol *const *sympa = a, *const *sympb = b;
+	return strcmp((*sympa)->label, (*sympb)->label);
+}
+
 static int symbolp_bsearch_compare(const void *key, const void *elt)
 {
 	const char *name = key;
@@ -995,6 +1005,45 @@ static void cleanup_symbol_arrays(struct ksplice_pack *pack)
 	}
 }
 
+static abort_t uniquify_symbols(struct ksplice_pack *pack)
+{
+	struct ksplice_reloc *r;
+	struct ksplice_section *s;
+	struct ksplice_symbol *sym, **sym_arr, **symp;
+	size_t size = pack->primary_symbols_end - pack->primary_symbols;
+
+	if (size == 0)
+		return OK;
+
+	sym_arr = vmalloc(sizeof(*sym_arr) * size);
+	if (sym_arr == NULL)
+		return OUT_OF_MEMORY;
+
+	for (symp = sym_arr, sym = pack->primary_symbols;
+	     symp < sym_arr + size && sym < pack->primary_symbols_end;
+	     sym++, symp++)
+		*symp = sym;
+
+	sort(sym_arr, size, sizeof(*sym_arr), compare_symbolp_labels, NULL);
+
+	for (r = pack->helper_relocs; r < pack->helper_relocs_end; r++) {
+		symp = bsearch(&r->symbol, sym_arr, size, sizeof(*sym_arr),
+			       compare_symbolp_labels);
+		if (symp != NULL)
+			r->symbol = *symp;
+	}
+
+	for (s = pack->helper_sections; s < pack->helper_sections_end; s++) {
+		symp = bsearch(&s->symbol, sym_arr, size, sizeof(*sym_arr),
+			       compare_symbolp_labels);
+		if (symp != NULL)
+			s->symbol = *symp;
+	}
+
+	vfree(sym_arr);
+	return OK;
+}
+
 static abort_t init_symbol_array(struct ksplice_pack *pack,
 				 struct ksplice_symbol *start,
 				 struct ksplice_symbol *end)
@@ -1012,6 +1061,7 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 		if (sym->vals == NULL)
 			return OUT_OF_MEMORY;
 		INIT_LIST_HEAD(sym->vals);
+		sym->lv = NULL;
 	}
 
 	sym_arr = vmalloc(sizeof(*sym_arr) * size);
@@ -1051,6 +1101,10 @@ static abort_t init_symbol_arrays(struct ksplice_pack *pack)
 
 	ret = init_symbol_array(pack, pack->primary_symbols,
 				pack->primary_symbols_end);
+	if (ret != OK)
+		return ret;
+
+	ret = uniquify_symbols(pack);
 	if (ret != OK)
 		return ret;
 
@@ -1295,9 +1349,10 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	if (!bootstrapped)
 		return OK;
 #endif /* KSPLICE_STANDALONE */
+
 	/* Create labelvals so that we can verify our choices in the second
 	   round of run-pre matching that considers data sections. */
-	ret = create_labelval(pack, r->symbol->label, sym_addr, VAL);
+	ret = create_labelval(pack, r->symbol, sym_addr, VAL);
 	if (ret != OK)
 		return ret;
 	return add_dependency_on_address(pack, sym_addr);
@@ -1582,7 +1637,7 @@ static abort_t try_addr(struct ksplice_pack *pack,
 		return NO_MATCH;
 	}
 
-	ret = create_labelval(pack, sect->symbol->label, run_addr, TEMP);
+	ret = create_labelval(pack, sect->symbol, run_addr, TEMP);
 	if (ret != OK)
 		return ret;
 
@@ -1893,9 +1948,9 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 		return UNEXPECTED;
 	}
 
-	ret = create_labelval(pack, r->symbol->label, val, TEMP);
+	ret = create_labelval(pack, r->symbol, val, TEMP);
 	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
-		struct labelval *lv = find_labelval(pack, r->symbol->label);
+		struct labelval *lv = r->symbol->lv;
 		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx: labelval %s "
 			"= %lx(%d) does not match expected %lx\n", run_addr,
 			r->blank_addr, r->symbol->label, lv->val, lv->status,
@@ -1909,14 +1964,13 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 			     struct list_head *vals)
 {
 	abort_t ret;
-	struct labelval *lv;
+	struct labelval *lv = ksym->lv;
 
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped)
 		return OK;
 #endif /* KSPLICE_STANDALONE */
 
-	lv = find_labelval(pack, ksym->label);
 	if (lv != NULL) {
 		release_vals(vals);
 		ksdebug(pack, "using detected sym %s=%lx\n", ksym->label,
@@ -2442,10 +2496,11 @@ static struct labelval *find_labelval(struct ksplice_pack *pack,
 	return NULL;
 }
 
-static abort_t create_labelval(struct ksplice_pack *pack, const char *label,
+static abort_t create_labelval(struct ksplice_pack *pack,
+			       struct ksplice_symbol *ksym,
 			       unsigned long val, int status)
 {
-	struct labelval *lv = find_labelval(pack, label);
+	struct labelval *lv = ksym->lv;
 	val = follow_trampolines(pack, val);
 	if (lv != NULL)
 		return lv->val == val ? OK : NO_MATCH;
@@ -2453,10 +2508,12 @@ static abort_t create_labelval(struct ksplice_pack *pack, const char *label,
 	lv = kmalloc(sizeof(*lv), GFP_KERNEL);
 	if (lv == NULL)
 		return OUT_OF_MEMORY;
-	lv->label = label;
+	lv->label = ksym->label;
 	lv->val = val;
 	lv->status = status;
+	lv->symbol = ksym;
 	list_add(&lv->list, &pack->labelvals);
+	ksym->lv = lv;
 	return OK;
 }
 
@@ -2526,6 +2583,7 @@ static void set_temp_labelvals(struct ksplice_pack *pack, int status)
 	list_for_each_entry_safe(lv, n, &pack->labelvals, list) {
 		if (lv->status == TEMP) {
 			if (status == NOVAL) {
+				lv->symbol->lv = NULL;
 				list_del(&lv->list);
 				kfree(lv);
 			} else {

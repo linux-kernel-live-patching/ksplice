@@ -1245,7 +1245,7 @@ void write_ksplice_system_map(struct superbfd *sbfd, asymbol *sym,
 }
 
 void write_ksplice_symbol_backend(struct supersect *ss,
-				  const struct ksplice_symbol *const *addr,
+				  struct ksplice_symbol *const *addr,
 				  asymbol *sym, const char *label,
 				  const char *name)
 {
@@ -1272,7 +1272,7 @@ void write_ksplice_symbol_backend(struct supersect *ss,
 }
 
 void write_ksplice_symbol(struct supersect *ss,
-			  const struct ksplice_symbol *const *addr,
+			  struct ksplice_symbol *const *addr,
 			  asymbol *sym, struct span *span,
 			  const char *addstr_sect)
 {
@@ -1322,7 +1322,7 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 		fake_sym.flags = 0;
 
 		write_ksplice_symbol_backend
-		    (ss, (const struct ksplice_symbol **)repladdr, &fake_sym,
+		    (ss, (struct ksplice_symbol **)repladdr, &fake_sym,
 		     fake_sym.name, fake_sym.name);
 		return;
 	}

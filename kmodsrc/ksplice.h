@@ -10,6 +10,7 @@ struct ksplice_symbol {
 	const char *label;
 /* private: */
 	struct list_head *vals;
+	struct labelval *lv;
 };
 
 /**
@@ -29,7 +30,7 @@ struct ksplice_symbol {
  **/
 struct ksplice_reloc {
 	unsigned long blank_addr;
-	const struct ksplice_symbol *symbol;
+	struct ksplice_symbol *symbol;
 	int pcrel;
 	long addend;
 	int size;
@@ -53,7 +54,7 @@ struct ksplice_reloc {
  * 			data, or data
  **/
 struct ksplice_section {
-	const struct ksplice_symbol *symbol;
+	struct ksplice_symbol *symbol;
 	unsigned long address;
 	unsigned long size;
 	unsigned int flags;
@@ -184,7 +185,7 @@ struct ksplice_pack {
 	const struct ksplice_section *primary_sections, *primary_sections_end;
 	struct ksplice_symbol *primary_symbols, *primary_symbols_end;
 	struct ksplice_reloc *helper_relocs, *helper_relocs_end;
-	const struct ksplice_section *helper_sections, *helper_sections_end;
+	struct ksplice_section *helper_sections, *helper_sections_end;
 	struct ksplice_symbol *helper_symbols, *helper_symbols_end;
 	struct ksplice_patch *patches, *patches_end;
 	struct ksplice_export *exports, *exports_end;

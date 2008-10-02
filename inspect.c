@@ -56,7 +56,7 @@ char *str_ksplice_symbol(struct supersect *ss,
 }
 
 char *str_ksplice_symbolp(struct supersect *ptr_ss,
-			  const struct ksplice_symbol *const *ksymbolp)
+			  struct ksplice_symbol *const *ksymbolp)
 {
 	struct supersect *ss;
 	const struct ksplice_symbol *ksymbol =

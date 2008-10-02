@@ -506,7 +506,7 @@ static int next_run_byte(struct ud *ud)
 }
 #endif /* !CONFIG_FUNCTION_DATA_SECTIONS */
 
-static const struct ksplice_symbol trampoline_symbol = {
+static struct ksplice_symbol trampoline_symbol = {
 	.name = NULL,
 	.label = "<trampoline>",
 };

@@ -23,7 +23,7 @@
 #endif
 
 extern struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
-extern const struct ksplice_section ksplice_sections[], ksplice_sections_end[];
+extern struct ksplice_section ksplice_sections[], ksplice_sections_end[];
 extern struct ksplice_symbol ksplice_symbols[], ksplice_symbols_end[];
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
