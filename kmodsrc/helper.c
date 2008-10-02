@@ -36,19 +36,21 @@ extern struct ksplice_system_map ksplice_system_map[],
 #define pack KSPLICE_UNIQ(pack)
 extern struct ksplice_pack pack;
 
+#define PTR(p) ({ static const volatile typeof(&*p) p##_ptr = p; p##_ptr; })
+
 static int init_helper(void)
 {
-	pack.helper_relocs = ksplice_relocs;
-	pack.helper_relocs_end = ksplice_relocs_end;
-	pack.helper_sections = ksplice_sections;
-	pack.helper_sections_end = ksplice_sections_end;
+	pack.helper_relocs = PTR(ksplice_relocs);
+	pack.helper_relocs_end = PTR(ksplice_relocs_end);
+	pack.helper_sections = PTR(ksplice_sections);
+	pack.helper_sections_end = PTR(ksplice_sections_end);
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-	pack.helper_parainstructions = parainstructions;
-	pack.helper_parainstructions_end = parainstructions_end;
+	pack.helper_parainstructions = PTR(parainstructions);
+	pack.helper_parainstructions_end = PTR(parainstructions_end);
 #endif
 #ifdef KSPLICE_STANDALONE
-	pack.helper_system_map = ksplice_system_map;
-	pack.helper_system_map_end = ksplice_system_map_end;
+	pack.helper_system_map = PTR(ksplice_system_map);
+	pack.helper_system_map_end = PTR(ksplice_system_map_end);
 #endif /* KSPLICE_STANDALONE */
 	return init_ksplice_pack(&pack);
 }
