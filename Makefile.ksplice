@@ -37,8 +37,10 @@ endif
 # different filechk definitions in 2.6.12.
 include scripts/Makefile.lib
 include Makefile
-CFLAGS_KERNEL += -ffunction-sections -fdata-sections
-CFLAGS_MODULE += -ffunction-sections -fdata-sections
+CC := ksplice-cc.pl $(CC)
+CFLAGS_KSPLICE = -ffunction-sections -fdata-sections -ksplice-cflags-api=1
+CFLAGS_KERNEL += $(CFLAGS_KSPLICE)
+CFLAGS_MODULE += $(CFLAGS_KSPLICE)
 ksplice-mods += vmlinux
 ksplice-dirs += $(addprefix _ksplice_,$(vmlinux-dirs))
 ifdef ksplice-mode-snap

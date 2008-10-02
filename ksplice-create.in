@@ -114,6 +114,7 @@ if($Verbose::level >= 2) {
 	push @make, "-s";
 }
 
+$ENV{PATH} = "$datadir:$ENV{PATH}";
 my @make_ksplice = (@make, "-f", "$datadir/Makefile.ksplice", @kbuild_flags);
 
 sub revert_orig() {
