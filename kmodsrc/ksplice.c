@@ -1144,9 +1144,14 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 		for (sect = pack->helper_sections;
 		     sect < pack->helper_sections_end; sect++) {
 			i = sect - pack->helper_sections;
-			if (finished[i] == 0)
-				ksdebug(pack, "run-pre: could not match "
-					"section %s\n", sect->symbol->label);
+			if (finished[i] != 0)
+				continue;
+			ksdebug(pack, "run-pre: could not match %s "
+				"section %s\n",
+				(sect->flags & KSPLICE_SECTION_DATA) != 0 ?
+				"data" :
+				(sect->flags & KSPLICE_SECTION_RODATA) != 0 ?
+				"rodata" : "text", sect->symbol->label);
 		}
 		ksdebug(pack, "Aborted.  run-pre: could not match some "
 			"sections.\n");
