@@ -59,6 +59,8 @@
 #include <stdio.h>
 #include <limits.h>
 
+#define KSPLICE_SYMBOL_STR "KSPLICE_SYMBOL_"
+
 #define symbol_init(sym) *(sym) = (asymbol *)NULL
 DEFINE_HASH_TYPE(asymbol *, symbol_hash, symbol_hash_init, symbol_hash_free,
 		 symbol_hash_lookup, symbol_init);
@@ -119,11 +121,13 @@ bool is_table_section(const char *name, bool consider_other);
 void rm_relocs(struct superbfd *isbfd);
 void rm_some_relocs(struct supersect *ss);
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
+void load_ksplice_symbol_offsets(struct superbfd *sbfd);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 static void write_ksplice_section(struct span *span);
 void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 				 const char *label);
+asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name);
 void filter_table_sections(struct superbfd *isbfd);
 void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
 void keep_referenced_sections(struct superbfd *sbfd);
@@ -229,6 +233,24 @@ void load_system_map()
 		*vec_grow(addr_vec_hash_lookup(&system_map, sym, TRUE),
 			  1) = addr;
 	fclose(fp);
+}
+
+void load_ksplice_symbol_offsets(struct superbfd *sbfd)
+{
+	asection *sect = bfd_get_section_by_name(sbfd->abfd,
+						 ".ksplice_symbols");
+	if (sect == NULL)
+		return;
+	struct supersect *ss = fetch_supersect(sbfd, sect);
+
+	struct ksplice_symbol *ksym;
+	for (ksym = ss->contents.data;
+	     (void *)ksym < ss->contents.data + ss->contents.size; ksym++) {
+		const char *label = read_string(ss, &ksym->label);
+		unsigned long *ksymbol_offp =
+		    ulong_hash_lookup(&ksplice_symbol_offset, label, TRUE);
+		*ksymbol_offp = addr_offset(ss, ksym);
+	}
 }
 
 void load_offsets()
@@ -534,6 +556,7 @@ void do_keep_helper(struct superbfd *isbfd)
 void do_finalize(struct superbfd *isbfd)
 {
 	load_system_map();
+	load_ksplice_symbol_offsets(isbfd);
 	load_offsets();
 	initialize_supersect_types(isbfd);
 	initialize_spans(isbfd);
@@ -1036,6 +1059,11 @@ void rm_relocs(struct superbfd *isbfd)
 			struct supersect *ss = fetch_supersect(isbfd, p);
 			rm_some_relocs(ss);
 		}
+		p = bfd_get_section_by_name(isbfd->abfd, ".ksplice_relocs");
+		if (p != NULL) {
+			struct supersect *ss = fetch_supersect(isbfd, p);
+			rm_some_relocs(ss);
+		}
 	}
 }
 
@@ -1216,56 +1244,62 @@ void write_ksplice_system_map(struct superbfd *sbfd, asymbol *sym,
 	write_string(smap_ss, &smap->label, "%s", label);
 }
 
-void write_ksplice_symbol(struct supersect *ss,
-			  const struct ksplice_symbol *const *addr,
-			  asymbol *sym, struct span *span,
-			  const char *addstr_sect)
+void write_ksplice_symbol_backend(struct supersect *ss,
+				  const struct ksplice_symbol *const *addr,
+				  asymbol *sym, const char *label,
+				  const char *name)
 {
 	struct supersect *ksymbol_ss = make_section(ss->parent,
 						    ".ksplice_symbols");
 	struct ksplice_symbol *ksymbol;
 	unsigned long *ksymbol_offp;
-	const char *label;
-	char *output;
-	if (span != NULL && span->start != 0)
-		label = span->label;
-	else
-		label = label_lookup(ss->parent, sym);
-	assert(asprintf(&output, "%s%s", label, addstr_sect) >= 0);
 
-	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, output, FALSE);
+	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, label, FALSE);
 	if (ksymbol_offp != NULL) {
 		write_reloc(ss, addr, &ksymbol_ss->symbol, *ksymbol_offp);
 		return;
 	}
 	ksymbol = sect_grow(ksymbol_ss, 1, struct ksplice_symbol);
-	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, output, TRUE);
+	ksymbol_offp = ulong_hash_lookup(&ksplice_symbol_offset, label, TRUE);
 	*ksymbol_offp = addr_offset(ksymbol_ss, ksymbol);
 
 	write_reloc(ss, addr, &ksymbol_ss->symbol, *ksymbol_offp);
-	write_string(ksymbol_ss, &ksymbol->label, "%s", output);
-
-	if (span != NULL && span->symbol == NULL) {
-		ksymbol->name = NULL;
-		return;
+	write_string(ksymbol_ss, &ksymbol->label, "%s", label);
+	if (name != NULL) {
+		write_string(ksymbol_ss, &ksymbol->name, "%s", name);
+		write_ksplice_system_map(ksymbol_ss->parent, sym, label);
 	}
+}
 
-	if (strcmp(addstr_sect, "") == 0)
-		write_ksplice_system_map(ksymbol_ss->parent, sym, output);
+void write_ksplice_symbol(struct supersect *ss,
+			  const struct ksplice_symbol *const *addr,
+			  asymbol *sym, struct span *span,
+			  const char *addstr_sect)
+{
+	const char *label, *name;
+	char *output;
+	if (span != NULL && span->start != 0)
+		label = span->label;
+	else
+		label = label_lookup(ss->parent, sym);
 
-	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
-		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
-	} else if (bfd_is_const_section(sym->section)) {
-		ksymbol->name = NULL;
-	} else {
-		asymbol *gsym = canonical_symbol(ss->parent, sym);
+	assert(asprintf(&output, "%s%s", label, addstr_sect) >= 0);
 
-		if (gsym == NULL || (gsym->flags & BSF_SECTION_SYM) != 0)
-			ksymbol->name = NULL;
-		else
-			write_string(ksymbol_ss, &ksymbol->name, "%s",
-				     gsym->name);
-	}
+	asymbol *gsym = canonical_symbol(ss->parent, sym);
+	if (strcmp(addstr_sect, "") != 0)
+		name = NULL;
+	else if (bfd_is_und_section(sym->section))
+		name = sym->name;
+	else if (bfd_is_const_section(sym->section))
+		name = NULL;
+	else if (span != NULL && span->symbol == NULL)
+		name = NULL;
+	else if (gsym == NULL || (gsym->flags & BSF_SECTION_SYM) != 0)
+		name = NULL;
+	else
+		name = gsym->name;
+
+	write_ksplice_symbol_backend(ss, addr, sym, output, name);
 }
 
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
@@ -1273,11 +1307,23 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
 	reloc_howto_type *howto = orig_reloc->howto;
 	bfd_vma addend = get_reloc_offset(ss, orig_reloc, false);
+	unsigned long *repladdr = ss->contents.data + orig_reloc->address;
 
-	if (mode("finalize") && starts_with(ss->name, ".ksplice_patches")) {
-		unsigned long *repladdr =
-		    ss->contents.data + orig_reloc->address;
+	if (mode("finalize") && strcmp(ss->name, ".ksplice_patches") == 0) {
 		*repladdr = 0;
+		return;
+	}
+	if (mode("finalize") && strcmp(ss->name, ".ksplice_relocs") == 0) {
+		assert(starts_with(sym_ptr->name, KSPLICE_SYMBOL_STR));
+		asymbol fake_sym;
+		fake_sym.name = sym_ptr->name + strlen(KSPLICE_SYMBOL_STR);
+		fake_sym.section = bfd_und_section_ptr;
+		fake_sym.value = 0;
+		fake_sym.flags = 0;
+
+		write_ksplice_symbol_backend
+		    (ss, (const struct ksplice_symbol **)repladdr, &fake_sym,
+		     fake_sym.name, fake_sym.name);
 		return;
 	}
 
@@ -1296,7 +1342,16 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	struct span *address_span = reloc_address_span(ss, orig_reloc);
 	write_reloc(kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address + address_span->shift);
-	write_ksplice_symbol(kreloc_ss, &kreloc->symbol, sym_ptr, span, "");
+	if (bfd_is_und_section(sym_ptr->section) && mode("keep")) {
+		char *name;
+		assert(asprintf(&name, KSPLICE_SYMBOL_STR "%s", sym_ptr->name)
+		       >= 0);
+		asymbol **symp = make_undefined_symbolp(ss->parent, name);
+		write_reloc(kreloc_ss, &kreloc->symbol, symp, 0);
+	} else {
+		write_ksplice_symbol(kreloc_ss, &kreloc->symbol, sym_ptr, span,
+				     "");
+	}
 	kreloc->pcrel = howto->pc_relative;
 	if (span != NULL && span->start != 0)
 		addend += sym_ptr->value - span->start;
@@ -1359,6 +1414,37 @@ void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
 	write_reloc(kpatch_ss, &kpatch->repladdr, &sect->symbol, 0);
 }
 
+asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name)
+{
+	asymbol **symp;
+	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
+	     symp++) {
+		asymbol *sym = *symp;
+		if (strcmp(name, sym->name) == 0 &&
+		    bfd_is_und_section(sym->section))
+			return symp;
+	}
+	asymbol ***sympp;
+	for (sympp = sbfd->new_syms.data;
+	     sympp < sbfd->new_syms.data + sbfd->new_syms.size; sympp++) {
+		asymbol **symp = *sympp;
+		asymbol *sym = *symp;
+		if (strcmp(name, sym->name) == 0 &&
+		    bfd_is_und_section(sym->section))
+			return symp;
+	}
+
+	symp = malloc(sizeof(*symp));
+	*symp = bfd_make_empty_symbol(sbfd->abfd);
+	asymbol *sym = *symp;
+	sym->name = name;
+	sym->section = bfd_und_section_ptr;
+	sym->flags = 0;
+	sym->value = 0;
+	*vec_grow(&sbfd->new_syms, 1) = symp;
+	return symp;
+}
+
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 				 const char *label)
 {
@@ -1367,24 +1453,7 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 						 struct ksplice_patch);
 
 	write_string(kpatch_ss, &kpatch->label, "%s", label);
-	asymbol **symp;
-	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
-	     symp++) {
-		asymbol *sym = *symp;
-		if (bfd_is_und_section(sym->section) &&
-		    strcmp(name, sym->name) == 0)
-			break;
-	}
-	if (symp >= sbfd->syms.data + sbfd->syms.size) {
-		symp = malloc(sizeof(*symp));
-		*symp = bfd_make_empty_symbol(sbfd->abfd);
-		asymbol *sym = *symp;
-		sym->name = strdup(name);
-		sym->section = bfd_und_section_ptr;
-		sym->flags = 0;
-		sym->value = 0;
-		*vec_grow(&sbfd->new_syms, 1) = symp;
-	}
+	asymbol **symp = make_undefined_symbolp(sbfd, strdup(name));
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
 }
 
