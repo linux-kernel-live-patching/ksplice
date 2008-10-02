@@ -156,8 +156,6 @@ static void match_global_symbol_sections(struct superbfd *oldsbfd,
 				  struct superbfd *newsbfd);
 static void match_sections_by_name(struct superbfd *oldsbfd,
 				   struct superbfd *newsbfd);
-static void match_sections_by_contents(struct superbfd *oldsbfd,
-				       struct superbfd *newsbfd);
 static void match_sections_by_label(struct superbfd *oldsbfd,
 				    struct superbfd *newsbfd);
 static void mark_new_sections(struct superbfd *sbfd);
@@ -332,8 +330,6 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	debug1(isbfd, "Matched by name\n");
 	match_sections_by_label(presbfd, isbfd);
 	debug1(isbfd, "Matched by label\n");
-	match_sections_by_contents(presbfd, isbfd);
-	debug1(isbfd, "Matched by contents\n");
 
 	do {
 		changed = false;
@@ -716,33 +712,6 @@ static void match_sections_by_label(struct superbfd *oldsbfd,
 				   label_lookup(oldsbfd, oldsect->symbol)) != 0)
 				continue;
 			oldss = fetch_supersect(oldsbfd, oldsect);
-			match_sections(oldss, newss);
-		}
-	}
-}
-
-static void match_sections_by_contents(struct superbfd *oldsbfd,
-				       struct superbfd *newsbfd)
-{
-	asection *oldsect, *newsect;
-	struct supersect *oldss, *newss;
-	for (newsect = newsbfd->abfd->sections; newsect != NULL;
-	     newsect = newsect->next) {
-		newss = fetch_supersect(newsbfd, newsect);
-		if (newss->type != SS_TYPE_RODATA)
-			continue;
-		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
-		     oldsect = oldsect->next) {
-			oldss = fetch_supersect(oldsbfd, oldsect);
-			if (oldss->type != SS_TYPE_RODATA)
-				continue;
-			if (oldss->relocs.size != 0 || newss->relocs.size != 0)
-				continue;
-			if (oldss->contents.size != newss->contents.size)
-				continue;
-			if (memcmp(oldss->contents.data, newss->contents.data,
-				   oldss->contents.size) != 0)
-				continue;
 			match_sections(oldss, newss);
 		}
 	}
