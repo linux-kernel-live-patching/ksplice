@@ -235,6 +235,13 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			goto out;
 		}
 
+		if (run_ud.mnemonic == UD_Iinvalid) {
+			ksdebug(pack, "Unrecognized opcode at %s+%lx\n",
+				sect->symbol->label, pre_offset);
+			ret = UNEXPECTED;
+			goto out;
+		}
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && \
     defined(_I386_BUG_H) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11) || \
 			     defined(CONFIG_DEBUG_BUGVERBOSE))
