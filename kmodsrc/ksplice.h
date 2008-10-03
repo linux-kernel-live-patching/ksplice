@@ -80,6 +80,7 @@ struct ksplice_patch {
 	unsigned long repladdr;
 /* private: */
 	unsigned long oldaddr;
+	void *vaddr;
 	char trampoline[MAX_TRAMPOLINE_SIZE];
 	char saved[MAX_TRAMPOLINE_SIZE];
 	unsigned int size;

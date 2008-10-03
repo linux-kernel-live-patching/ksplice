@@ -79,6 +79,7 @@ extra-y += ksplice.o
 
 RMSYMS = \
 	apply_paravirt \
+	core_kernel_text \
 	thread_return \
 	bust_spinlocks \
 	task_curr \
@@ -88,6 +89,7 @@ RMSYMS = \
 	module_mutex \
 	modules \
 	init_mm \
+	phys_base \
 	kallsyms_addresses \
 	kallsyms_num_syms \
 	kallsyms_names \

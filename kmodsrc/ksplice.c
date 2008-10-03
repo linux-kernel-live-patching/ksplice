@@ -57,16 +57,6 @@
 #define KSPLICE_NO_KERNEL_SUPPORT 1
 #endif /* KSPLICE_STANDALONE && !CONFIG_KSPLICE && !CONFIG_KSPLICE_MODULE */
 
-#if defined(KSPLICE_STANDALONE) && \
-    LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22) && defined(CONFIG_DEBUG_RODATA)
-/* 6fb14755a676282a4e6caa05a08c92db8e45cfff was after 2.6.21 */
-#if !defined(CONFIG_KPROBES) || LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
-/* 4e4eee0e0139811b36a07854dcfa9746bc8b16d3 was after 2.6.25 */
-#error "This version of Ksplice does not support your kernel."
-#error "Future versions of Ksplice will fix this problem."
-#endif /* !CONFIG_KPROBES || LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26) */
-#endif /* KSPLICE_STANDALONE && LINUX_VERSION_CODE && CONFIG_DEBUG_RODATA */
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
 /* 6e21828743247270d09a86756a0c11702500dbfb was after 2.6.18 */
 #define bool _Bool
@@ -418,6 +408,14 @@ static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
 }
 #endif
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,17)
+/* 5e376613899076396d0c97de67ad072587267370 was after 2.6.16 */
+static int core_kernel_text(unsigned long addr)
+{
+	return addr >= init_mm.start_code && addr < init_mm.end_code;
+}
+#endif /* LINUX_VERSION_CODE */
+
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
 #endif /* !task_thread_info */
@@ -481,6 +479,9 @@ static abort_t finalize_exports(struct ksplice_pack *pack);
 static abort_t finalize_patches(struct ksplice_pack *pack);
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr);
+static abort_t map_trampoline_pages(struct update *update);
+static void unmap_trampoline_pages(struct update *update);
+static void *map_writable(void *addr, size_t len);
 static abort_t apply_relocs(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *relocs,
 			    const struct ksplice_reloc *relocs_end);
@@ -689,6 +690,7 @@ static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 int init_ksplice_pack(struct ksplice_pack *pack)
 {
 	struct update *update;
+	struct ksplice_patch *p;
 	int ret = 0;
 
 #ifdef KSPLICE_STANDALONE
@@ -727,6 +729,10 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 			goto out;
 		}
 	}
+
+	for (p = pack->patches; p < pack->patches_end; p++)
+		p->vaddr = NULL;
+
 	list_for_each_entry(update, &updates, list) {
 		if (strcmp(pack->kid, update->kid) == 0) {
 			if (update->stage != STAGE_PREPARING) {
@@ -1251,6 +1257,69 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 			return ret;
 	}
 	return OK;
+}
+
+static abort_t map_trampoline_pages(struct update *update)
+{
+	struct ksplice_pack *pack;
+	list_for_each_entry(pack, &update->packs, list) {
+		struct ksplice_patch *p;
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			p->vaddr = map_writable((void *)p->oldaddr, p->size);
+			if (p->vaddr == NULL) {
+				ksdebug(pack, "Unable to map oldaddr read/write"
+					"\n");
+				unmap_trampoline_pages(update);
+				return UNEXPECTED;
+			}
+		}
+	}
+	return OK;
+}
+
+static void unmap_trampoline_pages(struct update *update)
+{
+	struct ksplice_pack *pack;
+	list_for_each_entry(pack, &update->packs, list) {
+		struct ksplice_patch *p;
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			vunmap((void *)((unsigned long)p->vaddr & PAGE_MASK));
+			p->vaddr = NULL;
+		}
+	}
+}
+
+/* Based off of linux's text_poke.  */
+static void *map_writable(void *addr, size_t len)
+{
+	void *vaddr;
+	int nr_pages = 2;
+	struct page *pages[2];
+
+	if (!core_kernel_text((unsigned long)addr)) {
+		pages[0] = vmalloc_to_page(addr);
+		pages[1] = vmalloc_to_page(addr + PAGE_SIZE);
+	} else {
+#if defined(CONFIG_X86_64) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+/* e3ebadd95cb621e2c7436f3d3646447ac9d5c16d was after 2.6.21 */
+		pages[0] = pfn_to_page(__pa_symbol(addr) >> PAGE_SHIFT);
+		WARN_ON(!PageReserved(pages[0]));
+		pages[1] = pfn_to_page(__pa_symbol(addr + PAGE_SIZE) >>
+				       PAGE_SHIFT);
+#else /* !CONFIG_X86_64 || LINUX_VERSION_CODE >= */
+		pages[0] = virt_to_page(addr);
+		WARN_ON(!PageReserved(pages[0]));
+		pages[1] = virt_to_page(addr + PAGE_SIZE);
+#endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
+	}
+	if (!pages[0])
+		return NULL;
+	if (!pages[1])
+		nr_pages = 1;
+	vaddr = vmap(pages, nr_pages, VM_MAP, PAGE_KERNEL);
+	if (vaddr == NULL)
+		return NULL;
+	return vaddr + offset_in_page(addr);
 }
 
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
@@ -2097,6 +2166,9 @@ static abort_t apply_patches(struct update *update)
 		}
 	}
 
+	ret = map_trampoline_pages(update);
+	if (ret != OK)
+		return ret;
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(update);
 #ifdef KSPLICE_STANDALONE
@@ -2118,6 +2190,7 @@ static abort_t apply_patches(struct update *update)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
+	unmap_trampoline_pages(update);
 
 	if (ret == CODE_BUSY) {
 		print_conflicts(update);
@@ -2149,6 +2222,9 @@ static abort_t reverse_patches(struct update *update)
 
 	_ksdebug(update, "Preparing to reverse %s\n", update->kid);
 
+	ret = map_trampoline_pages(update);
+	if (ret != OK)
+		return ret;
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(update);
 		clear_list(&update->conflicts, struct conflict, list);
@@ -2171,6 +2247,7 @@ static abort_t reverse_patches(struct update *update)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
+	unmap_trampoline_pages(update);
 
 	if (ret == CODE_BUSY) {
 		print_conflicts(update);
@@ -2460,8 +2537,8 @@ static void insert_trampoline(struct ksplice_patch *p)
 {
 	mm_segment_t old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	memcpy((void *)p->saved, (void *)p->oldaddr, p->size);
-	memcpy((void *)p->oldaddr, (void *)p->trampoline, p->size);
+	memcpy((void *)p->saved, p->vaddr, p->size);
+	memcpy(p->vaddr, (void *)p->trampoline, p->size);
 	flush_icache_range(p->oldaddr, p->oldaddr + p->size);
 	set_fs(old_fs);
 }
@@ -2469,7 +2546,7 @@ static void insert_trampoline(struct ksplice_patch *p)
 static abort_t verify_trampoline(struct ksplice_pack *pack,
 				 const struct ksplice_patch *p)
 {
-	if (memcmp((void *)p->oldaddr, (void *)p->trampoline, p->size) != 0) {
+	if (memcmp(p->vaddr, (void *)p->trampoline, p->size) != 0) {
 		ksdebug(pack, "Aborted.  Trampoline at %lx has been "
 			"overwritten.\n", p->oldaddr);
 		return CODE_BUSY;
@@ -2481,7 +2558,7 @@ static void remove_trampoline(const struct ksplice_patch *p)
 {
 	mm_segment_t old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	memcpy((void *)p->oldaddr, (void *)p->saved, p->size);
+	memcpy(p->vaddr, (void *)p->saved, p->size);
 	flush_icache_range(p->oldaddr, p->oldaddr + p->size);
 	set_fs(old_fs);
 }
