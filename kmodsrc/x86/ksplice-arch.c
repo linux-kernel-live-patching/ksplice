@@ -34,120 +34,6 @@ extern const char thread_return[];
 #ifndef CONFIG_FUNCTION_DATA_SECTIONS
 #include "udis86.h"
 
-/* Various efficient no-op patterns for aligning code labels.
-   Note: Don't try to assemble the instructions in the comments.
-   0L and 0w are not legal. */
-
-#define NUM_NOPS (sizeof(nops) / sizeof(nops[0]))
-struct insn {
-	size_t len;
-	const unsigned char *data;
-};
-
-/* *INDENT-OFF* */
-#define I(...) {							\
-		.len = sizeof((const unsigned char []){__VA_ARGS__}),	\
-		.data = ((const unsigned char []){__VA_ARGS__}),	\
-	}
-static const struct insn nops[] = {
-/* GNU assembler no-op patterns from
-   binutils-2.17/gas/config/tc-i386.c line 500 */
-I(0x90),					/* nop                  */
-I(0x89, 0xf6),					/* movl %esi,%esi       */
-I(0x8d, 0x76, 0x00),				/* leal 0(%esi),%esi    */
-I(0x8d, 0x74, 0x26, 0x00),			/* leal 0(%esi,1),%esi  */
-I(0x90,						/* nop                  */
-  0x8d, 0x74, 0x26, 0x00),			/* leal 0(%esi,1),%esi  */
-I(0x8d, 0xb6, 0x00, 0x00, 0x00, 0x00),		/* leal 0L(%esi),%esi   */
-I(0x8d, 0xb4, 0x26, 0x00, 0x00, 0x00, 0x00),	/* leal 0L(%esi,1),%esi */
-I(0x90,						/* nop                  */
-  0x8d, 0xb4, 0x26, 0x00, 0x00, 0x00, 0x00),	/* leal 0L(%esi,1),%esi */
-I(0x89, 0xf6,					/* movl %esi,%esi       */
-  0x8d, 0xbc, 0x27, 0x00, 0x00, 0x00, 0x00),	/* leal 0L(%edi,1),%edi */
-I(0x8d, 0x76, 0x00,				/* leal 0(%esi),%esi    */
-  0x8d, 0xbc, 0x27, 0x00, 0x00, 0x00, 0x00),	/* leal 0L(%edi,1),%edi */
-I(0x8d, 0x74, 0x26, 0x00,			/* leal 0(%esi,1),%esi  */
-  0x8d, 0xbc, 0x27, 0x00, 0x00, 0x00, 0x00),	/* leal 0L(%edi,1),%edi */
-I(0x8d, 0xb6, 0x00, 0x00, 0x00, 0x00,		/* leal 0L(%esi),%esi   */
-  0x8d, 0xbf, 0x00, 0x00, 0x00, 0x00),		/* leal 0L(%edi),%edi   */
-I(0x8d, 0xb6, 0x00, 0x00, 0x00, 0x00,		/* leal 0L(%esi),%esi   */
-  0x8d, 0xbc, 0x27, 0x00, 0x00, 0x00, 0x00),	/* leal 0L(%edi,1),%edi */
-I(0x8d, 0xb4, 0x26, 0x00, 0x00, 0x00, 0x00,	/* leal 0L(%esi,1),%esi */
-  0x8d, 0xbc, 0x27, 0x00, 0x00, 0x00, 0x00),	/* leal 0L(%edi,1),%edi */
-I(0xeb, 0x0d, 0x90, 0x90, 0x90, 0x90, 0x90,	/* jmp .+15; lotsa nops */
-  0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90),
-
-/* binutils-2.17/gas/config/tc-i386.c line 570 */
-I(0x66, 0x90),					/* xchg %ax,%ax         */
-I(0x66,						/* data16               */
-  0x66, 0x90),					/* xchg %ax,%ax         */
-I(0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66, 0x90),					/* xchg %ax,%ax         */
-I(0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66, 0x90),					/* xchg %ax,%ax         */
-
-/* binutils-2.18/gas/config/tc-i386.c line 572 */
-I(0x0f, 0x1f, 0x00),				/* nopl (%[re]ax)       */
-I(0x0f, 0x1f, 0x40, 0x00),			/* nopl 0(%[re]ax)      */
-I(0x0f, 0x1f, 0x44, 0x00, 0x00),	/* nopl 0(%[re]ax,%[re]ax,1)    */
-I(0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00),	/* nopw 0(%[re]ax,%[re]ax,1)    */
-I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00),
-					/* nopw 0(%[re]ax,%[re]ax,1)    */
-I(0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-					/* nopl 0L(%[re]ax,%[re]ax,1)   */
-I(0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-					/* nopw 0L(%[re]ax,%[re]ax,1)   */
-I(0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-				/* nopw %cs:0L(%[re]ax,%[re]ax,1)       */
-I(0x66,						/* data16               */
-  0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-				/* nopw %cs:0L(%[re]ax,%[re]ax,1)       */
-I(0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-				/* nopw %cs:0L(%[re]ax,%[re]ax,1)       */
-I(0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-				/* nopw %cs:0L(%[re]ax,%[re]ax,1)       */
-I(0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-				/* nopw %cs:0L(%[re]ax,%[re]ax,1)       */
-I(0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-				/* nopw %cs:0L(%[re]ax,%[re]ax,1)       */
-I(0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66,						/* data16               */
-  0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-				/* nopw %cs:0L(%[re]ax,%[re]ax,1)       */
-I(0x0f, 0x1f, 0x44, 0x00, 0x00,		/* nopl 0(%[re]ax,%[re]ax,1)    */
-  0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00),	/* nopw 0(%[re]ax,%[re]ax,1)    */
-I(0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00,	/* nopw 0(%[re]ax,%[re]ax,1)    */
-  0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00),	/* nopw 0(%[re]ax,%[re]ax,1)    */
-I(0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00,	/* nopw 0(%[re]ax,%[re]ax,1)    */
-  0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00),	/* nopl 0L(%[re]ax)     */
-I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
-  0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00),	/* nopl 0L(%[re]ax)     */
-I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
-  0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00),
-					/* nopl 0L(%[re]ax,%[re]ax,1)   */
-};
-/* *INDENT-ON* */
-
 static abort_t compare_operands(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
 				const struct ksplice_reloc **fingerp,
@@ -157,11 +43,12 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 				const unsigned char *pre, struct ud *run_ud,
 				struct ud *pre_ud, int opnum,
 				enum run_pre_mode mode);
-static int match_nop(const unsigned char *addr);
 static uint8_t ud_operand_len(struct ud_operand *operand);
 static uint8_t ud_prefix_len(struct ud *ud);
-static long jump_lval(struct ud_operand *operand);
+static long ud_operand_lval(struct ud_operand *operand);
 static int next_run_byte(struct ud *ud);
+static bool is_nop(struct ud *ud);
+static bool is_unconditional_jump(struct ud *ud);
 
 static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
@@ -169,13 +56,14 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				struct list_head *safety_records,
 				enum run_pre_mode mode)
 {
-	int runc, prec;
 	int i;
 	abort_t ret;
 	const unsigned char *run, *pre, *run_start, *pre_start, *safety_start;
 	struct ud pre_ud, run_ud;
 	const unsigned char **match_map;
 	const struct ksplice_reloc *finger;
+	unsigned long pre_offset, run_offset;
+	bool run_unconditional = false;
 
 	if (sect->size == 0)
 		return NO_MATCH;
@@ -209,8 +97,6 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	match_map[0] = run_start;
 
 	while (1) {
-		unsigned long pre_offset = pre - pre_start;
-		unsigned long run_offset = run - run_start;
 		if (ud_disassemble(&pre_ud) == 0) {
 			/* Ran out of pre bytes to match; we're done! */
 			unsigned long safety_offset = run - safety_start;
@@ -219,10 +105,77 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 						   safety_offset);
 			goto out;
 		}
-		if (ud_disassemble(&run_ud) == 0) {
-			ret = NO_MATCH;
-			goto out;
+		if (is_nop(&pre_ud)) {
+			if (mode == RUN_PRE_DEBUG) {
+				ksdebug(pack, "| nop: ");
+				print_bytes(pack, run, 0, pre,
+					    ud_insn_len(&pre_ud));
+			}
+			pre += ud_insn_len(&pre_ud);
+			continue;
 		}
+		pre_offset = pre - pre_start;
+
+		while (1) {
+			if (ud_disassemble(&run_ud) == 0) {
+				ret = NO_MATCH;
+				goto out;
+			}
+			if (!is_nop(&run_ud))
+				break;
+			if (mode == RUN_PRE_DEBUG) {
+				ksdebug(pack, "| nop: ");
+				print_bytes(pack, run, ud_insn_len(&run_ud),
+					    pre, 0);
+			}
+			run += ud_insn_len(&run_ud);
+		}
+
+		if (match_map[pre_offset] == NULL) {
+			match_map[pre_offset] = run;
+		} else if (match_map[pre_offset] != run) {
+			/* There is a discontinuity in the match map.
+			   Check that the last instruction was an
+			   unconditional change of control */
+			if (!run_unconditional) {
+				ksdebug(pack, "<--[No unconditional change of "
+					"control at control transfer point %lx]"
+					"\n", pre_offset);
+				return NO_MATCH;
+			}
+
+			if (mode == RUN_PRE_DEBUG)
+				ksdebug(pack, " [Moving run pointer for %lx "
+					"from %lx to %lx]\n", pre_offset,
+					(unsigned long)(run - run_start),
+					(unsigned long)(match_map[pre_offset] -
+							run_start));
+
+			/* Create a safety_record for the block just matched */
+			ret = create_safety_record(pack, sect, safety_records,
+						   (unsigned long)safety_start,
+						   run - safety_start);
+			if (ret != OK)
+				goto out;
+
+			/* We re-initialize the run ud structure because
+			   it may have cached upcoming bytes */
+			run = match_map[pre_offset];
+			ud_init(&run_ud);
+			ud_set_mode(&run_ud, BITS_PER_LONG);
+			ud_set_syntax(&run_ud, UD_SYN_ATT);
+			ud_set_input_hook(&run_ud, next_run_byte);
+			ud_set_pc(&run_ud, 0);
+			ud_set_user_opaque_data(&run_ud, (unsigned char *)run);
+			safety_start = run;
+			if (ud_disassemble(&run_ud) == 0) {
+				ret = NO_MATCH;
+				goto out;
+			}
+		}
+
+		run_offset = run - run_start;
+		run_unconditional = is_unconditional_jump(&run_ud);
 
 		if (mode == RUN_PRE_DEBUG) {
 			ksdebug(pack, "| ");
@@ -292,73 +245,6 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 		}
 		run += ud_insn_len(&run_ud);
 		pre += ud_insn_len(&pre_ud);
-
-		/* Nops are the only sense in which the instruction
-		   sequences are allowed to not match */
-		runc = match_nop(run);
-		prec = match_nop(pre);
-		if (runc > 0 || prec > 0) {
-			if (mode == RUN_PRE_DEBUG)
-				print_bytes(pack, run, runc, pre, prec);
-			ud_input_skip(&run_ud, runc);
-			ud_input_skip(&pre_ud, prec);
-			run += runc;
-			pre += prec;
-		}
-
-		if (pre - pre_start >= sect->size)
-			continue;
-
-		if (match_map[pre - pre_start] == run)
-			continue;
-
-		if (match_map[pre - pre_start] == NULL) {
-			match_map[pre - pre_start] = run;
-			continue;
-		}
-
-		/* This condition should occur for jumps into an ELF subsection.
-		   Check that the last instruction was an unconditional change
-		   of control */
-		if (!(run_ud.mnemonic == UD_Ijmp ||
-		      run_ud.mnemonic == UD_Iret ||
-		      run_ud.mnemonic == UD_Iretf ||
-		      run_ud.mnemonic == UD_Iiretw ||
-		      run_ud.mnemonic == UD_Iiretd ||
-		      run_ud.mnemonic == UD_Iiretq ||
-		      run_ud.mnemonic == UD_Isysexit ||
-		      run_ud.mnemonic == UD_Isysret ||
-		      run_ud.mnemonic == UD_Isyscall ||
-		      run_ud.mnemonic == UD_Isysenter)) {
-			ksdebug(pack, "<--[No unconditional change of "
-				"control at control transfer point %lx]\n",
-				pre_offset);
-			return NO_MATCH;
-		}
-
-		if (mode == RUN_PRE_DEBUG)
-			ksdebug(pack, " [Moving run pointer for %lx from %lx "
-				"to %lx]\n", pre_offset, run_offset,
-				(unsigned long)(match_map[pre_offset] -
-						run_start));
-
-		/* Create a safety_record for the block just matched */
-		ret = create_safety_record(pack, sect, safety_records,
-					   (unsigned long)safety_start,
-					   run - safety_start);
-		if (ret != OK)
-			goto out;
-
-		/* We re-initialize the ud structure because
-		   it may have cached upcoming bytes */
-		run = match_map[pre - pre_start];
-		ud_init(&run_ud);
-		ud_set_mode(&run_ud, BITS_PER_LONG);
-		ud_set_syntax(&run_ud, UD_SYN_ATT);
-		ud_set_input_hook(&run_ud, next_run_byte);
-		ud_set_pc(&run_ud, 0);
-		ud_set_user_opaque_data(&run_ud, (unsigned char *)run);
-		safety_start = run;
 	}
 out:
 	vfree(match_map);
@@ -450,9 +336,9 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 	if (pre_op->type == UD_OP_JIMM) {
 		/* Immediate jump without a relocation */
 		const unsigned char *pre_target = pre + ud_insn_len(pre_ud) +
-		    jump_lval(pre_op);
+		    ud_operand_lval(pre_op);
 		const unsigned char *run_target = run + ud_insn_len(run_ud) +
-		    jump_lval(run_op);
+		    ud_operand_lval(run_op);
 		if (pre_target == run_target) {
 			/* Paravirt-inserted pcrel jump; OK! */
 			return OK;
@@ -484,7 +370,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 					(unsigned long)pre_target,
 					(unsigned long)pre_start + sect->size,
 					(unsigned long)pre, ud_insn_len(pre_ud),
-					sect->size, jump_lval(pre_op),
+					sect->size, ud_operand_lval(pre_op),
 					(unsigned long)run_target);
 			}
 			return NO_MATCH;
@@ -500,24 +386,53 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 	}
 }
 
-static int match_nop(const unsigned char *addr)
+static bool is_nop(struct ud *ud)
 {
-	int i, j;
-	const struct insn *nop;
-	for (i = NUM_NOPS - 1; i >= 0; i--) {
-		nop = &nops[i];
-		for (j = 0; j < nop->len; j++) {
-			unsigned char byte;
-			if (probe_kernel_read(&byte, (void *)&addr[j], 1) ==
-			    -EFAULT)
-				break;
-			if (byte != nop->data[j])
-				break;
-		}
-		if (j == nop->len)
-			return j;
+	switch (ud->mnemonic) {
+	case UD_Inop:
+		return true;
+	case UD_Imov:
+		return ud->operand[0].type == UD_OP_REG &&
+		    ud->operand[0].type == UD_OP_REG &&
+		    ud->operand[2].type == UD_NONE &&
+		    ud->operand[0].base == ud->operand[1].base;
+	case UD_Ixchg:
+		return ud->operand[0].type == UD_OP_REG &&
+		    ud->operand[1].type == UD_OP_REG &&
+		    ud->operand[2].type == UD_NONE &&
+		    ud->operand[0].base == ud->operand[1].base;
+	case UD_Ilea:
+		return ud->operand[0].type == UD_OP_REG &&
+		    ud->operand[1].type == UD_OP_MEM &&
+		    ((ud->operand[1].base == ud->operand[0].base &&
+		      ud->operand[1].index == UD_NONE) ||
+		     (ud->operand[1].base == UD_NONE &&
+		      ud->operand[1].index == ud->operand[0].base &&
+		      ud->operand[1].scale == 0)) &&
+		    ud_operand_lval(&ud->operand[1]) == 0 &&
+		    ud->operand[2].type == UD_NONE;
+	default:
+		return false;
 	}
-	return 0;
+}
+
+static bool is_unconditional_jump(struct ud *ud)
+{
+	switch (ud->mnemonic) {
+	case UD_Ijmp:
+	case UD_Iret:
+	case UD_Iretf:
+	case UD_Iiretw:
+	case UD_Iiretd:
+	case UD_Iiretq:
+	case UD_Isysexit:
+	case UD_Isysret:
+	case UD_Isyscall:
+	case UD_Isysenter:
+		return true;
+	default:
+		return false;
+	}
 }
 
 static uint8_t ud_operand_len(struct ud_operand *operand)
@@ -538,23 +453,20 @@ static uint8_t ud_prefix_len(struct ud *ud)
 	return len;
 }
 
-static long jump_lval(struct ud_operand *operand)
+static long ud_operand_lval(struct ud_operand *operand)
 {
-	if (operand->type == UD_OP_JIMM) {
-		switch (operand->size) {
-		case 8:
-			return operand->lval.sbyte;
-		case 16:
-			return operand->lval.sword;
-		case 32:
-			return operand->lval.sdword;
-		case 64:
-			return operand->lval.sqword;
-		default:
-			return 0;
-		}
+	switch (operand->size) {
+	case 8:
+		return operand->lval.sbyte;
+	case 16:
+		return operand->lval.sword;
+	case 32:
+		return operand->lval.sdword;
+	case 64:
+		return operand->lval.sqword;
+	default:
+		return 0;
 	}
-	return 0;
 }
 
 static int next_run_byte(struct ud *ud)
