@@ -2062,7 +2062,7 @@ static const char *label_lookup(struct superbfd *sbfd, asymbol *sym)
 		if (csym == map->csym)
 			return map->label;
 	}
-	return symbol_label(sbfd, sym);
+	DIE;
 }
 
 static void print_label_map(struct superbfd *sbfd)
