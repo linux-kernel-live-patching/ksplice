@@ -2216,6 +2216,8 @@ static asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
 
 static asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
 {
+	if (bfd_is_const_section(sym->section))
+		return sym;
 	asymbol **symp = canonical_symbolp(sbfd, sym);
 	return symp != NULL ? *symp : NULL;
 }
