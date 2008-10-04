@@ -87,12 +87,10 @@ DECLARE_VEC_TYPE(asymbol **, asymbolpp_vec);
 	bfd_hash_table_init(table, newfunc)
 #endif
 
-#define DEFINE_HASH_TYPE(elt_t, hashtype,				\
-			 hashtype_init, hashtype_free,			\
-			 hashtype_lookup,				\
-			 elt_construct)					\
-	DECLARE_HASH_TYPE(elt_t, hashtype, hashtype_init,		\
-			  hashtype_free, hashtype_lookup);		\
+#define IMPLEMENT_HASH_TYPE(elt_t, hashtype,				\
+			    hashtype_init, hashtype_free,		\
+			    hashtype_lookup,				\
+			    elt_construct)				\
 									\
 	struct hashtype##_entry {					\
 		struct bfd_hash_entry root;				\
@@ -145,6 +143,17 @@ DECLARE_VEC_TYPE(asymbol **, asymbolpp_vec);
 	}								\
 									\
 	struct eat_trailing_semicolon
+
+#define DEFINE_HASH_TYPE(elt_t, hashtype,				\
+			 hashtype_init, hashtype_free,			\
+			 hashtype_lookup,				\
+			 elt_construct)					\
+	DECLARE_HASH_TYPE(elt_t, hashtype, hashtype_init,		\
+			  hashtype_free, hashtype_lookup);		\
+	IMPLEMENT_HASH_TYPE(elt_t, hashtype, hashtype_init,		\
+			    hashtype_free, hashtype_lookup,		\
+			    elt_construct);
+
 
 #ifndef bfd_get_section_size
 #define bfd_get_section_size(x) ((x)->_cooked_size)
