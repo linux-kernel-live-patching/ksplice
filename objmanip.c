@@ -2008,10 +2008,9 @@ void initialize_supersect_types(struct superbfd *sbfd)
 
 static void init_label_map(struct superbfd *sbfd)
 {
-	vec_init(&sbfd->maps);
-	label_mapp_hash_init(&sbfd->maps_hash);
-	struct label_map *map, *map2;
+	struct label_map *map;
 
+	vec_init(&sbfd->maps);
 	init_csyms(sbfd);
 
 	struct symbol_hash csyms;
@@ -2034,36 +2033,42 @@ static void init_label_map(struct superbfd *sbfd)
 		map = vec_grow(&sbfd->maps, 1);
 		map->csym = csym;
 		map->count = 0;
-		map->index = 0;
 		map->label = symbol_label(sbfd, csym);
 	}
+
+	struct label_mapp_hash label_maps;
+	label_mapp_hash_init(&label_maps);
 	for (map = sbfd->maps.data;
 	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		for (map2 = sbfd->maps.data;
-		     map2 < sbfd->maps.data + sbfd->maps.size; map2++) {
-			if (strcmp(map->label, map2->label) != 0)
-				continue;
-			map->count++;
-			if (map2 < map)
-				map->index++;
+		struct label_map **mapp =
+		    label_mapp_hash_lookup(&label_maps, map->label, TRUE);
+		if (*mapp == NULL) {
+			*mapp = map;
+			continue;
 		}
+
+		struct label_map *first_map = *mapp;
+		char *buf;
+		if (first_map->count == 0) {
+			assert(asprintf(&buf, "%s~%d", map->label, 0) >= 0);
+			first_map->label = buf;
+		}
+		first_map->count++;
+		assert(asprintf(&buf, "%s~%d", map->label, first_map->count)
+		       >= 0);
+		map->label = buf;
 	}
 
+	label_mapp_hash_init(&sbfd->maps_hash);
 	for (map = sbfd->maps.data;
 	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		if (map->count > 1) {
-			char *buf;
-			assert(asprintf(&buf, "%s~%d", map->label,
-					map->index) >= 0);
-			map->label = buf;
-		}
-		map->orig_label = map->label;
 		char *key;
 		assert(asprintf(&key, "%p", map->csym) >= 0);
 		struct label_map **mapp =
 		    label_mapp_hash_lookup(&sbfd->maps_hash, key, TRUE);
 		free(key);
 		*mapp = map;
+		map->orig_label = map->label;
 	}
 }
 

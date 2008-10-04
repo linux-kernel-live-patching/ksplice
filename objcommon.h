@@ -169,7 +169,6 @@ struct label_map {
 	const char *orig_label;
 	const char *label;
 	int count;
-	int index;
 };
 DECLARE_VEC_TYPE(struct label_map, label_map_vec);
 DECLARE_HASH_TYPE(struct label_map *, label_mapp_hash, label_mapp_hash_init,
