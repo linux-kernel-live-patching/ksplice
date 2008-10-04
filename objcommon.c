@@ -29,6 +29,10 @@ IMPLEMENT_HASH_TYPE(struct label_map *, label_mapp_hash, label_mapp_hash_init,
 		    label_mapp_hash_free, label_mapp_hash_lookup,
 		    label_mapp_init);
 
+#define asymbolpp_init(symp) *(symp) = NULL
+IMPLEMENT_HASH_TYPE(asymbol **, asymbolpp_hash, asymbolpp_hash_init,
+		    asymbolpp_hash_free, asymbolpp_hash_lookup, asymbolpp_init);
+
 void vec_do_reserve(void **data, size_t *mem_size, size_t new_size)
 {
 	if (new_size > *mem_size || new_size * 2 < *mem_size) {

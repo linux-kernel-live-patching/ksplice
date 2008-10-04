@@ -168,6 +168,7 @@ static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 			  const char *label);
 static void init_label_map(struct superbfd *sbfd);
 static asymbol **symbolp_scan(struct supersect *ss, bfd_vma value);
+static void init_csyms(struct superbfd *sbfd);
 static asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym);
 static asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
 static char *static_local_symbol(struct superbfd *sbfd, asymbol *sym);
@@ -2011,6 +2012,8 @@ static void init_label_map(struct superbfd *sbfd)
 	label_mapp_hash_init(&sbfd->maps_hash);
 	struct label_map *map, *map2;
 
+	init_csyms(sbfd);
+
 	asymbol **symp;
 	for (symp = sbfd->syms.data;
 	     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
@@ -2147,27 +2150,43 @@ static const char *find_caller(struct supersect *ss, asymbol *sym)
 	return "*multiple_callers*";
 }
 
+static void init_csyms(struct superbfd *sbfd)
+{
+	asymbolpp_hash_init(&sbfd->csyms);
+
+	asymbol **symp;
+	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
+	     symp++) {
+		asymbol *sym = *symp;
+		if ((sym->flags & BSF_DEBUGGING) != 0)
+			continue;
+		char *key;
+		assert(asprintf(&key, "%s+%lx", sym->section->name,
+				(unsigned long)sym->value) >= 0);
+		asymbol ***csympp = asymbolpp_hash_lookup(&sbfd->csyms, key,
+							  TRUE);
+		free(key);
+		if (*csympp == NULL) {
+			*csympp = symp;
+			continue;
+		}
+		asymbol *csym = **csympp;
+		if ((csym->flags & BSF_GLOBAL) != 0)
+			continue;
+		if ((sym->flags & BSF_GLOBAL) != 0)
+			*csympp = symp;
+	}
+}
+
 static asymbol **symbolp_scan(struct supersect *ss, bfd_vma value)
 {
-	asymbol **csymp;
-	asymbol **ret = NULL;
-	for (csymp = ss->parent->syms.data;
-	     csymp < ss->parent->syms.data + ss->parent->syms.size; csymp++) {
-		asymbol *csymtemp = *csymp;
-		if (bfd_is_const_section(csymtemp->section))
-			continue;
-		struct supersect *csym_ss =
-		    fetch_supersect(ss->parent, csymtemp->section);
-		if ((csymtemp->flags & BSF_DEBUGGING) != 0 ||
-		    ss != csym_ss || value != csymtemp->value)
-			continue;
-		if ((csymtemp->flags & BSF_GLOBAL) != 0)
-			return csymp;
-		if (ret == NULL)
-			ret = csymp;
-	}
-	if (ret != NULL)
-		return ret;
+	char *key;
+	assert(asprintf(&key, "%s+%lx", ss->name, (unsigned long)value) >= 0);
+	asymbol ***csympp =
+	    asymbolpp_hash_lookup(&ss->parent->csyms, key, FALSE);
+	free(key);
+	if (csympp != NULL)
+		return *csympp;
 
 	/* For section symbols of sections containing no symbols, return the
 	   section symbol that relocations are generated against */

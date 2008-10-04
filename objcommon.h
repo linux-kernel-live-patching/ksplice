@@ -161,6 +161,8 @@ DECLARE_VEC_TYPE(asymbol **, asymbolpp_vec);
 
 DECLARE_HASH_TYPE(arelent *, arelentp_hash, arelentp_hash_init,
 		  arelentp_hash_free, arelentp_hash_lookup);
+DECLARE_HASH_TYPE(asymbol **, asymbolpp_hash, asymbolpp_hash_init,
+		  asymbolpp_hash_free, asymbolpp_hash_lookup);
 
 struct label_map {
 	asymbol *csym;
@@ -192,6 +194,7 @@ struct superbfd {
 	struct label_map_vec maps;
 	struct label_mapp_hash maps_hash;
 	struct asymbolpp_vec new_syms;
+	struct asymbolpp_hash csyms;
 };
 
 enum supersect_type {
