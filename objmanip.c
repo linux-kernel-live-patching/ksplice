@@ -131,6 +131,7 @@ bfd_boolean copy_object(bfd *ibfd, bfd *obfd);
 void setup_section(bfd *ibfd, asection *isection, void *obfdarg);
 static void setup_new_section(bfd *obfd, struct supersect *ss);
 static void write_section(bfd *obfd, asection *osection, void *arg);
+static void delete_obsolete_relocs(struct supersect *ss);
 void mark_symbols_used_in_relocations(bfd *abfd, asection *isection,
 				      void *ignored);
 static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
@@ -1108,19 +1109,7 @@ arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		 bfd_vma offset)
 {
-	arelent *new_reloc = create_reloc(ss, addr, symp, offset), **relocp;
-	for (relocp = ss->relocs.data;
-	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
-		if ((*relocp)->address == new_reloc->address) {
-			memmove(relocp,
-				relocp + 1,
-				(void *)(ss->relocs.data + ss->relocs.size) -
-				(void *)(relocp + 1));
-			ss->relocs.size--;
-			relocp--;
-		}
-	}
-	*vec_grow(&ss->new_relocs, 1) = new_reloc;
+	*vec_grow(&ss->new_relocs, 1) = create_reloc(ss, addr, symp, offset);
 }
 
 void write_string(struct supersect *ss, const char **addr, const char *fmt, ...)
@@ -1652,12 +1641,46 @@ void setup_new_section(bfd *obfd, struct supersect *ss)
 	osection->output_offset = 0;
 }
 
+static int compare_reloc_addresses(const void *aptr, const void *bptr)
+{
+	const arelent *const *a = aptr, *const *b = bptr;
+	return (*a)->address - (*b)->address;
+}
+
+static void delete_obsolete_relocs(struct supersect *ss)
+{
+	if (ss->new_relocs.size == 0)
+		return;
+
+	qsort(ss->relocs.data, ss->relocs.size, sizeof(*ss->relocs.data),
+	      compare_reloc_addresses);
+	qsort(ss->new_relocs.data, ss->new_relocs.size,
+	      sizeof(*ss->new_relocs.data), compare_reloc_addresses);
+
+	struct arelentp_vec orig_relocs;
+	vec_move(&orig_relocs, &ss->relocs);
+
+	arelent **relocp, **new_relocp = ss->new_relocs.data;
+	for (relocp = orig_relocs.data;
+	     relocp < orig_relocs.data + orig_relocs.size; relocp++) {
+		while (new_relocp < ss->new_relocs.data + ss->new_relocs.size &&
+		       (*new_relocp)->address < (*relocp)->address)
+			new_relocp++;
+		arelent *reloc = *relocp, *new_reloc = *new_relocp;
+		if (new_relocp == ss->new_relocs.data + ss->new_relocs.size ||
+		    reloc->address != new_reloc->address)
+			*vec_grow(&ss->relocs, 1) = reloc;
+	}
+}
+
 void write_section(bfd *obfd, asection *osection, void *arg)
 {
 	struct supersect *ss = osection->userdata;
 
 	if ((ss->flags & SEC_GROUP) != 0 || ss->contents.size == 0)
 		return;
+
+	delete_obsolete_relocs(ss);
 
 	arelent **relocp;
 	char *error_message;
