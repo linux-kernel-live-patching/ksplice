@@ -2014,19 +2014,23 @@ static void init_label_map(struct superbfd *sbfd)
 
 	init_csyms(sbfd);
 
+	struct symbol_hash csyms;
+	symbol_hash_init(&csyms);
+
 	asymbol **symp;
 	for (symp = sbfd->syms.data;
 	     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
 		asymbol *csym = canonical_symbol(sbfd, *symp);
 		if (csym == NULL)
 			continue;
-		for (map = sbfd->maps.data;
-		     map < sbfd->maps.data + sbfd->maps.size; map++) {
-			if (map->csym == csym)
-				break;
-		}
-		if (map < sbfd->maps.data + sbfd->maps.size)
+		char *key;
+		assert(asprintf(&key, "%p", csym) >= 0);
+		asymbol **csymp = symbol_hash_lookup(&csyms, key, TRUE);
+		free(key);
+		if (*csymp != NULL)
 			continue;
+		*csymp = csym;
+
 		map = vec_grow(&sbfd->maps, 1);
 		map->csym = csym;
 		map->count = 0;
