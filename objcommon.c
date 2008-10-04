@@ -24,6 +24,11 @@
 IMPLEMENT_HASH_TYPE(arelent *, arelentp_hash, arelentp_hash_init,
 		    arelentp_hash_free, arelentp_hash_lookup, arelentp_init);
 
+#define label_mapp_init(map) *(map) = NULL
+IMPLEMENT_HASH_TYPE(struct label_map *, label_mapp_hash, label_mapp_hash_init,
+		    label_mapp_hash_free, label_mapp_hash_lookup,
+		    label_mapp_init);
+
 void vec_do_reserve(void **data, size_t *mem_size, size_t new_size)
 {
 	if (new_size > *mem_size || new_size * 2 < *mem_size) {

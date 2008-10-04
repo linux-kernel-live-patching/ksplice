@@ -2008,6 +2008,7 @@ void initialize_supersect_types(struct superbfd *sbfd)
 static void init_label_map(struct superbfd *sbfd)
 {
 	vec_init(&sbfd->maps);
+	label_mapp_hash_init(&sbfd->maps_hash);
 	struct label_map *map, *map2;
 
 	asymbol **symp;
@@ -2050,19 +2051,26 @@ static void init_label_map(struct superbfd *sbfd)
 			map->label = buf;
 		}
 		map->orig_label = map->label;
+		char *key;
+		assert(asprintf(&key, "%p", map->csym) >= 0);
+		struct label_map **mapp =
+		    label_mapp_hash_lookup(&sbfd->maps_hash, key, TRUE);
+		free(key);
+		*mapp = map;
 	}
 }
 
 static const char *label_lookup(struct superbfd *sbfd, asymbol *sym)
 {
-	struct label_map *map;
 	asymbol *csym = canonical_symbol(sbfd, sym);
-	for (map = sbfd->maps.data;
-	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		if (csym == map->csym)
-			return map->label;
-	}
-	DIE;
+	char *key;
+	assert(asprintf(&key, "%p", csym) >= 0);
+	struct label_map **mapp =
+	    label_mapp_hash_lookup(&sbfd->maps_hash, key, FALSE);
+	free(key);
+	if (mapp == NULL)
+		DIE;
+	return (*mapp)->label;
 }
 
 static void print_label_map(struct superbfd *sbfd)

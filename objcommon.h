@@ -170,6 +170,8 @@ struct label_map {
 	int index;
 };
 DECLARE_VEC_TYPE(struct label_map, label_map_vec);
+DECLARE_HASH_TYPE(struct label_map *, label_mapp_hash, label_mapp_hash_init,
+		  label_mapp_hash_free, label_mapp_hash_lookup);
 
 struct span {
 	struct supersect *ss;
@@ -188,6 +190,7 @@ struct superbfd {
 	struct asymbolp_vec syms;
 	struct supersect *new_supersects;
 	struct label_map_vec maps;
+	struct label_mapp_hash maps_hash;
 	struct asymbolpp_vec new_syms;
 };
 
