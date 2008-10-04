@@ -33,6 +33,10 @@ IMPLEMENT_HASH_TYPE(struct label_map *, label_mapp_hash, label_mapp_hash_init,
 IMPLEMENT_HASH_TYPE(asymbol **, asymbolpp_hash, asymbolpp_hash_init,
 		    asymbolpp_hash_free, asymbolpp_hash_lookup, asymbolpp_init);
 
+#define string_init(str) *(str) = NULL
+IMPLEMENT_HASH_TYPE(const char *, string_hash, string_hash_init,
+		    string_hash_free, string_hash_lookup, string_init);
+
 void vec_do_reserve(void **data, size_t *mem_size, size_t new_size)
 {
 	if (new_size > *mem_size || new_size * 2 < *mem_size) {

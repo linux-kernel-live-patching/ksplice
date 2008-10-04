@@ -169,6 +169,7 @@ static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 static void init_label_map(struct superbfd *sbfd);
 static asymbol **symbolp_scan(struct supersect *ss, bfd_vma value);
 static void init_csyms(struct superbfd *sbfd);
+static void init_callers(struct superbfd *sbfd);
 static asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym);
 static asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
 static char *static_local_symbol(struct superbfd *sbfd, asymbol *sym);
@@ -2012,6 +2013,7 @@ static void init_label_map(struct superbfd *sbfd)
 
 	vec_init(&sbfd->maps);
 	init_csyms(sbfd);
+	init_callers(sbfd);
 
 	struct symbol_hash csyms;
 	symbol_hash_init(&csyms);
@@ -2114,49 +2116,43 @@ static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 	DIE;
 }
 
-struct caller_search {
-	struct superbfd *sbfd;
-	asymbol *sym;
-	asection *calling_section;
-	int count;
-};
-
-void search_for_caller(bfd *abfd, asection *sect, void *searchptr)
+static void init_callers(struct superbfd *sbfd)
 {
-	struct caller_search *search = searchptr;
-	struct superbfd *sbfd = search->sbfd;
-	struct supersect *ss = fetch_supersect(sbfd, sect);
-	arelent **relocp;
-
-	for (relocp = ss->relocs.data;
-	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
-		asymbol *rsym = *(*relocp)->sym_ptr_ptr;
-		if (rsym->section == search->sym->section &&
-		    rsym->value + get_reloc_offset(ss, *relocp, true) ==
-		    search->sym->value) {
-			if (search->calling_section != sect)
-				search->count++;
-			if (search->calling_section == NULL)
-				search->calling_section = sect;
+	string_hash_init(&sbfd->callers);
+	asection *sect;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		arelent **relocp;
+		for (relocp = ss->relocs.data;
+		     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+			asymbol *sym = *(*relocp)->sym_ptr_ptr;
+			unsigned long val =
+			    sym->value + get_reloc_offset(ss, *relocp, true);
+			char *key;
+			assert(asprintf(&key, "%s+%lx", sym->section->name,
+					val) >= 0);
+			const char **ret = string_hash_lookup(&sbfd->callers,
+							      key, TRUE);
+			free(key);
+			if (*ret == NULL)
+				*ret = sect->name;
+			else
+				*ret = "*multiple_callers*";
 		}
 	}
 }
 
 static const char *find_caller(struct supersect *ss, asymbol *sym)
 {
-	struct caller_search search = {
-		.sym = sym,
-		.sbfd = ss->parent,
-		.count = 0,
-		.calling_section = NULL,
-	};
+	char *key;
+	assert(asprintf(&key, "%s+%lx", sym->section->name,
+			(unsigned long)sym->value) >= 0);
+	const char **ret = string_hash_lookup(&ss->parent->callers, key, FALSE);
+	free(key);
 
-	bfd_map_over_sections(ss->parent->abfd, search_for_caller, &search);
-	if (search.count == 1)
-		return search.calling_section->name;
-	if (search.count == 0)
+	if (ret == NULL)
 		return "*no_caller*";
-	return "*multiple_callers*";
+	return *ret;
 }
 
 static void init_csyms(struct superbfd *sbfd)
