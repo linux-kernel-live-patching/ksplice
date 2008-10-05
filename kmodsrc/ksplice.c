@@ -1730,11 +1730,15 @@ static abort_t apply_patches(struct update *update)
 	list_for_each_entry(pack, &update->packs, list) {
 		for (sect = pack->primary_sections;
 		     sect < pack->primary_sections_end; sect++) {
-			ret = create_safety_record(pack, sect,
-						   &pack->safety_records,
-						   sect->address, sect->size);
-			if (ret != OK)
-				return ret;
+			struct safety_record *rec = kmalloc(sizeof(*rec),
+							    GFP_KERNEL);
+			if (rec == NULL)
+				return OUT_OF_MEMORY;
+			rec->addr = sect->address;
+			rec->size = sect->size;
+			rec->label = sect->symbol->label;
+			rec->first_byte_safe = false;
+			list_add(&rec->list, &pack->safety_records);
 		}
 	}
 
