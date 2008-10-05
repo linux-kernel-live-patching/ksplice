@@ -65,7 +65,7 @@ DEFINE_HASH_TYPE(asymbol *, symbol_hash, symbol_hash_init, symbol_hash_free,
 
 struct export {
 	const char *name;
-	asection *sect;
+	struct supersect *ss;
 };
 DECLARE_VEC_TYPE(struct export, export_vec);
 
@@ -75,8 +75,8 @@ struct export_desc {
 	const char *export_type;
 	bool deletion;
 	struct str_vec names;
-	asection *sym_sect;
-	asection *crc_sect;
+	struct supersect *sym_ss;
+	struct supersect *crc_ss;
 };
 DECLARE_VEC_TYPE(struct export_desc, export_desc_vec);
 
@@ -96,8 +96,7 @@ void do_rmsyms(struct superbfd *isbfd);
 struct export_vec *get_export_syms(struct superbfd *sbfd);
 void compare_exported_symbols(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd, bool deletion);
-struct export_desc *new_export_desc(struct superbfd *sbfd, asection *sect,
-				    bool deletion);
+struct export_desc *new_export_desc(struct supersect *ss, bool deletion);
 bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 		  arelent *old_reloc, arelent *new_reloc);
 bool all_relocs_equal(struct supersect *old_ss, struct supersect *new_ss);
@@ -575,23 +574,27 @@ struct export_vec *get_export_syms(struct superbfd *sbfd)
 			struct export *exp = vec_grow(exports, 1);
 			exp->name =
 			    read_string(ss, (const char *const *)&sym->name);
-			exp->sect = sect;
+			exp->ss = ss;
 		}
 	}
 	return exports;
 }
 
-struct export_desc *new_export_desc(struct superbfd *sbfd, asection *sect,
-				    bool deletion)
+struct export_desc *new_export_desc(struct supersect *ss, bool deletion)
 {
 	struct export_desc *ed = vec_grow(&exports, 1);
 	ed->deletion = deletion;
 	vec_init(&ed->names);
-	ed->export_type = strdup(sect->name) + strlen("__ksymtab");
-	ed->sym_sect = sect;
+	ed->export_type = strdup(ss->name) + strlen("__ksymtab");
+	ed->sym_ss = ss;
 	char *crc_sect_name;
 	assert(asprintf(&crc_sect_name, "__kcrctab%s", ed->export_type) >= 0);
-	ed->crc_sect = bfd_get_section_by_name(sbfd->abfd, crc_sect_name);
+	asection *crc_sect =
+	    bfd_get_section_by_name(ss->parent->abfd, crc_sect_name);
+	if (crc_sect == NULL)
+		ed->crc_ss = NULL;
+	else
+		ed->crc_ss = fetch_supersect(ss->parent, crc_sect);
 	return ed;
 }
 
@@ -604,7 +607,7 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 		return;
 	old_exports = get_export_syms(oldsbfd);
 	struct export *old, *new;
-	asection *last_sect = NULL;
+	struct supersect *last_ss = NULL;
 	struct export_desc *ed = NULL;
 	for (new = new_exports->data; new < new_exports->data +
 	     new_exports->size; new++) {
@@ -613,16 +616,15 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 			for (old = old_exports->data; old < old_exports->data +
 			     old_exports->size; old++) {
 				if (strcmp(new->name, old->name) == 0 &&
-				    strcmp(new->sect->name, old->sect->name)
-				    == 0) {
+				    strcmp(new->ss->name, old->ss->name) == 0) {
 					found = true;
 					break;
 				}
 			}
 		}
-		if (last_sect != new->sect) {
-			last_sect = new->sect;
-			ed = new_export_desc(newsbfd, new->sect, deletion);
+		if (last_ss != new->ss) {
+			last_ss = new->ss;
+			ed = new_export_desc(new->ss, deletion);
 		}
 		if (!found)
 			*vec_grow(&ed->names, 1) = new->name;
@@ -986,13 +988,11 @@ bool all_relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 
 void rm_some_exports(struct superbfd *sbfd, const struct export_desc *ed)
 {
-	struct supersect *ss = fetch_supersect(sbfd, ed->sym_sect);
-	struct supersect *crc_ss = NULL;
-	if (ed->crc_sect != NULL) {
-		crc_ss = fetch_supersect(sbfd, ed->crc_sect);
+	struct supersect *ss = ed->sym_ss;
+	struct supersect *crc_ss = ed->crc_ss;
+	if (crc_ss != NULL)
 		assert(ss->contents.size * sizeof(unsigned long) ==
 		       crc_ss->contents.size * sizeof(struct kernel_symbol));
-	}
 
 	struct kernel_symbol *ksym;
 	unsigned long *crc = NULL;
