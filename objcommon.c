@@ -79,6 +79,7 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	new->new = false;
 	new->patch = false;
 	new->keep = true;
+	new->symbol = sect->symbol;
 
 	vec_init(&new->contents);
 	vec_resize(&new->contents, bfd_get_section_size(sect));

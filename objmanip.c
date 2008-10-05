@@ -109,13 +109,12 @@ static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 enum supersect_type supersect_type(struct supersect *ss);
 void initialize_supersect_types(struct superbfd *sbfd);
 static void initialize_spans(struct superbfd *sbfd);
-static void initialize_string_spans(struct superbfd *sbfd, asection *sect);
+static void initialize_string_spans(struct supersect *ss);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
 struct span *reloc_address_span(struct supersect *ss, arelent *reloc);
 void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
-static struct span *new_span(struct superbfd *sbfd, asection *sect,
-			     bfd_vma start, bfd_vma size);
+static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size);
 bool is_table_section(const char *name, bool consider_other);
 
 void rm_relocs(struct superbfd *isbfd);
@@ -170,8 +169,7 @@ static void print_label_map(struct superbfd *sbfd);
 static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 			  const char *label);
 static void init_label_map(struct superbfd *sbfd);
-static asymbol **symbolp_scan(struct superbfd *sbfd, asection *sect,
-			      bfd_vma value);
+static asymbol **symbolp_scan(struct supersect *ss, bfd_vma value);
 static asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym);
 static asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym);
 static char *static_local_symbol(struct superbfd *sbfd, asymbol *sym);
@@ -1006,13 +1004,11 @@ void rm_some_exports(struct superbfd *sbfd, const struct export_desc *ed)
 	     ksym++, crc++) {
 		asymbol *sym;
 		read_reloc(ss, &ksym->value, sizeof(ksym->value), &sym);
-		span = new_span(ss->parent, ed->sym_sect,
-				addr_offset(ss, ksym), sizeof(*ksym));
+		span = new_span(ss, addr_offset(ss, ksym), sizeof(*ksym));
 		span->keep = str_in_set(sym->name, &ed->names);
 
 		if (crc_ss != NULL) {
-			crc_span = new_span(ss->parent, ed->crc_sect,
-					    addr_offset(crc_ss, crc),
+			crc_span = new_span(crc_ss, addr_offset(crc_ss, crc),
 					    sizeof(*crc));
 			crc_span->keep = span->keep;
 		}
@@ -1479,8 +1475,7 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 		asymbol *sym, *fixup_sym;
 		read_reloc(ss, entry + s->addr_offset, sizeof(void *), &sym);
 
-		struct span *span = new_span(sbfd, isection,
-					     addr_offset(ss, entry),
+		struct span *span = new_span(ss, addr_offset(ss, entry),
 					     s->entry_size);
 		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
 		span->keep = sym_ss->keep;
@@ -1508,7 +1503,7 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 
 	struct fixup_entry *f;
 	for (f = fixups.data; f < fixups.data + fixups.size - 1; f++) {
-		struct span *span = new_span(sbfd, fixup_sect, f->offset,
+		struct span *span = new_span(fixup_ss, f->offset,
 					     (f + 1)->offset - f->offset);
 		span->keep = f->used;
 	}
@@ -2147,16 +2142,19 @@ static const char *find_caller(struct supersect *ss, asymbol *sym)
 	return "*multiple_callers*";
 }
 
-static asymbol **symbolp_scan(struct superbfd *sbfd, asection *sect,
-			      bfd_vma value)
+static asymbol **symbolp_scan(struct supersect *ss, bfd_vma value)
 {
 	asymbol **csymp;
 	asymbol **ret = NULL;
-	for (csymp = sbfd->syms.data; csymp < sbfd->syms.data + sbfd->syms.size;
-	     csymp++) {
+	for (csymp = ss->parent->syms.data;
+	     csymp < ss->parent->syms.data + ss->parent->syms.size; csymp++) {
 		asymbol *csymtemp = *csymp;
+		if (bfd_is_const_section(csymtemp->section))
+			continue;
+		struct supersect *csym_ss =
+		    fetch_supersect(ss->parent, csymtemp->section);
 		if ((csymtemp->flags & BSF_DEBUGGING) != 0 ||
-		    sect != csymtemp->section || value != csymtemp->value)
+		    ss != csym_ss || value != csymtemp->value)
 			continue;
 		if ((csymtemp->flags & BSF_GLOBAL) != 0)
 			return csymp;
@@ -2169,7 +2167,7 @@ static asymbol **symbolp_scan(struct superbfd *sbfd, asection *sect,
 	/* For section symbols of sections containing no symbols, return the
 	   section symbol that relocations are generated against */
 	if (value == 0)
-		return &sect->symbol;
+		return &ss->symbol;
 	return NULL;
 }
 
@@ -2184,7 +2182,7 @@ static asymbol **canonical_symbolp(struct superbfd *sbfd, asymbol *sym)
 		}
 		return NULL;
 	}
-	return symbolp_scan(sbfd, sym->section, sym->value);
+	return symbolp_scan(fetch_supersect(sbfd, sym->section), sym->value);
 }
 
 static asymbol *canonical_symbol(struct superbfd *sbfd, asymbol *sym)
@@ -2248,10 +2246,8 @@ static char *symbol_label(struct superbfd *sbfd, asymbol *sym)
 	return label;
 }
 
-static struct span *new_span(struct superbfd *sbfd, asection *sect,
-			     bfd_vma start, bfd_vma size)
+static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 {
-	struct supersect *ss = fetch_supersect(sbfd, sect);
 	struct span *span = vec_grow(&ss->spans, 1);
 	span->size = size;
 	span->start = start;
@@ -2259,13 +2255,13 @@ static struct span *new_span(struct superbfd *sbfd, asection *sect,
 	span->keep = false;
 	span->new = false;
 	span->shift = 0;
-	asymbol **symp = symbolp_scan(sbfd, sect, span->start);
+	asymbol **symp = symbolp_scan(ss, span->start);
 	if (symp != NULL) {
 		span->symbol = *symp;
-		span->label = label_lookup(sbfd, span->symbol);
+		span->label = label_lookup(ss->parent, span->symbol);
 	} else {
 		span->symbol = NULL;
-		const char *label = label_lookup(sbfd, sect->symbol);
+		const char *label = label_lookup(ss->parent, ss->symbol);
 		if (span->start != 0) {
 			char *buf;
 			assert(asprintf(&buf, "%s<span:%lx>", label,
@@ -2278,9 +2274,8 @@ static struct span *new_span(struct superbfd *sbfd, asection *sect,
 	return span;
 }
 
-static void initialize_string_spans(struct superbfd *sbfd, asection *sect)
+static void initialize_string_spans(struct supersect *ss)
 {
-	struct supersect *ss = fetch_supersect(sbfd, sect);
 	const char *str;
 	for (str = ss->contents.data;
 	     (void *)str < ss->contents.data + ss->contents.size;) {
@@ -2293,7 +2288,7 @@ static void initialize_string_spans(struct superbfd *sbfd, asection *sect)
 				DIE;
 			size++;
 		}
-		new_span(sbfd, sect, start, size);
+		new_span(ss, start, size);
 		str += size;
 	}
 }
@@ -2304,10 +2299,10 @@ static void initialize_spans(struct superbfd *sbfd)
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		if (ss->type == SS_TYPE_STRING)
-			initialize_string_spans(sbfd, sect);
+			initialize_string_spans(ss);
 		else if (!mode("keep") || (ss->type != SS_TYPE_SPECIAL &&
 					   ss->type != SS_TYPE_EXPORT))
-			new_span(sbfd, sect, 0, ss->contents.size);
+			new_span(ss, 0, ss->contents.size);
 	}
 }
 
