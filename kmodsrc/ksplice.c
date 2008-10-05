@@ -521,6 +521,8 @@ add_system_map_candidates(struct ksplice_pack *pack,
 			  const struct ksplice_system_map *start,
 			  const struct ksplice_system_map *end,
 			  const char *label, struct list_head *vals);
+static int compare_system_map(const void *a, const void *b);
+static int system_map_bsearch_compare(const void *key, const void *elt);
 #endif /* KSPLICE_STANDALONE */
 #ifdef CONFIG_KALLSYMS
 static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
@@ -662,6 +664,14 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 	sort(pack->helper_relocs,
 	     (pack->helper_relocs_end - pack->helper_relocs),
 	     sizeof(struct ksplice_reloc), compare_reloc_addresses, NULL);
+#ifdef KSPLICE_STANDALONE
+	sort(pack->primary_system_map,
+	     (pack->primary_system_map_end - pack->primary_system_map),
+	     sizeof(struct ksplice_system_map), compare_system_map, NULL);
+	sort(pack->helper_system_map,
+	     (pack->helper_system_map_end - pack->helper_system_map),
+	     sizeof(struct ksplice_system_map), compare_system_map, NULL);
+#endif /* KSPLICE_STANDALONE */
 
 	mutex_lock(&module_mutex);
 	if (strcmp(pack->target_name, "vmlinux") == 0) {
@@ -1780,18 +1790,25 @@ add_system_map_candidates(struct ksplice_pack *pack,
 		ksdebug(pack, "Aborted.  System.map does not match kernel.\n");
 		return BAD_SYSTEM_MAP;
 	}
-	for (smap = start; smap < end; smap++) {
-		if (strcmp(smap->label, label) == 0)
-			break;
-	}
-	if (smap >= end)
+
+	smap = bsearch(label, start, end - start, sizeof(*smap),
+		       system_map_bsearch_compare);
+	if (smap == NULL)
 		return OK;
+
 	for (i = 0; i < smap->nr_candidates; i++) {
 		ret = add_candidate_val(pack, vals, smap->candidates[i] + off);
 		if (ret != OK)
 			return ret;
 	}
 	return OK;
+}
+
+static int system_map_bsearch_compare(const void *key, const void *elt)
+{
+	const struct ksplice_system_map *map = elt;
+	const char *label = key;
+	return strcmp(label, map->label);
 }
 #endif /* !KSPLICE_STANDALONE */
 
@@ -2472,6 +2489,14 @@ static int compare_reloc_addresses(const void *a, const void *b)
 		return 0;
 }
 
+#ifdef KSPLICE_STANDALONE
+static int compare_system_map(const void *a, const void *b)
+{
+	const struct ksplice_system_map *sa = a, *sb = b;
+	return strcmp(sa->label, sb->label);
+}
+#endif /* KSPLICE_STANDALONE */
+
 #ifdef CONFIG_DEBUG_FS
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
 /* Old kernels don't have debugfs_create_blob */
@@ -3144,6 +3169,11 @@ static int init_ksplice(void)
 #ifdef KSPLICE_STANDALONE
 	struct ksplice_pack *pack = &bootstrap_pack;
 	pack->update = init_ksplice_update(pack->kid);
+#ifdef KSPLICE_STANDALONE
+	sort(pack->primary_system_map,
+	     (pack->primary_system_map_end - pack->primary_system_map),
+	     sizeof(struct ksplice_system_map), compare_system_map, NULL);
+#endif /* KSPLICE_STANDALONE */
 	if (pack->update == NULL)
 		return -ENOMEM;
 	add_to_update(pack, pack->update);
