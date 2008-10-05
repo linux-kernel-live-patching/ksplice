@@ -71,11 +71,6 @@ DECLARE_VEC_TYPE(struct export, export_vec);
 
 DECLARE_VEC_TYPE(const char *, str_vec);
 
-struct wsect {
-	asection *sect;
-	struct wsect *next;
-};
-
 struct export_desc {
 	const char *export_type;
 	bool deletion;
