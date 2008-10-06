@@ -53,6 +53,11 @@
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
 #if defined(KSPLICE_STANDALONE) && \
+    !defined(CONFIG_KSPLICE) && !defined(CONFIG_KSPLICE_MODULE)
+#define KSPLICE_NO_KERNEL_SUPPORT 1
+#endif /* KSPLICE_STANDALONE && !CONFIG_KSPLICE && !CONFIG_KSPLICE_MODULE */
+
+#if defined(KSPLICE_STANDALONE) && \
     LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22) && defined(CONFIG_DEBUG_RODATA)
 /* 6fb14755a676282a4e6caa05a08c92db8e45cfff was after 2.6.21 */
 #if !defined(CONFIG_KPROBES) || LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
@@ -166,6 +171,28 @@ struct accumulate_struct {
 	const char *desired_name;
 	struct list_head *vals;
 };
+
+struct ksplice_lookup {
+/* input */
+	struct ksplice_pack *pack;
+	struct ksplice_symbol **arr;
+	size_t size;
+/* output */
+	abort_t ret;
+};
+
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+struct symsearch {
+	const struct kernel_symbol *start, *stop;
+	const unsigned long *crcs;
+	enum {
+		NOT_GPL_ONLY,
+		GPL_ONLY,
+		WILL_BE_GPL_ONLY,
+	} licence;
+	bool unused;
+};
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
 /* c33fa9f5609e918824446ef9a75319d4a802f1f4 was after 2.6.25 */
@@ -515,6 +542,18 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 static abort_t lookup_symbol(struct ksplice_pack *pack,
 			     const struct ksplice_symbol *ksym,
 			     struct list_head *vals);
+static void cleanup_symbol_arrays(struct ksplice_pack *pack);
+static abort_t init_symbol_arrays(struct ksplice_pack *pack);
+static abort_t init_symbol_array(struct ksplice_pack *pack,
+				 struct ksplice_symbol *start,
+				 struct ksplice_symbol *end);
+static abort_t add_matching_values(struct ksplice_lookup *lookup,
+				   const char *sym_name, unsigned long sym_val);
+static bool add_export_values(const struct symsearch *syms,
+			      struct module *owner,
+			      unsigned int symnum, void *data);
+static int symbolp_bsearch_compare(const void *key, const void *elt);
+static int compare_symbolp_names(const void *a, const void *b);
 #ifdef KSPLICE_STANDALONE
 static abort_t
 add_system_map_candidates(struct ksplice_pack *pack,
@@ -531,8 +570,6 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 				     struct module *sym_owner,
 				     unsigned long sym_val);
 #endif /* CONFIG_KALLSYMS */
-static abort_t exported_symbol_lookup(struct ksplice_pack *pack,
-				      const char *name, struct list_head *vals);
 static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
 				 const char *name, struct list_head *vals);
 
@@ -594,11 +631,6 @@ _ksdebug(struct update *update, const char *fmt, ...);
 #define ksdebug(pack, fmt, ...) \
 	_ksdebug(pack->update, fmt, ## __VA_ARGS__)
 
-#if defined(KSPLICE_STANDALONE) && \
-    !defined(CONFIG_KSPLICE) && !defined(CONFIG_KSPLICE_MODULE)
-#define KSPLICE_NO_KERNEL_SUPPORT 1
-#endif /* KSPLICE_STANDALONE && !CONFIG_KSPLICE && !CONFIG_KSPLICE_MODULE */
-
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 /* Functions defined here that will be exported in later kernels */
 #ifdef CONFIG_KALLSYMS
@@ -619,6 +651,10 @@ static const struct kernel_symbol *find_symbol(const char *name,
 					       struct module **owner,
 					       const unsigned long **crc,
 					       bool gplok, bool warn);
+static bool each_symbol(bool (*fn)(const struct symsearch *arr,
+				   struct module *owner,
+				   unsigned int symnum, void *data),
+			void *data);
 static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
@@ -848,7 +884,13 @@ static abort_t apply_update(struct update *update)
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
 	list_for_each_entry(pack, &update->packs, list) {
+		ret = init_symbol_arrays(pack);
+		if (ret != OK) {
+			cleanup_symbol_arrays(pack);
+			return ret;
+		}
 		ret = prepare_pack(pack);
+		cleanup_symbol_arrays(pack);
 		if (ret != OK)
 			goto out;
 	}
@@ -864,6 +906,140 @@ out:
 	return ret;
 }
 
+static int compare_symbolp_names(const void *a, const void *b)
+{
+	const struct ksplice_symbol *const *sympa = a, *const *sympb = b;
+	if ((*sympa)->name == NULL && (*sympb)->name == NULL)
+		return 0;
+	if ((*sympa)->name == NULL)
+		return -1;
+	if ((*sympb)->name == NULL)
+		return 1;
+	return strcmp((*sympa)->name, (*sympb)->name);
+}
+
+static int symbolp_bsearch_compare(const void *key, const void *elt)
+{
+	const char *name = key;
+	const struct ksplice_symbol *const *symp = elt;
+	const struct ksplice_symbol *sym = *symp;
+	if (sym->name == NULL)
+		return 1;
+	return strcmp(name, sym->name);
+}
+
+static abort_t add_matching_values(struct ksplice_lookup *lookup,
+				   const char *sym_name, unsigned long sym_val)
+{
+	struct ksplice_symbol **symp;
+	abort_t ret;
+
+	symp = bsearch(sym_name, lookup->arr, lookup->size,
+		       sizeof(*lookup->arr), symbolp_bsearch_compare);
+	if (symp == NULL)
+		return OK;
+
+	while (symp > lookup->arr &&
+	       symbolp_bsearch_compare(sym_name, symp - 1) == 0)
+		symp--;
+
+	for (; symp < lookup->arr + lookup->size; symp++) {
+		struct ksplice_symbol *sym = *symp;
+		if (sym->name == NULL || strcmp(sym_name, sym->name) != 0)
+			break;
+		ret = add_candidate_val(lookup->pack, sym->vals, sym_val);
+		if (ret != OK)
+			return ret;
+	}
+	return OK;
+}
+
+static bool add_export_values(const struct symsearch *syms,
+			      struct module *owner,
+			      unsigned int symnum, void *data)
+{
+	struct ksplice_lookup *lookup = data;
+	abort_t ret;
+
+	ret = add_matching_values(lookup, syms->start[symnum].name,
+				  syms->start[symnum].value);
+	if (ret != OK) {
+		lookup->ret = ret;
+		return true;
+	}
+	return false;
+}
+
+static void cleanup_symbol_arrays(struct ksplice_pack *pack)
+{
+	struct ksplice_symbol *sym;
+	for (sym = pack->primary_symbols; sym < pack->primary_symbols_end;
+	     sym++) {
+		clear_list(sym->vals, struct candidate_val, list);
+		kfree(sym->vals);
+		sym->vals = NULL;
+	}
+	for (sym = pack->helper_symbols; sym < pack->helper_symbols_end; sym++) {
+		clear_list(sym->vals, struct candidate_val, list);
+		kfree(sym->vals);
+		sym->vals = NULL;
+	}
+}
+
+static abort_t init_symbol_array(struct ksplice_pack *pack,
+				 struct ksplice_symbol *start,
+				 struct ksplice_symbol *end)
+{
+	struct ksplice_symbol *sym, **sym_arr, **symp;
+	struct ksplice_lookup lookup;
+	size_t size = end - start;
+
+	if (size == 0)
+		return OK;
+
+	for (sym = start; sym < end; sym++) {
+		sym->vals = kmalloc(sizeof(*sym->vals), GFP_KERNEL);
+		if (sym->vals == NULL)
+			return OUT_OF_MEMORY;
+		INIT_LIST_HEAD(sym->vals);
+	}
+
+	sym_arr = vmalloc(sizeof(*sym_arr) * size);
+	if (sym_arr == NULL)
+		return OUT_OF_MEMORY;
+
+	for (symp = sym_arr, sym = start; symp < sym_arr + size && sym < end;
+	     sym++, symp++)
+		*symp = sym;
+
+	sort(sym_arr, size, sizeof(*sym_arr), compare_symbolp_names, NULL);
+
+	lookup.pack = pack;
+	lookup.arr = sym_arr;
+	lookup.size = size;
+	lookup.ret = OK;
+
+	each_symbol(add_export_values, &lookup);
+	vfree(sym_arr);
+	return lookup.ret;
+}
+
+static abort_t init_symbol_arrays(struct ksplice_pack *pack)
+{
+	abort_t ret;
+
+	ret = init_symbol_array(pack, pack->helper_symbols,
+				pack->helper_symbols_end);
+	if (ret != OK)
+		return ret;
+
+	ret = init_symbol_array(pack, pack->primary_symbols,
+				pack->primary_symbols_end);
+	if (ret != OK)
+		return ret;
+
+	return OK;
+}
 
 static abort_t prepare_pack(struct ksplice_pack *pack)
 {
@@ -1743,9 +1919,12 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 #endif
 
 	if (ksym->name != NULL) {
-		ret = exported_symbol_lookup(pack, ksym->name, vals);
-		if (ret != OK)
-			return ret;
+		struct candidate_val *val;
+		list_for_each_entry(val, ksym->vals, list) {
+			ret = add_candidate_val(pack, vals, val->val);
+			if (ret != OK)
+				return ret;
+		}
 
 		ret = new_export_lookup(pack, pack->update, ksym->name, vals);
 		if (ret != OK)
@@ -1834,16 +2013,6 @@ static int accumulate_matching_names(void *data, const char *sym_name,
 	return (__force int)OK;
 }
 #endif /* CONFIG_KALLSYMS */
-
-static abort_t exported_symbol_lookup(struct ksplice_pack *pack,
-				      const char *name, struct list_head *vals)
-{
-	const struct kernel_symbol *sym;
-	sym = find_symbol(name, NULL, NULL, true, false);
-	if (sym == NULL)
-		return OK;
-	return add_candidate_val(pack, vals, sym->value);
-}
 
 static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
 				 const char *name, struct list_head *vals)
@@ -2800,17 +2969,6 @@ static int use_module(struct module *a, struct module *b)
 #else
 #define symversion(base, idx) ((base != NULL) ? ((base) + (idx)) : NULL)
 #endif
-
-struct symsearch {
-	const struct kernel_symbol *start, *stop;
-	const unsigned long *crcs;
-	enum {
-		NOT_GPL_ONLY,
-		GPL_ONLY,
-		WILL_BE_GPL_ONLY,
-	} licence;
-	bool unused;
-};
 
 static bool each_symbol_in_section(const struct symsearch *arr,
 				   unsigned int arrsize,

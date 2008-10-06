@@ -8,6 +8,8 @@
 struct ksplice_symbol {
 	const char *name;
 	const char *label;
+/* private: */
+	struct list_head *vals;
 };
 
 /**
@@ -180,8 +182,10 @@ struct ksplice_pack {
 	struct module *primary;
 	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
 	const struct ksplice_section *primary_sections, *primary_sections_end;
+	struct ksplice_symbol *primary_symbols, *primary_symbols_end;
 	struct ksplice_reloc *helper_relocs, *helper_relocs_end;
 	const struct ksplice_section *helper_sections, *helper_sections_end;
+	struct ksplice_symbol *helper_symbols, *helper_symbols_end;
 	struct ksplice_patch *patches, *patches_end;
 	struct ksplice_export *exports, *exports_end;
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
