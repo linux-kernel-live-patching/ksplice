@@ -150,6 +150,7 @@ I(0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00,	/* nopl 0L(%[re]ax)     */
 
 static abort_t compare_operands(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
+				const struct ksplice_reloc **fingerp,
 				const unsigned char **match_map,
 				const unsigned char *run_start,
 				const unsigned char *run,
@@ -174,12 +175,15 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	const unsigned char *run, *pre, *run_start, *pre_start, *safety_start;
 	struct ud pre_ud, run_ud;
 	const unsigned char **match_map;
+	const struct ksplice_reloc *finger;
 
 	if (sect->size == 0)
 		return NO_MATCH;
 
 	pre_start = (const unsigned char *)sect->address;
 	run_start = (const unsigned char *)run_addr;
+
+	finger = init_reloc_search(pack, sect);
 
 	run = run_start;
 	pre = pre_start;
@@ -252,7 +256,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			   by 2 bytes and then a 4-byte relocation; and is not
 			   disassembler-friendly. */
 			const struct ksplice_reloc *r;
-			ret = lookup_reloc(pack, (unsigned long)(pre + 4), &r);
+			ret = lookup_reloc(pack, &finger,
+					   (unsigned long)(pre + 4), &r);
 			if (ret == NO_MATCH) {
 				if (mode == RUN_PRE_INITIAL)
 					ksdebug(pack, "Unrecognized ud2\n");
@@ -279,9 +284,9 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
 
 		for (i = 0; i < ARRAY_SIZE(run_ud.operand); i++) {
-			ret = compare_operands(pack, sect, match_map, run_start,
-					       run, pre, &run_ud, &pre_ud, i,
-					       mode);
+			ret = compare_operands(pack, sect, &finger, match_map,
+					       run_start, run, pre, &run_ud,
+					       &pre_ud, i, mode);
 			if (ret != OK)
 				goto out;
 		}
@@ -362,6 +367,7 @@ out:
 
 static abort_t compare_operands(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
+				const struct ksplice_reloc **fingerp,
 				const unsigned char **match_map,
 				const unsigned char *run_start,
 				const unsigned char *run,
@@ -405,7 +411,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 	if (ud_operand_len(run_op) == 0 && ud_operand_len(pre_op) == 0)
 		return OK;
 
-	ret = lookup_reloc(pack, (unsigned long)(pre + pre_off), &r);
+	ret = lookup_reloc(pack, fingerp, (unsigned long)(pre + pre_off), &r);
 	if (ret == OK) {
 		struct ksplice_reloc run_reloc = *r;
 		if (r->size != ud_operand_len(pre_op)) {

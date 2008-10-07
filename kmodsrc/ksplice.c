@@ -500,7 +500,12 @@ static abort_t brute_search_all(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
 				struct list_head *vals);
 #endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
-static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
+static const struct ksplice_reloc *
+init_reloc_search(struct ksplice_pack *pack,
+		  const struct ksplice_section *sect);
+static abort_t lookup_reloc(struct ksplice_pack *pack,
+			    const struct ksplice_reloc **fingerp,
+			    unsigned long addr,
 			    const struct ksplice_reloc **relocp);
 static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *r,
@@ -1440,18 +1445,20 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 {
 	int matched = 0;
 	abort_t ret;
-	const struct ksplice_reloc *r;
+	const struct ksplice_reloc *r, *finger;
 	const unsigned char *pre, *run, *pre_start, *run_start;
 	unsigned char runval;
 
 	pre_start = (const unsigned char *)sect->address;
 	run_start = (const unsigned char *)run_addr;
 
+	finger = init_reloc_search(pack, sect);
+
 	pre = pre_start;
 	run = run_start;
 	while (pre < pre_start + sect->size) {
 		unsigned long offset = pre - pre_start;
-		ret = lookup_reloc(pack, (unsigned long)pre, &r);
+		ret = lookup_reloc(pack, &finger, (unsigned long)pre, &r);
 		if (ret == OK) {
 			ret = handle_reloc(pack, r, (unsigned long)run, mode);
 			if (ret != OK) {
@@ -1603,24 +1610,44 @@ out:
 
 static int reloc_bsearch_compare(const void *key, const void *elt)
 {
-	unsigned long addr = (unsigned long)key;
+	const struct ksplice_section *sect = key;
 	const struct ksplice_reloc *r = elt;
-	if (addr < r->blank_addr)
+	if (sect->address + sect->size < r->blank_addr)
 		return -1;
-	if (addr >= r->blank_addr + r->size)
+	if (sect->address > r->blank_addr)
 		return 1;
 	return 0;
 }
 
-static abort_t lookup_reloc(struct ksplice_pack *pack, unsigned long addr,
-			    const struct ksplice_reloc **relocp)
+static const struct ksplice_reloc *
+init_reloc_search(struct ksplice_pack *pack, const struct ksplice_section *sect)
 {
 	const struct ksplice_reloc *r;
+	r = bsearch((void *)sect, pack->helper_relocs, pack->helper_relocs_end -
+		    pack->helper_relocs, sizeof(*r), reloc_bsearch_compare);
+	if (r != NULL) {
+		while (r > pack->helper_relocs &&
+		       (r - 1)->blank_addr >= sect->address)
+			r--;
+		return r;
+	}
+	return pack->helper_relocs_end;
+}
+
+static abort_t lookup_reloc(struct ksplice_pack *pack,
+			    const struct ksplice_reloc **fingerp,
+			    unsigned long addr,
+			    const struct ksplice_reloc **relocp)
+{
+	const struct ksplice_reloc *r = *fingerp;
 	int canary_ret;
 
-	r = bsearch((void *)addr, pack->helper_relocs, pack->helper_relocs_end -
-		    pack->helper_relocs, sizeof(*r), reloc_bsearch_compare);
-	if (r == NULL)
+	while (r < pack->helper_relocs_end && addr >= r->blank_addr + r->size)
+		r++;
+	*fingerp = r;
+	if (r == pack->helper_relocs_end)
+		return NO_MATCH;
+	if (addr < r->blank_addr)
 		return NO_MATCH;
 
 	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
