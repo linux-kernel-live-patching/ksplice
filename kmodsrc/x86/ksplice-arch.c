@@ -50,6 +50,15 @@ static int next_run_byte(struct ud *ud);
 static bool is_nop(struct ud *ud);
 static bool is_unconditional_jump(struct ud *ud);
 
+void initialize_ksplice_ud(struct ud *ud)
+{
+	ud_init(ud);
+	ud_set_mode(ud, BITS_PER_LONG);
+	ud_set_syntax(ud, UD_SYN_ATT);
+	ud_set_pc(ud, 0);
+	ud_set_vendor(ud, UD_VENDOR_ANY);
+}
+
 static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
 				unsigned long run_addr,
@@ -76,17 +85,11 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	run = run_start;
 	pre = pre_start;
 
-	ud_init(&pre_ud);
-	ud_set_mode(&pre_ud, BITS_PER_LONG);
-	ud_set_syntax(&pre_ud, UD_SYN_ATT);
+	initialize_ksplice_ud(&pre_ud);
 	ud_set_input_buffer(&pre_ud, (unsigned char *)pre, sect->size);
-	ud_set_pc(&pre_ud, 0);
 
-	ud_init(&run_ud);
-	ud_set_mode(&run_ud, BITS_PER_LONG);
-	ud_set_syntax(&run_ud, UD_SYN_ATT);
+	initialize_ksplice_ud(&run_ud);
 	ud_set_input_hook(&run_ud, next_run_byte);
-	ud_set_pc(&run_ud, 0);
 	ud_set_user_opaque_data(&run_ud, (unsigned char *)run_addr);
 	safety_start = run_start;
 
@@ -161,11 +164,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			/* We re-initialize the run ud structure because
 			   it may have cached upcoming bytes */
 			run = match_map[pre_offset];
-			ud_init(&run_ud);
-			ud_set_mode(&run_ud, BITS_PER_LONG);
-			ud_set_syntax(&run_ud, UD_SYN_ATT);
+			initialize_ksplice_ud(&run_ud);
 			ud_set_input_hook(&run_ud, next_run_byte);
-			ud_set_pc(&run_ud, 0);
 			ud_set_user_opaque_data(&run_ud, (unsigned char *)run);
 			safety_start = run;
 			if (ud_disassemble(&run_ud) == 0) {
