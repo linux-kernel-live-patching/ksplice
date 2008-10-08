@@ -508,7 +508,7 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 	old_exports = get_export_syms(oldsbfd);
 	struct export *old, *new;
 	asection *last_sect = NULL;
-	struct export_desc *ed;
+	struct export_desc *ed = NULL;
 	for (new = new_exports->data; new < new_exports->data +
 	     new_exports->size; new++) {
 		bool found = false;
