@@ -33,6 +33,12 @@ extern const char thread_return[];
 
 #ifndef CONFIG_FUNCTION_DATA_SECTIONS
 #include "udis86.h"
+#ifdef CONFIG_FTRACE
+#include <asm/ftrace.h>
+#include <linux/ftrace.h>
+
+extern ftrace_func_t ftrace_trace_function;
+#endif /* CONFIG_FTRACE */
 
 static abort_t compare_operands(struct ksplice_pack *pack,
 				const struct ksplice_section *sect,
@@ -49,6 +55,7 @@ static long ud_operand_lval(struct ud_operand *operand);
 static int next_run_byte(struct ud *ud);
 static bool is_nop(struct ud *ud);
 static bool is_unconditional_jump(struct ud *ud);
+static bool is_mcount_call(struct ud *ud, unsigned long addr);
 
 void initialize_ksplice_ud(struct ud *ud)
 {
@@ -108,7 +115,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 						   safety_offset);
 			goto out;
 		}
-		if (is_nop(&pre_ud)) {
+		if (is_nop(&pre_ud) ||
+		    is_mcount_call(&pre_ud, (unsigned long)pre)) {
 			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(pack, "| nop: ");
 				print_bytes(pack, run, 0, pre,
@@ -124,7 +132,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				ret = NO_MATCH;
 				goto out;
 			}
-			if (!is_nop(&run_ud))
+			if (!is_nop(&run_ud) &&
+			    !is_mcount_call(&run_ud, (unsigned long)run))
 				break;
 			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(pack, "| nop: ");
@@ -385,6 +394,24 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 		return NO_MATCH;
 	}
 }
+
+#ifdef CONFIG_FTRACE
+static bool is_mcount_call(struct ud *ud, unsigned long addr)
+{
+	unsigned long target = addr + ud_insn_len(ud) +
+	    ud_operand_lval(&ud->operand[0]);
+	if (ud->mnemonic == UD_Icall &&
+	    (target == (unsigned long)mcount ||
+	     target == (unsigned long)ftrace_trace_function))
+		return true;
+	return false;
+}
+#else /* !CONFIG_FTRACE */
+static bool is_mcount_call(struct ud *ud, unsigned long addr)
+{
+	return false;
+}
+#endif /* CONFIG_FTRACE */
 
 static bool is_nop(struct ud *ud)
 {

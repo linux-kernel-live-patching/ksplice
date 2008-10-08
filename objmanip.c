@@ -1067,6 +1067,10 @@ void rm_some_relocs(struct supersect *ss)
 		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
 			rm_reloc = true;
 
+		if (strcmp(sym_ptr->name, "mcount") == 0 &&
+		    bfd_is_und_section(sym_ptr->section))
+			rm_reloc = false;
+
 		if (rm_reloc)
 			write_ksplice_reloc(ss, *relocp);
 		else

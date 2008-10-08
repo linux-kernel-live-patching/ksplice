@@ -110,7 +110,8 @@ RMSYMS = \
 	__start___kcrctab_gpl \
 	__start___kcrctab_gpl_future \
 	__start___kcrctab_unused \
-	__start___kcrctab_unused_gpl
+	__start___kcrctab_unused_gpl \
+	ftrace_trace_function
 
 quiet_cmd_ksplice-rmsyms = RMSYMS  $@
 cmd_ksplice-rmsyms = \
