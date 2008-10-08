@@ -75,6 +75,9 @@ ud_set_vendor(struct ud* u, unsigned v)
 	case UD_VENDOR_INTEL:
 		u->vendor = v;
 		break;
+	case UD_VENDOR_ANY:
+		u->vendor = v;
+		break;
 	default:
 		u->vendor = UD_VENDOR_AMD;
   }

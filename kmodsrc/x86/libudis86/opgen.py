@@ -33,7 +33,8 @@ spl_mnm_types = [   'd3vil',      \
 #                
 vend_dict = { 
     'AMD'       : '00', 
-    'INTEL'     : '01' 
+    'INTEL'     : '01',
+    'ANY'       : '02'
 }
 
 
@@ -462,7 +463,7 @@ for node in tlNode.childNodes:
             }                  
             table_name  = tables[table_name][table_index]['name']    
             table_index = vend_dict[vendor]
-            table_size = 2
+            table_size = 3
             mktab(table_name, table_size)
 
         tables[table_name][table_index] = { \
@@ -472,6 +473,15 @@ for node in tlNode.childNodes:
             'opr'   : opr,      \
             'flags' : flags     \
         }
+
+        if len(vendor):
+            tables[table_name][vend_dict['ANY']] = { \
+                'type'  : 'leaf',   \
+                'name'  : mnemonic, \
+                'pfx'   : pfx,      \
+                'opr'   : opr,      \
+                'flags' : flags     \
+            }
 
 # ---------------------------------------------------------------------
 # Generate itab.h
@@ -497,6 +507,7 @@ f.write('''
 f.write("\nenum ud_itab_vendor_index {\n" )
 f.write("  ITAB__VENDOR_INDX__AMD,\n" )
 f.write("  ITAB__VENDOR_INDX__INTEL,\n" )
+f.write("  ITAB__VENDOR_INDX__ANY,\n" )
 f.write("};\n\n")
 
 

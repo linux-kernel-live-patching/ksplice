@@ -197,6 +197,7 @@ typedef struct ud_operand 	ud_operand_t;
 #define UD_INP_CACHE_SZ		32
 #define UD_VENDOR_AMD		0
 #define UD_VENDOR_INTEL		1
+#define UD_VENDOR_ANY		2
 
 #define bail_out(ud,error_code) longjmp( (ud)->bailout, error_code )
 #define try_decode(ud) if ( setjmp( (ud)->bailout ) == 0 )
