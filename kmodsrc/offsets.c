@@ -26,6 +26,10 @@
 #define paravirt_patch_site paravirt_patch
 #endif /* LINUX_VERSION_CODE */
 #endif /* CONFIG_PARAVIRT */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
+/* 8256e47cdc8923e9959eb1d7f95d80da538add80 was after 2.6.23 */
+#include <linux/marker.h>
+#endif /* LINUX_VERSION_CODE */
 
 #include <asm/uaccess.h>
 #include "offsets.h"
@@ -54,6 +58,7 @@ const struct table_section table_sections[]
 		.sect = ".altinstructions",
 		.entry_size = sizeof(struct alt_instr),
 		.entry_align = __alignof__(struct alt_instr),
+		.has_addr = 1,
 		.addr_offset = offsetof(struct alt_instr, instr),
 		.other_sect = ".altinstr_replacement",
 		.other_offset = offsetof(struct alt_instr, replacement),
@@ -64,6 +69,7 @@ const struct table_section table_sections[]
 		.sect = "__bug_table",
 		.entry_size = sizeof(struct bug_entry),
 		.entry_align = __alignof__(struct bug_entry),
+		.has_addr = 1,
 		.addr_offset = offsetof(struct bug_entry, bug_addr),
 	},
 #else /* !CONFIG_GENERIC_BUG || LINUX_VERSION_CODE < */
@@ -73,15 +79,27 @@ const struct table_section table_sections[]
 		.sect = "__ex_table",
 		.entry_size = sizeof(struct exception_table_entry),
 		.entry_align = __alignof__(struct exception_table_entry),
+		.has_addr = 1,
 		.addr_offset = offsetof(struct exception_table_entry, insn),
 		.other_sect = ".fixup",
 		.other_offset = offsetof(struct exception_table_entry, fixup),
 	},
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
+/* 8256e47cdc8923e9959eb1d7f95d80da538add80 was after 2.6.23 */
+	{
+		.sect = "__markers",
+		.entry_size = sizeof(struct marker),
+		.entry_align = __alignof__(struct marker),
+		.other_sect = "__markers_strings",
+		.other_offset = offsetof(struct marker, name),
+	},
+#endif /* LINUX_VERSION_CODE */
 #ifdef CONFIG_PARAVIRT
 	{
 		.sect = ".parainstructions",
 		.entry_size = sizeof(struct paravirt_patch_site),
 		.entry_align = __alignof__(struct paravirt_patch_site),
+		.has_addr = 1,
 		.addr_offset = offsetof(struct paravirt_patch_site, instr),
 	},
 #endif /* CONFIG_PARAVIRT */
@@ -89,6 +107,7 @@ const struct table_section table_sections[]
 		.sect = ".smp_locks",
 		.entry_size = sizeof(u8 *),
 		.entry_align = __alignof__(u8 *),
+		.has_addr = 1,
 		.addr_offset = 0,
 	},
 };

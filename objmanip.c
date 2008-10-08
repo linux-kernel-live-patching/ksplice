@@ -123,6 +123,7 @@ void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
 static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size);
 bool is_table_section(const char *name, bool consider_other);
+void mangle_section_name(struct superbfd *sbfd, const char *name);
 
 void rm_relocs(struct superbfd *isbfd);
 void rm_some_relocs(struct supersect *ss);
@@ -551,6 +552,7 @@ void do_keep_helper(struct superbfd *isbfd)
 
 	rm_relocs(isbfd);
 	remove_unkept_spans(isbfd);
+	mangle_section_name(isbfd, "__markers");
 }
 
 void do_finalize(struct superbfd *isbfd)
@@ -1609,7 +1611,8 @@ void filter_table_sections(struct superbfd *isbfd)
 		struct table_section s = *ts;
 		s.sect = read_string(tables_ss, &ts->sect);
 		s.other_sect = read_string(tables_ss, &ts->other_sect);
-		filter_table_section(isbfd, &s);
+		if (s.has_addr)
+			filter_table_section(isbfd, &s);
 	}
 }
 
@@ -1748,7 +1751,7 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 	if (!ss->keep)
 		return;
 
-	asection *osection = bfd_make_section_anyway(obfd, isection->name);
+	asection *osection = bfd_make_section_anyway(obfd, ss->name);
 	assert(osection != NULL);
 
 	osection->userdata = ss;
@@ -2707,4 +2710,15 @@ void remove_unkept_spans(struct superbfd *sbfd)
 				  span->size);
 		}
 	}
+}
+
+void mangle_section_name(struct superbfd *sbfd, const char *name)
+{
+	asection *sect = bfd_get_section_by_name(sbfd->abfd, name);
+	if (sect == NULL)
+		return;
+	struct supersect *ss = fetch_supersect(sbfd, sect);
+	char *buf;
+	assert(asprintf(&buf, ".ksplice_pre.%s", ss->name) >= 0);
+	ss->name = buf;
 }
