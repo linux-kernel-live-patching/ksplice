@@ -1038,15 +1038,21 @@ static abort_t uniquify_symbols(struct ksplice_pack *pack)
 	for (r = pack->helper_relocs; r < pack->helper_relocs_end; r++) {
 		symp = bsearch(&r->symbol, sym_arr, size, sizeof(*sym_arr),
 			       compare_symbolp_labels);
-		if (symp != NULL)
+		if (symp != NULL) {
+			if ((*symp)->name == NULL)
+				(*symp)->name = r->symbol->name;
 			r->symbol = *symp;
+		}
 	}
 
 	for (s = pack->helper_sections; s < pack->helper_sections_end; s++) {
 		symp = bsearch(&s->symbol, sym_arr, size, sizeof(*sym_arr),
 			       compare_symbolp_labels);
-		if (symp != NULL)
+		if (symp != NULL) {
+			if ((*symp)->name == NULL)
+				(*symp)->name = s->symbol->name;
 			s->symbol = *symp;
+		}
 	}
 
 	vfree(sym_arr);
@@ -1103,6 +1109,10 @@ static abort_t init_symbol_arrays(struct ksplice_pack *pack)
 {
 	abort_t ret;
 
+	ret = uniquify_symbols(pack);
+	if (ret != OK)
+		return ret;
+
 	ret = init_symbol_array(pack, pack->helper_symbols,
 				pack->helper_symbols_end);
 	if (ret != OK)
@@ -1110,10 +1120,6 @@ static abort_t init_symbol_arrays(struct ksplice_pack *pack)
 
 	ret = init_symbol_array(pack, pack->primary_symbols,
 				pack->primary_symbols_end);
-	if (ret != OK)
-		return ret;
-
-	ret = uniquify_symbols(pack);
 	if (ret != OK)
 		return ret;
 
