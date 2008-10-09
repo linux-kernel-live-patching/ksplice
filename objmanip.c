@@ -1187,17 +1187,13 @@ void lookup_system_map(struct addr_vec *addrs, const char *name, long offset)
 	}
 }
 
-void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
-			    const unsigned long **sym_addrs,
-			    unsigned long *num_sym_addrs, asymbol *sym)
+void compute_system_map_array(struct superbfd *sbfd, struct addr_vec *addrs,
+			      asymbol *sym)
 {
-	struct addr_vec addrs;
-	vec_init(&addrs);
-
 	if (bfd_is_abs_section(sym->section)) {
-		*vec_grow(&addrs, 1) = sym->value;
+		*vec_grow(addrs, 1) = sym->value;
 	} else if (bfd_is_und_section(sym->section)) {
-		lookup_system_map(&addrs, sym->name, 0);
+		lookup_system_map(addrs, sym->name, 0);
 	} else if (!bfd_is_const_section(sym->section)) {
 		asymbol **gsymp;
 		for (gsymp = sbfd->syms.data;
@@ -1205,43 +1201,41 @@ void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 			asymbol *gsym = *gsymp;
 			if ((gsym->flags & BSF_DEBUGGING) == 0 &&
 			    gsym->section == sym->section)
-				lookup_system_map(&addrs, gsym->name,
+				lookup_system_map(addrs, gsym->name,
 						  sym->value - gsym->value);
 		}
 	}
-
-	*num_sym_addrs = addrs.size;
-	if (addrs.size != 0) {
-		struct supersect *array_ss = make_section(sbfd,
-							  ".ksplice_array");
-		void *buf = sect_grow(array_ss, addrs.size,
-				      typeof(*addrs.data));
-		memcpy(buf, addrs.data, addrs.size * sizeof(*addrs.data));
-		write_reloc(ss, sym_addrs, &array_ss->symbol,
-			    addr_offset(array_ss, buf));
-	} else {
-		*sym_addrs = NULL;
-	}
-
-	vec_free(&addrs);
 }
 
 void write_ksplice_system_map(struct superbfd *sbfd, asymbol *sym,
 			      const char *label)
 {
-	struct supersect *smap_ss = make_section(sbfd, ".ksplice_system_map");
-	struct ksplice_system_map *smap;
-
 	bool *done = bool_hash_lookup(&system_map_written, label, TRUE);
 	if (*done)
 		return;
 	*done = true;
 
-	smap = sect_grow(smap_ss, 1, struct ksplice_system_map);
+	struct addr_vec addrs;
+	vec_init(&addrs);
 
-	write_system_map_array(sbfd, smap_ss, &smap->candidates,
-			       &smap->nr_candidates, sym);
-	write_string(smap_ss, &smap->label, "%s", label);
+	compute_system_map_array(sbfd, &addrs, sym);
+	if (addrs.size != 0) {
+		struct supersect *smap_ss =
+		    make_section(sbfd, ".ksplice_system_map");
+		struct ksplice_system_map *smap =
+		    sect_grow(smap_ss, 1, struct ksplice_system_map);
+		write_string(smap_ss, &smap->label, "%s", label);
+
+		struct supersect *array_ss = make_section(sbfd,
+							  ".ksplice_array");
+		void *buf = sect_grow(array_ss, addrs.size,
+				      typeof(*addrs.data));
+		memcpy(buf, addrs.data, addrs.size * sizeof(*addrs.data));
+		smap->nr_candidates = addrs.size;
+		write_reloc(smap_ss, &smap->candidates, &array_ss->symbol,
+			    addr_offset(array_ss, buf));
+	}
+	vec_free(&addrs);
 }
 
 void write_ksplice_symbol_backend(struct supersect *ss,
