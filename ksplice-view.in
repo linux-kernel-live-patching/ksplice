@@ -104,9 +104,14 @@ update's tarball filename I<UPDATE_TARBALL> (if the update is on disk).
 
 L<ksplice-create(8)>, L<ksplice-apply(8)>, L<ksplice-undo(8)>
 
+=head1 BUGS
+
+Please report bugs to <PACKAGE_BUGREPORT>.
+
 =head1 COPYRIGHT
 
 Copyright (C) 2007-2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+
 Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
                     Tim Abbott <tabbott@mit.edu>
 
