@@ -1199,11 +1199,10 @@ void write_system_map_array(struct superbfd *sbfd, struct supersect *ss,
 }
 
 void write_ksplice_system_map(struct superbfd *sbfd, asymbol *sym,
-			      const char *addstr_sect)
+			      const char *label)
 {
 	struct supersect *smap_ss = make_section(sbfd, ".ksplice_system_map");
 	struct ksplice_system_map *smap;
-	const char *label = label_lookup(sbfd, sym);
 
 	bool *done = bool_hash_lookup(&system_map_written, label, TRUE);
 	if (*done)
@@ -1214,7 +1213,7 @@ void write_ksplice_system_map(struct superbfd *sbfd, asymbol *sym,
 
 	write_system_map_array(sbfd, smap_ss, &smap->candidates,
 			       &smap->nr_candidates, sym);
-	write_string(smap_ss, &smap->label, "%s%s", label, addstr_sect);
+	write_string(smap_ss, &smap->label, "%s", label);
 }
 
 void write_ksplice_symbol(struct supersect *ss,
@@ -1251,7 +1250,8 @@ void write_ksplice_symbol(struct supersect *ss,
 		return;
 	}
 
-	write_ksplice_system_map(ksymbol_ss->parent, sym, addstr_sect);
+	if (strcmp(addstr_sect, "") == 0)
+		write_ksplice_system_map(ksymbol_ss->parent, sym, output);
 
 	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
 		write_string(ksymbol_ss, &ksymbol->name, "%s", sym->name);
