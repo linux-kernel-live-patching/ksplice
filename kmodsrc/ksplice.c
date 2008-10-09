@@ -554,6 +554,10 @@ static bool add_export_values(const struct symsearch *syms,
 			      unsigned int symnum, void *data);
 static int symbolp_bsearch_compare(const void *key, const void *elt);
 static int compare_symbolp_names(const void *a, const void *b);
+#ifdef CONFIG_KALLSYMS
+static int add_kallsyms_values(void *data, const char *name,
+			       struct module *owner, unsigned long val);
+#endif /* CONFIG_KALLSYMS */
 #ifdef KSPLICE_STANDALONE
 static abort_t
 add_system_map_candidates(struct ksplice_pack *pack,
@@ -563,13 +567,6 @@ add_system_map_candidates(struct ksplice_pack *pack,
 static int compare_system_map(const void *a, const void *b);
 static int system_map_bsearch_compare(const void *key, const void *elt);
 #endif /* KSPLICE_STANDALONE */
-#ifdef CONFIG_KALLSYMS
-static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
-				      const char *name, struct list_head *vals);
-static int accumulate_matching_names(void *data, const char *sym_name,
-				     struct module *sym_owner,
-				     unsigned long sym_val);
-#endif /* CONFIG_KALLSYMS */
 static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
 				 const char *name, struct list_head *vals);
 
@@ -954,6 +951,18 @@ static abort_t add_matching_values(struct ksplice_lookup *lookup,
 	return OK;
 }
 
+#ifdef CONFIG_KALLSYMS
+static int add_kallsyms_values(void *data, const char *name,
+			       struct module *owner, unsigned long val)
+{
+	struct ksplice_lookup *lookup = data;
+	if (owner == lookup->pack->primary ||
+	    !patches_module(owner, lookup->pack->target))
+		return (__force int)OK;
+	return (__force int)add_matching_values(lookup, name, val);
+}
+#endif /* CONFIG_KALLSYMS */
+
 static bool add_export_values(const struct symsearch *syms,
 			      struct module *owner,
 			      unsigned int symnum, void *data)
@@ -993,6 +1002,7 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 	struct ksplice_symbol *sym, **sym_arr, **symp;
 	struct ksplice_lookup lookup;
 	size_t size = end - start;
+	abort_t ret;
 
 	if (size == 0)
 		return OK;
@@ -1020,8 +1030,14 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 	lookup.ret = OK;
 
 	each_symbol(add_export_values, &lookup);
+	ret = lookup.ret;
+#ifdef CONFIG_KALLSYMS
+	if (ret == OK)
+		ret = (__force abort_t)
+		    kallsyms_on_each_symbol(add_kallsyms_values, &lookup);
+#endif /* CONFIG_KALLSYMS */
 	vfree(sym_arr);
-	return lookup.ret;
+	return ret;
 }
 
 static abort_t init_symbol_arrays(struct ksplice_pack *pack)
@@ -1929,12 +1945,6 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 		ret = new_export_lookup(pack, pack->update, ksym->name, vals);
 		if (ret != OK)
 			return ret;
-
-#ifdef CONFIG_KALLSYMS
-		ret = lookup_symbol_kallsyms(pack, ksym->name, vals);
-		if (ret != OK)
-			return ret;
-#endif /* CONFIG_KALLSYMS */
 	}
 
 	return OK;
@@ -1990,29 +2000,6 @@ static int system_map_bsearch_compare(const void *key, const void *elt)
 	return strcmp(label, map->label);
 }
 #endif /* !KSPLICE_STANDALONE */
-
-#ifdef CONFIG_KALLSYMS
-static abort_t lookup_symbol_kallsyms(struct ksplice_pack *pack,
-				      const char *name, struct list_head *vals)
-{
-	struct accumulate_struct acc = { pack, name, vals };
-	return (__force abort_t)
-	    kallsyms_on_each_symbol(accumulate_matching_names, &acc);
-}
-
-static int accumulate_matching_names(void *data, const char *sym_name,
-				     struct module *sym_owner,
-				     unsigned long sym_val)
-{
-	struct accumulate_struct *acc = data;
-	if (strcmp(sym_name, acc->desired_name) == 0 &&
-	    patches_module(sym_owner, acc->pack->target) &&
-	    sym_owner != acc->pack->primary)
-		return (__force int)add_candidate_val(acc->pack, acc->vals,
-						      sym_val);
-	return (__force int)OK;
-}
-#endif /* CONFIG_KALLSYMS */
 
 static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
 				 const char *name, struct list_head *vals)
