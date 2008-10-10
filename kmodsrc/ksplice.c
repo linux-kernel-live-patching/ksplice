@@ -740,6 +740,7 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 				goto out;
 			}
 			add_to_update(pack, update);
+			ret = 0;
 			goto out;
 		}
 	}
