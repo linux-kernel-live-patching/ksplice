@@ -227,8 +227,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			}
 			if (ret != OK)
 				goto out;
-			ret = handle_reloc(pack, r, (unsigned long)(run + 4),
-					   mode);
+			ret = handle_reloc(pack, sect, r,
+					   (unsigned long)(run + 4), mode);
 			if (ret != OK)
 				goto out;
 			/* If there's a relocation, then it's a BUG? */
@@ -329,7 +329,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 			run_reloc.dst_mask = ~(~0 << run_reloc.size * 8);
 		run_reloc.addend += (ud_operand_len(pre_op) -
 				     ud_operand_len(run_op));
-		ret = handle_reloc(pack, &run_reloc,
+		ret = handle_reloc(pack, sect, &run_reloc,
 				   (unsigned long)(run + run_off), mode);
 		if (ret != OK) {
 			if (mode == RUN_PRE_DEBUG)

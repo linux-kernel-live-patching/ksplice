@@ -538,6 +538,7 @@ static abort_t lookup_reloc(struct ksplice_pack *pack,
 			    unsigned long addr,
 			    const struct ksplice_reloc **relocp);
 static abort_t handle_reloc(struct ksplice_pack *pack,
+			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode);
 
@@ -1789,7 +1790,8 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 		unsigned long offset = pre - pre_start;
 		ret = lookup_reloc(pack, &finger, (unsigned long)pre, &r);
 		if (ret == OK) {
-			ret = handle_reloc(pack, r, (unsigned long)run, mode);
+			ret = handle_reloc(pack, sect, r, (unsigned long)run,
+					   mode);
 			if (ret != OK) {
 				if (mode == RUN_PRE_INITIAL)
 					ksdebug(pack, "reloc in sect does not "
@@ -1997,6 +1999,7 @@ static abort_t lookup_reloc(struct ksplice_pack *pack,
 }
 
 static abort_t handle_reloc(struct ksplice_pack *pack,
+			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode)
 {
@@ -2020,6 +2023,9 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 		return UNEXPECTED;
 	}
 
+	if ((sect->flags & KSPLICE_SECTION_DATA) != 0 &&
+	    sect->symbol == r->symbol)
+		return OK;
 	ret = create_labelval(pack, r->symbol, val, TEMP);
 	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL) {
 		struct labelval *lv = r->symbol->lv;
