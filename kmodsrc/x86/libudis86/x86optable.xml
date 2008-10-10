@@ -2976,17 +2976,17 @@
   </instruction>
 
   <instruction mnemonic="vmclear">
-    <opcode> aso rexr rexx rexb ; sse66 0F C7 /0 ; Mq </opcode>
+    <opcode> aso rexr rexx rexb ; sse66 0F C7 /6 ; Mq </opcode>
     <vendor> INTEL </vendor>
   </instruction>
 
   <instruction mnemonic="vmxon">
-    <opcode> aso rexr rexx rexb ; ssef3 0F C7 /7 ; Mq </opcode>
+    <opcode> aso rexr rexx rexb ; ssef3 0F C7 /6 ; Mq </opcode>
     <vendor> INTEL </vendor>
   </instruction>
 
   <instruction mnemonic="vmptrld">
-    <opcode> aso rexr rexx rexb ; 0F C7 /0 ; Mq </opcode>
+    <opcode> aso rexr rexx rexb ; 0F C7 /6 ; Mq </opcode>
     <vendor> INTEL </vendor>
   </instruction>
 
