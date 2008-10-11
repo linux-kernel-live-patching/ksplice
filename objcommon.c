@@ -92,9 +92,6 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	new->parent = sbfd;
 	new->name = sect->name;
 	new->flags = bfd_get_section_flags(sbfd->abfd, sect);
-	new->match = NULL;
-	new->new = false;
-	new->patch = false;
 	new->keep = true;
 	new->symbol = sect->symbol;
 
@@ -154,8 +151,6 @@ struct supersect *new_supersect(struct superbfd *sbfd, const char *name)
 	new->next = sbfd->new_supersects;
 	sbfd->new_supersects = new;
 	new->flags = SEC_ALLOC | SEC_HAS_CONTENTS | SEC_RELOC;
-	new->new = false;
-	new->patch = false;
 	new->keep = true;
 
 	vec_init(&new->contents);

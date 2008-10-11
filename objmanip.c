@@ -101,10 +101,10 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 struct export_desc *new_export_desc(struct supersect *ss, bool deletion);
 bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 		  arelent *old_reloc, arelent *new_reloc);
-bool all_relocs_equal(struct supersect *old_ss, struct supersect *new_ss);
 bfd_vma non_dst_mask(struct supersect *ss, arelent *reloc);
+bool all_relocs_equal(struct span *old_span, struct span *new_span);
 static bool part_of_reloc(struct supersect *ss, unsigned long addr);
-static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss);
+static bool nonrelocs_equal(struct span *old_span, struct span *new_span);
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 					  struct superbfd *newsbfd);
 
@@ -125,7 +125,7 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 void load_ksplice_symbol_offsets(struct superbfd *sbfd);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 static void write_ksplice_section(struct span *span);
-void write_ksplice_patch(struct superbfd *sbfd, const char *sectname);
+void write_ksplice_patch(struct superbfd *sbfd, struct span *span);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 				 const char *label);
 asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name);
@@ -156,34 +156,35 @@ void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		      bfd_vma offset);
 static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-				void (*fn)(struct supersect *oldss,
+				void (*fn)(struct span *old_span,
 					   asymbol *oldsym,
-					   struct supersect *newss,
+					   struct span *new_span,
 					   asymbol *newsym));
-static void check_global_symbols(struct supersect *oldss, asymbol *oldsym,
-				 struct supersect *newss, asymbol *newsym);
-static void match_global_symbols(struct supersect *oldss, asymbol *oldsym,
-				 struct supersect *newss, asymbol *newsym);
+static void check_global_symbols(struct span *old_span, asymbol *oldsym,
+				 struct span *new_span, asymbol *newsym);
+static void match_global_symbols(struct span *old_span, asymbol *oldsym,
+				 struct span *new_span, asymbol *newsym);
+static void match_symbol_spans(struct span *old_span, asymbol *oldsym,
+			       struct span *new_span, asymbol *newsym);
 
-static void foreach_section_pair(struct superbfd *oldsbfd,
-				 struct superbfd *newsbfd,
-				 void (*fn)(struct supersect *oldss,
-					    struct supersect *newss));
-static void match_sections_by_name(struct supersect *oldss,
-				   struct supersect *newss);
-static void match_sections_by_label(struct supersect *oldss,
-				    struct supersect *newss);
-static void mark_new_sections(struct superbfd *sbfd);
-static void handle_deleted_sections(struct superbfd *oldsbfd,
-				    struct superbfd *newsbfd);
-static void compare_matched_sections(struct superbfd *sbfd);
+static void foreach_span_pair(struct superbfd *oldsbfd,
+			      struct superbfd *newsbfd,
+			      void (*fn)(struct span *old_span,
+					 struct span *new_span));
+static void match_spans_by_label(struct span *old_span, struct span *new_span);
+static void match_string_spans(struct span *old_span, struct span *new_span);
+static void mark_new_spans(struct superbfd *sbfd);
+static void handle_deleted_spans(struct superbfd *oldsbfd,
+				 struct superbfd *newsbfd);
+static void compare_matched_spans(struct superbfd *newsbfd);
+static void compare_spans(struct span *old_span, struct span *new_span);
 static void update_nonzero_offsets(struct superbfd *sbfd);
 static void handle_nonzero_offset_relocs(struct supersect *ss);
 
 static const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
-static void print_label_map(struct superbfd *sbfd);
 static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 			  const char *label);
+static void print_label_changes(struct superbfd *sbfd);
 static void init_label_map(struct superbfd *sbfd);
 static asymbol **symbolp_scan(struct supersect *ss, bfd_vma value);
 static void init_csyms(struct superbfd *sbfd);
@@ -363,85 +364,74 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	load_offsets();
 	initialize_supersect_types(isbfd);
 	initialize_supersect_types(presbfd);
+	initialize_spans(isbfd);
+	initialize_spans(presbfd);
 
 	foreach_symbol_pair(presbfd, isbfd, match_global_symbols);
 	debug1(isbfd, "Matched global\n");
-	foreach_section_pair(presbfd, isbfd, match_sections_by_name);
+	foreach_span_pair(presbfd, isbfd, match_string_spans);
+	debug1(isbfd, "Matched string spans\n");
+	foreach_symbol_pair(presbfd, isbfd, match_symbol_spans);
 	debug1(isbfd, "Matched by name\n");
-	foreach_section_pair(presbfd, isbfd, match_sections_by_label);
+	foreach_span_pair(presbfd, isbfd, match_spans_by_label);
 	debug1(isbfd, "Matched by label\n");
 
 	do {
 		changed = false;
-		compare_matched_sections(isbfd);
+		compare_matched_spans(isbfd);
 		update_nonzero_offsets(isbfd);
-		mark_new_sections(isbfd);
+		mark_new_spans(isbfd);
 	} while (changed);
 	vec_init(&delsects);
 
 	foreach_symbol_pair(presbfd, isbfd, check_global_symbols);
 
-	handle_deleted_sections(presbfd, isbfd);
+	handle_deleted_spans(presbfd, isbfd);
 	handle_section_symbol_renames(presbfd, isbfd);
 
 	vec_init(&exports);
 	compare_exported_symbols(presbfd, isbfd, false);
 	compare_exported_symbols(isbfd, presbfd, true);
 
-	initialize_spans(isbfd);
-	initialize_spans(presbfd);
+	assert(bfd_close(prebfd));
+
 	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
-		if (ss->type != SS_TYPE_STRING)
-			continue;
-		asection *oldsect = bfd_get_section_by_name(prebfd, sect->name);
-		if (oldsect == NULL)
-			continue;
-		struct supersect *old_ss = fetch_supersect(presbfd, oldsect);
-		struct span *span, *old_span;
+		ss->keep = false;
+		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT)
+			ss->keep = true;
+		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			span->new = true;
-			for (old_span = old_ss->spans.data;
-			     old_span < old_ss->spans.data + old_ss->spans.size;
-			     old_span++) {
-				if (strcmp((char *)ss->contents.data +
-					   span->start,
-					   (char *)old_ss->contents.data +
-					   old_span->start) == 0) {
-					if (!span->new)
-						DIE;
-					span->label = old_span->label;
-					span->new = false;
-				}
+			if (span->new || span->patch) {
+				ss->keep = true;
+				span->keep = true;
 			}
 		}
 	}
-	assert(bfd_close(prebfd));
+
+	print_label_changes(isbfd);
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
-		ss->keep = false;
-		if (ss->type == SS_TYPE_STRING || ss->type == SS_TYPE_SPECIAL ||
-		    ss->type == SS_TYPE_EXPORT)
-			ss->keep = true;
-		if (ss->new || ss->patch)
-			ss->keep = true;
-	}
-
-	print_label_map(isbfd);
-
-	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		struct supersect *ss = fetch_supersect(isbfd, sect);
-		if (ss->patch)
-			debug0(isbfd, "Patching section: %s\n", sect->name);
+		struct span *span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (span->patch)
+				debug0(isbfd, "Patching span %s\n",
+				       span->label);
+		}
 	}
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
-		if (ss->new)
-			debug0(isbfd, "New section: %s\n", sect->name);
+		struct span *span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (span->new)
+				debug0(isbfd, "New span %s\n", span->label);
+		}
 	}
 
 	const char **sectname;
@@ -459,14 +449,6 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 			       ed->export_type, *symname);
 	}
 
-	struct span *span;
-	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		struct supersect *ss = fetch_supersect(isbfd, sect);
-		for (span = ss->spans.data;
-		     span < ss->spans.data + ss->spans.size; span++)
-			span->keep = ss->keep;
-	}
-
 	filter_table_sections(isbfd);
 	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
 		const char **symname;
@@ -482,16 +464,14 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
-		if (!ss->patch && !ss->new)
-			continue;
-
 		struct span *span;
 		for (span = ss->spans.data;
-		     span < ss->spans.data + ss->spans.size; span++)
-			write_ksplice_section(span);
-
-		if (ss->patch)
-			write_ksplice_patch(isbfd, sect->name);
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (span->patch || span->new)
+				write_ksplice_section(span);
+			if (span->patch)
+				write_ksplice_patch(isbfd, span);
+		}
 	}
 
 	rm_relocs(isbfd);
@@ -667,54 +647,56 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 	}
 }
 
-void match_sections(struct supersect *oldss, struct supersect *newss)
+void match_spans(struct span *old_span, struct span *new_span)
 {
-	if (oldss->match == newss && newss->match == oldss)
+	struct superbfd *sbfd = new_span->ss->parent;
+	if (old_span->match == new_span && new_span->match == old_span)
 		return;
-	if (oldss->match != NULL) {
-		err(newss->parent, "Matching conflict: old %s: %s != %s\n",
-		    oldss->name, oldss->match->name, newss->name);
+	if (old_span->match != NULL) {
+		err(sbfd, "Matching conflict: old %s: %s != %s\n",
+		    old_span->label, old_span->match->label, new_span->label);
 		DIE;
 	}
-	if (newss->match != NULL) {
-		err(newss->parent, "Matching conflict: new %s: %s != %s\n",
-		    newss->name, newss->match->name, oldss->name);
+	if (new_span->match != NULL) {
+		err(sbfd, "Matching conflict: new %s: %s != %s\n",
+		    new_span->label, new_span->match->label, old_span->label);
 		DIE;
 	}
-	oldss->match = newss;
-	newss->match = oldss;
-	debug1(newss->parent, "Matched old %s to new %s\n",
-	       oldss->name, newss->name);
+	old_span->match = new_span;
+	new_span->match = old_span;
+	debug1(sbfd, "Matched old %s to new %s\n", old_span->label,
+	       new_span->label);
 }
 
-static void match_global_symbols(struct supersect *oldss, asymbol *oldsym,
-				 struct supersect *newss, asymbol *newsym)
+static void match_global_symbols(struct span *old_span, asymbol *oldsym,
+				 struct span *new_span, asymbol *newsym)
 {
 	if ((oldsym->flags & BSF_GLOBAL) == 0 ||
 	    (newsym->flags & BSF_GLOBAL) == 0)
 		return;
-	match_sections(oldss, newss);
+	match_spans(old_span, new_span);
 }
 
-static void check_global_symbols(struct supersect *oldss, asymbol *oldsym,
-				 struct supersect *newss, asymbol *newsym)
+static void check_global_symbols(struct span *old_span, asymbol *oldsym,
+				 struct span *new_span, asymbol *newsym)
 {
 	if ((oldsym->flags & BSF_GLOBAL) == 0 ||
 	    (newsym->flags & BSF_GLOBAL) == 0)
 		return;
-	if (oldss->type == SS_TYPE_IGNORED)
+	if (old_span->ss->type == SS_TYPE_IGNORED)
 		return;
-	if (oldss->match != newss || newss->match != oldss) {
-		err(newss->parent, "Global symbol section mismatch: %s %s/%s\n",
-		    oldsym->name, oldss->name, newss->name);
+	if (old_span->match != new_span || new_span->match != old_span) {
+		err(new_span->ss->parent, "Global symbol span mismatch: %s "
+		    "%s/%s\n", oldsym->name, old_span->ss->name,
+		    new_span->ss->name);
 		DIE;
 	}
 }
 
 static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsbfd,
-				void (*fn)(struct supersect *oldss,
+				void (*fn)(struct span *old_span,
 					   asymbol *oldsym,
-					   struct supersect *newss,
+					   struct span *new_span,
 					   asymbol *newsym))
 {
 	asymbol **oldsymp, **newsymp;
@@ -731,188 +713,254 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 				continue;
 			if (strcmp(oldsym->name, newsym->name) != 0)
 				continue;
-			struct supersect *oldss =
+
+			struct supersect *old_ss =
 			    fetch_supersect(oldsbfd, oldsym->section);
-			struct supersect *newss =
+			struct supersect *new_ss =
 			    fetch_supersect(newsbfd, newsym->section);
-			fn(oldss, oldsym, newss, newsym);
+			if (old_ss->type != new_ss->type ||
+			    old_ss->type == SS_TYPE_SPECIAL ||
+			    old_ss->type == SS_TYPE_EXPORT)
+				continue;
+
+			struct span *old_span =
+			    find_span(old_ss, oldsym->value);
+			struct span *new_span =
+			    find_span(new_ss, newsym->value);
+			if (old_span == NULL) {
+				err(oldsbfd, "Could not find span for %s\n",
+				    oldsym->name);
+				DIE;
+			}
+			if (new_span == NULL) {
+				err(newsbfd, "Could not find span for %s\n",
+				    newsym->name);
+				DIE;
+			}
+			fn(old_span, oldsym, new_span, newsym);
 		}
 	}
 }
 
-static void match_sections_by_name(struct supersect *oldss,
-				   struct supersect *newss)
+static void match_symbol_spans(struct span *old_span, asymbol *oldsym,
+			       struct span *new_span, asymbol *newsym)
 {
-	if (static_local_symbol(newss->parent,
-				canonical_symbol(newss->parent, newss->symbol)))
+	if ((oldsym->flags & BSF_DEBUGGING) != 0 ||
+	    (newsym->flags & BSF_DEBUGGING) != 0)
 		return;
-	if (strcmp(oldss->name, newss->name) == 0)
-		match_sections(oldss, newss);
+	if (old_span->ss->type == SS_TYPE_SPECIAL ||
+	    old_span->ss->type == SS_TYPE_EXPORT)
+		return;
+	if (static_local_symbol(old_span->ss->parent, oldsym) ||
+	    static_local_symbol(new_span->ss->parent, newsym))
+		return;
+	if (old_span->match == NULL && new_span->match == NULL)
+		match_spans(old_span, new_span);
 }
 
-static void match_sections_by_label(struct supersect *oldss,
-				    struct supersect *newss)
+static void match_spans_by_label(struct span *old_span, struct span *new_span)
 {
-	if (strcmp(label_lookup(oldss->parent, oldss->symbol),
-		   label_lookup(newss->parent, newss->symbol)) == 0)
-		match_sections(oldss, newss);
+	if (old_span->ss->type == SS_TYPE_STRING)
+		return;
+	if (strcmp(old_span->label, new_span->label) == 0)
+		match_spans(old_span, new_span);
 }
 
-static void foreach_section_pair(struct superbfd *oldsbfd,
-				 struct superbfd *newsbfd,
-				 void (*fn)(struct supersect *oldss,
-					    struct supersect *newss))
+static void match_string_spans(struct span *old_span, struct span *new_span)
+{
+	if (old_span->ss->type != SS_TYPE_STRING ||
+	    strcmp(old_span->ss->name, new_span->ss->name) != 0)
+		return;
+	if (strcmp((char *)old_span->ss->contents.data + old_span->start,
+		   (char *)new_span->ss->contents.data + new_span->start) == 0)
+		match_spans(old_span, new_span);
+}
+
+static void foreach_span_pair(struct superbfd *oldsbfd,
+			      struct superbfd *newsbfd,
+			      void (*fn)(struct span *old_span,
+					 struct span *new_span))
 {
 	asection *oldsect, *newsect;
 	struct supersect *oldss, *newss;
+	struct span *old_span, *new_span;
 	for (newsect = newsbfd->abfd->sections; newsect != NULL;
 	     newsect = newsect->next) {
 		newss = fetch_supersect(newsbfd, newsect);
-		if (newss->type == SS_TYPE_STRING ||
-		    newss->type == SS_TYPE_SPECIAL ||
+		if (newss->type == SS_TYPE_SPECIAL ||
 		    newss->type == SS_TYPE_EXPORT)
 			continue;
 		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
 		     oldsect = oldsect->next) {
 			oldss = fetch_supersect(oldsbfd, oldsect);
-			if (oldss->type == SS_TYPE_STRING ||
-			    oldss->type == SS_TYPE_SPECIAL ||
-			    oldss->type == SS_TYPE_EXPORT)
-			continue;
-			fn(oldss, newss);
+			if (oldss->type != newss->type)
+				continue;
+			for (new_span = newss->spans.data;
+			     new_span < newss->spans.data + newss->spans.size;
+			     new_span++) {
+				for (old_span = oldss->spans.data;
+				     old_span < oldss->spans.data +
+				     oldss->spans.size; old_span++)
+					fn(old_span, new_span);
+			}
 		}
 	}
 }
 
-static void mark_new_sections(struct superbfd *sbfd)
+static void mark_new_spans(struct superbfd *sbfd)
 {
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (ss->type == SS_TYPE_STRING || ss->type == SS_TYPE_SPECIAL ||
-		    ss->type == SS_TYPE_IGNORED || ss->type == SS_TYPE_EXPORT)
+		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT ||
+		    ss->type == SS_TYPE_IGNORED)
 			continue;
-		if (ss->match == NULL)
-			ss->new = true;
+		struct span *span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (span->match == NULL)
+				span->new = true;
+		}
 	}
 }
 
-static void handle_deleted_sections(struct superbfd *oldsbfd,
-				    struct superbfd *newsbfd)
+static void handle_deleted_spans(struct superbfd *oldsbfd,
+				 struct superbfd *newsbfd)
 {
 	asection *sect;
 	for (sect = oldsbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(oldsbfd, sect);
 		if (ss->type != SS_TYPE_TEXT)
 			continue;
-		if (ss->match != NULL)
-			continue;
-		const char *label = label_lookup(oldsbfd, sect->symbol);
-		*vec_grow(&delsects, 1) = label;
-		asymbol *csym = canonical_symbol(oldsbfd, sect->symbol);
-		write_ksplice_deleted_patch(newsbfd, csym->name, label);
+		struct span *span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (span->match != NULL)
+				continue;
+			*vec_grow(&delsects, 1) = span->label;
+			if (span->symbol == NULL)
+				DIE;
+			write_ksplice_deleted_patch(newsbfd, span->symbol->name,
+						    span->label);
+		}
 	}
 }
 
 static void handle_nonzero_offset_relocs(struct supersect *ss)
 {
-	int i;
-	for (i = 0; i < ss->relocs.size; i++) {
-		asymbol *sym = *ss->relocs.data[i]->sym_ptr_ptr;
-		bfd_vma offset = get_reloc_offset(ss, ss->relocs.data[i], true);
-		if (sym->value + offset == 0)
+	struct span *address_span, *target_span;
+	arelent **relocp;
+	for (relocp = ss->relocs.data;
+	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+		arelent *reloc = *relocp;
+		address_span = find_span(ss, reloc->address);
+		if (!address_span->new && !address_span->patch)
 			continue;
+
+		asymbol *sym = *reloc->sym_ptr_ptr;
 		if (bfd_is_const_section(sym->section))
 			continue;
-		struct supersect *sym_ss = fetch_supersect(ss->parent,
-							   sym->section);
-		if (sym_ss->type != SS_TYPE_TEXT)
+		bfd_vma offset = get_reloc_offset(ss, reloc, true);
+		target_span = reloc_target_span(ss, reloc);
+		if (sym->value + offset == target_span->start)
 			continue;
-		if (!sym_ss->patch) {
-			changed = true;
-			debug1(ss->parent,
-			       "Changing %s because a relocation from sect %s "
-			       "has a nonzero offset %lx+%lx into it\n",
-			       sym_ss->name, ss->name,
-			       (unsigned long)sym->value,
-			       (unsigned long)offset);
-		}
-		sym_ss->patch = true;
+
+		if (target_span->ss->type != SS_TYPE_TEXT)
+			continue;
+		if (target_span->patch)
+			continue;
+
+		target_span->patch = true;
+		changed = true;
+		debug1(ss->parent, "Changing %s because a relocation from sect "
+		       "%s has a nonzero offset %lx+%lx into it\n",
+		       target_span->label, ss->name, (unsigned long)sym->value,
+		       (unsigned long)offset);
 	}
 }
 
 static void update_nonzero_offsets(struct superbfd *sbfd)
 {
 	asection *sect;
-	struct supersect *ss;
-
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		ss = fetch_supersect(sbfd, sect);
-		if (ss->new || ss->patch)
-			handle_nonzero_offset_relocs(ss);
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT ||
+		    ss->type == SS_TYPE_IGNORED)
+			continue;
+		handle_nonzero_offset_relocs(ss);
 	}
 }
 
-static void compare_matched_sections(struct superbfd *newsbfd)
+static void compare_spans(struct span *old_span, struct span *new_span)
 {
-	asection *newp;
-	struct supersect *old_ss, *new_ss;
-	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
-		new_ss = fetch_supersect(newsbfd, newp);
-		if (new_ss->match == NULL)
-			continue;
-		old_ss = new_ss->match;
+	struct superbfd *newsbfd = new_span->ss->parent;
 
-		if (nonrelocs_equal(old_ss, new_ss) &&
-		    all_relocs_equal(old_ss, new_ss))
-			continue;
+	if (nonrelocs_equal(old_span, new_span) &&
+	    all_relocs_equal(old_span, new_span))
+		return;
 
-		char *reason;
-		if (new_ss->contents.size != old_ss->contents.size)
-			reason = "differing sizes";
-		else if (memcmp(new_ss->contents.data, old_ss->contents.data,
-				new_ss->contents.size) != 0)
-			reason = "differing contents";
-		else
-			reason = "differing relocations";
-		if (new_ss->type == SS_TYPE_TEXT) {
-			if (new_ss->patch)
+	char *reason;
+	if (new_span->size != old_span->size)
+		reason = "differing sizes";
+	else if (!nonrelocs_equal(old_span, new_span))
+		reason = "differing contents";
+	else
+		reason = "differing relocations";
+
+	if (new_span->ss->type == SS_TYPE_TEXT) {
+		if (new_span->patch)
+			return;
+		new_span->patch = true;
+		debug1(newsbfd, "Changing %s due to %s\n", new_span->label,
+		       reason);
+	} else {
+		debug1(newsbfd, "Unmatching %s and %s due to %s\n",
+		       old_span->label, new_span->label, reason);
+		new_span->match = NULL;
+		old_span->match = NULL;
+	}
+	changed = true;
+	if (unchangeable_section(new_span->ss))
+		err(newsbfd, "warning: ignoring change to nonpatchable "
+		    "section %s\n", new_span->ss->name);
+}
+
+static void compare_matched_spans(struct superbfd *newsbfd)
+{
+	asection *sect;
+	for (sect = newsbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(newsbfd, sect);
+		struct span *span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (span->match == NULL)
 				continue;
-			new_ss->patch = true;
-			debug1(newsbfd, "Changing %s due to %s\n", new_ss->name,
-			       reason);
-		} else {
-			debug1(newsbfd, "Unmatching %s and %s due to %s\n",
-			       old_ss->name, new_ss->name, reason);
-			new_ss->match = NULL;
-			old_ss->match = NULL;
+			compare_spans(span->match, span);
 		}
-		changed = true;
-		if (unchangeable_section(new_ss))
-			err(newsbfd, "warning: ignoring change to nonpatchable "
-			    "section %s\n", new_ss->name);
 	}
 }
 
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 					  struct superbfd *newsbfd)
 {
-	asection *newp, *oldp;
-	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
-		struct supersect *newss = fetch_supersect(newsbfd, newp);
-		if (newss->match == NULL)
-			continue;
-		oldp = bfd_get_section_by_name(oldsbfd->abfd,
-					       newss->match->name);
-		if (oldp == NULL)
-			continue;
-
-		const char *old_label = label_lookup(oldsbfd, oldp->symbol);
-		const char *new_label = label_lookup(newsbfd, newp->symbol);
-
-		if (strcmp(old_label, new_label) == 0)
-			continue;
-		label_map_set(newsbfd, new_label, old_label);
+	asection *sect;
+	struct span *span;
+	for (sect = newsbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(newsbfd, sect);
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (span->match == NULL)
+				continue;
+			if (strcmp(span->label, span->match->label) == 0)
+				continue;
+			if (strcmp(span->orig_label, span->label) != 0 &&
+			    strcmp(span->label, span->match->label) != 0)
+				DIE;
+			if (span->symbol != NULL)
+				label_map_set(newsbfd, span->label,
+					      span->match->label);
+			span->label = span->match->label;
+		}
 	}
 }
 
@@ -929,16 +977,18 @@ static bool part_of_reloc(struct supersect *ss, unsigned long addr)
 	return false;
 }
 
-static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss)
+static bool nonrelocs_equal(struct span *old_span, struct span *new_span)
 {
 	int i;
-	if (old_ss->contents.size != new_ss->contents.size)
+	struct supersect *old_ss = old_span->ss, *new_ss = new_span->ss;
+	if (old_span->size != new_span->size)
 		return false;
-	const unsigned char *old = old_ss->contents.data;
-	const unsigned char *new = new_ss->contents.data;
-	for (i = 0; i < old_ss->contents.size; i++) {
+	const unsigned char *old = old_ss->contents.data + old_span->start;
+	const unsigned char *new = new_ss->contents.data + new_span->start;
+	for (i = 0; i < old_span->size; i++) {
 		if (old[i] != new[i] &&
-		    !(part_of_reloc(old_ss, i) && part_of_reloc(new_ss, i)))
+		    !(part_of_reloc(old_ss, i + old_span->start) &&
+		      part_of_reloc(new_ss, i + new_span->start)))
 			return false;
 	}
 	return true;
@@ -949,8 +999,11 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 {
 	struct superbfd *oldsbfd = old_src_ss->parent;
 	struct superbfd *newsbfd = new_src_ss->parent;
+	struct span *old_addr_span = find_span(old_src_ss, old_reloc->address);
+	struct span *new_addr_span = find_span(new_src_ss, new_reloc->address);
 
-	if (old_reloc->address != new_reloc->address) {
+	if (old_reloc->address - old_addr_span->start !=
+	    new_reloc->address - new_addr_span->start) {
 		debug1(newsbfd, "Section %s/%s has reloc address mismatch at "
 		       "%lx\n", old_src_ss->name, new_src_ss->name,
 		       (unsigned long)old_reloc->address);
@@ -998,36 +1051,17 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 
 	struct supersect *old_ss = fetch_supersect(oldsbfd, old_sect);
 	struct supersect *new_ss = fetch_supersect(newsbfd, new_sect);
+	struct span *old_span = reloc_target_span(old_src_ss, old_reloc);
+	struct span *new_span = reloc_target_span(new_src_ss, new_reloc);
 
-	if (old_ss->type == SS_TYPE_STRING &&
-	    /* check it's not an out-of-range relocation to a string;
-	       we'll just compare entire sections for them */
-	    !(old_offset >= old_ss->contents.size ||
-	      new_offset >= new_ss->contents.size)) {
-		if (strcmp(old_ss->contents.data + old_sym->value + old_offset,
-			   new_ss->contents.data + new_sym->value + new_offset)
-		    != 0) {
-			debug0(newsbfd, "Section %s/%s has string difference "
-			       "\"%s\"/\"%s\"\n", old_src_ss->name,
-			       new_src_ss->name,
-			       (const char *)(old_ss->contents.data +
-					      old_sym->value + old_offset),
-			       (const char *)(new_ss->contents.data +
-					      new_sym->value + new_offset));
-			debug1(newsbfd, "Strings differ between %s and %s\n",
-			       old_src_ss->name, new_src_ss->name);
-			return false;
-		}
-		return true;
-	}
-
-	if (old_ss->match != new_ss || new_ss->match != old_ss) {
+	if (old_span->match != new_span || new_span->match != old_span) {
 		debug1(newsbfd, "Nonmatching relocs from %s to %s/%s\n",
-		       new_src_ss->name, new_ss->name, old_ss->name);
+		       new_src_ss->name, old_span->label, new_span->label);
 		return false;
 	}
 
-	if (old_sym->value + old_offset != new_sym->value + new_offset) {
+	if (old_sym->value + old_offset - old_span->start !=
+	    new_sym->value + new_offset - new_span->start) {
 		debug1(newsbfd, "Offsets to %s/%s differ between %s "
 		       "and %s: %lx+%lx/%lx+%lx\n", old_ss->name,
 		       new_ss->name, old_src_ss->name, new_src_ss->name,
@@ -1037,8 +1071,9 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 		return false;
 	}
 
-	if ((old_sym->value + old_offset != 0 ||
-	     new_sym->value + new_offset != 0) && new_ss->patch) {
+	if ((old_sym->value + old_offset - old_span->start != 0 ||
+	     new_sym->value + new_offset - new_span->start != 0) &&
+	    new_span->patch) {
 		debug1(newsbfd, "Relocation from %s to nonzero offsets "
 		       "%lx+%lx/%lx+%lx in changed section %s\n",
 		       new_src_ss->name, (unsigned long)old_sym->value,
@@ -1049,19 +1084,41 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 	return true;
 }
 
-bool all_relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
+bool all_relocs_equal(struct span *old_span, struct span *new_span)
 {
-	if (old_ss->relocs.size != new_ss->relocs.size) {
-		debug1(new_ss->parent, "Different reloc count between %s and "
-		       "%s\n", old_ss->name, new_ss->name);
-		return false;
+	struct supersect *old_ss = old_span->ss, *new_ss = new_span->ss;
+	arelent **old_relocp, **new_relocp;
+
+	for (old_relocp = old_ss->relocs.data;
+	     old_relocp < old_ss->relocs.data + old_ss->relocs.size;
+	     old_relocp++) {
+		if (find_span(old_ss, (*old_relocp)->address) == old_span)
+			break;
 	}
 
-	int i;
-	for (i = 0; i < old_ss->relocs.size; i++) {
-		if (!relocs_equal(old_ss, new_ss, old_ss->relocs.data[i],
-				  new_ss->relocs.data[i]))
+	for (new_relocp = new_ss->relocs.data;
+	     new_relocp < new_ss->relocs.data + new_ss->relocs.size;
+	     new_relocp++) {
+		if (find_span(new_ss, (*new_relocp)->address) == new_span)
+			break;
+	}
+
+	for (; old_relocp < old_ss->relocs.data + old_ss->relocs.size &&
+	     find_span(old_ss, (*old_relocp)->address) == old_span &&
+	     new_relocp < new_ss->relocs.data + new_ss->relocs.size &&
+	     find_span(new_ss, (*new_relocp)->address) == new_span;
+	     old_relocp++, new_relocp++) {
+		if (!relocs_equal(old_ss, new_ss, *old_relocp, *new_relocp))
 			return false;
+	}
+
+	if ((old_relocp < old_ss->relocs.data + old_ss->relocs.size &&
+	     find_span(old_ss, (*old_relocp)->address) == old_span) ||
+	    (new_relocp < new_ss->relocs.data + new_ss->relocs.size &&
+	     find_span(new_ss, (*new_relocp)->address) == new_span)) {
+		debug1(new_ss->parent, "Different reloc count between %s and "
+		       "%s\n", old_span->label, new_span->label);
+		return false;
 	}
 
 	return true;
@@ -1155,7 +1212,6 @@ void rm_some_relocs(struct supersect *ss)
 
 		if (mode("keep-primary") &&
 		    (bfd_is_const_section(sym_ptr->section) ||
-		     fetch_supersect(ss->parent, sym_ptr->section)->new ||
 		     reloc_target_span(ss, *relocp)->new ||
 		     !find_span(ss, (*relocp)->address)->keep))
 			rm_reloc = false;
@@ -1463,17 +1519,15 @@ static void write_ksplice_section(struct span *span)
 		    span->start + span->shift);
 }
 
-void write_ksplice_patch(struct superbfd *sbfd, const char *sectname)
+void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
 {
 	struct supersect *kpatch_ss = make_section(sbfd, ".ksplice_patches");
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
-	asection *sect = bfd_get_section_by_name(sbfd->abfd, sectname);
-	assert(sect != NULL);
 
-	write_string(kpatch_ss, &kpatch->label, "%s",
-		     label_lookup(sbfd, sect->symbol));
-	write_reloc(kpatch_ss, &kpatch->repladdr, &sect->symbol, 0);
+	write_string(kpatch_ss, &kpatch->label, "%s", span->label);
+	write_reloc(kpatch_ss, &kpatch->repladdr, &span->ss->symbol,
+		    span->start + span->shift);
 }
 
 asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name)
@@ -1596,10 +1650,10 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	     entry < ss->contents.data + ss->contents.size;
 	     entry += s->entry_size) {
 		asymbol *sym, *fixup_sym;
-		read_reloc(ss, entry + s->addr_offset, sizeof(void *), &sym);
-
 		struct span *span = new_span(ss, addr_offset(ss, entry),
 					     s->entry_size);
+
+		read_reloc(ss, entry + s->addr_offset, sizeof(void *), &sym);
 		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
 		span->keep = sym_ss->keep;
 
@@ -1918,13 +1972,17 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 	for (symp = isyms->data; symp < isyms->data + isyms->size; symp++) {
 		asymbol *sym = *symp;
 		struct supersect *sym_ss = NULL;
-		if (!bfd_is_const_section(sym->section))
+		struct span *sym_span = NULL;
+		if (!bfd_is_const_section(sym->section)) {
 			sym_ss = fetch_supersect(sbfd, sym->section);
+			sym_span = find_span(sym_ss, sym->value);
+		}
 
 		bool keep = false;
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
-		    !(mode("keep-primary") && sym_ss != NULL && sym_ss->new))
+		    !(mode("keep-primary") && sym_span != NULL &&
+		      sym_span->new))
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
 		if (mode("finalize") && (sym->flags & BSF_GLOBAL) != 0)
@@ -2246,15 +2304,18 @@ static const char *label_lookup(struct superbfd *sbfd, asymbol *sym)
 	return (*mapp)->label;
 }
 
-static void print_label_map(struct superbfd *sbfd)
+static void print_label_changes(struct superbfd *sbfd)
 {
-	struct label_map *map;
-	for (map = sbfd->maps.data;
-	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		if (strcmp(map->orig_label, map->label) == 0)
-			continue;
-		debug1(sbfd, "Label change: %s -> %s\n",
-		       map->label, map->orig_label);
+	asection *sect;
+	struct span *span;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (strcmp(span->label, span->orig_label) != 0)
+				debug1(sbfd, "Label change: %s -> %s\n",
+				       span->label, span->orig_label);
+		}
 	}
 }
 
@@ -2444,6 +2505,8 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 	span->ss = ss;
 	span->keep = false;
 	span->new = false;
+	span->patch = false;
+	span->match = NULL;
 	span->shift = 0;
 	asymbol **symp = symbolp_scan(ss, span->start);
 	if (symp != NULL) {
@@ -2461,6 +2524,7 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 			span->label = label;
 		}
 	}
+	span->orig_label = span->label;
 	return span;
 }
 

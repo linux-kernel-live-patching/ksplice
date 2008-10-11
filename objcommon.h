@@ -179,11 +179,14 @@ DECLARE_HASH_TYPE(struct label_map *, label_mapp_hash, label_mapp_hash_init,
 struct span {
 	struct supersect *ss;
 	asymbol *symbol;
+	const char *orig_label;
 	const char *label;
 	bfd_vma start;
 	bfd_vma size;
 	bool keep;
 	bool new;
+	bool patch;
+	struct span *match;
 	bfd_size_type shift;
 };
 DECLARE_VEC_TYPE(struct span, span_vec);
@@ -218,9 +221,6 @@ struct supersect {
 	struct span_vec spans;
 	struct arelentp_hash reloc_hash;
 	asymbol *symbol;
-	struct supersect *match;
-	bool new;
-	bool patch;
 	bool keep;
 	enum supersect_type type;
 };
