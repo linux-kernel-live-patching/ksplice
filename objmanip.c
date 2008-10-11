@@ -907,11 +907,23 @@ static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 		  arelent *old_reloc, arelent *new_reloc)
 {
-	if (old_reloc->address != new_reloc->address)
-		return false;
-
 	struct superbfd *oldsbfd = old_src_ss->parent;
 	struct superbfd *newsbfd = new_src_ss->parent;
+
+	if (old_reloc->address != new_reloc->address) {
+		debug1(newsbfd, "Section %s/%s has reloc address mismatch at "
+		       "%lx\n", old_src_ss->name, new_src_ss->name,
+		       (unsigned long)old_reloc->address);
+		return false;
+	}
+
+	if (old_reloc->howto != new_reloc->howto) {
+		debug1(newsbfd, "Section %s/%s has howto type mismatch at "
+		       "%lx\n", old_src_ss->name, new_src_ss->name,
+		       (unsigned long)old_reloc->address);
+		return false;
+	}
+
 	asymbol *old_sym = *old_reloc->sym_ptr_ptr;
 	asymbol *new_sym = *new_reloc->sym_ptr_ptr;
 	asection *old_sect = old_sym->section;
