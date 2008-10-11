@@ -155,8 +155,16 @@ void write_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		 bfd_vma offset);
 arelent *create_reloc(struct supersect *ss, const void *addr, asymbol **symp,
 		      bfd_vma offset);
-static void match_global_symbol_sections(struct superbfd *oldsbfd,
-				  struct superbfd *newsbfd);
+static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsbfd,
+				void (*fn)(struct supersect *oldss,
+					   asymbol *oldsym,
+					   struct supersect *newss,
+					   asymbol *newsym));
+static void check_global_symbols(struct supersect *oldss, asymbol *oldsym,
+				 struct supersect *newss, asymbol *newsym);
+static void match_global_symbols(struct supersect *oldss, asymbol *oldsym,
+				 struct supersect *newss, asymbol *newsym);
+
 static void match_sections_by_name(struct superbfd *oldsbfd,
 				   struct superbfd *newsbfd);
 static void match_sections_by_label(struct superbfd *oldsbfd,
@@ -352,7 +360,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	initialize_supersect_types(isbfd);
 	initialize_supersect_types(presbfd);
 
-	match_global_symbol_sections(presbfd, isbfd);
+	foreach_symbol_pair(presbfd, isbfd, match_global_symbols);
 	debug1(isbfd, "Matched global\n");
 	match_sections_by_name(presbfd, isbfd);
 	debug1(isbfd, "Matched by name\n");
@@ -366,6 +374,8 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		mark_new_sections(isbfd);
 	} while (changed);
 	vec_init(&delsects);
+
+	foreach_symbol_pair(presbfd, isbfd, check_global_symbols);
 
 	handle_deleted_sections(presbfd, isbfd);
 	handle_section_symbol_renames(presbfd, isbfd);
@@ -673,22 +683,47 @@ void match_sections(struct supersect *oldss, struct supersect *newss)
 	       oldss->name, newss->name);
 }
 
-static void match_global_symbol_sections(struct superbfd *oldsbfd,
-					 struct superbfd *newsbfd)
+static void match_global_symbols(struct supersect *oldss, asymbol *oldsym,
+				 struct supersect *newss, asymbol *newsym)
+{
+	if ((oldsym->flags & BSF_GLOBAL) == 0 ||
+	    (newsym->flags & BSF_GLOBAL) == 0)
+		return;
+	match_sections(oldss, newss);
+}
+
+static void check_global_symbols(struct supersect *oldss, asymbol *oldsym,
+				 struct supersect *newss, asymbol *newsym)
+{
+	if ((oldsym->flags & BSF_GLOBAL) == 0 ||
+	    (newsym->flags & BSF_GLOBAL) == 0)
+		return;
+	if (oldss->type == SS_TYPE_IGNORED)
+		return;
+	if (oldss->match != newss || newss->match != oldss) {
+		err(newss->parent, "Global symbol section mismatch: %s %s/%s\n",
+		    oldsym->name, oldss->name, newss->name);
+		DIE;
+	}
+}
+
+static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsbfd,
+				void (*fn)(struct supersect *oldss,
+					   asymbol *oldsym,
+					   struct supersect *newss,
+					   asymbol *newsym))
 {
 	asymbol **oldsymp, **newsymp;
 	for (oldsymp = oldsbfd->syms.data;
 	     oldsymp < oldsbfd->syms.data + oldsbfd->syms.size; oldsymp++) {
 		asymbol *oldsym = *oldsymp;
-		if ((oldsym->flags & BSF_GLOBAL) == 0 ||
-		    bfd_is_const_section(oldsym->section))
+		if (bfd_is_const_section(oldsym->section))
 			continue;
 		for (newsymp = newsbfd->syms.data;
 		     newsymp < newsbfd->syms.data + newsbfd->syms.size;
 		     newsymp++) {
 			asymbol *newsym = *newsymp;
-			if ((newsym->flags & BSF_GLOBAL) == 0 ||
-			    bfd_is_const_section(oldsym->section))
+			if (bfd_is_const_section(newsym->section))
 				continue;
 			if (strcmp(oldsym->name, newsym->name) != 0)
 				continue;
@@ -696,7 +731,7 @@ static void match_global_symbol_sections(struct superbfd *oldsbfd,
 			    fetch_supersect(oldsbfd, oldsym->section);
 			struct supersect *newss =
 			    fetch_supersect(newsbfd, newsym->section);
-			match_sections(oldss, newss);
+			fn(oldss, oldsym, newss, newsym);
 		}
 	}
 }
