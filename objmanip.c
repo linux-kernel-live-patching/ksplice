@@ -165,10 +165,14 @@ static void check_global_symbols(struct supersect *oldss, asymbol *oldsym,
 static void match_global_symbols(struct supersect *oldss, asymbol *oldsym,
 				 struct supersect *newss, asymbol *newsym);
 
-static void match_sections_by_name(struct superbfd *oldsbfd,
-				   struct superbfd *newsbfd);
-static void match_sections_by_label(struct superbfd *oldsbfd,
-				    struct superbfd *newsbfd);
+static void foreach_section_pair(struct superbfd *oldsbfd,
+				 struct superbfd *newsbfd,
+				 void (*fn)(struct supersect *oldss,
+					    struct supersect *newss));
+static void match_sections_by_name(struct supersect *oldss,
+				   struct supersect *newss);
+static void match_sections_by_label(struct supersect *oldss,
+				    struct supersect *newss);
 static void mark_new_sections(struct superbfd *sbfd);
 static void handle_deleted_sections(struct superbfd *oldsbfd,
 				    struct superbfd *newsbfd);
@@ -362,9 +366,9 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 
 	foreach_symbol_pair(presbfd, isbfd, match_global_symbols);
 	debug1(isbfd, "Matched global\n");
-	match_sections_by_name(presbfd, isbfd);
+	foreach_section_pair(presbfd, isbfd, match_sections_by_name);
 	debug1(isbfd, "Matched by name\n");
-	match_sections_by_label(presbfd, isbfd);
+	foreach_section_pair(presbfd, isbfd, match_sections_by_label);
 	debug1(isbfd, "Matched by label\n");
 
 	do {
@@ -736,29 +740,28 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 	}
 }
 
-static void match_sections_by_name(struct superbfd *oldsbfd,
-				   struct superbfd *newsbfd)
+static void match_sections_by_name(struct supersect *oldss,
+				   struct supersect *newss)
 {
-	asection *newp, *oldp;
-	for (newp = newsbfd->abfd->sections; newp != NULL; newp = newp->next) {
-		struct supersect *newss = fetch_supersect(newsbfd, newp);
-		oldp = bfd_get_section_by_name(oldsbfd->abfd, newp->name);
-		if (oldp == NULL || newss->type == SS_TYPE_STRING ||
-		    newss->type == SS_TYPE_SPECIAL ||
-		    newss->type == SS_TYPE_EXPORT)
-			continue;
-		if (static_local_symbol(newsbfd,
-					canonical_symbol(newsbfd,
-							 newp->symbol)))
-			continue;
-
-		struct supersect *oldss = fetch_supersect(oldsbfd, oldp);
+	if (static_local_symbol(newss->parent,
+				canonical_symbol(newss->parent, newss->symbol)))
+		return;
+	if (strcmp(oldss->name, newss->name) == 0)
 		match_sections(oldss, newss);
-	}
 }
 
-static void match_sections_by_label(struct superbfd *oldsbfd,
-				    struct superbfd *newsbfd)
+static void match_sections_by_label(struct supersect *oldss,
+				    struct supersect *newss)
+{
+	if (strcmp(label_lookup(oldss->parent, oldss->symbol),
+		   label_lookup(newss->parent, newss->symbol)) == 0)
+		match_sections(oldss, newss);
+}
+
+static void foreach_section_pair(struct superbfd *oldsbfd,
+				 struct superbfd *newsbfd,
+				 void (*fn)(struct supersect *oldss,
+					    struct supersect *newss))
 {
 	asection *oldsect, *newsect;
 	struct supersect *oldss, *newss;
@@ -771,11 +774,12 @@ static void match_sections_by_label(struct superbfd *oldsbfd,
 			continue;
 		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
 		     oldsect = oldsect->next) {
-			if (strcmp(label_lookup(newsbfd, newsect->symbol),
-				   label_lookup(oldsbfd, oldsect->symbol)) != 0)
-				continue;
 			oldss = fetch_supersect(oldsbfd, oldsect);
-			match_sections(oldss, newss);
+			if (oldss->type == SS_TYPE_STRING ||
+			    oldss->type == SS_TYPE_SPECIAL ||
+			    oldss->type == SS_TYPE_EXPORT)
+			continue;
+			fn(oldss, newss);
 		}
 	}
 }
