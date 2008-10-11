@@ -102,6 +102,7 @@ struct export_desc *new_export_desc(struct supersect *ss, bool deletion);
 bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 		  arelent *old_reloc, arelent *new_reloc);
 bool all_relocs_equal(struct supersect *old_ss, struct supersect *new_ss);
+bfd_vma non_dst_mask(struct supersect *ss, arelent *reloc);
 static bool part_of_reloc(struct supersect *ss, unsigned long addr);
 static bool nonrelocs_equal(struct supersect *old_ss, struct supersect *new_ss);
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
@@ -924,6 +925,14 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 		return false;
 	}
 
+	if (non_dst_mask(old_src_ss, old_reloc) !=
+	    non_dst_mask(new_src_ss, new_reloc)) {
+		debug1(newsbfd, "Section %s/%s has contents mismatch at %lx\n",
+		       old_src_ss->name, new_src_ss->name,
+		       (unsigned long)old_reloc->address);
+		return false;
+	}
+
 	asymbol *old_sym = *old_reloc->sym_ptr_ptr;
 	asymbol *new_sym = *new_reloc->sym_ptr_ptr;
 	asection *old_sect = old_sym->section;
@@ -1017,6 +1026,14 @@ bool all_relocs_equal(struct supersect *old_ss, struct supersect *new_ss)
 	}
 
 	return true;
+}
+
+bfd_vma non_dst_mask(struct supersect *ss, arelent *reloc)
+{
+	int bits = bfd_get_reloc_size(reloc->howto) * 8;
+	void *address = ss->contents.data + reloc->address;
+	bfd_vma x = bfd_get(bits, ss->parent->abfd, address);
+	return x & ~reloc->howto->dst_mask;
 }
 
 void rm_some_exports(struct superbfd *sbfd, const struct export_desc *ed)
