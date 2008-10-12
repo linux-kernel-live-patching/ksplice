@@ -101,8 +101,9 @@ typedef int __bitwise__ abort_t;
 #define UNEXPECTED_RUNNING_TASK ((__force abort_t) 8)
 #define UNEXPECTED ((__force abort_t) 9)
 #define TARGET_NOT_LOADED ((__force abort_t) 10)
+#define CALL_FAILED ((__force abort_t) 11)
 #ifdef KSPLICE_STANDALONE
-#define BAD_SYSTEM_MAP ((__force abort_t) 11)
+#define BAD_SYSTEM_MAP ((__force abort_t) 12)
 #endif /* KSPLICE_STANDALONE */
 
 struct update {
@@ -2507,6 +2508,17 @@ static abort_t apply_patches(struct update *update)
 	ret = map_trampoline_pages(update);
 	if (ret != OK)
 		return ret;
+
+	list_for_each_entry(pack, &update->packs, list) {
+		const typeof(int (*)(void)) *f;
+		for (f = pack->pre_apply; f < pack->pre_apply_end; f++) {
+			if ((*f)() != 0) {
+				ret = CALL_FAILED;
+				goto out;
+			}
+		}
+	}
+
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(update);
 #ifdef KSPLICE_STANDALONE
@@ -2528,6 +2540,7 @@ static abort_t apply_patches(struct update *update)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
+out:
 	unmap_trampoline_pages(update);
 
 	if (ret == CODE_BUSY) {
@@ -2539,8 +2552,22 @@ static abort_t apply_patches(struct update *update)
 			 "reversed.\n", update->kid, update->kid);
 	}
 
-	if (ret != OK)
+	if (ret != OK) {
+		list_for_each_entry(pack, &update->packs, list) {
+			const typeof(void (*)(void)) *f;
+			for (f = pack->fail_apply; f < pack->fail_apply_end;
+			     f++)
+				(*f)();
+		}
+
 		return ret;
+	}
+
+	list_for_each_entry(pack, &update->packs, list) {
+		const typeof(void (*)(void)) *f;
+		for (f = pack->post_apply; f < pack->post_apply_end; f++)
+			(*f)();
+	}
 
 	_ksdebug(update, "Atomic patch insertion for %s complete\n",
 		 update->kid);
@@ -2563,6 +2590,17 @@ static abort_t reverse_patches(struct update *update)
 	ret = map_trampoline_pages(update);
 	if (ret != OK)
 		return ret;
+
+	list_for_each_entry(pack, &update->packs, list) {
+		const typeof(int (*)(void)) *f;
+		for (f = pack->pre_reverse; f < pack->pre_reverse_end; f++) {
+			if ((*f)() != 0) {
+				ret = CALL_FAILED;
+				goto out;
+			}
+		}
+	}
+
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(update);
 		clear_list(&update->conflicts, struct conflict, list);
@@ -2585,6 +2623,7 @@ static abort_t reverse_patches(struct update *update)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
+out:
 	unmap_trampoline_pages(update);
 
 	if (ret == CODE_BUSY) {
@@ -2596,8 +2635,22 @@ static abort_t reverse_patches(struct update *update)
 			 update->kid);
 	}
 
-	if (ret != OK)
+	if (ret != OK) {
+		list_for_each_entry(pack, &update->packs, list) {
+			const typeof(void (*)(void)) *f;
+			for (f = pack->fail_reverse; f < pack->fail_reverse_end;
+			     f++)
+				(*f)();
+		}
+
 		return ret;
+	}
+
+	list_for_each_entry(pack, &update->packs, list) {
+		const typeof(void (*)(void)) *f;
+		for (f = pack->post_reverse; f < pack->post_reverse_end; f++)
+			(*f)();
+	}
 
 	list_for_each_entry(pack, &update->packs, list)
 		clear_list(&pack->safety_records, struct safety_record, list);
@@ -2637,6 +2690,13 @@ static int __apply_patches(void *updateptr)
 		}
 	}
 
+	list_for_each_entry(pack, &update->packs, list) {
+		const typeof(int (*)(void)) *f;
+		for (f = pack->check_apply; f < pack->check_apply_end; f++)
+			if ((*f)() != 0)
+				return (__force int)CALL_FAILED;
+	}
+
 	update->stage = STAGE_APPLIED;
 #ifdef TAINT_KSPLICE
 	add_taint(TAINT_KSPLICE);
@@ -2654,6 +2714,13 @@ static int __apply_patches(void *updateptr)
 		for (p = pack->patches; p < pack->patches_end; p++)
 			insert_trampoline(p);
 	}
+
+	list_for_each_entry(pack, &update->packs, list) {
+		const typeof(void (*)(void)) *f;
+		for (f = pack->apply; f < pack->apply_end; f++)
+			(*f)();
+	}
+
 	return (__force int)OK;
 }
 
@@ -2687,6 +2754,13 @@ static int __reverse_patches(void *updateptr)
 		}
 	}
 
+	list_for_each_entry(pack, &update->packs, list) {
+		const typeof(int (*)(void)) *f;
+		for (f = pack->check_reverse; f < pack->check_reverse_end; f++)
+			if ((*f)() != 0)
+				return (__force int)CALL_FAILED;
+	}
+
 	update->stage = STAGE_REVERSED;
 
 	list_for_each_entry(pack, &update->packs, list)
@@ -2701,9 +2775,16 @@ static int __reverse_patches(void *updateptr)
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
+		const typeof(void (*)(void)) *f;
+		for (f = pack->reverse; f < pack->reverse_end; f++)
+			(*f)();
+	}
+
+	list_for_each_entry(pack, &update->packs, list) {
 		for (p = pack->patches; p < pack->patches_end; p++)
 			remove_trampoline(p);
 	}
+
 	return (__force int)OK;
 }
 
@@ -3675,6 +3756,8 @@ static ssize_t abort_cause_show(struct update *update, char *buf)
 		return snprintf(buf, PAGE_SIZE, "unexpected_running_task\n");
 	case TARGET_NOT_LOADED:
 		return snprintf(buf, PAGE_SIZE, "target_not_loaded\n");
+	case CALL_FAILED:
+		return snprintf(buf, PAGE_SIZE, "call_failed\n");
 	case UNEXPECTED:
 		return snprintf(buf, PAGE_SIZE, "unexpected\n");
 	}

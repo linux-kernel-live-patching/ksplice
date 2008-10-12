@@ -113,6 +113,12 @@ END
 		"out_of_memory" => <<'END',
 Ksplice has aborted the undo operation because the kernel ran out of memory.
 END
+		"call_failed" => <<'END',
+Ksplice has aborted the undo operation at the request of a one of the
+pre-application hooks that were included as part of this Ksplice
+update.  This is likely the result of a bug in the patch used to
+generate this update.
+END
 		"unexpected" => <<'END',
 Ksplice has aborted because of an unexpected error.
 Please consider reporting a bug to PACKAGE_BUGREPORT.

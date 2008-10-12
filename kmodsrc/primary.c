@@ -27,6 +27,21 @@ extern const struct ksplice_section ksplice_sections[], ksplice_sections_end[];
 extern struct ksplice_symbol ksplice_symbols[], ksplice_symbols_end[];
 extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
 extern struct ksplice_export ksplice_exports[], ksplice_exports_end[];
+extern const typeof(int (*)(void)) ksplice_call_pre_apply[],
+    ksplice_call_pre_apply_end[], ksplice_call_check_apply[],
+    ksplice_call_check_apply_end[];
+extern const typeof(void (*)(void)) ksplice_call_apply[],
+    ksplice_call_apply_end[], ksplice_call_post_apply[],
+    ksplice_call_post_apply_end[], ksplice_call_fail_apply[],
+    ksplice_call_fail_apply_end[];
+extern const typeof(int (*)(void)) ksplice_call_pre_reverse[],
+    ksplice_call_pre_reverse_end[], ksplice_call_check_reverse[],
+    ksplice_call_check_reverse_end[];
+extern const typeof(void (*)(void)) ksplice_call_reverse[],
+    ksplice_call_reverse_end[], ksplice_call_post_reverse[],
+    ksplice_call_post_reverse_end[], ksplice_call_fail_reverse[],
+    ksplice_call_fail_reverse_end[];
+
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 #endif
@@ -54,6 +69,26 @@ struct ksplice_pack pack = {
 	.patches_end = ksplice_patches_end,
 	.exports = ksplice_exports,
 	.exports_end = ksplice_exports_end,
+	.pre_apply = ksplice_call_pre_apply,
+	.pre_apply_end = ksplice_call_pre_apply_end,
+	.check_apply = ksplice_call_check_apply,
+	.check_apply_end = ksplice_call_check_apply_end,
+	.apply = ksplice_call_apply,
+	.apply_end = ksplice_call_apply_end,
+	.post_apply = ksplice_call_post_apply,
+	.post_apply_end = ksplice_call_post_apply_end,
+	.fail_apply = ksplice_call_fail_apply,
+	.fail_apply_end = ksplice_call_fail_apply_end,
+	.pre_reverse = ksplice_call_pre_reverse,
+	.pre_reverse_end = ksplice_call_pre_reverse_end,
+	.check_reverse = ksplice_call_check_reverse,
+	.check_reverse_end = ksplice_call_check_reverse_end,
+	.reverse = ksplice_call_reverse,
+	.reverse_end = ksplice_call_reverse_end,
+	.post_reverse = ksplice_call_post_reverse,
+	.post_reverse_end = ksplice_call_post_reverse_end,
+	.fail_reverse = ksplice_call_fail_reverse,
+	.fail_reverse_end = ksplice_call_fail_reverse_end,
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	.primary_parainstructions = parainstructions,
 	.primary_parainstructions_end = parainstructions_end,

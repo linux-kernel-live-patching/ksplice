@@ -20,10 +20,14 @@
 use strict;
 use warnings;
 use IPC::Open3;
+use Cwd qw(abs_path);
+use File::Basename;
 
+my $dir = abs_path(dirname($0) . "/ksplice-patch");
 my @cmd;
 foreach (@ARGV) {
 	if (/^-ksplice-cflags-api=1$/) {
+		push @cmd, "-I$dir";
 		push @cmd, qw(-D__DATE__="<{DATE...}>" -D__TIME__="<{TIME}>");
 	} else {
 		push @cmd, $_;

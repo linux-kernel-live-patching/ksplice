@@ -219,6 +219,14 @@ struct ksplice_pack {
 	struct ksplice_symbol *helper_symbols, *helper_symbols_end;
 	struct ksplice_patch *patches, *patches_end;
 	struct ksplice_export *exports, *exports_end;
+	const typeof(int (*)(void)) *pre_apply, *pre_apply_end, *check_apply,
+	    *check_apply_end;
+	const typeof(void (*)(void)) *apply, *apply_end, *post_apply,
+	    *post_apply_end, *fail_apply, *fail_apply_end;
+	const typeof(int (*)(void)) *pre_reverse, *pre_reverse_end,
+	    *check_reverse, *check_reverse_end;
+	const typeof(void (*)(void)) *reverse, *reverse_end, *post_reverse,
+	    *post_reverse_end, *fail_reverse, *fail_reverse_end;
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 	struct paravirt_patch_site
 	    *primary_parainstructions, *primary_parainstructions_end,
