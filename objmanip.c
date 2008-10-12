@@ -114,6 +114,7 @@ static void initialize_spans(struct superbfd *sbfd);
 static void initialize_string_spans(struct supersect *ss);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
 struct span *reloc_address_span(struct supersect *ss, arelent *reloc);
+struct span *find_span(struct supersect *ss, bfd_size_type address);
 void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
 static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size);
@@ -2514,16 +2515,24 @@ struct span *reloc_target_span(struct supersect *ss, arelent *reloc)
 	return target_span;
 }
 
-struct span *reloc_address_span(struct supersect *ss, arelent *reloc)
+struct span *find_span(struct supersect *ss, bfd_size_type address)
 {
 	struct span *span;
 	for (span = ss->spans.data; span < ss->spans.data + ss->spans.size;
 	     span++) {
-		if (reloc->address >= span->start &&
-		    reloc->address < span->start + span->size)
+		if (address >= span->start &&
+		    address < span->start + span->size)
 			return span;
 	}
+	/* Deal with empty BSS sections */
+	if (ss->contents.size == 0 && ss->spans.size > 0)
+		return ss->spans.data;
 	return NULL;
+}
+
+struct span *reloc_address_span(struct supersect *ss, arelent *reloc)
+{
+	return find_span(ss, reloc->address);
 }
 
 void compute_span_shifts(struct superbfd *sbfd)
