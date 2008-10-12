@@ -54,7 +54,7 @@ void initialize_ksplice_ud(struct ud *ud)
 {
 	ud_init(ud);
 	ud_set_mode(ud, BITS_PER_LONG);
-	ud_set_syntax(ud, UD_SYN_ATT);
+	ud_set_syntax(ud, NULL);
 	ud_set_pc(ud, 0);
 	ud_set_vendor(ud, UD_VENDOR_ANY);
 }
