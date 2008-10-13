@@ -2631,6 +2631,15 @@ void remove_unkept_spans(struct superbfd *sbfd)
 				*vec_grow(&ss->relocs, 1) = reloc;
 				continue;
 			}
+			struct supersect *sym_ss =
+			    fetch_supersect(sbfd, sym->section);
+			if (span != NULL && (sym->flags & BSF_SECTION_SYM) == 0
+			    && find_span(sym_ss, sym->value) != span) {
+				err(sbfd, "Spans for symbol %s and relocation "
+				    "target do not match in sect %s\n",
+				    sym->name, sym_ss->name);
+				DIE;
+			}
 			if (span != NULL && span->keep) {
 				arelent *new_reloc = malloc(sizeof(*new_reloc));
 				*new_reloc = *reloc;
