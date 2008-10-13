@@ -123,6 +123,7 @@ void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
 static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size);
 bool is_table_section(const char *name, bool consider_other);
+const struct table_section *get_table_section(const char *name);
 void mangle_section_name(struct superbfd *sbfd, const char *name);
 
 void rm_relocs(struct superbfd *isbfd);
@@ -2144,6 +2145,22 @@ bool is_table_section(const char *name, bool consider_other)
 			return true;
 	}
 	return false;
+}
+
+const struct table_section *get_table_section(const char *name)
+{
+	struct supersect *tables_ss =
+	    fetch_supersect(offsets_sbfd,
+			    bfd_get_section_by_name(offsets_sbfd->abfd,
+						    ".ksplice_table_sections"));
+	const struct table_section *ts;
+	for (ts = tables_ss->contents.data;
+	     (void *)ts < tables_ss->contents.data + tables_ss->contents.size;
+	     ts++) {
+		if (strcmp(name, read_string(tables_ss, &ts->sect)) == 0)
+			return ts;
+	}
+	return NULL;
 }
 
 enum supersect_type supersect_type(struct supersect *ss)
