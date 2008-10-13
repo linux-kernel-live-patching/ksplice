@@ -1900,7 +1900,8 @@ static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym)
 		if (sym == *symp)
 			break;
 	}
-	return symp >= ss->syms.data + ss->syms.size;
+	return symp >= ss->syms.data + ss->syms.size &&
+	    (sym->flags & BSF_SECTION_SYM) == 0;
 }
 
 /* Modified function from GNU Binutils objcopy.c

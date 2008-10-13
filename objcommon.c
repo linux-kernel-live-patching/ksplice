@@ -117,7 +117,7 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
 	     symp++) {
 		asymbol *sym = *symp;
-		if (sym->section == sect)
+		if (sym->section == sect && (sym->flags & BSF_SECTION_SYM) == 0)
 			*vec_grow(&new->syms, 1) = sym;
 	}
 
