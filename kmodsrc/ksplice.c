@@ -1814,8 +1814,6 @@ static abort_t reverse_patches(struct update *update)
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(1000));
 	}
-	list_for_each_entry(pack, &update->packs, list)
-		clear_list(&pack->safety_records, struct safety_record, list);
 
 	if (ret == CODE_BUSY) {
 		print_conflicts(update);
@@ -1828,6 +1826,9 @@ static abort_t reverse_patches(struct update *update)
 
 	if (ret != OK)
 		return ret;
+
+	list_for_each_entry(pack, &update->packs, list)
+		clear_list(&pack->safety_records, struct safety_record, list);
 
 	_ksdebug(update, "Atomic patch removal for %s complete\n", update->kid);
 	return OK;
