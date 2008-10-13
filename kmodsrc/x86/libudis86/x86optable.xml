@@ -1719,6 +1719,10 @@
     <opcode> 0F 01 /1 /mod=11 /rm=0 ; </opcode>
   </instruction>
 
+  <instruction mnemonic="montmul">
+    <opcode> ; 0f a6 /mod=11 /rm=0 /0 ; </opcode>
+  </instruction>
+
   <instruction mnemonic="mov">
     <opcode cast="1"> aso rexw rexr rexx rexb ; C6 /0 ; Eb Ib </opcode>
     <opcode cast="1"> aso oso rexw rexr rexx rexb ; C7 /0 ; Ev Iz </opcode>
@@ -3086,6 +3090,38 @@
 
   <instruction mnemonic="xorps">
     <opcode> aso rexr rexx rexb ; 0f 57 ; V W </opcode>
+  </instruction>
+
+  <instruction mnemonic="xcryptecb">
+    <opcode> ; 0f a7 /mod=11 /rm=0 /1 ; </opcode>
+  </instruction>
+
+  <instruction mnemonic="xcryptcbc">
+    <opcode> ; 0f a7 /mod=11 /rm=0 /2 ; </opcode>
+  </instruction>
+
+  <instruction mnemonic="xcryptctr">
+    <opcode> ; 0f a7 /mod=11 /rm=0 /3 ; </opcode>
+  </instruction>
+
+  <instruction mnemonic="xcryptcfb">
+    <opcode> ; 0f a7 /mod=11 /rm=0 /4 ; </opcode>
+  </instruction>
+
+  <instruction mnemonic="xcryptofb">
+    <opcode> ; 0f a7 /mod=11 /rm=0 /5 ; </opcode>
+  </instruction>
+
+  <instruction mnemonic="xsha1">
+    <opcode> ; 0f a6 /mod=11 /rm=0 /1 ; </opcode>
+  </instruction>
+
+  <instruction mnemonic="xsha256">
+    <opcode> ; 0f a6 /mod=11 /rm=0 /2 ; </opcode>
+  </instruction>
+
+  <instruction mnemonic="xstore">
+    <opcode> ; 0f a7 /mod=11 /rm=0 /0 ; </opcode>
   </instruction>
 
   <instruction mnemonic="db"></instruction>
