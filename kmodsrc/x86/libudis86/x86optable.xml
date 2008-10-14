@@ -3001,6 +3001,11 @@
     <vendor> INTEL </vendor>
   </instruction>
 
+  <instruction mnemonic="vmlaunch">
+    <opcode> 0F 01 /0 /mod=11 /rm=2 ; </opcode>
+    <vendor> INTEL </vendor>
+  </instruction>
+
   <instruction mnemonic="vmresume">
     <opcode> 0F 01 /0 /mod=11 /rm=3 ; </opcode>
     <vendor> INTEL </vendor>
@@ -3008,6 +3013,20 @@
 
   <instruction mnemonic="vmxoff">
     <opcode> 0F 01 /0 /mod=11 /rm=4 ; </opcode>
+    <vendor> INTEL </vendor>
+  </instruction>
+
+  <instruction mnemonic="vmread">
+    <opcode mode="def64"> aso rexr rexx rexb ; 0F 78 /M16 ; Ed Gd </opcode>
+    <opcode mode="def64"> aso rexr rexx rexb ; 0F 78 /M32 ; Ed Gd </opcode>
+    <opcode mode="def64"> aso rexr rexx rexb ; 0F 78 /M64 ; Eq Gq </opcode>
+    <vendor> INTEL </vendor>
+  </instruction>
+
+  <instruction mnemonic="vmwrite">
+    <opcode mode="def64"> aso rexr rexx rexb ; 0F 79 /M16 ; Gd Ed </opcode>
+    <opcode mode="def64"> aso rexr rexx rexb ; 0F 79 /M32 ; Gd Ed </opcode>
+    <opcode mode="def64"> aso rexr rexx rexb ; 0F 79 /M64 ; Gq Eq </opcode>
     <vendor> INTEL </vendor>
   </instruction>
 
