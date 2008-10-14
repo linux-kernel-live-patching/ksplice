@@ -140,7 +140,6 @@ struct debugfs_blob_wrapper {
 
 struct labelval {
 	struct list_head list;
-	const char *label;
 	unsigned long val;
 	struct ksplice_symbol *symbol;
 };
@@ -2575,7 +2574,7 @@ static struct labelval *find_labelval(struct ksplice_pack *pack,
 {
 	struct labelval *lv;
 	list_for_each_entry(lv, &pack->labelvals, list) {
-		if (strcmp(lv->label, label) == 0)
+		if (strcmp(lv->symbol->label, label) == 0)
 			return lv;
 	}
 	return NULL;
@@ -2593,7 +2592,6 @@ static abort_t create_labelval(struct ksplice_pack *pack,
 	lv = kmalloc(sizeof(*lv), GFP_KERNEL);
 	if (lv == NULL)
 		return OUT_OF_MEMORY;
-	lv->label = ksym->label;
 	lv->val = val;
 	lv->symbol = ksym;
 	if (status == VAL)
