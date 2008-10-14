@@ -205,7 +205,7 @@ for o in operand_dict.keys():
     if not (operand_dict[o][1] in siz_constants):
         siz_constants.append(operand_dict[o][1])
 
-xmlDoc = minidom.parse( "../docs/x86optable.xml" )
+xmlDoc = minidom.parse(sys.argv[1])
 tlNode = xmlDoc.firstChild
 
 #
