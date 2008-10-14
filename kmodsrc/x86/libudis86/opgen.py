@@ -545,6 +545,17 @@ for m in spl_mnm_types:
 f.write("};\n\n")
 
 #
+# Generate operand definitions
+#
+f.write("\n/* itab entry operand definitions */\n\n");
+operands = operand_dict.keys()
+operands.sort()
+for o in operands:
+    f.write("#define O_%-7s { %-12s %-8s }\n" %
+            (o, operand_dict[o][0] + ",", operand_dict[o][1]));
+f.write("\n");
+
+#
 # Generate struct defs
 #
 f.write( \
