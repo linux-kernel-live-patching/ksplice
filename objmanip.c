@@ -187,6 +187,7 @@ static void compare_spans(struct span *old_span, struct span *new_span);
 static void update_nonzero_offsets(struct superbfd *sbfd);
 static void handle_nonzero_offset_relocs(struct supersect *ss);
 
+static void init_objmanip_superbfd(struct superbfd *sbfd);
 static const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
 static void label_map_set(struct superbfd *sbfd, const char *oldlabel,
 			  const char *label);
@@ -329,14 +330,17 @@ int main(int argc, char *argv[])
 	bfd *obfd = bfd_openw(argv[2], output_target);
 	assert(obfd);
 
-	struct superbfd *isbfd = fetch_superbfd(ibfd);
-	init_label_map(isbfd);
+	load_system_map();
+	load_offsets();
 
 	bool_hash_init(&system_map_written);
 	ulong_hash_init(&ksplice_symbol_offset);
 	ulong_hash_init(&ksplice_string_offset);
 
+	struct superbfd *isbfd = fetch_superbfd(ibfd);
+
 	modestr = argv[3];
+	init_objmanip_superbfd(isbfd);
 	if (mode("keep-primary")) {
 		kid = argv[5];
 		do_keep_primary(isbfd, argv[4]);
@@ -365,13 +369,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	assert(bfd_check_format_matches(prebfd, bfd_object, &matching));
 
 	struct superbfd *presbfd = fetch_superbfd(prebfd);
-	init_label_map(presbfd);
-	load_system_map();
-	load_offsets();
-	initialize_supersect_types(isbfd);
-	initialize_supersect_types(presbfd);
-	initialize_spans(isbfd);
-	initialize_spans(presbfd);
+	init_objmanip_superbfd(presbfd);
 
 	foreach_symbol_pair(presbfd, isbfd, match_global_symbols);
 	debug1(isbfd, "Matched global\n");
@@ -486,11 +484,6 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 
 void do_keep_helper(struct superbfd *isbfd)
 {
-	load_system_map();
-	load_offsets();
-	initialize_supersect_types(isbfd);
-	initialize_spans(isbfd);
-
 	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
@@ -557,21 +550,13 @@ void do_keep_helper(struct superbfd *isbfd)
 
 void do_finalize(struct superbfd *isbfd)
 {
-	load_system_map();
 	load_ksplice_symbol_offsets(isbfd);
-	load_offsets();
-	initialize_supersect_types(isbfd);
-	initialize_spans(isbfd);
 	rm_relocs(isbfd);
 }
 
 void do_rmsyms(struct superbfd *isbfd)
 {
 	read_str_set(&rmsyms);
-	load_system_map();
-	load_offsets();
-	initialize_supersect_types(isbfd);
-	initialize_spans(isbfd);
 	rm_relocs(isbfd);
 }
 
@@ -2710,6 +2695,13 @@ void remove_unkept_spans(struct superbfd *sbfd)
 				  span->size);
 		}
 	}
+}
+
+static void init_objmanip_superbfd(struct superbfd *sbfd)
+{
+	init_label_map(sbfd);
+	initialize_supersect_types(sbfd);
+	initialize_spans(sbfd);
 }
 
 void mangle_section_name(struct superbfd *sbfd, const char *name)
