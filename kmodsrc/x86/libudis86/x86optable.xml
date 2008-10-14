@@ -2521,6 +2521,7 @@
   <instruction mnemonic="pushfw">
     <opcode mode="def64"> oso ; 9c /M32 /O16 ; </opcode>
     <opcode mode="def64"> oso ; 9c /M16 /O16 ; </opcode>
+    <opcode mode="def64"> oso rexw ; 9c /M64 /O16 ; </opcode>
   </instruction>
 
   <instruction mnemonic="pushfd">
@@ -2529,7 +2530,8 @@
   </instruction>
 
   <instruction mnemonic="pushfq">
-    <opcode mode="def64"> oso rexw ; 9c /M64 ; </opcode>
+    <opcode mode="def64"> oso rexw ; 9c /M64 /O32 ; </opcode>
+    <opcode mode="def64"> oso rexw ; 9c /M64 /O64 ; </opcode>
   </instruction>
 
   <instruction mnemonic="pxor">
