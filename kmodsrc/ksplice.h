@@ -10,7 +10,7 @@ struct ksplice_symbol {
 	const char *label;
 /* private: */
 	struct list_head *vals;
-	struct labelval *lv;
+	unsigned long value;
 };
 
 /**
@@ -204,7 +204,6 @@ struct ksplice_pack {
 	struct ksplice_module_list_entry module_list_entry;
 	struct update *update;
 	struct module *target;
-	struct list_head labelvals;
 	struct list_head temp_labelvals;
 	struct list_head safety_records;
 	struct list_head list;
