@@ -79,6 +79,7 @@ operand_dict = {
     "Md"       : [    "OP_M"        , "SZ_D"     ],
     "Mq"       : [    "OP_M"        , "SZ_Q"     ],
     "Mt"       : [    "OP_M"        , "SZ_T"     ],
+    "Mo"       : [    "OP_M"        , "SZ_O"     ],
     "I1"       : [    "OP_I1"       , "SZ_NA"    ],
     "I3"       : [    "OP_I3"       , "SZ_NA"    ],
     "Ib"       : [    "OP_I"        , "SZ_B"     ],

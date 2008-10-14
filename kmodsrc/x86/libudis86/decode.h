@@ -124,6 +124,7 @@ enum __attribute__((packed)) ud_operand_size {
     SZ_D   = 32,
     SZ_Q   = 64,
     SZ_T   = 80,
+    SZ_O   = 128,
 };
 
 

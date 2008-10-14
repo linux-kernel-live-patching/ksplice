@@ -1434,6 +1434,12 @@
     <opcode> 0f 08 ; </opcode>
   </instruction>
 
+  <instruction mnemonic="invept">
+    <opcode> sse66 0f 38 80 /M32 ; Gd Mo </opcode>
+    <opcode> sse66 0f 38 80 /M64 ; Gq Mo </opcode>
+    <vendor> INTEL </vendor>
+  </instruction>
+
   <instruction mnemonic="invlpg">
     <opcode> aso rexr rexx rexb ; 0F 01 /7 /mod=!11 ; M </opcode>
   </instruction>
@@ -1441,6 +1447,12 @@
   <instruction mnemonic="invlpga">
     <opcode> 0F 01 /3 /mod=11 /rm=7 ; </opcode>
     <vendor> AMD </vendor>
+  </instruction>
+
+  <instruction mnemonic="invvpid">
+    <opcode> sse66 0f 38 81 /M32 ; Gd Mo </opcode>
+    <opcode> sse66 0f 38 81 /M64 ; Gq Mo </opcode>
+    <vendor> INTEL </vendor>
   </instruction>
 
   <instruction mnemonic="iretw">
