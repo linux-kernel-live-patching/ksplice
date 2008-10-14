@@ -25,6 +25,7 @@ spl_mnm_types = [   'd3vil',      \
                     'grp_osize',  \
                     'grp_asize',  \
                     'grp_mod',    \
+                    'grp_3byte',  \
                     'none'        \
                 ]
 
@@ -386,6 +387,15 @@ for node in tlNode.childNodes:
                 table_sse  = ''
             elif op == '0F':
                 table_name = "itab__0f"
+                table_size = 256
+            elif op == '38' and (table_name == "itab__0f" or
+                                 table_name == "itab__pfx_SSE66__0f"):
+                table_index = '38'
+                tables[table_name][table_index] = { \
+                    'type' : 'grp_3byte',  \
+                    'name' : "%s__38" % (table_name) \
+                }
+                table_name  = tables[table_name][table_index]['name']
                 table_size = 256
             elif op[0:5] == '/X87=':
                 tables[table_name][table_index] = { \

@@ -275,6 +275,14 @@ search:
         index    = curr - 0xC0;
         break;
 
+    case UD_Igrp_3byte:
+        curr     = inp_next( u );
+        did_peek = 0;
+        if (u->error)
+            return -1;
+        index    = curr;
+        break;
+
     case UD_Igrp_osize:
         if ( u->opr_mode == 64 ) 
             index = ITAB__MODE_INDX__64;
