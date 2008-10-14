@@ -9,6 +9,9 @@
 #define UD_SYN_H
 
 #include "types.h"
+#ifndef __UD_STANDALONE__
+# include <stdarg.h>
+#endif /* __UD_STANDALONE__ */
 
 extern const char* ud_reg_tab[];
 

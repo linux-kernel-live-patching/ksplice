@@ -8,10 +8,19 @@
 #ifndef UD_TYPES_H
 #define UD_TYPES_H
 
-#define __UD_STANDALONE__ 1
+#ifdef __KERNEL__
+  /* -D__KERNEL__ is automatically passed on the command line when
+     building something as part of the Linux kernel */
+# include <linux/kernel.h>
+# include <linux/string.h>
+# define __UD_STANDALONE__ 1
+#endif /* __KERNEL__ */
 
-#include <linux/kernel.h>
-#include <linux/string.h>
+#include "itab.h"
+
+#ifndef __UD_STANDALONE__
+# include <stdio.h>
+#endif /* __UD_STANDALONE__ */
 
 #ifdef _MSC_VER
 # define FMT64 "%I64"
@@ -25,9 +34,10 @@
   typedef __int64 int64_t;
 #else
 # define FMT64 "%ll"
+# ifndef __UD_STANDALONE__
+#  include <inttypes.h>
+# endif /* __UD_STANDALONE__ */
 #endif
-
-#include "itab.h"
 
 /* -----------------------------------------------------------------------------
  * All possible "types" of objects in udis86. Order is Important!
@@ -140,7 +150,7 @@ struct ud
   uint8_t		inp_fill;
 #ifndef __UD_STANDALONE__
   FILE*			inp_file;
-#endif /* __UD_STANDALONE__ */
+#endif
   uint8_t		inp_ctr;
   uint8_t*		inp_buff;
   uint8_t*		inp_buff_end;

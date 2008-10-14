@@ -6,10 +6,13 @@
  * -----------------------------------------------------------------------------
  */
 
-#include <linux/kernel.h>
-
 #include "input.h"
 #include "extern.h"
+
+#ifndef __UD_STANDALONE__
+# include <stdlib.h>
+# include <string.h>
+#endif /* __UD_STANDALONE__ */
 
 /* =============================================================================
  * ud_init() - Initializes ud_t object.
