@@ -113,7 +113,6 @@ void initialize_supersect_types(struct superbfd *sbfd);
 static void initialize_spans(struct superbfd *sbfd);
 static void initialize_string_spans(struct supersect *ss);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
-struct span *reloc_address_span(struct supersect *ss, arelent *reloc);
 struct span *find_span(struct supersect *ss, bfd_size_type address);
 void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
@@ -1158,7 +1157,7 @@ void rm_some_relocs(struct supersect *ss)
 		    (bfd_is_const_section(sym_ptr->section) ||
 		     fetch_supersect(ss->parent, sym_ptr->section)->new ||
 		     reloc_target_span(ss, *relocp)->new ||
-		     !reloc_address_span(ss, *relocp)->keep))
+		     !find_span(ss, (*relocp)->address)->keep))
 			rm_reloc = false;
 
 		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
@@ -1402,7 +1401,7 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
 						 struct ksplice_reloc);
 
-	struct span *address_span = reloc_address_span(ss, orig_reloc);
+	struct span *address_span = find_span(ss, orig_reloc->address);
 	write_reloc(kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address + address_span->shift);
 	if (bfd_is_und_section(sym_ptr->section) && mode("keep")) {
@@ -1646,7 +1645,7 @@ void keep_referenced_sections(struct superbfd *sbfd)
 		for (relocp = ss->relocs.data;
 		     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 			asymbol *sym = *(*relocp)->sym_ptr_ptr;
-			address_span = reloc_address_span(ss, *relocp);
+			address_span = find_span(ss, (*relocp)->address);
 			if (!address_span->keep)
 				continue;
 			target_span = reloc_target_span(ss, *relocp);
@@ -2528,11 +2527,6 @@ struct span *find_span(struct supersect *ss, bfd_size_type address)
 	if (ss->contents.size == 0 && ss->spans.size > 0)
 		return ss->spans.data;
 	return NULL;
-}
-
-struct span *reloc_address_span(struct supersect *ss, arelent *reloc)
-{
-	return find_span(ss, reloc->address);
 }
 
 void compute_span_shifts(struct superbfd *sbfd)
