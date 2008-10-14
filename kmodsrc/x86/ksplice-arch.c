@@ -195,7 +195,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	ud_set_syntax(&run_ud, UD_SYN_ATT);
 	ud_set_input_hook(&run_ud, next_run_byte);
 	ud_set_pc(&run_ud, 0);
-	run_ud.userdata = (unsigned char *)run_addr;
+	ud_set_user_opaque_data(&run_ud, (unsigned char *)run_addr);
 	safety_start = run_start;
 
 	match_map = vmalloc(sizeof(*match_map) * sect->size);
@@ -345,7 +345,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 		ud_set_syntax(&run_ud, UD_SYN_ATT);
 		ud_set_input_hook(&run_ud, next_run_byte);
 		ud_set_pc(&run_ud, 0);
-		run_ud.userdata = (unsigned char *)run;
+		ud_set_user_opaque_data(&run_ud, (unsigned char *)run);
 		safety_start = run;
 	}
 out:
@@ -547,9 +547,9 @@ static long jump_lval(struct ud_operand *operand)
 static int next_run_byte(struct ud *ud)
 {
 	unsigned char byte;
-	if (probe_kernel_read(&byte, ud->userdata, 1) == -EFAULT)
+	if (probe_kernel_read(&byte, ud_get_user_opaque_data(ud), 1) == -EFAULT)
 		return UD_EOI;
-	ud->userdata++;
+	ud_set_user_opaque_data(ud, ud_get_user_opaque_data(ud) + 1);
 	return byte;
 }
 #endif /* !CONFIG_FUNCTION_DATA_SECTIONS */

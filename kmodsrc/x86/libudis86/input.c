@@ -44,6 +44,18 @@ ud_set_input_hook(register struct ud* u, int (*hook)(struct ud*))
   inp_init(u);
 }
 
+extern void
+ud_set_user_opaque_data( struct ud * u, void * opaque )
+{
+  u->user_opaque_data = opaque;
+}
+
+extern void *
+ud_get_user_opaque_data( struct ud * u )
+{
+  return u->user_opaque_data;
+}
+
 /* =============================================================================
  * ud_inp_set_buffer() - Set buffer as input.
  * =============================================================================

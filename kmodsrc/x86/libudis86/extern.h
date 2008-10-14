@@ -59,6 +59,10 @@ extern unsigned int ud_insn_len(struct ud* u);
 
 extern const char* ud_lookup_mnemonic(enum ud_mnemonic_code c);
 
+extern void ud_set_user_opaque_data(struct ud*, void*);
+
+extern void *ud_get_user_opaque_data(struct ud*);
+
 /* ========================================================================== */
 
 #ifdef __cplusplus
