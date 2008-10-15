@@ -128,10 +128,10 @@ void show_ksplice_sections(struct supersect *ksect_ss)
 void show_ksplice_patch(struct supersect *ss,
 			const struct ksplice_patch *kpatch)
 {
-	printf("label: %s\n"
+	printf("symbol: %s\n"
 	       "repladdr: %s\n"
 	       "\n",
-	       read_string(ss, &kpatch->label),
+	       str_ksplice_symbolp(ss, &kpatch->symbol),
 	       str_pointer(ss, (void *const *)&kpatch->repladdr));
 }
 

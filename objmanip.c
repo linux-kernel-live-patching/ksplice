@@ -1517,7 +1517,8 @@ void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
 
-	write_string(kpatch_ss, &kpatch->label, "%s", span->label);
+	write_ksplice_symbol_backend(kpatch_ss, &kpatch->symbol, NULL,
+				     span->label, NULL);
 	write_reloc(kpatch_ss, &kpatch->repladdr, &span->ss->symbol,
 		    span->start + span->shift);
 }
@@ -1560,7 +1561,9 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
 
-	write_string(kpatch_ss, &kpatch->label, "%s", label);
+	write_ksplice_symbol_backend(kpatch_ss, &kpatch->symbol, NULL,
+				     label, NULL);
+
 	asymbol **symp = make_undefined_symbolp(sbfd, strdup(name));
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
 }

@@ -76,7 +76,7 @@ struct ksplice_section {
  * @size:		The size of the trampoline
  **/
 struct ksplice_patch {
-	const char *label;
+	struct ksplice_symbol *symbol;
 	unsigned long repladdr;
 /* private: */
 	unsigned long oldaddr;

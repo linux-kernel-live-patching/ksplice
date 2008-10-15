@@ -599,8 +599,6 @@ static abort_t verify_trampoline(struct ksplice_pack *pack,
 				 const struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
 
-static struct labelval *find_labelval(struct ksplice_pack *pack,
-				      const char *label);
 static abort_t create_labelval(struct ksplice_pack *pack,
 			       struct ksplice_symbol *ksym,
 			       unsigned long val, int status);
@@ -1219,17 +1217,16 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 	abort_t ret;
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
-		struct labelval *lv = find_labelval(pack, p->label);
 		bool found = false;
-		if (lv == NULL) {
+		if (p->symbol->lv == NULL) {
 			ksdebug(pack, "Failed to find %s for oldaddr\n",
-				p->label);
+				p->symbol->label);
 			return FAILED_TO_FIND;
 		}
-		p->oldaddr = lv->val;
+		p->oldaddr = p->symbol->lv->val;
 
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (strcmp(rec->label, p->label) == 0 &&
+			if (strcmp(rec->label, p->symbol->label) == 0 &&
 			    follow_trampolines(pack, p->oldaddr)
 			    == rec->addr) {
 				found = true;
@@ -1238,17 +1235,17 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 		}
 		if (!found) {
 			ksdebug(pack, "No safety record for patch %s\n",
-				p->label);
+				p->symbol->label);
 			return NO_MATCH;
 		}
 		if (rec->size < p->size) {
 			ksdebug(pack, "Symbol %s is too short for trampoline\n",
-				p->label);
+				p->symbol->label);
 			return UNEXPECTED;
 		}
 		/* Make sure the record's label field won't get freed
 		   when the helper module is unloaded */
-		rec->label = p->label;
+		rec->label = p->symbol->label;
 
 		if (p->repladdr == 0)
 			p->repladdr = (unsigned long)ksplice_deleted;
@@ -2580,17 +2577,6 @@ static void remove_trampoline(const struct ksplice_patch *p)
 	set_fs(old_fs);
 }
 
-static struct labelval *find_labelval(struct ksplice_pack *pack,
-				      const char *label)
-{
-	struct labelval *lv;
-	list_for_each_entry(lv, &pack->labelvals, list) {
-		if (strcmp(lv->symbol->label, label) == 0)
-			return lv;
-	}
-	return NULL;
-}
-
 static abort_t create_labelval(struct ksplice_pack *pack,
 			       struct ksplice_symbol *ksym,
 			       unsigned long val, int status)
@@ -2626,7 +2612,7 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 		return OK;
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
-		if (strcmp(sect->symbol->label, p->label) == 0)
+		if (strcmp(sect->symbol->label, p->symbol->label) == 0)
 			break;
 	}
 	if (p >= pack->patches_end)
