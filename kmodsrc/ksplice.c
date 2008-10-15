@@ -884,6 +884,9 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 				p->label);
 			return UNEXPECTED;
 		}
+		/* Make sure the record's label field won't get freed
+		   when the helper module is unloaded */
+		rec->label = p->label;
 
 		if (p->repladdr == 0)
 			p->repladdr = (unsigned long)ksplice_deleted;
