@@ -103,6 +103,8 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 			*vec_grow(&new->syms, 1) = sym;
 	}
 
+	vec_init(&new->spans);
+
 	return new;
 }
 

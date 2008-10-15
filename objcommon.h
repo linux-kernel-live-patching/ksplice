@@ -159,6 +159,13 @@ struct label_map {
 };
 DECLARE_VEC_TYPE(struct label_map, label_map_vec);
 
+struct span {
+	struct supersect *ss;
+	bfd_vma start;
+	bfd_vma size;
+};
+DECLARE_VEC_TYPE(struct span, span_vec);
+
 struct superbfd {
 	bfd *abfd;
 	struct asymbolp_vec syms;
@@ -183,6 +190,7 @@ struct supersect {
 	struct arelentp_vec new_relocs;
 	struct supersect *next;
 	struct asymbolp_vec syms;
+	struct span_vec spans;
 	asymbol *symbol;
 	struct supersect *match;
 	bool new;
