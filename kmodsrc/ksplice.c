@@ -1326,10 +1326,15 @@ static void *map_writable(void *addr, size_t len)
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr)
 {
+	struct ksplice_pack *p;
 	struct module *m =
 	    __module_text_address(follow_trampolines(pack, addr));
-	if (m == NULL || m == pack->primary)
+	if (m == NULL)
 		return OK;
+	list_for_each_entry(p, &pack->update->packs, list) {
+		if (m == p->primary)
+			return OK;
+	}
 	if (use_module(pack->primary, m) != 1)
 		return MODULE_BUSY;
 	return OK;
