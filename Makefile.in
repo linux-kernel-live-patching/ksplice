@@ -21,10 +21,11 @@ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
 perl_primary = ksplice-create ksplice-view ksplice-apply ksplice-undo Ksplice.pm ksplice-obj.pl
 perl_man = $(patsubst %,%.8,$(perl_primary))
 objutils = objmanip inspect
+itab = kmodsrc/x86/libudis86/itab.h kmodsrc/x86/libudis86/itab.c
 
 have_static := $(wildcard $(srcdir)/objmanip-static)
 
-default: $(perl_primary) $(perl_man) objutils
+default: $(perl_primary) $(perl_man) objutils $(itab)
 	@echo "Ready for 'make install'"
 
 ifeq ($(strip $(have_static)),)
@@ -79,6 +80,9 @@ kmodsrcfiles = \
 	kmodsrc/x86/libudis86/itab.h \
 	kmodsrc/x86/libudis86/types.h
 
+$(itab): kmodsrc/x86/libudis86/x86optable.xml kmodsrc/x86/libudis86/opgen.py
+	cd kmodsrc/x86/libudis86 && python opgen.py x86optable.xml
+
 $(addprefix install-,$(kmodsrcfiles)): install-%: %
 	install -m644 -D $< $(DESTDIR)$(datadir)/ksplice/$<
 
@@ -105,4 +109,5 @@ clean:
 distclean: clean
 	rm -f Makefile kmodsrc/Makefile
 	rm -f $(objutils:=-static)
+	rm -f $(itab)
 	rm -f configure config.status config.log
