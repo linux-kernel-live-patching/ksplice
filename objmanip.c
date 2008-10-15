@@ -73,6 +73,8 @@ DECLARE_VEC_TYPE(struct export, export_vec);
 
 DECLARE_VEC_TYPE(const char *, str_vec);
 
+DECLARE_VEC_TYPE(unsigned long, ulong_vec);
+
 struct export_desc {
 	const char *export_type;
 	bool deletion;
@@ -112,6 +114,9 @@ enum supersect_type supersect_type(struct supersect *ss);
 void initialize_supersect_types(struct superbfd *sbfd);
 static void initialize_spans(struct superbfd *sbfd);
 static void initialize_string_spans(struct supersect *ss);
+static void initialize_table_spans(struct superbfd *sbfd,
+				   struct table_section *s);
+static void initialize_table_section_spans(struct superbfd *sbfd);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
 struct span *find_span(struct supersect *ss, bfd_size_type address);
 void remove_unkept_spans(struct superbfd *sbfd);
@@ -1591,23 +1596,6 @@ void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 	}
 }
 
-struct fixup_entry {
-	bfd_vma offset;
-	bool used;
-};
-DECLARE_VEC_TYPE(struct fixup_entry, fixup_entry_vec);
-
-int compare_fixups(const void *aptr, const void *bptr)
-{
-	const struct fixup_entry *a = aptr, *b = bptr;
-	if (a->offset < b->offset)
-		return -1;
-	else if (a->offset > b->offset)
-		return 1;
-	else
-		return (int)a->used - (int)b->used;
-}
-
 void filter_table_sections(struct superbfd *isbfd)
 {
 	struct supersect *tables_ss =
@@ -1630,59 +1618,28 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	asection *isection = bfd_get_section_by_name(sbfd->abfd, s->sect);
 	if (isection == NULL)
 		return;
-	asection *fixup_sect = NULL;
-	if (s->other_sect != NULL)
-		fixup_sect = bfd_get_section_by_name(sbfd->abfd, s->other_sect);
-
 	struct supersect *ss = fetch_supersect(sbfd, isection);
-	if (ss->alignment < ffs(s->entry_align) - 1)
-		ss->alignment = ffs(s->entry_align) - 1;
-
-	struct supersect *fixup_ss = NULL;
-	if (fixup_sect != NULL)
-		fixup_ss = fetch_supersect(sbfd, fixup_sect);
-
-	struct fixup_entry_vec fixups;
-	vec_init(&fixups);
 
 	void *entry;
 	for (entry = ss->contents.data;
 	     entry < ss->contents.data + ss->contents.size;
 	     entry += s->entry_size) {
-		asymbol *sym, *fixup_sym;
-		struct span *span = new_span(ss, addr_offset(ss, entry),
-					     s->entry_size);
+		asymbol *sym;
+		struct span *span = find_span(ss, addr_offset(ss, entry));
+		assert(span != NULL);
 
 		read_reloc(ss, entry + s->addr_offset, sizeof(void *), &sym);
 		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
 		span->keep = sym_ss->keep;
 
-		struct fixup_entry *f;
-		if (fixup_sect != NULL) {
-			bfd_vma fixup_offset =
-			    read_reloc(ss, entry + s->other_offset,
-				       sizeof(void *), &fixup_sym);
-			if (fixup_sym->section == fixup_sect) {
-				assert(fixup_offset < fixup_ss->contents.size);
-				f = vec_grow(&fixups, 1);
-				f->offset = fixup_offset;
-				f->used = span->keep;
-			}
+		if (s->other_sect != NULL) {
+			arelent *reloc =
+			    find_reloc(ss, entry + s->other_offset);
+			assert(reloc != NULL);
+			struct span *sym_span = reloc_target_span(ss, reloc);
+			if (span->keep)
+				sym_span->keep = true;
 		}
-	}
-
-	if (fixup_sect == NULL)
-		return;
-
-	qsort(fixups.data, fixups.size, sizeof(*fixups.data), compare_fixups);
-	*vec_grow(&fixups, 1) = (struct fixup_entry)
-	    { .offset = fixup_ss->contents.size, .used = false };
-
-	struct fixup_entry *f;
-	for (f = fixups.data; f < fixups.data + fixups.size - 1; f++) {
-		struct span *span = new_span(fixup_ss, f->offset,
-					     (f + 1)->offset - f->offset);
-		span->keep = f->used;
 	}
 }
 
@@ -2547,15 +2504,95 @@ static void initialize_string_spans(struct supersect *ss)
 	}
 }
 
+static int compare_ulongs(const void *va, const void *vb)
+{
+	const unsigned long *a = va, *b = vb;
+	return *a - *b;
+}
+
+static void initialize_table_spans(struct superbfd *sbfd,
+				   struct table_section *s)
+{
+	asection *isection = bfd_get_section_by_name(sbfd->abfd, s->sect);
+	if (isection == NULL)
+		return;
+	asection *other_sect = NULL;
+	if (s->other_sect != NULL)
+		other_sect = bfd_get_section_by_name(sbfd->abfd, s->other_sect);
+
+	struct supersect *ss = fetch_supersect(sbfd, isection);
+	if (ss->alignment < ffs(s->entry_align) - 1)
+		ss->alignment = ffs(s->entry_align) - 1;
+
+	struct supersect *other_ss = NULL;
+	if (other_sect != NULL)
+		other_ss = fetch_supersect(sbfd, other_sect);
+
+	struct ulong_vec offsets;
+	vec_init(&offsets);
+
+	void *entry;
+	for (entry = ss->contents.data;
+	     entry < ss->contents.data + ss->contents.size;
+	     entry += s->entry_size) {
+		new_span(ss, addr_offset(ss, entry), s->entry_size);
+
+		if (other_sect != NULL) {
+			asymbol *sym;
+			bfd_vma offset = read_reloc(ss, entry + s->other_offset,
+						    sizeof(void *), &sym);
+			if (sym->section == other_sect) {
+				assert(offset >= 0 &&
+				       offset < other_ss->contents.size);
+				*vec_grow(&offsets, 1) = offset;
+			}
+		}
+	}
+
+	if (other_sect == NULL)
+		return;
+
+	qsort(offsets.data, offsets.size, sizeof(*offsets.data),
+	      compare_ulongs);
+	*vec_grow(&offsets, 1) = other_ss->contents.size;
+
+	unsigned long *off;
+	for (off = offsets.data; off < offsets.data + offsets.size - 1; off++)
+		new_span(other_ss, *off, *(off + 1) - *off);
+}
+
+static void initialize_table_section_spans(struct superbfd *sbfd)
+{
+	struct supersect *tables_ss =
+	    fetch_supersect(offsets_sbfd,
+			    bfd_get_section_by_name(offsets_sbfd->abfd,
+						    ".ksplice_table_sections"));
+	const struct table_section *ts;
+	struct table_section s;
+	for (ts = tables_ss->contents.data;
+	     (void *)ts < tables_ss->contents.data + tables_ss->contents.size;
+	     ts++) {
+		s = *ts;
+		s.sect = read_string(tables_ss, &ts->sect);
+		s.other_sect = read_string(tables_ss, &ts->other_sect);
+		initialize_table_spans(sbfd, &s);
+	}
+}
+
 static void initialize_spans(struct superbfd *sbfd)
 {
+	if (mode("keep"))
+		initialize_table_section_spans(sbfd);
+
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		if (is_table_section(sect->name, true) && mode("keep"))
+			continue;
+
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		if (ss->type == SS_TYPE_STRING)
 			initialize_string_spans(ss);
-		else if (!mode("keep") || (ss->type != SS_TYPE_SPECIAL &&
-					   ss->type != SS_TYPE_EXPORT))
+		else if (!mode("keep") || ss->type != SS_TYPE_EXPORT)
 			new_span(ss, 0, ss->contents.size);
 	}
 }

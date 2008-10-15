@@ -266,28 +266,33 @@ bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, bool adjust_pc)
 	return x + add;
 }
 
-bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
-		   asymbol **symp)
+arelent *find_reloc(struct supersect *ss, const void *addr)
 {
-	bfd_vma val = bfd_get(size * 8, ss->parent->abfd, addr);
 	bfd_vma address = addr_offset(ss, addr);
 	char *key;
 	assert(asprintf(&key, "%lx", (unsigned long)address) >= 0);
 	arelent **relocp = arelentp_hash_lookup(&ss->reloc_hash, key, FALSE);
 	free(key);
-	if (relocp == NULL) {
+	return relocp != NULL ? *relocp : NULL;
+}
+
+bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
+		   asymbol **symp)
+{
+	bfd_vma val = bfd_get(size * 8, ss->parent->abfd, addr);
+	arelent *reloc = find_reloc(ss, addr);
+	if (reloc == NULL) {
 		if (symp != NULL)
 			*symp = *bfd_abs_section_ptr->symbol_ptr_ptr;
 		return val;
 	}
-	arelent *reloc = *relocp;
 
 	if (symp != NULL)
 		*symp = *reloc->sym_ptr_ptr;
 	else if (*reloc->sym_ptr_ptr != bfd_abs_section_ptr->symbol)
 		fprintf(stderr, "warning: unexpected "
 			"non-absolute relocation at %s+%lx\n",
-			ss->name, (unsigned long)address);
+			ss->name, (unsigned long)addr_offset(ss, addr));
 	return get_reloc_offset(ss, reloc, false);
 }
 
