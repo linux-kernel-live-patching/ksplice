@@ -1449,6 +1449,11 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 	unsigned char bytes[sizeof(long)];
 	unsigned long val;
 
+	if (r->size <= 0 || r->size > sizeof(long)) {
+		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		return UNEXPECTED;
+	}
+
 	if (probe_kernel_read(bytes, (void *)addr, r->size) == -EFAULT)
 		return NO_MATCH;
 
