@@ -201,8 +201,10 @@ static bool virtual_address_mapped(unsigned long addr);
 
 static long probe_kernel_read(void *dst, void *src, size_t size)
 {
+	if (size == 0)
+		return 0;
 	if (!virtual_address_mapped((unsigned long)src) ||
-	    !virtual_address_mapped((unsigned long)src + size))
+	    !virtual_address_mapped((unsigned long)src + size - 1))
 		return -EFAULT;
 
 	memcpy(dst, src, size);
