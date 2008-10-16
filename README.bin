@@ -15,7 +15,7 @@ Notable Runtime Dependencies:
  - perl
  - patch
 
-For more information about Ksplice, please see <http://web.mit.edu/ksplice>.
+For more information about Ksplice, please see <http://www.ksplice.com/>.
 
 If you want to build the software from source, you can do so by running:
  $ make distclean

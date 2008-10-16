@@ -20,4 +20,4 @@ Notable Build Dependencies:
  - GNU binary file descriptor (BFD) library (tested against v2.15 through v2.18)
    (available in Debian's binutils-dev package and in other distributions)
 
-For more information about Ksplice, please see <http://web.mit.edu/ksplice>.
+For more information about Ksplice, please see <http://www.ksplice.com/>.
