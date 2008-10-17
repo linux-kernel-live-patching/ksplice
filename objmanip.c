@@ -1632,6 +1632,17 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 				sym_span->keep = true;
 		}
 	}
+
+	arelent **relocp;
+	for (relocp = ss->relocs.data;
+	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+		struct span *addr_span = find_span(ss, (*relocp)->address);
+		struct span *target_span = reloc_target_span(ss, *relocp);
+		if (addr_span->keep && mode("keep-primary")) {
+			target_span->keep = true;
+			target_span->ss->keep = true;
+		}
+	}
 }
 
 void keep_referenced_sections(struct superbfd *sbfd)
