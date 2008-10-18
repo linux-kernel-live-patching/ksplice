@@ -542,6 +542,10 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode);
+static struct ksplice_section *symbol_section(struct ksplice_pack *pack,
+					      const struct ksplice_symbol *sym);
+static int compare_section_labels(const void *va, const void *vb);
+static int symbol_section_bsearch_compare(const void *a, const void *b);
 
 /* Computing possible addresses for symbols */
 static abort_t lookup_symbol(struct ksplice_pack *pack,
@@ -703,14 +707,17 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 
 	sort(pack->helper_relocs,
 	     (pack->helper_relocs_end - pack->helper_relocs),
-	     sizeof(struct ksplice_reloc), compare_reloc_addresses, NULL);
+	     sizeof(*pack->helper_relocs), compare_reloc_addresses, NULL);
+	sort(pack->helper_sections,
+	     (pack->helper_sections_end - pack->helper_sections),
+	     sizeof(*pack->helper_sections), compare_section_labels, NULL);
 #ifdef KSPLICE_STANDALONE
 	sort(pack->primary_system_map,
 	     (pack->primary_system_map_end - pack->primary_system_map),
-	     sizeof(struct ksplice_system_map), compare_system_map, NULL);
+	     sizeof(*pack->primary_system_map), compare_system_map, NULL);
 	sort(pack->helper_system_map,
 	     (pack->helper_system_map_end - pack->helper_system_map),
-	     sizeof(struct ksplice_system_map), compare_system_map, NULL);
+	     sizeof(*pack->helper_system_map), compare_system_map, NULL);
 #endif /* KSPLICE_STANDALONE */
 
 	mutex_lock(&module_mutex);
@@ -2020,6 +2027,7 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode)
 {
+	struct ksplice_section *sym_sect;
 	unsigned long val;
 	abort_t ret;
 
@@ -2048,7 +2056,48 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx: labelval %s "
 			"= %lx does not match expected %lx\n", run_addr,
 			r->blank_addr, r->symbol->label, r->symbol->value, val);
+
+	if (ret != OK)
+		return ret;
+	sym_sect = symbol_section(pack, r->symbol);
+	if (sym_sect != NULL && (sym_sect->flags & KSPLICE_SECTION_STRING) != 0) {
+		if (mode == RUN_PRE_INITIAL)
+			ksdebug(pack, "Recursively comparing string section "
+				"%s\n", sym_sect->symbol->label);
+		else if (mode == RUN_PRE_DEBUG)
+			ksdebug(pack, "[str start] ");
+		ret = run_pre_cmp(pack, sym_sect, val, NULL, mode);
+		if (mode == RUN_PRE_DEBUG)
+			ksdebug(pack, "[str end] ");
+		if (ret == OK && mode == RUN_PRE_INITIAL)
+			ksdebug(pack, "Successfully matched string section %s"
+				"\n", sym_sect->symbol->label);
+		else if (mode == RUN_PRE_INITIAL)
+			ksdebug(pack, "Failed to match string section %s\n",
+				sym_sect->symbol->label);
+	}
 	return ret;
+}
+
+static int symbol_section_bsearch_compare(const void *a, const void *b)
+{
+	const struct ksplice_symbol *sym = a;
+	const struct ksplice_section *sect = b;
+	return strcmp(sym->label, sect->symbol->label);
+}
+
+static int compare_section_labels(const void *va, const void *vb)
+{
+	const struct ksplice_section *a = va, *b = vb;
+	return strcmp(a->symbol->label, b->symbol->label);
+}
+
+static struct ksplice_section *symbol_section(struct ksplice_pack *pack,
+					      const struct ksplice_symbol *sym)
+{
+	return bsearch(sym, pack->helper_sections, pack->helper_sections_end -
+		       pack->helper_sections, sizeof(struct ksplice_section),
+		       symbol_section_bsearch_compare);
 }
 
 static abort_t lookup_symbol(struct ksplice_pack *pack,

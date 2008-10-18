@@ -1533,6 +1533,10 @@ static void write_ksplice_section(struct span *span)
 	if (ss->type == SS_TYPE_TEXT)
 		ksect->flags |= KSPLICE_SECTION_TEXT;
 	assert(ksect->flags != 0);
+
+	if (ss->type == SS_TYPE_STRING)
+		ksect->flags |= KSPLICE_SECTION_STRING;
+
 	write_reloc(ksect_ss, &ksect->address, &ss->symbol,
 		    span->start + span->shift);
 }
