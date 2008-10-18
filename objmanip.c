@@ -2597,8 +2597,10 @@ static void initialize_table_spans(struct superbfd *sbfd,
 	*vec_grow(&offsets, 1) = other_ss->contents.size;
 
 	unsigned long *off;
-	for (off = offsets.data; off < offsets.data + offsets.size - 1; off++)
-		new_span(other_ss, *off, *(off + 1) - *off);
+	for (off = offsets.data; off < offsets.data + offsets.size - 1; off++) {
+		if (*off != *(off + 1))
+			new_span(other_ss, *off, *(off + 1) - *off);
+	}
 }
 
 static void initialize_table_section_spans(struct superbfd *sbfd)
