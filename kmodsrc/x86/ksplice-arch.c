@@ -79,6 +79,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	const struct ksplice_reloc *finger;
 	unsigned long pre_offset, run_offset;
 	bool run_unconditional = false;
+	const struct ksplice_reloc *r;
 
 	if (sect->size == 0)
 		return NO_MATCH;
@@ -217,7 +218,6 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			/* ud2 means BUG().  On old i386 kernels, it is followed
 			   by 2 bytes and then a 4-byte relocation; and is not
 			   disassembler-friendly. */
-			const struct ksplice_reloc *r;
 			ret = lookup_reloc(pack, &finger,
 					   (unsigned long)(pre + 4), &r);
 			if (ret == NO_MATCH) {
@@ -244,6 +244,26 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			continue;
 		}
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
+
+		ret = lookup_reloc(pack, &finger, (unsigned long)pre, &r);
+		if (ret == OK && r->howto->type == KSPLICE_HOWTO_BUG) {
+			if (mode == RUN_PRE_DEBUG)
+				ksdebug(pack, "[BUG] ");
+			ret = handle_reloc(pack, sect, r, (unsigned long)run,
+					   mode);
+			if (ret != OK)
+				goto out;
+		} else if (ret != NO_MATCH && ret != OK) {
+			goto out;
+#if defined(CONFIG_X86_64) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
+#else /* !CONFIG_X86_64 || LINUX_VERSION_CODE >= */
+		} else if (run_ud.mnemonic == UD_Iud2) {
+			ksdebug(pack, "Unexpected ud2\n");
+			ret = NO_MATCH;
+			goto out;
+#endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
+		}
 
 		for (i = 0; i < ARRAY_SIZE(run_ud.operand); i++) {
 			ret = compare_operands(pack, sect, &finger, run_start,
@@ -563,6 +583,29 @@ static abort_t prepare_trampoline(struct ksplice_pack *pack,
 				 (unsigned long)p->trampoline + 1,
 				 p->repladdr - (p->oldaddr + 1));
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+static abort_t handle_bug(struct ksplice_pack *pack,
+			  const struct ksplice_reloc *r, unsigned long run_addr)
+{
+	const struct bug_entry *run_bug = find_bug(run_addr);
+	struct ksplice_section *bug_sect = symbol_section(pack, r->symbol);
+	if (run_bug == NULL)
+		return NO_MATCH;
+	if (bug_sect == NULL)
+		return UNEXPECTED;
+	return create_labelval(pack, bug_sect->symbol, (unsigned long)run_bug,
+			       TEMP);
+}
+#else /* LINUX_VERSION_CODE < */
+/* 7664c5a1da4711bb6383117f51b94c8dc8f3f1cd was after 2.6.19 */
+static abort_t handle_bug(struct ksplice_pack *pack,
+			  const struct ksplice_reloc *r, unsigned long run_addr)
+{
+	/* There should be no bug_table, so just return NO_MATCH */
+	return NO_MATCH;
+}
+#endif /* LINUX_VERSION_CODE */
 
 static abort_t handle_paravirt(struct ksplice_pack *pack,
 			       unsigned long pre_addr, unsigned long run_addr,

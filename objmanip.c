@@ -142,6 +142,15 @@ static void write_ksplice_nonreloc_howto(struct supersect *ss,
 					 int size);
 static void write_date_relocs(struct superbfd *sbfd, const char *str,
 			      enum ksplice_reloc_howto_type type);
+static void write_table_relocs(struct superbfd *sbfd, const char *sectname,
+			       enum ksplice_reloc_howto_type type);
+static void write_ksplice_table_reloc(struct supersect *ss,
+				      unsigned long address,
+				      const char *label,
+				      enum ksplice_reloc_howto_type type);
+static void write_ksplice_ignore_reloc(struct supersect *ss,
+				       unsigned long address,
+				       bfd_size_type size);
 void load_ksplice_symbol_offsets(struct superbfd *sbfd);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 static void write_ksplice_section(struct span *span);
@@ -568,6 +577,7 @@ void do_keep_helper(struct superbfd *isbfd)
 		}
 	}
 
+	write_table_relocs(isbfd, "__bug_table", KSPLICE_HOWTO_BUG);
 	rm_relocs(isbfd);
 	remove_unkept_spans(isbfd);
 	mangle_section_name(isbfd, "__markers");
@@ -1608,6 +1618,82 @@ static void write_ksplice_date_reloc(struct supersect *ss, unsigned long offset,
 				     strlen(str));
 }
 
+static void write_table_relocs(struct superbfd *sbfd, const char *sectname,
+			       enum ksplice_reloc_howto_type type)
+{
+	asection *sect = bfd_get_section_by_name(sbfd->abfd, sectname);
+	if (sect == NULL)
+		return;
+	struct supersect *ss = fetch_supersect(sbfd, sect);
+
+	const struct table_section *s = get_table_section(sectname);
+	if (s == NULL)
+		DIE;
+
+	void *entry;
+	for (entry = ss->contents.data;
+	     entry < ss->contents.data + ss->contents.size;
+	     entry += s->entry_size) {
+		struct span *span = find_span(ss, addr_offset(ss, entry));
+		assert(span != NULL);
+		if (!span->keep)
+			continue;
+
+		arelent *reloc = find_reloc(ss, entry + s->addr_offset);
+		assert(reloc != NULL);
+		if (strcmp(ss->name, "__bug_table") == 0)
+			write_ksplice_ignore_reloc
+			    (ss, addr_offset(ss, entry + s->other_offset),
+			     sizeof(unsigned short));
+		asymbol *sym = *reloc->sym_ptr_ptr;
+		assert(!bfd_is_const_section(sym->section));
+		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
+		unsigned long addr = get_reloc_offset(ss, reloc, true) +
+		    sym->value;
+		write_ksplice_table_reloc(sym_ss, addr, span->label, type);
+	}
+}
+
+static void write_ksplice_table_reloc(struct supersect *ss,
+				      unsigned long address,
+				      const char *label,
+				      enum ksplice_reloc_howto_type type)
+{
+	struct supersect *kreloc_ss;
+	kreloc_ss = make_section(ss->parent, ".ksplice_relocs%s", ss->name);
+	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
+						 struct ksplice_reloc);
+	struct span *span = find_span(ss, address);
+	assert(span != NULL);
+
+	write_ksplice_symbol_backend(kreloc_ss, &kreloc->symbol, NULL,
+				     label, NULL);
+	write_reloc(kreloc_ss, &kreloc->blank_addr, &ss->symbol,
+		    address + span->shift);
+	write_ksplice_nonreloc_howto(kreloc_ss, &kreloc->howto, type, 0);
+}
+
+static void write_ksplice_ignore_reloc(struct supersect *ss,
+				       unsigned long address,
+				       bfd_size_type size)
+{
+	struct supersect *kreloc_ss;
+	kreloc_ss = make_section(ss->parent, ".ksplice_relocs%s", ss->name);
+	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
+						 struct ksplice_reloc);
+	struct span *span = find_span(ss, address);
+	assert(span != NULL);
+	char *label;
+	assert(asprintf(&label, "%s+%lx(IGNORED)", span->label, address) >= 0);
+
+	write_ksplice_symbol_backend(kreloc_ss, &kreloc->symbol, NULL,
+				     label, NULL);
+	write_reloc(kreloc_ss, &kreloc->blank_addr, &ss->symbol,
+		    address + span->shift);
+	write_ksplice_nonreloc_howto(kreloc_ss, &kreloc->howto,
+				     KSPLICE_HOWTO_IGNORE, size);
+}
+
 static void write_ksplice_nonreloc_howto(struct supersect *ss,
 					 const struct ksplice_reloc_howto
 					 *const *addr,
@@ -1632,8 +1718,20 @@ static void write_ksplice_nonreloc_howto(struct supersect *ss,
 static void write_ksplice_section(struct span *span)
 {
 	struct supersect *ss = span->ss;
+	const char *sectname = span->ss->name;
+	const struct table_section *ts = get_table_section(ss->name);
+
+	if (ts != NULL && ts->has_addr) {
+		arelent *reloc = find_reloc(ss, ss->contents.data + span->start
+					    + ts->addr_offset);
+		assert(reloc != NULL);
+		asymbol *rsym = *reloc->sym_ptr_ptr;
+		assert(!bfd_is_const_section(rsym->section));
+		sectname = rsym->section->name;
+	}
+
 	struct supersect *ksect_ss =
-	    make_section(ss->parent, ".ksplice_sections%s", span->ss->name);
+	    make_section(ss->parent, ".ksplice_sections%s", sectname);
 	struct ksplice_section *ksect = sect_grow(ksect_ss, 1,
 						  struct ksplice_section);
 	asymbol *sym = span->symbol == NULL ? ss->symbol : span->symbol;
@@ -2269,7 +2367,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    starts_with(ss->name, ".memexit.rodata") ||
 	    starts_with(ss->name, ".cpuexit.rodata") ||
 	    starts_with(ss->name, ".ref.rodata") ||
-	    starts_with(ss->name, "__markers_strings"))
+	    starts_with(ss->name, "__markers_strings") ||
+	    (mode("keep-helper") && starts_with(ss->name, "__bug_table")))
 		return SS_TYPE_RODATA;
 
 	if (starts_with(ss->name, ".bss"))

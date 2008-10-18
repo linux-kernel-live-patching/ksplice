@@ -80,6 +80,7 @@ extra-y += ksplice.o
 RMSYMS = \
 	apply_paravirt \
 	core_kernel_text \
+	find_bug \
 	thread_return \
 	bust_spinlocks \
 	task_curr \

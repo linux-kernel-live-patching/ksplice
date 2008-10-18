@@ -18,6 +18,11 @@
 
 #include <linux/module.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+#include <linux/bug.h>
+#else /* LINUX_VERSION_CODE */
+/* 7664c5a1da4711bb6383117f51b94c8dc8f3f1cd was after 2.6.19 */
+#endif /* LINUX_VERSION_CODE */
 #include <linux/ctype.h>
 #if defined CONFIG_DEBUG_FS || LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
 #include <linux/debugfs.h>
@@ -685,6 +690,9 @@ static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
 				 unsigned long *new_addr);
 static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
+static abort_t handle_bug(struct ksplice_pack *pack,
+			  const struct ksplice_reloc *r,
+			  unsigned long run_addr);
 static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 
 #ifndef KSPLICE_STANDALONE
@@ -1785,7 +1793,8 @@ static abort_t try_addr(struct ksplice_pack *pack,
 		set_temp_labelvals(pack, NOVAL);
 		ksdebug(pack, "run-pre: %s sect %s does not match (r_a=%lx "
 			"p_a=%lx s=%lx)\n",
-			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "data" :
+			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "rodata" :
+			(sect->flags & KSPLICE_SECTION_DATA) != 0 ? "data" :
 			"text", sect->symbol->label, run_addr, sect->address,
 			sect->size);
 		ksdebug(pack, "run-pre: ");
@@ -2073,6 +2082,10 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	case KSPLICE_HOWTO_DATE:
 	case KSPLICE_HOWTO_TIME:
 		return handle_howto_date(pack, sect, r, run_addr, mode);
+	case KSPLICE_HOWTO_BUG:
+		return handle_bug(pack, r, run_addr);
+	case KSPLICE_HOWTO_IGNORE:
+		return OK;
 	default:
 		ksdebug(pack, "Unexpected howto type %d\n", r->howto->type);
 		return UNEXPECTED;

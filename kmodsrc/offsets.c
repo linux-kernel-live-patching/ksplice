@@ -71,6 +71,7 @@ const struct table_section table_sections[]
 		.entry_align = __alignof__(struct bug_entry),
 		.has_addr = 1,
 		.addr_offset = offsetof(struct bug_entry, bug_addr),
+		.other_offset = offsetof(struct bug_entry, line),
 	},
 #else /* !CONFIG_GENERIC_BUG || LINUX_VERSION_CODE < */
 /* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
