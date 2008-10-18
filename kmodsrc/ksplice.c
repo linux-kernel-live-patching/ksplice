@@ -1545,19 +1545,15 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 static abort_t match_pack_sections(struct ksplice_pack *pack,
 				   bool consider_data_sections)
 {
-	const struct ksplice_section *sect;
+	struct ksplice_section *sect;
 	abort_t ret;
-	char *finished;
-	int i, remaining = 0;
+	int remaining = 0;
 	bool progress;
 
-	finished = kcalloc(pack->helper_sections_end - pack->helper_sections,
-			   sizeof(*finished), GFP_KERNEL);
-	if (finished == NULL)
-		return OUT_OF_MEMORY;
 	for (sect = pack->helper_sections; sect < pack->helper_sections_end;
 	     sect++) {
-		if ((sect->flags & KSPLICE_SECTION_DATA) == 0)
+		if ((sect->flags & KSPLICE_SECTION_DATA) == 0 &&
+		    (sect->flags & KSPLICE_SECTION_MATCHED) == 0)
 			remaining++;
 	}
 
@@ -1565,20 +1561,18 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 		progress = false;
 		for (sect = pack->helper_sections;
 		     sect < pack->helper_sections_end; sect++) {
-			i = sect - pack->helper_sections;
-			if (finished[i])
+			if ((sect->flags & KSPLICE_SECTION_MATCHED) != 0)
 				continue;
 			if (!consider_data_sections &&
 			    (sect->flags & KSPLICE_SECTION_DATA) != 0)
 				continue;
 			ret = find_section(pack, sect);
 			if (ret == OK) {
-				finished[i] = 1;
+				sect->flags |= KSPLICE_SECTION_MATCHED;
 				if ((sect->flags & KSPLICE_SECTION_DATA) == 0)
 					remaining--;
 				progress = true;
 			} else if (ret != NO_MATCH) {
-				kfree(finished);
 				return ret;
 			}
 		}
@@ -1588,8 +1582,7 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 
 		for (sect = pack->helper_sections;
 		     sect < pack->helper_sections_end; sect++) {
-			i = sect - pack->helper_sections;
-			if (finished[i] != 0)
+			if ((sect->flags & KSPLICE_SECTION_MATCHED) != 0)
 				continue;
 			ksdebug(pack, "run-pre: could not match %s "
 				"section %s\n",
@@ -1600,10 +1593,8 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 		}
 		ksdebug(pack, "Aborted.  run-pre: could not match some "
 			"sections.\n");
-		kfree(finished);
 		return NO_MATCH;
 	}
-	kfree(finished);
 	return OK;
 }
 
@@ -2060,7 +2051,8 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	if (ret != OK)
 		return ret;
 	sym_sect = symbol_section(pack, r->symbol);
-	if (sym_sect != NULL && (sym_sect->flags & KSPLICE_SECTION_STRING) != 0) {
+	if (sym_sect != NULL && (sym_sect->flags & KSPLICE_SECTION_MATCHED) == 0
+	    && (sym_sect->flags & KSPLICE_SECTION_STRING) != 0) {
 		if (mode == RUN_PRE_INITIAL)
 			ksdebug(pack, "Recursively comparing string section "
 				"%s\n", sym_sect->symbol->label);
