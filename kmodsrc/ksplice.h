@@ -34,6 +34,7 @@ enum ksplice_reloc_howto_type {
 	KSPLICE_HOWTO_TIME,
 	KSPLICE_HOWTO_BUG,
 	KSPLICE_HOWTO_IGNORE,
+	KSPLICE_HOWTO_EXTABLE,
 };
 
 /**

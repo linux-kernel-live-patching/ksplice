@@ -246,9 +246,14 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
 
 		ret = lookup_reloc(pack, &finger, (unsigned long)pre, &r);
-		if (ret == OK && r->howto->type == KSPLICE_HOWTO_BUG) {
-			if (mode == RUN_PRE_DEBUG)
-				ksdebug(pack, "[BUG] ");
+		if (ret == OK && (r->howto->type == KSPLICE_HOWTO_EXTABLE ||
+				  r->howto->type == KSPLICE_HOWTO_BUG)) {
+			if (mode == RUN_PRE_DEBUG) {
+				if (r->howto->type == KSPLICE_HOWTO_EXTABLE)
+					ksdebug(pack, "[ex] ");
+				if (r->howto->type == KSPLICE_HOWTO_BUG)
+					ksdebug(pack, "[bug] ");
+			}
 			ret = handle_reloc(pack, sect, r, (unsigned long)run,
 					   mode);
 			if (ret != OK)
@@ -606,6 +611,21 @@ static abort_t handle_bug(struct ksplice_pack *pack,
 	return NO_MATCH;
 }
 #endif /* LINUX_VERSION_CODE */
+
+static abort_t handle_extable(struct ksplice_pack *pack,
+			      const struct ksplice_reloc *r,
+			      unsigned long run_addr)
+{
+	const struct exception_table_entry *run_ent =
+	    search_exception_tables(run_addr);
+	struct ksplice_section *ex_sect = symbol_section(pack, r->symbol);
+	if (run_ent == NULL)
+		return NO_MATCH;
+	if (ex_sect == NULL)
+		return UNEXPECTED;
+	return create_labelval(pack, ex_sect->symbol, (unsigned long)run_ent,
+			       TEMP);
+}
 
 static abort_t handle_paravirt(struct ksplice_pack *pack,
 			       unsigned long pre_addr, unsigned long run_addr,

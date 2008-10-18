@@ -693,6 +693,9 @@ static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 static abort_t handle_bug(struct ksplice_pack *pack,
 			  const struct ksplice_reloc *r,
 			  unsigned long run_addr);
+static abort_t handle_extable(struct ksplice_pack *pack,
+			      const struct ksplice_reloc *r,
+			      unsigned long run_addr);
 static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 
 #ifndef KSPLICE_STANDALONE
@@ -2084,6 +2087,8 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 		return handle_howto_date(pack, sect, r, run_addr, mode);
 	case KSPLICE_HOWTO_BUG:
 		return handle_bug(pack, r, run_addr);
+	case KSPLICE_HOWTO_EXTABLE:
+		return handle_extable(pack, r, run_addr);
 	case KSPLICE_HOWTO_IGNORE:
 		return OK;
 	default:

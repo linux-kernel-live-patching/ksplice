@@ -84,6 +84,8 @@ static const char *str_howto_type(const struct ksplice_reloc_howto *howto)
 		return "date";
 	case KSPLICE_HOWTO_BUG:
 		return "bug";
+	case KSPLICE_HOWTO_EXTABLE:
+		return "extable";
 	case KSPLICE_HOWTO_IGNORE:
 		return "ignore";
 	default:

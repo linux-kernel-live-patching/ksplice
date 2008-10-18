@@ -526,7 +526,8 @@ void do_keep_helper(struct superbfd *isbfd)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			if (ss->type == SS_TYPE_TEXT)
+			if (ss->type == SS_TYPE_TEXT &&
+			    !starts_with(ss->name, ".fixup"))
 				keep_span(span);
 			else
 				span->keep = false;
@@ -578,9 +579,12 @@ void do_keep_helper(struct superbfd *isbfd)
 	}
 
 	write_table_relocs(isbfd, "__bug_table", KSPLICE_HOWTO_BUG);
+	write_table_relocs(isbfd, "__ex_table", KSPLICE_HOWTO_EXTABLE);
 	rm_relocs(isbfd);
 	remove_unkept_spans(isbfd);
+
 	mangle_section_name(isbfd, "__markers");
+	mangle_section_name(isbfd, "__ex_table");
 }
 
 void do_finalize(struct superbfd *isbfd)
@@ -2350,7 +2354,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    starts_with(ss->name, ".ref.text") ||
 	    starts_with(ss->name, ".spinlock.text") ||
 	    starts_with(ss->name, ".kprobes.text") ||
-	    starts_with(ss->name, ".sched.text"))
+	    starts_with(ss->name, ".sched.text") ||
+	    (mode("keep-helper") && starts_with(ss->name, ".fixup")))
 		return SS_TYPE_TEXT;
 
 	int n = -1;
@@ -2368,7 +2373,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    starts_with(ss->name, ".cpuexit.rodata") ||
 	    starts_with(ss->name, ".ref.rodata") ||
 	    starts_with(ss->name, "__markers_strings") ||
-	    (mode("keep-helper") && starts_with(ss->name, "__bug_table")))
+	    (mode("keep-helper") && (starts_with(ss->name, "__bug_table") ||
+				     starts_with(ss->name, "__ex_table"))))
 		return SS_TYPE_RODATA;
 
 	if (starts_with(ss->name, ".bss"))
