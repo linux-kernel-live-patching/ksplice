@@ -61,8 +61,8 @@ kmodsrcfiles = \
 	kmodsrc/helper.c \
 	kmodsrc/primary.c \
 	kmodsrc/Makefile \
-	kmodsrc/ld-script \
-	kmodsrc/ksplice.lds \
+	kmodsrc/ksplice.lds.S \
+	kmodsrc/ksplice-rmsyms.lds \
 	kmodsrc/offsets.c \
 	kmodsrc/offsets.h \
 	kmodsrc/x86/udis86.h \

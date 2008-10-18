@@ -24,7 +24,7 @@ KSPLICE_CORE = ksplice-$(KSPLICE_KID)
 quiet_cmd_ksplice-collect = COLLECT $@
 cmd_ksplice-collect = \
 	$(ksplice-script) finalize $< $<.final $* && \
-	$(LD) --script=$(src)/ld-script -r -o $@ $<.final
+	$(LD) --script=$(obj)/ksplice.lds -r -o $@ $<.final
 
 ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
 	"-DKSPLICE_MID=$(KSPLICE_MID)" \
@@ -54,6 +54,7 @@ $(KSPLICE)-objs = $(ksplice-primary-objs)
 $(KSPLICE)-helper-objs = $(ksplice-helper-objs)
 CFLAGS_primary-$(target).o = $(ksplice-pack-cflags)
 CFLAGS_helper-$(target).o = $(ksplice-pack-cflags)
+CPPFLAGS_ksplice.lds = $(ksplice-pack-cflags) -P
 endef
 
 $(foreach mod,$(KSPLICE_MODULES),$(eval $(ksplice-pack-vars)))
@@ -65,10 +66,21 @@ $(foreach mod,$(KSPLICE_MODULES),$(obj)/helper-$(target).o): $(obj)/%.o: $(src)/
 	$(call if_changed_rule,cc_o_c)
 endif
 
-$(obj)/collect-primary-%.o: $(obj)/%.o.KSPLICE_primary FORCE
+$(obj)/collect-primary-%.o: $(obj)/%.o.KSPLICE_primary $(obj)/ksplice.lds FORCE
 	$(call if_changed,ksplice-collect)
-$(obj)/collect-helper-%.o: $(obj)/%.o.KSPLICE_helper FORCE
+$(obj)/collect-helper-%.o: $(obj)/%.o.KSPLICE_helper $(obj)/ksplice.lds FORCE
 	$(call if_changed,ksplice-collect)
+
+ifeq ($(quiet_cmd_cpp_lds_S),)
+quiet_cmd_cpp_lds_S = LDS     $@
+      cmd_cpp_lds_S = $(CPP) -Wp,-MD,$(depfile) $(NOSTDINC_FLAGS) $(CPPFLAGS) $(EXTRA_CPPFLAGS) $(CPPFLAGS_$(@F)) $(cpp_flags) -D__ASSEMBLY__ -o $@ $<
+
+%.lds: %.lds.S FORCE
+	$(call if_changed_dep,cpp_lds_S)
+endif
+
+$(obj)/ksplice.lds: $(src)/ksplice.lds.S FORCE
+	$(call if_changed_dep,cpp_lds_S)
 
 CFLAGS_offsets.o += $(KSPLICE_CFLAGS)
 extra-y += offsets.o
@@ -119,7 +131,7 @@ RMSYMS = \
 quiet_cmd_ksplice-rmsyms = RMSYMS  $@
 cmd_ksplice-rmsyms = \
 	$(ksplice-script) rmsyms $< $<.rmsyms $(RMSYMS) && \
-	$(LD) -r -o $@ $<.rmsyms $(src)/ksplice.lds
+	$(LD) -r -o $@ $<.rmsyms $(src)/ksplice-rmsyms.lds
 $(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o $(obj)/offsets.o FORCE
 	$(call if_changed,ksplice-rmsyms)
 endif # KSPLICE_STANDALONE
