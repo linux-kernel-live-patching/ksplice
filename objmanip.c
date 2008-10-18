@@ -1950,12 +1950,6 @@ static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym)
 	    (sym->flags & BSF_SECTION_SYM) == 0;
 }
 
-/* Modified function from GNU Binutils objcopy.c
- *
- * Choose which symbol entries to copy.
- * We don't copy in place, because that confuses the relocs.
- * Return the number of symbols to print.
- */
 void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms)
 {
@@ -1970,8 +1964,6 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 			sym_span = find_span(sym_ss, sym->value);
 		}
 
-		bool keep = false;
-
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
 		    !(mode("keep-primary") && sym_span != NULL &&
 		      sym_span->new))
@@ -1980,22 +1972,14 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (mode("finalize") && (sym->flags & BSF_GLOBAL) != 0)
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
-		if ((sym->flags & BSF_KEEP) != 0	/* Used in relocation.  */
-		    || ((sym->flags & BSF_SECTION_SYM) != 0 && sym_ss != NULL &&
-			sym_ss->keep))
-			keep = true;
-		else if ((sym->flags & (BSF_GLOBAL | BSF_WEAK)) != 0 &&
-			 sym_ss != NULL && sym_ss->keep)
-			keep = true;
-
+		bool keep = bfd_is_const_section(sym->section) ||
+		    (sym_ss->keep && (sym->flags & BSF_SECTION_SYM) != 0) ||
+		    (sym_span != NULL && sym_span->keep);
+		if (bfd_is_und_section(sym->section) &&
+		    (sym->flags & BSF_KEEP) == 0)
+			keep = false;
 		if (deleted_table_section_symbol(ibfd, sym))
 			keep = false;
-
-		if (bfd_is_com_section(sym->section))
-			keep = false;
-
-		if (mode("rmsyms"))
-			keep = !str_in_set(sym->name, &rmsyms);
 
 		if (keep) {
 			if (sym_ss != NULL && !sym_ss->keep) {
