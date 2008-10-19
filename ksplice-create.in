@@ -23,6 +23,7 @@ use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
 my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
+my $series = 0;
 my @only_targets;
 my @extra_match;
 my $standalone;
@@ -33,6 +34,7 @@ GetOptions(@common_options,
 	"patch=s" => \$patchfile,
 	"diffext=s" => \$diffext,
 	"prebuild" => \$prebuild,
+	"series!" => \$series,
 	"only-targets=s" => \@only_targets,
 	"extra-match=s" => \@extra_match,
 	"standalone!" => \$standalone,
@@ -118,9 +120,13 @@ $ENV{PATH} = "$datadir:$ENV{PATH}";
 my @make_ksplice = (@make, "-f", "$datadir/Makefile.ksplice", @kbuild_flags);
 
 sub revert_orig() {
-	for(split(/\0/, runstr(qw(find -name *.KSPLICE* -print0)))) {
+	for(split(/\0/, runstr(qw(find -name *.KSPLICE_* -print0)))) {
 		if(my ($file) = m/^(.*)\.KSPLICE_pre$/) {
-			rename($_, $file);
+			if ($series) {
+				unlink($_);
+			} else {
+				rename($_, $file);
+			}
 			runval("$datadir/ksplice-obj.pl", "snap", "$file.KSPLICE") if(-e "$file.KSPLICE");
 		} elsif(m/\.KSPLICE_(?:primary|helper)$/) {
 			unlink($_) if(-e $_);
