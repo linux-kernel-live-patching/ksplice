@@ -175,7 +175,7 @@ runval_infile($patchfile, "patch", @patch_opt, "-bz", ".KSPLICE_pre");
 push @make_ksplice, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
 push @make_ksplice, "KSPLICE_ONLY_TARGETS=@only_targets" if (@only_targets);
 if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
-	revert_orig();
+	revert_orig() if(defined($diffext));
 	die "Aborting: Applying the patch appears to break the kernel build";
 }
 
@@ -207,11 +207,11 @@ foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
 }
 
 if(!@modules) {
-	revert_orig();
+	revert_orig() if(defined($diffext));
 	die "Aborting: No changes detected";
 }
 
-revert_orig();
+revert_orig() if(defined($diffext));
 
 runval(@make_kmodsrc, "modules", "KSPLICE_MODULES=@modules");
 
