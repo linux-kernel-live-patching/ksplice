@@ -25,6 +25,7 @@ use Ksplice;
 my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
 my $description;
 my $series = 0;
+my $build_modules = 0;
 my @only_targets;
 my @extra_match;
 my $standalone;
@@ -37,6 +38,7 @@ GetOptions(@common_options,
 	"diffext=s" => \$diffext,
 	"prebuild" => \$prebuild,
 	"series!" => \$series,
+	"build-modules!" => \$build_modules,
 	"only-targets=s" => \@only_targets,
 	"extra-match=s" => \@extra_match,
 	"standalone!" => \$standalone,
@@ -120,6 +122,8 @@ if($Verbose::level >= 2) {
 
 $ENV{PATH} = "$datadir:$ENV{PATH}";
 my @make_ksplice = (@make, "-f", "$datadir/Makefile.ksplice", @kbuild_flags);
+
+push(@make_ksplice, "KSPLICE_BUILD_MODULES=1") if ($build_modules);
 
 sub revert_orig() {
 	for(split(/\0/, runstr(qw(find -name *.KSPLICE_* -print0)))) {

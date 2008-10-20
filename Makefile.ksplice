@@ -42,6 +42,9 @@ CFLAGS_KSPLICE = -ffunction-sections -fdata-sections -ksplice-cflags-api=1
 CFLAGS_KERNEL += $(CFLAGS_KSPLICE)
 CFLAGS_MODULE += $(CFLAGS_KSPLICE)
 ksplice-mods += vmlinux
+ifdef KSPLICE_BUILD_MODULES
+ksplice-deps += ksplice_modpost
+endif
 ksplice-dirs += $(addprefix _ksplice_,$(vmlinux-dirs))
 ifdef ksplice-mode-snap
 ksplice-before += prepare0 prepare scripts
@@ -54,11 +57,22 @@ $(obj)/vmlinux.o.KSPLICE: $(call ksplice-objs,$(ksplice-vmlinux-objs)) FORCE
 ksplice-targets += $(obj)/vmlinux.o.KSPLICE
 $(ksplice-vmlinux-objs:=.KSPLICE): $(ksplice-dirs) ;
 
+PHONY += ksplice_modpost
+ksplice_modpost: $(ksplice-dirs)
+	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
+
 else	# KERNELRELEASE
+
+ifdef KSPLICE_BUILD_MODULES
+KBUILD_MODULES = 1
+endif
 
 include $(srctree)/scripts/Makefile.build
 ksplice-mods += $(obj-m:.o=)
 ksplice-deps += $(if $(filter $(KSPLICE_ONLY_TARGETS),vmlinux),$(builtin-target:=.KSPLICE) $(lib-target:=.KSPLICE))
+ifdef KSPLICE_BUILD_MODULES
+ksplice-deps += $(obj-m)
+endif
 ksplice-dirs += $(addprefix _ksplice_,$(subdir-ym))
 
 ifdef builtin-target
