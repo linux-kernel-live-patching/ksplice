@@ -133,7 +133,7 @@ void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 static void write_ksplice_section(struct span *span);
 void write_ksplice_patch(struct superbfd *sbfd, struct span *span);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
-				 const char *label);
+				 const char *label, const char *sectname);
 asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name);
 void filter_table_sections(struct superbfd *isbfd);
 void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
@@ -151,7 +151,8 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym);
 void read_str_set(struct str_vec *strs);
 bool str_in_set(const char *str, const struct str_vec *strs);
-struct supersect *make_section(struct superbfd *sbfd, const char *name);
+struct supersect *__attribute((format(printf, 2, 3)))
+make_section(struct superbfd *sbfd, const char *fmt, ...);
 void __attribute__((format(printf, 3, 4)))
 write_string(struct supersect *ss, const char **addr, const char *fmt, ...);
 void rm_some_exports(struct superbfd *isbfd, const struct export_desc *ed);
@@ -837,7 +838,8 @@ static void handle_deleted_spans(struct superbfd *oldsbfd,
 			if (span->symbol == NULL)
 				DIE;
 			write_ksplice_deleted_patch(newsbfd, span->symbol->name,
-						    span->label);
+						    span->label,
+						    span->ss->name);
 		}
 	}
 }
@@ -1170,23 +1172,20 @@ void rm_relocs(struct superbfd *isbfd)
 	asection *p;
 	for (p = isbfd->abfd->sections; p != NULL; p = p->next) {
 		struct supersect *ss = fetch_supersect(isbfd, p);
-		if ((mode("keep") && ss->type == SS_TYPE_SPECIAL) ||
-		    ss->type == SS_TYPE_KSPLICE)
-			continue;
-		if (ss->keep || mode("rmsyms"))
+		bool remove_relocs = ss->keep;
+
+		if (mode("keep") && ss->type == SS_TYPE_SPECIAL)
+			remove_relocs = false;
+
+		if (ss->type == SS_TYPE_KSPLICE)
+			remove_relocs = false;
+		if (mode("finalize") &&
+		    (starts_with(ss->name, ".ksplice_patches") ||
+		     starts_with(ss->name, ".ksplice_relocs")))
+			remove_relocs = true;
+
+		if (remove_relocs)
 			rm_some_relocs(ss);
-	}
-	if (mode("finalize")) {
-		p = bfd_get_section_by_name(isbfd->abfd, ".ksplice_patches");
-		if (p != NULL) {
-			struct supersect *ss = fetch_supersect(isbfd, p);
-			rm_some_relocs(ss);
-		}
-		p = bfd_get_section_by_name(isbfd->abfd, ".ksplice_relocs");
-		if (p != NULL) {
-			struct supersect *ss = fetch_supersect(isbfd, p);
-			rm_some_relocs(ss);
-		}
 	}
 }
 
@@ -1228,8 +1227,14 @@ void rm_some_relocs(struct supersect *ss)
 	}
 }
 
-struct supersect *make_section(struct superbfd *sbfd, const char *name)
+struct supersect *make_section(struct superbfd *sbfd, const char *fmt, ...)
 {
+	va_list ap;
+	char *name;
+	va_start(ap, fmt);
+	assert(vasprintf(&name, fmt, ap) >= 0);
+	va_end(ap);
+
 	asection *sect = bfd_get_section_by_name(sbfd->abfd, name);
 	if (sect != NULL)
 		return fetch_supersect(sbfd, sect);
@@ -1425,11 +1430,11 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	bfd_vma addend = get_reloc_offset(ss, orig_reloc, false);
 	unsigned long *repladdr = ss->contents.data + orig_reloc->address;
 
-	if (mode("finalize") && strcmp(ss->name, ".ksplice_patches") == 0) {
+	if (mode("finalize") && starts_with(ss->name, ".ksplice_patches")) {
 		*repladdr = 0;
 		return;
 	}
-	if (mode("finalize") && strcmp(ss->name, ".ksplice_relocs") == 0) {
+	if (mode("finalize") && starts_with(ss->name, ".ksplice_relocs")) {
 		assert(starts_with(sym_ptr->name, KSPLICE_SYMBOL_STR));
 		asymbol fake_sym;
 		fake_sym.name = sym_ptr->name + strlen(KSPLICE_SYMBOL_STR);
@@ -1448,10 +1453,12 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 		span = NULL;
 	blot_section(ss, orig_reloc->address, howto);
 
-	struct supersect *kreloc_ss = make_section(ss->parent,
-						   mode("rmsyms") ?
-						   ".ksplice_init_relocs" :
-						   ".ksplice_relocs");
+	struct supersect *kreloc_ss;
+	if (mode("rmsyms"))
+		kreloc_ss = make_section(ss->parent, ".ksplice_init_relocs");
+	else
+		kreloc_ss = make_section(ss->parent, ".ksplice_relocs%s",
+					 ss->name);
 	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
 						 struct ksplice_reloc);
 
@@ -1496,7 +1503,7 @@ static void write_ksplice_section(struct span *span)
 {
 	struct supersect *ss = span->ss;
 	struct supersect *ksect_ss =
-	    make_section(ss->parent, ".ksplice_sections");
+	    make_section(ss->parent, ".ksplice_sections%s", span->ss->name);
 	struct ksplice_section *ksect = sect_grow(ksect_ss, 1,
 						  struct ksplice_section);
 	asymbol *sym = span->symbol == NULL ? ss->symbol : span->symbol;
@@ -1519,7 +1526,8 @@ static void write_ksplice_section(struct span *span)
 
 void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
 {
-	struct supersect *kpatch_ss = make_section(sbfd, ".ksplice_patches");
+	struct supersect *kpatch_ss =
+	    make_section(sbfd, ".ksplice_patches%s", span->ss->name);
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
 
@@ -1561,9 +1569,10 @@ asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name)
 }
 
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
-				 const char *label)
+				 const char *label, const char *sectname)
 {
-	struct supersect *kpatch_ss = make_section(sbfd, ".ksplice_patches");
+	struct supersect *kpatch_ss =
+	    make_section(sbfd, ".ksplice_patches%s", sectname);
 	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
 						 struct ksplice_patch);
 

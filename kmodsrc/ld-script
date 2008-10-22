@@ -2,7 +2,7 @@ SECTIONS {
   .text : { *(.text .text.* .exit.text) }
   .ksplice_relocs : {
     ksplice_relocs = .;
-    KEEP(*(.ksplice_relocs))
+    KEEP(*(.ksplice_relocs*))
     ksplice_relocs_end = .;
   }
   .ksplice_symbols : {
@@ -12,12 +12,12 @@ SECTIONS {
   }
   .ksplice_sections : {
     ksplice_sections = .;
-    KEEP(*(.ksplice_sections))
+    KEEP(*(.ksplice_sections*))
     ksplice_sections_end = .;
   }
   .ksplice_patches : {
     ksplice_patches = .;
-    KEEP(*(.ksplice_patches))
+    KEEP(*(.ksplice_patches*))
     ksplice_patches_end = .;
   }
   .ksplice_exports : {
