@@ -224,6 +224,7 @@ bool changed;
 struct ksplice_config *config;
 
 const char *modestr, *kid;
+bool write_output = true;
 
 struct superbfd *offsets_sbfd = NULL;
 
@@ -328,8 +329,6 @@ int main(int argc, char *argv[])
 	assert(bfd_check_format_matches(ibfd, bfd_object, &matching));
 
 	const char *output_target = bfd_get_target(ibfd);
-	bfd *obfd = bfd_openw(argv[2], output_target);
-	assert(obfd);
 
 	load_system_map();
 	load_offsets();
@@ -353,11 +352,15 @@ int main(int argc, char *argv[])
 		do_rmsyms(isbfd);
 	}
 
-	copy_object(ibfd, obfd);
+	if (write_output) {
+		bfd *obfd = bfd_openw(argv[2], output_target);
+		assert(obfd);
+		copy_object(ibfd, obfd);
+		assert(bfd_close(obfd));
+	}
 
 	if (offsets_sbfd != NULL)
 		assert(bfd_close(offsets_sbfd->abfd));
-	assert(bfd_close(obfd));
 	assert(bfd_close(ibfd));
 	return EXIT_SUCCESS;
 }
@@ -451,13 +454,16 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	}
 
 	filter_table_sections(isbfd);
+	write_output = false;
 	for (ed = exports.data; ed < exports.data + exports.size; ed++) {
 		const char **symname;
 		for (symname = ed->names.data;
 		     symname < ed->names.data + ed->names.size; symname++)
 			write_ksplice_export(isbfd, *symname,
 					     ed->export_type, ed->deletion);
-		if (!ed->deletion)
+		if (ed->deletion)
+			write_output = true;
+		else
 			rm_some_exports(isbfd, ed);
 	}
 
@@ -468,6 +474,8 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
+			if (span->keep)
+				write_output = true;
 			if (span->patch || span->new)
 				write_ksplice_section(span);
 			if (span->patch)
