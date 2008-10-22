@@ -206,6 +206,7 @@ for (split(/\0/, runstr(qw(find -name *.KSPLICE* ! ( -name *.KSPLICE -empty ) ! 
 	copy_debug($1) if (m/^(.*)\.KSPLICE_pre$/);
 }
 
+my @modulepaths = ();
 my @modules = ();
 foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
 	open MOD, '<', $_;
@@ -215,12 +216,18 @@ foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
 			     "$mod.o.KSPLICE_helper") {
 		copy($collect, "$kmodsrc/" . basename($collect));
 	}
+	push @modulepaths, "$mod.ko" if ($mod ne "vmlinux");
 	push @modules, basename($mod);
 }
 
 if(!@modules) {
 	revert_orig() if(defined($diffext));
 	die "Aborting: No changes detected";
+}
+
+if ($build_modules) {
+	mkdir("$tmpdir/modules");
+	runval(@make_ksplice, "KSPLICE_MODE=diff", "ksplice_modinst", "MODLIB=$tmpdir/modules", "modules=@modulepaths");
 }
 
 revert_orig() if(defined($diffext));
@@ -246,6 +253,7 @@ rename("$kmodsrc/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko") if ($standalone);
 
 mkdir("$ksplice/debug");
 rename("objects", "$ksplice/debug/objects");
+rename("modules", "$ksplice/modules") if ($build_modules);
 rename("$kmodsrc", "$ksplice/debug/kmodsrc");
 runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
 copy("$ksplice.tar.gz", "$origdir/$ksplice.tar.gz");

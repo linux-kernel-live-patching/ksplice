@@ -57,9 +57,11 @@ $(obj)/vmlinux.o.KSPLICE: $(call ksplice-objs,$(ksplice-vmlinux-objs)) FORCE
 ksplice-targets += $(obj)/vmlinux.o.KSPLICE
 $(ksplice-vmlinux-objs:=.KSPLICE): $(ksplice-dirs) ;
 
-PHONY += ksplice_modpost
+PHONY += ksplice_modpost ksplice_modinst
 ksplice_modpost: $(ksplice-dirs)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
+ksplice_modinst: $(ksplice-dirs)
+	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modinst
 
 else	# KERNELRELEASE
 
