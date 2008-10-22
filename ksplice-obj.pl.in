@@ -113,8 +113,8 @@ sub do_combine {
 }
 
 sub do_finalize {
-	my ($in, $out) = @_;
-	runval("$libexecdir/ksplice-objmanip", $in, $out, "finalize");
+	my ($in, $out, $target) = @_;
+	runval("$libexecdir/ksplice-objmanip", $in, $out, "finalize", $target);
 }
 
 sub do_rmsyms {

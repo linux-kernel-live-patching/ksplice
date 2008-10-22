@@ -23,7 +23,7 @@ KSPLICE_CORE = ksplice-$(KSPLICE_KID)
 
 quiet_cmd_ksplice-collect = COLLECT $@
 cmd_ksplice-collect = \
-	$(ksplice-script) finalize $< $<.final && \
+	$(ksplice-script) finalize $< $<.final $* && \
 	$(LD) --script=$(src)/ld-script -r -o $@ $<.final
 
 ksplice-pack-cflags = $(KSPLICE_CFLAGS) \

@@ -224,7 +224,7 @@ bool changed;
 
 struct ksplice_config *config;
 
-const char *modestr, *kid;
+const char *modestr, *kid, *finalize_target = NULL;
 bool write_output = true;
 
 struct superbfd *offsets_sbfd = NULL;
@@ -341,6 +341,8 @@ int main(int argc, char *argv[])
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
 
 	modestr = argv[3];
+	if (mode("finalize"))
+		finalize_target = argv[4];
 	init_objmanip_superbfd(isbfd);
 	if (mode("keep-primary")) {
 		kid = argv[5];
@@ -555,6 +557,17 @@ void do_keep_helper(struct superbfd *isbfd)
 void do_finalize(struct superbfd *isbfd)
 {
 	load_ksplice_symbol_offsets(isbfd);
+	asection *sect;
+	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (ss->type == SS_TYPE_EXIT) {
+			struct span *span;
+			for (span = ss->spans.data;
+			     span < ss->spans.data + ss->spans.size; span++)
+				span->keep = false;
+			ss->keep = false;
+		}
+	}
 	rm_relocs(isbfd);
 }
 
@@ -2037,6 +2050,12 @@ bool is_table_section(const char *name, bool consider_other)
 
 enum supersect_type supersect_type(struct supersect *ss)
 {
+	if (mode("finalize") &&
+	    strcmp(finalize_target, "vmlinux") == 0 &&
+	    (starts_with(ss->name, ".ksplice_relocs.exit") ||
+	     starts_with(ss->name, ".ksplice_sections.exit") ||
+	     starts_with(ss->name, ".ksplice_patches.exit")))
+		return SS_TYPE_EXIT;
 	if (starts_with(ss->name, ".ksplice"))
 		return SS_TYPE_KSPLICE;
 
@@ -2096,14 +2115,10 @@ enum supersect_type supersect_type(struct supersect *ss)
 	if (starts_with(ss->name, ".vdso"))
 		return SS_TYPE_IGNORED;
 
-	if (bfd_get_section_by_name(ss->parent->abfd, ".exitcall.exit") == NULL) {
-		if (starts_with(ss->name, ".exit.text"))
-			return SS_TYPE_TEXT;
-		if (starts_with(ss->name, ".exit.data"))
-			return SS_TYPE_DATA;
-	} else if (starts_with(ss->name, ".exit.text") ||
-		   starts_with(ss->name, ".exit.data"))
-		return SS_TYPE_IGNORED;
+	if (starts_with(ss->name, ".exit.text"))
+		return SS_TYPE_TEXT;
+	if (starts_with(ss->name, ".exit.data"))
+		return SS_TYPE_DATA;
 
 	if (starts_with(ss->name, ".text") ||
 	    starts_with(ss->name, ".kernel.text") ||
