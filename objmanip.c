@@ -128,6 +128,9 @@ void mangle_section_name(struct superbfd *sbfd, const char *name);
 void rm_relocs(struct superbfd *isbfd);
 void rm_some_relocs(struct supersect *ss);
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
+static void write_ksplice_reloc_howto(struct supersect *ss, const
+				      struct ksplice_reloc_howto *const *addr,
+				      reloc_howto_type *howto);
 void load_ksplice_symbol_offsets(struct superbfd *sbfd);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 static void write_ksplice_section(struct span *span);
@@ -239,6 +242,7 @@ struct addr_vec_hash system_map;
 
 struct bool_hash system_map_written;
 struct ulong_hash ksplice_symbol_offset;
+struct ulong_hash ksplice_howto_offset;
 struct ulong_hash ksplice_string_offset;
 
 void load_system_map()
@@ -336,6 +340,7 @@ int main(int argc, char *argv[])
 
 	bool_hash_init(&system_map_written);
 	ulong_hash_init(&ksplice_symbol_offset);
+	ulong_hash_init(&ksplice_howto_offset);
 	ulong_hash_init(&ksplice_string_offset);
 
 	struct superbfd *isbfd = fetch_superbfd(ibfd);
@@ -1442,7 +1447,6 @@ void write_ksplice_symbol(struct supersect *ss,
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
-	reloc_howto_type *howto = orig_reloc->howto;
 	bfd_vma addend = get_reloc_offset(ss, orig_reloc, false);
 	unsigned long *repladdr = ss->contents.data + orig_reloc->address;
 
@@ -1467,7 +1471,7 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	struct span *span = reloc_target_span(ss, orig_reloc);
 	if (span == ss->spans.data && span->start != addend)
 		span = NULL;
-	blot_section(ss, orig_reloc->address, howto);
+	blot_section(ss, orig_reloc->address, orig_reloc->howto);
 
 	struct supersect *kreloc_ss;
 	if (mode("rmsyms"))
@@ -1491,16 +1495,41 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 		write_ksplice_symbol(kreloc_ss, &kreloc->symbol, sym_ptr, span,
 				     "");
 	}
-	kreloc->pcrel = howto->pc_relative;
 	if (span != NULL && span->start != 0)
 		addend += sym_ptr->value - span->start;
 	kreloc->addend = addend;
-	kreloc->size = bfd_get_reloc_size(howto);
-	kreloc->dst_mask = howto->dst_mask;
-	kreloc->rightshift = howto->rightshift;
-	kreloc->signed_addend =
+	write_ksplice_reloc_howto(kreloc_ss, &kreloc->howto, orig_reloc->howto);
+}
+
+static void write_ksplice_reloc_howto(struct supersect *ss, const
+				      struct ksplice_reloc_howto *const *addr,
+				      reloc_howto_type *howto)
+{
+	struct supersect *khowto_ss = make_section(ss->parent,
+						   ".ksplice_reloc_howtos");
+	struct ksplice_reloc_howto *khowto;
+	unsigned long *khowto_offp;
+
+	khowto_offp = ulong_hash_lookup(&ksplice_howto_offset, howto->name,
+					FALSE);
+	if (khowto_offp != NULL) {
+		write_reloc(ss, addr, &khowto_ss->symbol, *khowto_offp);
+		return;
+	}
+	khowto = sect_grow(khowto_ss, 1, struct ksplice_reloc_howto);
+	khowto_offp = ulong_hash_lookup(&ksplice_howto_offset, howto->name,
+					TRUE);
+	*khowto_offp = addr_offset(khowto_ss, khowto);
+
+	khowto->type = KSPLICE_HOWTO_RELOC;
+	khowto->pcrel = howto->pc_relative;
+	khowto->size = bfd_get_reloc_size(howto);
+	khowto->dst_mask = howto->dst_mask;
+	khowto->rightshift = howto->rightshift;
+	khowto->signed_addend =
 	    (howto->complain_on_overflow == complain_overflow_signed) ||
 	    (howto->complain_on_overflow == complain_overflow_bitfield);
+	write_reloc(ss, addr, &khowto_ss->symbol, *khowto_offp);
 }
 
 #define CANARY(x, canary) ((x & ~howto->dst_mask) | (canary & howto->dst_mask))

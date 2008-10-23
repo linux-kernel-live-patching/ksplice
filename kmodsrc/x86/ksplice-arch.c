@@ -309,24 +309,28 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 	ret = lookup_reloc(pack, fingerp, (unsigned long)(pre + pre_off), &r);
 	if (ret == OK) {
 		struct ksplice_reloc run_reloc = *r;
-		if (r->size != ud_operand_len(pre_op)) {
+		struct ksplice_reloc_howto run_howto = *r->howto;
+		run_reloc.howto = &run_howto;
+		if (r->howto->size != ud_operand_len(pre_op)) {
 			ksdebug(pack, "ksplice_h: run-pre: reloc size %d "
-				"differs from disassembled size %d\n", r->size,
-				ud_operand_len(pre_op));
+				"differs from disassembled size %d\n",
+				r->howto->size, ud_operand_len(pre_op));
 			return NO_MATCH;
 		}
-		if (r->size != ud_operand_len(run_op) &&
-		    (r->dst_mask != 0xffffffff || r->rightshift != 0)) {
+		if (r->howto->size != ud_operand_len(run_op) &&
+		    (r->howto->dst_mask != 0xffffffff ||
+		     r->howto->rightshift != 0)) {
 			/* Reloc types unsupported with differing reloc sizes */
 			ksdebug(pack, "ksplice_h: reloc: invalid flags for a "
 				"relocation with size changed\n");
-			ksdebug(pack, "%ld %u\n", r->dst_mask, r->rightshift);
+			ksdebug(pack, "%ld %u\n", r->howto->dst_mask,
+				r->howto->rightshift);
 			return UNEXPECTED;
 		}
 		/* adjust for differing relocation size */
-		run_reloc.size = ud_operand_len(run_op);
-		if (r->size != run_reloc.size)
-			run_reloc.dst_mask = ~(~0 << run_reloc.size * 8);
+		run_howto.size = ud_operand_len(run_op);
+		if (r->howto->size != run_howto.size)
+			run_howto.dst_mask = ~(~0 << run_howto.size * 8);
 		run_reloc.addend += (ud_operand_len(pre_op) -
 				     ud_operand_len(run_op));
 		ret = handle_reloc(pack, sect, &run_reloc,
@@ -511,14 +515,19 @@ static struct ksplice_symbol trampoline_symbol = {
 	.label = "<trampoline>",
 };
 
-static const struct ksplice_reloc trampoline_reloc = {
-	.symbol = &trampoline_symbol,
+static const struct ksplice_reloc_howto trampoline_howto = {
+	.type = KSPLICE_HOWTO_RELOC,
 	.pcrel = 1,
-	.addend = -4,
 	.size = 4,
 	.dst_mask = 0xffffffffL,
 	.rightshift = 0,
 	.signed_addend = 1,
+};
+
+static const struct ksplice_reloc trampoline_reloc = {
+	.symbol = &trampoline_symbol,
+	.addend = -4,
+	.howto = &trampoline_howto,
 };
 
 static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,

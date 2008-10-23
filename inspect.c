@@ -73,21 +73,37 @@ char *str_ksplice_symbolp(struct supersect *ptr_ss,
 				  sym->value + offset);
 }
 
+static const char *str_howto_type(const struct ksplice_reloc_howto *howto)
+{
+	switch (howto->type) {
+	case KSPLICE_HOWTO_RELOC:
+		return "reloc";
+	default:
+		return "unknown";
+	}
+}
+
 void show_ksplice_reloc(struct supersect *ss,
 			const struct ksplice_reloc *kreloc)
 {
-	printf("  blank_addr: %s\n"
+	struct supersect *khowto_ss;
+	const struct ksplice_reloc_howto *khowto =
+	    read_pointer(ss, (void *const *)&kreloc->howto, &khowto_ss);
+	printf("  blank_addr: %s  size: %x\n"
+	       "  type: %s\n"
 	       "  symbol: %s\n"
 	       "  addend: %lx\n"
-	       "  pcrel: %x  size: %x  dst_mask: %lx  rightshift: %x\n"
+	       "  pcrel: %x  dst_mask: %lx  rightshift: %x  signed_addend: %x\n"
 	       "\n",
 	       str_pointer(ss, (void *const *)&kreloc->blank_addr),
+	       read_num(khowto_ss, &khowto->size),
+	       str_howto_type(khowto),
 	       str_ksplice_symbolp(ss, &kreloc->symbol),
 	       read_num(ss, &kreloc->addend),
-	       read_num(ss, &kreloc->pcrel),
-	       read_num(ss, &kreloc->size),
-	       read_num(ss, &kreloc->dst_mask),
-	       read_num(ss, &kreloc->rightshift));
+	       read_num(khowto_ss, &khowto->pcrel),
+	       read_num(khowto_ss, &khowto->dst_mask),
+	       read_num(khowto_ss, &khowto->rightshift),
+	       read_num(khowto_ss, &khowto->signed_addend));
 }
 
 void show_ksplice_relocs(struct supersect *kreloc_ss)

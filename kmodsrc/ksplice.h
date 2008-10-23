@@ -17,8 +17,23 @@ struct ksplice_symbol {
  * struct ksplice_reloc - Ksplice's analogue of an ELF relocation
  * @blank_addr:		The address of the relocation's storage unit
  * @symbol:		The ksplice_symbol associated with this relocation
- * @pcrel:		Is the relocation PC relative?
+ * @howto:		The information regarding the relocation type
  * @addend:		The ELF addend of the relocation
+ **/
+struct ksplice_reloc {
+	unsigned long blank_addr;
+	struct ksplice_symbol *symbol;
+	const struct ksplice_reloc_howto *howto;
+	long addend;
+};
+
+enum ksplice_reloc_howto_type {
+	KSPLICE_HOWTO_RELOC,
+};
+
+/**
+ * struct ksplice_reloc_howto - Ksplice's relocation type information
+ * @pcrel:		Is the relocation PC relative?
  * @size:		The size, in bytes, of the item to be relocated
  * @dst_mask:		Bitmask for which parts of the instruction or data are
  * 			replaced with the relocated value
@@ -28,11 +43,9 @@ struct ksplice_symbol {
  * 			(based on rightshift from GNU BFD's reloc_howto_struct)
  * @signed_addend:	Should the addend be interpreted as a signed value?
  **/
-struct ksplice_reloc {
-	unsigned long blank_addr;
-	struct ksplice_symbol *symbol;
+struct ksplice_reloc_howto {
+	enum ksplice_reloc_howto_type type;
 	int pcrel;
-	long addend;
 	int size;
 	long dst_mask;
 	unsigned int rightshift;

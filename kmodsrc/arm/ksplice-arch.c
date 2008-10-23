@@ -25,14 +25,19 @@ static struct ksplice_symbol trampoline_symbol = {
 	.label = "<trampoline>",
 };
 
-static const struct ksplice_reloc trampoline_reloc = {
-	.symbol = &trampoline_symbol,
+static const struct ksplice_reloc_howto trampoline_howto = {
+	.type = KSPLICE_HOWTO_RELOC,
 	.pcrel = 1,
-	.addend = -8,
 	.size = 4,
 	.dst_mask = 0x00ffffffL,
 	.rightshift = 2,
 	.signed_addend = 1,
+};
+
+static const struct ksplice_reloc trampoline_reloc = {
+	.symbol = &trampoline_symbol,
+	.addend = -8,
+	.howto = &trampoline_howto,
 };
 
 static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,

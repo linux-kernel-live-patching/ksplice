@@ -619,7 +619,7 @@ static void release_vals(struct list_head *vals);
 static void set_temp_labelvals(struct ksplice_pack *pack, int status_val);
 
 static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
-			   int size, long dst_mask);
+			   const struct ksplice_reloc_howto *howto);
 static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr);
 static bool patches_module(const struct module *a, const struct module *b);
@@ -1376,7 +1376,7 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	unsigned long sym_addr;
 	LIST_HEAD(vals);
 
-	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
+	canary_ret = contains_canary(pack, r->blank_addr, r->howto);
 	if (canary_ret < 0)
 		return UNEXPECTED;
 	if (canary_ret == 0) {
@@ -1412,13 +1412,14 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	release_vals(&vals);
 
 	ret = write_reloc_value(pack, r, r->blank_addr,
-				r->pcrel ? sym_addr - r->blank_addr : sym_addr);
+				r->howto->pcrel ? sym_addr - r->blank_addr :
+				sym_addr);
 	if (ret != OK)
 		return ret;
 
 	ksdebug(pack, "reloc: %lx to %s+%lx (S=%lx ", r->blank_addr,
 		r->symbol->label, r->addend, sym_addr);
-	switch (r->size) {
+	switch (r->howto->size) {
 	case 1:
 		ksdebug(pack, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
 		break;
@@ -1456,16 +1457,17 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 {
 	unsigned char bytes[sizeof(long)];
 	unsigned long val;
+	const struct ksplice_reloc_howto *howto = r->howto;
 
-	if (r->size <= 0 || r->size > sizeof(long)) {
+	if (howto->size <= 0 || howto->size > sizeof(long)) {
 		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
 		return UNEXPECTED;
 	}
 
-	if (probe_kernel_read(bytes, (void *)addr, r->size) == -EFAULT)
+	if (probe_kernel_read(bytes, (void *)addr, howto->size) == -EFAULT)
 		return NO_MATCH;
 
-	switch (r->size) {
+	switch (howto->size) {
 	case 1:
 		val = *(uint8_t *)bytes;
 		break;
@@ -1485,10 +1487,10 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 		return UNEXPECTED;
 	}
 
-	val &= r->dst_mask;
-	if (r->signed_addend)
-		val |= -(val & (r->dst_mask & ~(r->dst_mask >> 1)));
-	val <<= r->rightshift;
+	val &= howto->dst_mask;
+	if (howto->signed_addend)
+		val |= -(val & (howto->dst_mask & ~(howto->dst_mask >> 1)));
+	val <<= howto->rightshift;
 	val -= r->addend;
 	*valp = val;
 	return OK;
@@ -1499,24 +1501,25 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 unsigned long addr, unsigned long sym_addr)
 {
 	unsigned long val = sym_addr + r->addend;
-	val >>= r->rightshift;
-	switch (r->size) {
+	const struct ksplice_reloc_howto *howto = r->howto;
+	val >>= howto->rightshift;
+	switch (howto->size) {
 	case 1:
-		*(uint8_t *)addr =
-		    (*(uint8_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
+		*(uint8_t *)addr = (*(uint8_t *)addr & ~howto->dst_mask) |
+		    (val & howto->dst_mask);
 		break;
 	case 2:
-		*(uint16_t *)addr =
-		    (*(uint16_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
+		*(uint16_t *)addr = (*(uint16_t *)addr & ~howto->dst_mask) |
+		    (val & howto->dst_mask);
 		break;
 	case 4:
-		*(uint32_t *)addr =
-		    (*(uint32_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
+		*(uint32_t *)addr = (*(uint32_t *)addr & ~howto->dst_mask) |
+		    (val & howto->dst_mask);
 		break;
 #if BITS_PER_LONG >= 64
 	case 8:
-		*(uint64_t *)addr =
-		    (*(uint64_t *)addr & ~r->dst_mask) | (val & r->dst_mask);
+		*(uint64_t *)addr = (*(uint64_t *)addr & ~howto->dst_mask) |
+		    (val & howto->dst_mask);
 		break;
 #endif /* BITS_PER_LONG */
 	default:
@@ -1818,9 +1821,10 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 				return ret;
 			}
 			if (mode == RUN_PRE_DEBUG)
-				print_bytes(pack, run, r->size, pre, r->size);
-			pre += r->size;
-			run += r->size;
+				print_bytes(pack, run, r->howto->size, pre,
+					    r->howto->size);
+			pre += r->howto->size;
+			run += r->howto->size;
 			continue;
 		} else if (ret != NO_MATCH) {
 			return ret;
@@ -1991,15 +1995,19 @@ static abort_t lookup_reloc(struct ksplice_pack *pack,
 	const struct ksplice_reloc *r = *fingerp;
 	int canary_ret;
 
-	while (r < pack->helper_relocs_end && addr >= r->blank_addr + r->size)
+	while (r < pack->helper_relocs_end &&
+	       addr >= r->blank_addr + r->howto->size)
 		r++;
 	*fingerp = r;
 	if (r == pack->helper_relocs_end)
 		return NO_MATCH;
 	if (addr < r->blank_addr)
 		return NO_MATCH;
+	*relocp = r;
+	if (r->howto->type != KSPLICE_HOWTO_RELOC)
+		return OK;
 
-	canary_ret = contains_canary(pack, r->blank_addr, r->size, r->dst_mask);
+	canary_ret = contains_canary(pack, r->blank_addr, r->howto);
 	if (canary_ret < 0)
 		return UNEXPECTED;
 	if (canary_ret == 0) {
@@ -2012,7 +2020,6 @@ static abort_t lookup_reloc(struct ksplice_pack *pack,
 		ksdebug(pack, "Invalid nonzero relocation offset\n");
 		return UNEXPECTED;
 	}
-	*relocp = r;
 	return OK;
 }
 
@@ -2028,7 +2035,7 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	ret = read_reloc_value(pack, r, run_addr, &val);
 	if (ret != OK)
 		return ret;
-	if (r->pcrel)
+	if (r->howto->pcrel)
 		val += run_addr;
 
 	if (mode == RUN_PRE_INITIAL)
@@ -2036,7 +2043,7 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 			"found %s = %lx\n", run_addr, r->blank_addr,
 			r->symbol->label, r->addend, r->symbol->label, val);
 
-	if (contains_canary(pack, run_addr, r->size, r->dst_mask) != 0) {
+	if (contains_canary(pack, run_addr, r->howto) != 0) {
 		ksdebug(pack, "Aborted.  Unexpected canary in run code at %lx"
 			"\n", run_addr);
 		return UNEXPECTED;
@@ -2197,11 +2204,15 @@ static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
 	struct ksplice_export *exp;
 	list_for_each_entry(pack, &update->packs, list) {
 		for (exp = pack->exports; exp < pack->exports_end; exp++) {
+			struct ksplice_reloc_howto howto;
+			howto.size = sizeof(unsigned long);
+			howto.type = KSPLICE_HOWTO_RELOC;
+			howto.dst_mask = -1;
 			if (strcmp(exp->new_name, name) == 0 &&
 			    exp->sym != NULL &&
 			    contains_canary(pack,
 					    (unsigned long)&exp->sym->value,
-					    sizeof(unsigned long), -1) == 0)
+					    &howto) == 0)
 				return add_candidate_val(p, vals,
 							 exp->sym->value);
 		}
@@ -2725,22 +2736,22 @@ static void set_temp_labelvals(struct ksplice_pack *pack, int status)
 }
 
 static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
-			   int size, long dst_mask)
+			   const struct ksplice_reloc_howto *howto)
 {
-	switch (size) {
+	switch (howto->size) {
 	case 1:
-		return (*(uint8_t *)blank_addr & dst_mask) ==
-		    (KSPLICE_CANARY & dst_mask);
+		return (*(uint8_t *)blank_addr & howto->dst_mask) ==
+		    (KSPLICE_CANARY & howto->dst_mask);
 	case 2:
-		return (*(uint16_t *)blank_addr & dst_mask) ==
-		    (KSPLICE_CANARY & dst_mask);
+		return (*(uint16_t *)blank_addr & howto->dst_mask) ==
+		    (KSPLICE_CANARY & howto->dst_mask);
 	case 4:
-		return (*(uint32_t *)blank_addr & dst_mask) ==
-		    (KSPLICE_CANARY & dst_mask);
+		return (*(uint32_t *)blank_addr & howto->dst_mask) ==
+		    (KSPLICE_CANARY & howto->dst_mask);
 #if BITS_PER_LONG >= 64
 	case 8:
-		return (*(uint64_t *)blank_addr & dst_mask) ==
-		    (KSPLICE_CANARY & dst_mask);
+		return (*(uint64_t *)blank_addr & howto->dst_mask) ==
+		    (KSPLICE_CANARY & howto->dst_mask);
 #endif /* BITS_PER_LONG */
 	default:
 		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
