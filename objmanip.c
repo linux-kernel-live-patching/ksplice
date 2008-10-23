@@ -415,6 +415,8 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		     span < ss->spans.data + ss->spans.size; span++) {
 			if (span->new || span->patch)
 				keep_span(span);
+			else
+				span->keep = false;
 		}
 	}
 
@@ -495,7 +497,15 @@ void do_keep_helper(struct superbfd *isbfd)
 	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
-		ss->keep = ss->type == SS_TYPE_TEXT;
+		ss->keep = false;
+		struct span *span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (ss->type == SS_TYPE_TEXT)
+				keep_span(span);
+			else
+				span->keep = false;
+		}
 	}
 
 	asymbol **symp;
@@ -506,17 +516,10 @@ void do_keep_helper(struct superbfd *isbfd)
 		    (sym->flags & BSF_GLOBAL) != 0) {
 			struct supersect *sym_ss =
 			    fetch_supersect(isbfd, sym->section);
+			struct span *span = find_span(sym_ss, sym->value);
 			if (sym_ss->type != SS_TYPE_IGNORED)
-				sym_ss->keep = true;
+				keep_span(span);
 		}
-	}
-
-	struct span *span;
-	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		struct supersect *ss = fetch_supersect(isbfd, sect);
-		for (span = ss->spans.data;
-		     span < ss->spans.data + ss->spans.size; span++)
-			span->keep = ss->keep;
 	}
 
 	do {
@@ -2500,7 +2503,7 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 	span->size = size;
 	span->start = start;
 	span->ss = ss;
-	span->keep = false;
+	span->keep = true;
 	span->new = false;
 	span->patch = false;
 	span->match = NULL;
