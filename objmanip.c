@@ -186,6 +186,7 @@ static void compare_matched_spans(struct superbfd *newsbfd);
 static void compare_spans(struct span *old_span, struct span *new_span);
 static void update_nonzero_offsets(struct superbfd *sbfd);
 static void handle_nonzero_offset_relocs(struct supersect *ss);
+static void keep_span(struct span *span);
 
 static void init_objmanip_superbfd(struct superbfd *sbfd);
 static const char *label_lookup(struct superbfd *sbfd, asymbol *sym);
@@ -406,10 +407,8 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			if (span->new || span->patch) {
-				ss->keep = true;
-				span->keep = true;
-			}
+			if (span->new || span->patch)
+				keep_span(span);
 		}
 	}
 
@@ -1139,16 +1138,14 @@ void rm_some_exports(struct superbfd *sbfd, const struct export_desc *ed)
 		asymbol *sym;
 		read_reloc(ss, &ksym->value, sizeof(ksym->value), &sym);
 		span = new_span(ss, addr_offset(ss, ksym), sizeof(*ksym));
-		span->keep = str_in_set(sym->name, &ed->names);
-		if (span->keep)
-			ss->keep = true;
+		if (str_in_set(sym->name, &ed->names))
+			keep_span(span);
 
 		if (crc_ss != NULL) {
 			crc_span = new_span(crc_ss, addr_offset(crc_ss, crc),
 					    sizeof(*crc));
-			crc_span->keep = span->keep;
-			if (crc_span->keep)
-				crc_ss->keep = true;
+			if (span->keep)
+				keep_span(crc_span);
 		}
 
 		if (span->keep) {
@@ -1621,19 +1618,16 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 
 		read_reloc(ss, entry + s->addr_offset, sizeof(void *), &sym);
 		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
-		span->keep = sym_ss->keep;
-		if (span->keep)
-			ss->keep = true;
+		if (sym_ss->keep)
+			keep_span(span);
 
 		if (s->other_sect != NULL) {
 			arelent *reloc =
 			    find_reloc(ss, entry + s->other_offset);
 			assert(reloc != NULL);
 			struct span *sym_span = reloc_target_span(ss, reloc);
-			if (span->keep) {
-				sym_span->ss->keep = true;
-				sym_span->keep = true;
-			}
+			if (span->keep)
+				keep_span(sym_span);
 		}
 	}
 
@@ -1642,10 +1636,8 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 		struct span *addr_span = find_span(ss, (*relocp)->address);
 		struct span *target_span = reloc_target_span(ss, *relocp);
-		if (addr_span->keep && mode("keep-primary")) {
-			target_span->keep = true;
-			target_span->ss->keep = true;
-		}
+		if (addr_span->keep && mode("keep-primary"))
+			keep_span(target_span);
 	}
 }
 
@@ -1671,8 +1663,7 @@ void keep_referenced_sections(struct superbfd *sbfd)
 			sym_ss = fetch_supersect(sbfd, sym->section);
 			if (sym_ss->type == SS_TYPE_IGNORED)
 				continue;
-			target_span->keep = true;
-			sym_ss->keep = true;
+			keep_span(target_span);
 			changed = true;
 		}
 	}
@@ -2458,6 +2449,12 @@ static char *symbol_label(struct superbfd *sbfd, asymbol *sym)
 	}
 
 	return label;
+}
+
+static void keep_span(struct span *span)
+{
+	span->keep = true;
+	span->ss->keep = true;
 }
 
 static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
