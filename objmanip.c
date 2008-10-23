@@ -131,6 +131,16 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc);
 static void write_ksplice_reloc_howto(struct supersect *ss, const
 				      struct ksplice_reloc_howto *const *addr,
 				      reloc_howto_type *howto);
+static void write_ksplice_date_reloc(struct supersect *ss, unsigned long offset,
+				     const char *str,
+				     enum ksplice_reloc_howto_type type);
+static void write_ksplice_nonreloc_howto(struct supersect *ss,
+					 const struct ksplice_reloc_howto
+					 *const *addr,
+					 enum ksplice_reloc_howto_type type,
+					 int size);
+static void write_date_relocs(struct superbfd *sbfd, const char *str,
+			      enum ksplice_reloc_howto_type type);
 void load_ksplice_symbol_offsets(struct superbfd *sbfd);
 void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto);
 static void write_ksplice_section(struct span *span);
@@ -576,6 +586,8 @@ void do_finalize(struct superbfd *isbfd)
 			ss->keep = false;
 		}
 	}
+	write_date_relocs(isbfd, "<{DATE...}>", KSPLICE_HOWTO_DATE);
+	write_date_relocs(isbfd, "<{TIME}>", KSPLICE_HOWTO_TIME);
 	rm_relocs(isbfd);
 }
 
@@ -1542,6 +1554,72 @@ void blot_section(struct supersect *ss, int offset, reloc_howto_type *howto)
 	x = (x & ~howto->dst_mask) |
 	    ((bfd_vma)KSPLICE_CANARY & howto->dst_mask);
 	bfd_put(bits, ss->parent->abfd, x, address);
+}
+
+static void write_date_relocs(struct superbfd *sbfd, const char *str,
+			      enum ksplice_reloc_howto_type type)
+{
+	asection *sect;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (ss->type != SS_TYPE_STRING && ss->type != SS_TYPE_RODATA)
+			continue;
+		void *ptr;
+		for (ptr = ss->contents.data;
+		     ptr + strlen(str) < ss->contents.data + ss->contents.size;
+		     ptr++) {
+			if (strcmp((const char *)ptr, str) == 0)
+				write_ksplice_date_reloc(ss,
+							 addr_offset(ss, ptr),
+							 str, type);
+		}
+	}
+}
+
+static void write_ksplice_date_reloc(struct supersect *ss, unsigned long offset,
+				     const char *str,
+				     enum ksplice_reloc_howto_type type)
+{
+	struct supersect *kreloc_ss;
+	kreloc_ss = make_section(ss->parent, ".ksplice_relocs%s", ss->name);
+	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
+						 struct ksplice_reloc);
+
+	const char *filename = ss->parent->abfd->filename;
+	char *c = strstr(filename, ".KSPLICE");
+	int flen = (c == NULL ? strlen(filename) : c - filename);
+
+	char *label;
+	assert(asprintf(&label, "%s<%.*s>", str, flen, filename) >= 0);
+	write_ksplice_symbol_backend(kreloc_ss, &kreloc->symbol, NULL,
+				     label, NULL);
+
+	struct span *span = find_span(ss, offset);
+	write_reloc(kreloc_ss, &kreloc->blank_addr, &ss->symbol,
+		    offset + span->shift);
+	write_ksplice_nonreloc_howto(kreloc_ss, &kreloc->howto, type,
+				     strlen(str));
+}
+
+static void write_ksplice_nonreloc_howto(struct supersect *ss,
+					 const struct ksplice_reloc_howto
+					 *const *addr,
+					 enum ksplice_reloc_howto_type type,
+					 int size)
+{
+	struct supersect *khowto_ss =
+	    make_section(ss->parent, ".ksplice_reloc_howtos");
+	struct ksplice_reloc_howto *khowto =
+	    sect_grow(khowto_ss, 1, struct ksplice_reloc_howto);
+
+	khowto->type = type;
+	khowto->size = size;
+	khowto->pcrel = 0;
+	khowto->dst_mask = 0;
+	khowto->rightshift = 0;
+	khowto->signed_addend = 0;
+	write_reloc(ss, addr, &khowto_ss->symbol,
+		    addr_offset(khowto_ss, khowto));
 }
 
 static void write_ksplice_section(struct span *span)

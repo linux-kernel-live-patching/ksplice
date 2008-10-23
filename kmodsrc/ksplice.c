@@ -18,6 +18,7 @@
 
 #include <linux/module.h>
 #include <linux/version.h>
+#include <linux/ctype.h>
 #if defined CONFIG_DEBUG_FS || LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
 #include <linux/debugfs.h>
 #else /* CONFIG_DEBUG_FS */
@@ -544,6 +545,11 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode);
+static abort_t handle_howto_date(struct ksplice_pack *pack,
+				 const struct ksplice_section *sect,
+				 const struct ksplice_reloc *r,
+				 unsigned long run_addr,
+				 enum run_pre_mode mode);
 static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 				  const struct ksplice_section *sect,
 				  const struct ksplice_reloc *r,
@@ -2050,10 +2056,62 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	switch (r->howto->type) {
 	case KSPLICE_HOWTO_RELOC:
 		return handle_howto_reloc(pack, sect, r, run_addr, mode);
+	case KSPLICE_HOWTO_DATE:
+	case KSPLICE_HOWTO_TIME:
+		return handle_howto_date(pack, sect, r, run_addr, mode);
 	default:
 		ksdebug(pack, "Unexpected howto type %d\n", r->howto->type);
 		return UNEXPECTED;
 	}
+}
+
+static abort_t handle_howto_date(struct ksplice_pack *pack,
+				 const struct ksplice_section *sect,
+				 const struct ksplice_reloc *r,
+				 unsigned long run_addr, enum run_pre_mode mode)
+{
+	abort_t ret;
+	char *buf = kmalloc(r->howto->size, GFP_KERNEL);
+
+	if (buf == NULL)
+		return OUT_OF_MEMORY;
+	if (probe_kernel_read(buf, (void *)run_addr, r->howto->size) == -EFAULT) {
+		ret = NO_MATCH;
+		goto out;
+	}
+
+	switch (r->howto->type) {
+	case KSPLICE_HOWTO_TIME:
+		if (isdigit(buf[0]) && isdigit(buf[1]) && buf[2] == ':' &&
+		    isdigit(buf[3]) && isdigit(buf[4]) && buf[5] == ':' &&
+		    isdigit(buf[6]) && isdigit(buf[7]))
+			ret = OK;
+		else
+			ret = NO_MATCH;
+		break;
+	case KSPLICE_HOWTO_DATE:
+		if (isalpha(buf[0]) && isalpha(buf[1]) && isalpha(buf[2]) &&
+		    buf[3] == ' ' && (buf[4] == ' ' || isdigit(buf[4])) &&
+		    isdigit(buf[5]) && buf[6] == ' ' && isdigit(buf[7]) &&
+		    isdigit(buf[8]) && isdigit(buf[9]) && isdigit(buf[10]))
+			ret = OK;
+		else
+			ret = NO_MATCH;
+		break;
+	default:
+		ret = UNEXPECTED;
+	}
+	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL)
+		ksdebug(pack, "%s string: \"%.*s\" does not match format\n",
+			r->howto->type == KSPLICE_HOWTO_DATE ? "date" : "time",
+			r->howto->size, buf);
+
+	if (ret != OK)
+		goto out;
+	ret = create_labelval(pack, r->symbol, run_addr, TEMP);
+out:
+	kfree(buf);
+	return ret;
 }
 
 static abort_t handle_howto_reloc(struct ksplice_pack *pack,

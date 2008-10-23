@@ -29,6 +29,8 @@ struct ksplice_reloc {
 
 enum ksplice_reloc_howto_type {
 	KSPLICE_HOWTO_RELOC,
+	KSPLICE_HOWTO_DATE,
+	KSPLICE_HOWTO_TIME,
 };
 
 /**
