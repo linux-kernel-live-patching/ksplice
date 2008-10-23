@@ -640,7 +640,7 @@ static bool starts_with(const char *str, const char *prefix);
 static bool singular(struct list_head *list);
 static void *bsearch(const void *key, const void *base, size_t n,
 		     size_t size, int (*cmp)(const void *key, const void *elt));
-static int compare_reloc_addresses(const void *a, const void *b);
+static int compare_relocs(const void *a, const void *b);
 static int reloc_bsearch_compare(const void *key, const void *elt);
 
 /* Debugging */
@@ -720,7 +720,7 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 
 	sort(pack->helper_relocs,
 	     (pack->helper_relocs_end - pack->helper_relocs),
-	     sizeof(*pack->helper_relocs), compare_reloc_addresses, NULL);
+	     sizeof(*pack->helper_relocs), compare_relocs, NULL);
 	sort(pack->helper_sections,
 	     (pack->helper_sections_end - pack->helper_sections),
 	     sizeof(*pack->helper_sections), compare_section_labels, NULL);
@@ -1850,6 +1850,7 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 					    r->howto->size);
 			pre += r->howto->size;
 			run += r->howto->size;
+			finger++;
 			continue;
 		} else if (ret != NO_MATCH) {
 			return ret;
@@ -2021,7 +2022,8 @@ static abort_t lookup_reloc(struct ksplice_pack *pack,
 	int canary_ret;
 
 	while (r < pack->helper_relocs_end &&
-	       addr >= r->blank_addr + r->howto->size)
+	       addr >= r->blank_addr + r->howto->size &&
+	       !(addr == r->blank_addr && r->howto->size == 0))
 		r++;
 	*fingerp = r;
 	if (r == pack->helper_relocs_end)
@@ -2926,7 +2928,7 @@ static void *bsearch(const void *key, const void *base, size_t n,
 	return NULL;
 }
 
-static int compare_reloc_addresses(const void *a, const void *b)
+static int compare_relocs(const void *a, const void *b)
 {
 	const struct ksplice_reloc *ra = a, *rb = b;
 	if (ra->blank_addr > rb->blank_addr)
@@ -2934,7 +2936,7 @@ static int compare_reloc_addresses(const void *a, const void *b)
 	else if (ra->blank_addr < rb->blank_addr)
 		return -1;
 	else
-		return 0;
+		return ra->howto->size - rb->howto->size;
 }
 
 #ifdef KSPLICE_STANDALONE
