@@ -420,7 +420,7 @@ static bool is_nop(struct ud *ud)
 		return true;
 	case UD_Imov:
 		return ud->operand[0].type == UD_OP_REG &&
-		    ud->operand[0].type == UD_OP_REG &&
+		    ud->operand[1].type == UD_OP_REG &&
 		    ud->operand[2].type == UD_NONE &&
 		    ud->operand[0].base == ud->operand[1].base;
 	case UD_Ixchg:
