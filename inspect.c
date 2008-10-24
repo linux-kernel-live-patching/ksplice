@@ -76,10 +76,10 @@ char *str_ksplice_symbolp(struct supersect *ptr_ss,
 void show_ksplice_reloc(struct supersect *ss,
 			const struct ksplice_reloc *kreloc)
 {
-	printf("blank_addr: %s\n"
-	       "symbol: %s\n"
-	       "addend: %lx\n"
-	       "pcrel: %x  size: %x  dst_mask: %lx  rightshift: %x\n"
+	printf("  blank_addr: %s\n"
+	       "  symbol: %s\n"
+	       "  addend: %lx\n"
+	       "  pcrel: %x  size: %x  dst_mask: %lx  rightshift: %x\n"
 	       "\n",
 	       str_pointer(ss, (void *const *)&kreloc->blank_addr),
 	       str_ksplice_symbolp(ss, &kreloc->symbol),
@@ -92,17 +92,15 @@ void show_ksplice_reloc(struct supersect *ss,
 
 void show_ksplice_relocs(struct supersect *kreloc_ss)
 {
-	printf("KSPLICE RELOCATIONS IN SECTION %s:\n\n", kreloc_ss->name);
 	const struct ksplice_reloc *kreloc;
 	for (kreloc = kreloc_ss->contents.data; (void *)kreloc <
 	     kreloc_ss->contents.data + kreloc_ss->contents.size; kreloc++)
 		show_ksplice_reloc(kreloc_ss, kreloc);
-	printf("\n");
 }
 
 void show_ksplice_section_flags(const struct ksplice_section *ksect)
 {
-	printf("flags:");
+	printf("  flags:");
 	if (ksect->flags & KSPLICE_SECTION_RODATA)
 		printf(" rodata");
 	if (ksect->flags & KSPLICE_SECTION_TEXT)
@@ -115,8 +113,8 @@ void show_ksplice_section_flags(const struct ksplice_section *ksect)
 void show_ksplice_section(struct supersect *ss,
 			  const struct ksplice_section *ksect)
 {
-	printf("symbol: %s\n"
-	       "address: %s  size: %lx\n",
+	printf("  symbol: %s\n"
+	       "  address: %s  size: %lx\n",
 	       str_ksplice_symbolp(ss, &ksect->symbol),
 	       str_pointer(ss, (void *const *)&ksect->address),
 	       read_num(ss, &ksect->size));
@@ -126,19 +124,17 @@ void show_ksplice_section(struct supersect *ss,
 
 void show_ksplice_sections(struct supersect *ksect_ss)
 {
-	printf("KSPLICE SECTIONS:\n\n");
 	struct ksplice_section *ksect;
 	for (ksect = ksect_ss->contents.data; (void *)ksect <
 	     ksect_ss->contents.data + ksect_ss->contents.size; ksect++)
 		show_ksplice_section(ksect_ss, ksect);
-	printf("\n");
 }
 
 void show_ksplice_patch(struct supersect *ss,
 			const struct ksplice_patch *kpatch)
 {
-	printf("symbol: %s\n"
-	       "repladdr: %s\n"
+	printf("  symbol: %s\n"
+	       "  repladdr: %s\n"
 	       "\n",
 	       str_ksplice_symbolp(ss, &kpatch->symbol),
 	       str_pointer(ss, (void *const *)&kpatch->repladdr));
@@ -146,30 +142,26 @@ void show_ksplice_patch(struct supersect *ss,
 
 void show_ksplice_patches(struct supersect *kpatch_ss)
 {
-	printf("KSPLICE PATCHES:\n\n");
 	const struct ksplice_patch *kpatch;
 	for (kpatch = kpatch_ss->contents.data; (void *)kpatch <
 	     kpatch_ss->contents.data + kpatch_ss->contents.size; kpatch++)
 		show_ksplice_patch(kpatch_ss, kpatch);
-	printf("\n");
 }
 
 void show_ksplice_export(struct supersect *ss, const struct ksplice_export *exp)
 {
-	printf("name: %s\n"
-	       "newname: %s\n"
+	printf("  name: %s\n"
+	       "  newname: %s\n"
 	       "\n",
 	       read_string(ss, &exp->name), read_string(ss, &exp->new_name));
 }
 
 void show_ksplice_exports(struct supersect *export_ss)
 {
-	printf("KSPLICE EXPORTS:\n\n");
 	const struct ksplice_export *exp;
 	for (exp = export_ss->contents.data; (void *)exp <
 	     export_ss->contents.data + export_ss->contents.size; exp++)
 		show_ksplice_export(export_ss, exp);
-	printf("\n");
 }
 
 void show_ksplice_system_map(struct supersect *ss,
@@ -182,12 +174,75 @@ void show_ksplice_system_map(struct supersect *ss,
 
 void show_ksplice_system_maps(struct supersect *smap_ss)
 {
-	printf("KSPLICE SYSTEM.MAP:\n\n");
 	const struct ksplice_system_map *smap;
 	for (smap = smap_ss->contents.data;
 	     (void *)smap < smap_ss->contents.data + smap_ss->contents.size;
 	     smap++)
 		show_ksplice_system_map(smap_ss, smap);
+}
+
+struct inspect_section {
+	const char *prefix;
+	const char *header;
+	const char *notfound;
+	void (*show)(struct supersect *ss);
+};
+
+const struct inspect_section inspect_sections[] = {
+	{
+		.prefix = ".ksplice_init_relocs",
+		.header = "KSPLICE INIT RELOCATIONS",
+		.notfound = "No ksplice init relocations.\n",
+		.show = show_ksplice_relocs,
+	},
+	{
+		.prefix = ".ksplice_relocs",
+		.header = "KSPLICE RELOCATIONS",
+		.notfound = "No ksplice relocations.\n",
+		.show = show_ksplice_relocs,
+	},
+	{
+		.prefix = ".ksplice_sections",
+		.header = "KSPLICE SECTIONS",
+		.notfound = "No ksplice sections.\n",
+		.show = show_ksplice_sections,
+	},
+	{
+		.prefix = ".ksplice_patches",
+		.header = "KSPLICE PATCHES",
+		.notfound = "No ksplice patches.\n",
+		.show = show_ksplice_patches,
+	},
+	{
+		.prefix = ".ksplice_exports",
+		.header = "KSPLICE EXPORTS",
+		.notfound = "No ksplice exports.\n",
+		.show = show_ksplice_exports,
+	},
+	{
+		.prefix = ".ksplice_system_map",
+		.header = "KSPLICE SYSTEM.MAP",
+		.notfound = "No ksplice System.map.\n",
+		.show = show_ksplice_system_maps,
+	},
+}, *const inspect_sections_end = *(&inspect_sections + 1);
+
+static void show_inspect_section(struct superbfd *sbfd,
+				 const struct inspect_section *isect)
+{
+	bool found = false;
+	asection *sect;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (starts_with(ss->name, isect->prefix) &&
+		    ss->contents.size != 0) {
+			printf("%s IN [%s]:\n", isect->header, sect->name);
+			found = true;
+			isect->show(ss);
+		}
+	}
+	if (!found)
+		printf("%s", isect->notfound);
 	printf("\n");
 }
 
@@ -204,64 +259,9 @@ int main(int argc, char *argv[])
 	assert(bfd_check_format_matches(ibfd, bfd_object, &matching));
 
 	struct superbfd *sbfd = fetch_superbfd(ibfd);
-
-	asection *kreloc_init_sect =
-	    bfd_get_section_by_name(ibfd, ".ksplice_init_relocs");
-	if (kreloc_init_sect != NULL) {
-		struct supersect *kreloc_init_ss =
-		    fetch_supersect(sbfd, kreloc_init_sect);
-		show_ksplice_relocs(kreloc_init_ss);
-	} else {
-		printf("No ksplice init relocations.\n\n");
-	}
-
-	asection *kreloc_sect = bfd_get_section_by_name(ibfd,
-							".ksplice_relocs");
-	if (kreloc_sect != NULL) {
-		struct supersect *kreloc_ss =
-		    fetch_supersect(sbfd, kreloc_sect);
-		show_ksplice_relocs(kreloc_ss);
-	} else {
-		printf("No ksplice relocations.\n\n");
-	}
-
-	asection *ksect_sect = bfd_get_section_by_name(ibfd,
-						       ".ksplice_sections");
-	if (ksect_sect != NULL) {
-		struct supersect *ksect_ss = fetch_supersect(sbfd, ksect_sect);
-		show_ksplice_sections(ksect_ss);
-	} else {
-		printf("No ksplice sections.\n\n");
-	}
-
-	asection *kpatch_sect = bfd_get_section_by_name(ibfd,
-							".ksplice_patches");
-	if (kpatch_sect != NULL) {
-		struct supersect *kpatch_ss =
-		    fetch_supersect(sbfd, kpatch_sect);
-		show_ksplice_patches(kpatch_ss);
-	} else {
-		printf("No ksplice patches.\n\n");
-	}
-
-	asection *export_sect = bfd_get_section_by_name(ibfd,
-							".ksplice_exports");
-	if (export_sect != NULL) {
-		struct supersect *export_ss =
-		    fetch_supersect(sbfd, export_sect);
-		show_ksplice_exports(export_ss);
-	} else {
-		printf("No ksplice exports.\n\n");
-	}
-
-	asection *smap_sect = bfd_get_section_by_name(ibfd,
-						      ".ksplice_system_map");
-	if (smap_sect != NULL) {
-		struct supersect *smap_ss = fetch_supersect(sbfd, smap_sect);
-		show_ksplice_system_maps(smap_ss);
-	} else {
-		printf("No ksplice System.map.\n\n");
-	}
+	const struct inspect_section *isect;
+	for (isect = inspect_sections; isect < inspect_sections_end; isect++)
+		show_inspect_section(sbfd, isect);
 
 	return 0;
 }
