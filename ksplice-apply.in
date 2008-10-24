@@ -104,7 +104,8 @@ if($stage ne 'applied') {
 	die;
 }
 mkpath("/var/run/ksplice/updates/$kid");
-copy("patch", "/var/run/ksplice/updates/$kid/patch");
+copy("patch", "/var/run/ksplice/updates/$kid/patch") if (-e "patch");
+copy("description", "/var/run/ksplice/updates/$kid/description") if (-e "description");
 foreach my $helper (glob('ksplice-*-helper.ko')) {
 	$helper =~ s/-/_/g;
 	$helper =~ s/\.ko$//;

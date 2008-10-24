@@ -64,6 +64,20 @@ sub view_file {
 	close(PATCH);
 }
 
+sub show_kid {
+	my ($kid) = @_;
+	if ($Verbose::level < 0) {
+		print "$kid\n";
+	} else {
+		my $desc = get_short_description($kid);
+		if (defined($desc)) {
+			print "$kid: $desc";
+		} else {
+			print "$kid: no description available\n";
+		}
+	}
+}
+
 sub view_list {
 	foreach(split(/\n/, runstr("lsmod"))) {
 		next unless my ($mid) = m/^ksplice_(\S*)\s/;
@@ -71,14 +85,14 @@ sub view_list {
 		($kid = $mid) =~ s/[-_].*$//;
 		next unless (-e "/sys/module/$module/ksplice/stage");
 		open STAGE, '<', "/sys/module/$module/ksplice/stage" or next;
-		print "$kid\n" if(<STAGE> eq "applied\n");
+		show_kid($kid) if(<STAGE> eq "applied\n");
 		close STAGE;
 	}
 	if (-e "/sys/kernel/ksplice") {
 		chdir("/sys/kernel/ksplice");
 		foreach $update (glob("*")) {
 			($kid = $update) =~ s/^ksplice_//;
-			print "$kid\n" if(get_stage($kid) eq "applied");
+			show_kid($kid) if(get_stage($kid) eq "applied");
 		}
 	}
 }

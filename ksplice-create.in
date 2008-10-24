@@ -23,6 +23,7 @@ use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
 my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
+my $description;
 my $series = 0;
 my @only_targets;
 my @extra_match;
@@ -32,6 +33,7 @@ my @patch_opt = "-p1";
 GetOptions(@common_options,
 	"id=s" => \$kid,
 	"patch=s" => \$patchfile,
+	"description=s" => \$description,
 	"diffext=s" => \$diffext,
 	"prebuild" => \$prebuild,
 	"series!" => \$series,
@@ -224,6 +226,11 @@ runval(@make_kmodsrc, "modules", "KSPLICE_MODULES=@modules");
 chdir($tmpdir);
 mkdir($ksplice);
 move($patchfile, $ksplice);
+if ($description) {
+	open(DESCRIPTION, ">$ksplice/description");
+	print DESCRIPTION "$description\n";
+	close(DESCRIPTION);
+}
 foreach my $mod (@modules) {
 	(my $target = $mod) =~ s/-/_/g;
 	my $mid = "${kid}_$target";

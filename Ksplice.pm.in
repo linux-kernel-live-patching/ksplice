@@ -21,7 +21,7 @@ our @EXPORT = qw(
 	$datadir $libexecdir @common_options $help
 	child_error runval runval_raw runstr runstr_err runval_in runval_infile unpack_update
 	get_stage set_stage set_debug_level get_abort_cause get_patch update_loaded
-	get_debug_output get_conflicts
+	get_debug_output get_conflicts get_short_description
 	abs_path getcwd basename dirname tmpdir
 	copy rename move utime chdir mkdir mkpath unlink rmtree tempfile tempdir
 );
@@ -217,6 +217,14 @@ sub get_conflicts {
 sub get_patch {
 	my ($kid) = @_;
 	my $result = read_file("/var/run/ksplice/updates/$kid/patch");
+	return $result;
+}
+
+sub get_short_description {
+	my ($kid) = @_;
+	open(INPUT, "<", "/var/run/ksplice/updates/$kid/description") or return undef;
+	my $result = <INPUT>;
+	close(INPUT);
 	return $result;
 }
 
