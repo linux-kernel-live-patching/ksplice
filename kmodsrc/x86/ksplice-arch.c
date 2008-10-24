@@ -41,9 +41,8 @@ extern ftrace_func_t ftrace_trace_function;
 #endif /* CONFIG_FTRACE */
 
 static abort_t compare_operands(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
+				struct ksplice_section *sect,
 				const struct ksplice_reloc **fingerp,
-				const unsigned char **match_map,
 				const unsigned char *run_start,
 				const unsigned char *run,
 				const unsigned char *pre, struct ud *run_ud,
@@ -67,7 +66,7 @@ void initialize_ksplice_ud(struct ud *ud)
 }
 
 static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
+				struct ksplice_section *sect,
 				unsigned long run_addr,
 				struct list_head *safety_records,
 				enum run_pre_mode mode)
@@ -105,6 +104,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 		return OUT_OF_MEMORY;
 	memset(match_map, 0, sizeof(*match_map) * sect->size);
 	match_map[0] = run_start;
+	sect->match_map = match_map;
 
 	while (1) {
 		if (ud_disassemble(&pre_ud) == 0) {
@@ -246,9 +246,9 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
 
 		for (i = 0; i < ARRAY_SIZE(run_ud.operand); i++) {
-			ret = compare_operands(pack, sect, &finger, match_map,
-					       run_start, run, pre, &run_ud,
-					       &pre_ud, i, mode);
+			ret = compare_operands(pack, sect, &finger, run_start,
+					       run, pre, &run_ud, &pre_ud, i,
+					       mode);
 			if (ret != OK)
 				goto out;
 		}
@@ -256,14 +256,16 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 		pre += ud_insn_len(&pre_ud);
 	}
 out:
-	vfree(match_map);
+	if (ret != OK || mode != RUN_PRE_FINAL) {
+		vfree(match_map);
+		sect->match_map = NULL;
+	}
 	return ret;
 }
 
 static abort_t compare_operands(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
+				struct ksplice_section *sect,
 				const struct ksplice_reloc **fingerp,
-				const unsigned char **match_map,
 				const unsigned char *run_start,
 				const unsigned char *run,
 				const unsigned char *pre, struct ud *run_ud,
@@ -279,6 +281,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 	struct ud_operand *pre_op = &pre_ud->operand[opnum];
 	uint8_t run_off = ud_prefix_len(run_ud);
 	uint8_t pre_off = ud_prefix_len(pre_ud);
+	const unsigned char **match_map = sect->match_map;
 	const struct ksplice_reloc *r;
 	for (i = 0; i < opnum; i++) {
 		run_off += ud_operand_len(&run_ud->operand[i]);

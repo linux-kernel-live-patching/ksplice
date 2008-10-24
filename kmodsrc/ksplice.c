@@ -503,9 +503,9 @@ static void __attribute__((noreturn)) ksplice_deleted(void);
 static abort_t match_pack_sections(struct ksplice_pack *pack,
 				   bool consider_data_sections);
 static abort_t find_section(struct ksplice_pack *pack,
-			    const struct ksplice_section *sect);
+			    struct ksplice_section *sect);
 static abort_t try_addr(struct ksplice_pack *pack,
-			const struct ksplice_section *sect,
+			struct ksplice_section *sect,
 			unsigned long run_addr,
 			struct list_head *safety_records,
 			enum run_pre_mode mode);
@@ -517,7 +517,7 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 #ifndef CONFIG_FUNCTION_DATA_SECTIONS
 /* defined in arch/ARCH/kernel/ksplice-arch.c */
 static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
+				struct ksplice_section *sect,
 				unsigned long run_addr,
 				struct list_head *safety_records,
 				enum run_pre_mode mode);
@@ -527,11 +527,11 @@ static void print_bytes(struct ksplice_pack *pack,
 			const unsigned char *pre, int prec);
 #if defined(KSPLICE_STANDALONE) && !defined(CONFIG_KALLSYMS)
 static abort_t brute_search(struct ksplice_pack *pack,
-			    const struct ksplice_section *sect,
+			    struct ksplice_section *sect,
 			    const void *start, unsigned long len,
 			    struct list_head *vals);
 static abort_t brute_search_all(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
+				struct ksplice_section *sect,
 				struct list_head *vals);
 #endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
 static const struct ksplice_reloc *
@@ -708,6 +708,7 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 {
 	struct update *update;
 	struct ksplice_patch *p;
+	struct ksplice_section *s;
 	int ret = 0;
 
 #ifdef KSPLICE_STANDALONE
@@ -751,6 +752,8 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 
 	for (p = pack->patches; p < pack->patches_end; p++)
 		p->vaddr = NULL;
+	for (s = pack->helper_sections; s < pack->helper_sections_end; s++)
+		s->match_map = NULL;
 
 	list_for_each_entry(update, &updates, list) {
 		if (strcmp(pack->kid, update->kid) == 0) {
@@ -926,9 +929,17 @@ static abort_t apply_update(struct update *update)
 	ret = apply_patches(update);
 out:
 	list_for_each_entry(pack, &update->packs, list) {
+		struct ksplice_section *s;
 		if (update->stage == STAGE_PREPARING)
 			clear_list(&pack->safety_records, struct safety_record,
 				   list);
+		for (s = pack->helper_sections; s < pack->helper_sections_end;
+		     s++) {
+			if (s->match_map != NULL) {
+				vfree(s->match_map);
+				s->match_map = NULL;
+			}
+		}
 	}
 	mutex_unlock(&module_mutex);
 	return ret;
@@ -1630,7 +1641,7 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 }
 
 static abort_t find_section(struct ksplice_pack *pack,
-			    const struct ksplice_section *sect)
+			    struct ksplice_section *sect)
 {
 	int i;
 	abort_t ret;
@@ -1730,7 +1741,7 @@ static abort_t find_section(struct ksplice_pack *pack,
 }
 
 static abort_t try_addr(struct ksplice_pack *pack,
-			const struct ksplice_section *sect,
+			struct ksplice_section *sect,
 			unsigned long run_addr,
 			struct list_head *safety_records,
 			enum run_pre_mode mode)
@@ -1919,7 +1930,7 @@ static void print_bytes(struct ksplice_pack *pack,
 
 #if defined(KSPLICE_STANDALONE) && !defined(CONFIG_KALLSYMS)
 static abort_t brute_search(struct ksplice_pack *pack,
-			    const struct ksplice_section *sect,
+			    struct ksplice_section *sect,
 			    const void *start, unsigned long len,
 			    struct list_head *vals)
 {
@@ -1954,7 +1965,7 @@ static abort_t brute_search(struct ksplice_pack *pack,
 }
 
 static abort_t brute_search_all(struct ksplice_pack *pack,
-				const struct ksplice_section *sect,
+				struct ksplice_section *sect,
 				struct list_head *vals)
 {
 	struct module *m;
