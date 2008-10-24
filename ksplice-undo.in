@@ -78,6 +78,7 @@ unless($failed == 0) {
 	}
 	die;
 }
+rmtree("/var/run/ksplice/updates/$kid");
 exit(0);
 
 sub print_error {
