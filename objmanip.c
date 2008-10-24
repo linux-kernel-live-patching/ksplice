@@ -1243,8 +1243,7 @@ void rm_some_relocs(struct supersect *ss)
 
 		if (mode("keep-primary") &&
 		    (bfd_is_const_section(sym_ptr->section) ||
-		     reloc_target_span(ss, *relocp)->new ||
-		     !find_span(ss, (*relocp)->address)->keep))
+		     reloc_target_span(ss, *relocp)->new))
 			rm_reloc = false;
 
 		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
@@ -1252,6 +1251,9 @@ void rm_some_relocs(struct supersect *ss)
 
 		if (strcmp(sym_ptr->name, "mcount") == 0 &&
 		    bfd_is_und_section(sym_ptr->section))
+			rm_reloc = false;
+
+		if (!find_span(ss, (*relocp)->address)->keep)
 			rm_reloc = false;
 
 		if (rm_reloc)
