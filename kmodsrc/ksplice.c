@@ -2134,7 +2134,8 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 				  unsigned long run_addr,
 				  enum run_pre_mode mode)
 {
-	struct ksplice_section *sym_sect;
+	struct ksplice_section *sym_sect = symbol_section(pack, r->symbol);
+	unsigned long offset = r->target_addend;
 	unsigned long val;
 	abort_t ret;
 
@@ -2144,11 +2145,57 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 	if (r->howto->pcrel)
 		val += run_addr;
 
+#ifdef KSPLICE_STANDALONE
+	/* The match_map is only used in KSPLICE_STANDALONE */
+	if (sym_sect == NULL || sym_sect->match_map == NULL || offset == 0) {
+		;
+	} else if (offset < 0 || offset >= sym_sect->size) {
+		ksdebug(pack, "Out of range relocation: %s+%lx -> %s+%lx",
+			sect->symbol->label, r->blank_addr - sect->address,
+			r->symbol->label, offset);
+		return NO_MATCH;
+	} else if (sect == sym_sect && sect->match_map[offset] == NULL) {
+		sym_sect->match_map[offset] =
+		    (const unsigned char *)r->symbol->value + offset;
+	} else if (sect == sym_sect && (unsigned long)sect->match_map[offset] ==
+		   r->symbol->value + offset) {
+		;
+	} else if (sect == sym_sect) {
+		ksdebug(pack, "Relocations to nonmatching locations within "
+			"section %s: %lx does not match %lx\n",
+			sect->symbol->label, offset,
+			(unsigned long)sect->match_map[offset] -
+			r->symbol->value);
+		return NO_MATCH;
+	} else if ((sym_sect->flags & KSPLICE_SECTION_MATCHED) == 0) {
+		if (mode == RUN_PRE_INITIAL)
+			ksdebug(pack, "Delaying matching of %s due to reloc "
+				"from to unmatching section: %s+%lx\n",
+				sect->symbol->label, r->symbol->label, offset);
+		return NO_MATCH;
+	} else if (sym_sect->match_map[offset] == NULL) {
+		if (mode == RUN_PRE_INITIAL)
+			ksdebug(pack, "Relocation not to instruction boundary: "
+				"%s+%lx -> %s+%lx", sect->symbol->label,
+				r->blank_addr - sect->address, r->symbol->label,
+				offset);
+		return NO_MATCH;
+	} else if ((unsigned long)sym_sect->match_map[offset] !=
+		   r->symbol->value + offset) {
+		if (mode == RUN_PRE_INITIAL)
+			ksdebug(pack, "Match map shift %s+%lx: %lx != %lx\n",
+				r->symbol->label, offset,
+				r->symbol->value + offset,
+				(unsigned long)sym_sect->match_map[offset]);
+		val += r->symbol->value + offset -
+		    (unsigned long)sym_sect->match_map[offset];
+	}
+#endif /* KSPLICE_STANDALONE */
+
 	if (mode == RUN_PRE_INITIAL)
 		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx to %s+%lx: "
 			"found %s = %lx\n", run_addr, r->blank_addr,
-			r->symbol->label, r->target_addend, r->symbol->label,
-			val);
+			r->symbol->label, offset, r->symbol->label, val);
 
 	if (contains_canary(pack, run_addr, r->howto) != 0) {
 		ksdebug(pack, "Aborted.  Unexpected canary in run code at %lx"
@@ -2167,7 +2214,6 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 
 	if (ret != OK)
 		return ret;
-	sym_sect = symbol_section(pack, r->symbol);
 	if (sym_sect != NULL && (sym_sect->flags & KSPLICE_SECTION_MATCHED) == 0
 	    && (sym_sect->flags & KSPLICE_SECTION_STRING) != 0) {
 		if (mode == RUN_PRE_INITIAL)
