@@ -75,7 +75,7 @@ enum stage {
 };
 
 enum run_pre_mode {
-	RUN_PRE_INITIAL, RUN_PRE_DEBUG, RUN_PRE_FINAL
+	RUN_PRE_INITIAL, RUN_PRE_DEBUG, RUN_PRE_FINAL, RUN_PRE_SILENT
 };
 
 enum { NOVAL, TEMP, VAL };

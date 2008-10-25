@@ -40,6 +40,13 @@ extern const char thread_return[];
 extern ftrace_func_t ftrace_trace_function;
 #endif /* CONFIG_FTRACE */
 
+static abort_t compare_instructions(struct ksplice_pack *pack,
+				    struct ksplice_section *sect,
+				    const struct ksplice_reloc **fingerp,
+				    const unsigned char *run_start,
+				    const unsigned char *run,
+				    const unsigned char *pre, struct ud *run_ud,
+				    struct ud *pre_ud, enum run_pre_mode mode);
 static abort_t compare_operands(struct ksplice_pack *pack,
 				struct ksplice_section *sect,
 				const struct ksplice_reloc **fingerp,
@@ -71,7 +78,6 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				struct list_head *safety_records,
 				enum run_pre_mode mode)
 {
-	int i;
 	abort_t ret;
 	const unsigned char *run, *pre, *run_start, *pre_start, *safety_start;
 	struct ud pre_ud, run_ud;
@@ -79,7 +85,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	const struct ksplice_reloc *finger;
 	unsigned long pre_offset, run_offset;
 	bool run_unconditional = false;
-	const struct ksplice_reloc *r;
+	bool pre_nop = true, run_nop = true;
 
 	if (sect->size == 0)
 		return NO_MATCH;
@@ -108,7 +114,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 	sect->match_map = match_map;
 
 	while (1) {
-		if (ud_disassemble(&pre_ud) == 0) {
+		if (pre_nop && ud_disassemble(&pre_ud) == 0) {
 			/* Ran out of pre bytes to match; we're done! */
 			unsigned long safety_offset = run - safety_start;
 			ret = create_safety_record(pack, sect, safety_records,
@@ -116,8 +122,15 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 						   safety_offset);
 			goto out;
 		}
-		if (is_nop(&pre_ud) ||
-		    is_mcount_call(&pre_ud, (unsigned long)pre)) {
+		if (run_nop && ud_disassemble(&run_ud) == 0) {
+			ret = NO_MATCH;
+			goto out;
+		}
+		pre_nop = is_nop(&pre_ud) ||
+		    is_mcount_call(&pre_ud, (unsigned long)pre);
+		run_nop = is_nop(&run_ud) ||
+		    is_mcount_call(&run_ud, (unsigned long)run);
+		if (pre_nop && !run_nop) {
 			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(pack, "| nop: ");
 				print_bytes(pack, run, 0, pre,
@@ -126,23 +139,34 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			pre += ud_insn_len(&pre_ud);
 			continue;
 		}
-		pre_offset = pre - pre_start;
-
-		while (1) {
-			if (ud_disassemble(&run_ud) == 0) {
-				ret = NO_MATCH;
-				goto out;
-			}
-			if (!is_nop(&run_ud) &&
-			    !is_mcount_call(&run_ud, (unsigned long)run))
-				break;
+		if (run_nop && !pre_nop) {
 			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(pack, "| nop: ");
 				print_bytes(pack, run, ud_insn_len(&run_ud),
 					    pre, 0);
 			}
 			run += ud_insn_len(&run_ud);
+			continue;
 		}
+		if (run_nop && pre_nop) {
+			ret = compare_instructions(pack, sect, &finger,
+						   run_start, run, pre, &run_ud,
+						   &pre_ud, RUN_PRE_SILENT);
+			if (ret != OK) {
+				if (mode == RUN_PRE_DEBUG) {
+					ksdebug(pack, "| nop: ");
+					print_bytes(pack, run,
+						    ud_insn_len(&run_ud), pre,
+						    ud_insn_len(&pre_ud));
+				}
+				run += ud_insn_len(&run_ud);
+				pre += ud_insn_len(&pre_ud);
+				continue;
+			} else if (ret != NO_MATCH && ret != OK) {
+				goto out;
+			}
+		}
+		pre_offset = pre - pre_start;
 
 		if (match_map[pre_offset] == NULL) {
 			match_map[pre_offset] = run;
@@ -154,7 +178,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				ksdebug(pack, "<--[No unconditional change of "
 					"control at control transfer point %lx]"
 					"\n", pre_offset);
-				return NO_MATCH;
+				ret = NO_MATCH;
+				goto out;
 			}
 
 			if (mode == RUN_PRE_DEBUG)
@@ -183,38 +208,19 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				goto out;
 			}
 		}
-
 		run_offset = run - run_start;
 		run_unconditional = is_unconditional_jump(&run_ud);
-
-		if (mode == RUN_PRE_DEBUG) {
-			ksdebug(pack, "| ");
-			print_bytes(pack, run, ud_insn_len(&run_ud),
-				    pre, ud_insn_len(&pre_ud));
-		}
-
-		if (run_ud.mnemonic != pre_ud.mnemonic) {
-			if (mode == RUN_PRE_DEBUG)
-				ksdebug(pack, "mnemonic mismatch: %s %s\n",
-					ud_lookup_mnemonic(run_ud.mnemonic),
-					ud_lookup_mnemonic(pre_ud.mnemonic));
-			ret = NO_MATCH;
-			goto out;
-		}
-
-		if (run_ud.mnemonic == UD_Iinvalid) {
-			ksdebug(pack, "Unrecognized opcode at %s+%lx\n",
-				sect->symbol->label, pre_offset);
-			ret = UNEXPECTED;
-			goto out;
-		}
+		run_nop = true;
+		pre_nop = true;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && \
     defined(_I386_BUG_H) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11) || \
 			     defined(CONFIG_DEBUG_BUGVERBOSE))
 /* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
 /* 38326f786cf4529a86b1ccde3aa17f4fa7e8472a was after 2.6.10 */
-		if (run_ud.mnemonic == UD_Iud2) {
+		if (run_ud.mnemonic == pre_ud.mnemonic &&
+		    run_ud.mnemonic == UD_Iud2) {
+			const struct ksplice_reloc *r;
 			/* ud2 means BUG().  On old i386 kernels, it is followed
 			   by 2 bytes and then a 4-byte relocation; and is not
 			   disassembler-friendly. */
@@ -245,38 +251,10 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 		}
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
 
-		ret = lookup_reloc(pack, &finger, (unsigned long)pre, &r);
-		if (ret == OK && (r->howto->type == KSPLICE_HOWTO_EXTABLE ||
-				  r->howto->type == KSPLICE_HOWTO_BUG)) {
-			if (mode == RUN_PRE_DEBUG) {
-				if (r->howto->type == KSPLICE_HOWTO_EXTABLE)
-					ksdebug(pack, "[ex] ");
-				if (r->howto->type == KSPLICE_HOWTO_BUG)
-					ksdebug(pack, "[bug] ");
-			}
-			ret = handle_reloc(pack, sect, r, (unsigned long)run,
-					   mode);
-			if (ret != OK)
-				goto out;
-		} else if (ret != NO_MATCH && ret != OK) {
+		ret = compare_instructions(pack, sect, &finger, run_start, run,
+					   pre, &run_ud, &pre_ud, mode);
+		if (ret != OK)
 			goto out;
-#if defined(CONFIG_X86_64) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
-/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
-#else /* !CONFIG_X86_64 || LINUX_VERSION_CODE >= */
-		} else if (run_ud.mnemonic == UD_Iud2) {
-			ksdebug(pack, "Unexpected ud2\n");
-			ret = NO_MATCH;
-			goto out;
-#endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
-		}
-
-		for (i = 0; i < ARRAY_SIZE(run_ud.operand); i++) {
-			ret = compare_operands(pack, sect, &finger, run_start,
-					       run, pre, &run_ud, &pre_ud, i,
-					       mode);
-			if (ret != OK)
-				goto out;
-		}
 		run += ud_insn_len(&run_ud);
 		pre += ud_insn_len(&pre_ud);
 	}
@@ -286,6 +264,71 @@ out:
 		sect->match_map = NULL;
 	}
 	return ret;
+}
+
+static abort_t compare_instructions(struct ksplice_pack *pack,
+				    struct ksplice_section *sect,
+				    const struct ksplice_reloc **fingerp,
+				    const unsigned char *run_start,
+				    const unsigned char *run,
+				    const unsigned char *pre, struct ud *run_ud,
+				    struct ud *pre_ud, enum run_pre_mode mode)
+{
+	abort_t ret;
+	int i;
+	const unsigned char *pre_start = (const unsigned char *)sect->address;
+	unsigned long pre_offset = pre - pre_start;
+	const struct ksplice_reloc *r;
+
+	if (mode == RUN_PRE_DEBUG) {
+		ksdebug(pack, "| ");
+		print_bytes(pack, run, ud_insn_len(run_ud), pre,
+			    ud_insn_len(pre_ud));
+	}
+
+	if (run_ud->mnemonic != pre_ud->mnemonic) {
+		if (mode == RUN_PRE_DEBUG)
+			ksdebug(pack, "mnemonic mismatch: %s %s\n",
+				ud_lookup_mnemonic(run_ud->mnemonic),
+				ud_lookup_mnemonic(pre_ud->mnemonic));
+		return NO_MATCH;
+	}
+
+	if (run_ud->mnemonic == UD_Iinvalid) {
+		ksdebug(pack, "Unrecognized opcode at %s+%lx\n",
+			sect->symbol->label, pre_offset);
+		return UNEXPECTED;
+	}
+
+	ret = lookup_reloc(pack, fingerp, (unsigned long)pre, &r);
+	if (ret == OK && (r->howto->type == KSPLICE_HOWTO_EXTABLE ||
+			  r->howto->type == KSPLICE_HOWTO_BUG)) {
+		if (mode == RUN_PRE_DEBUG) {
+			if (r->howto->type == KSPLICE_HOWTO_EXTABLE)
+				ksdebug(pack, "[ex] ");
+			if (r->howto->type == KSPLICE_HOWTO_BUG)
+				ksdebug(pack, "[bug] ");
+		}
+		ret = handle_reloc(pack, sect, r, (unsigned long)run, mode);
+		if (ret != OK)
+			return ret;
+	} else if (ret != NO_MATCH && ret != OK) {
+		return ret;
+#if defined(CONFIG_X86_64) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
+#else /* !CONFIG_X86_64 || LINUX_VERSION_CODE >= */
+	} else if (run_ud->mnemonic == UD_Iud2) {
+		ksdebug(pack, "Unexpected ud2\n");
+		return NO_MATCH;
+#endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
+	}
+	for (i = 0; i < ARRAY_SIZE(run_ud->operand); i++) {
+		ret = compare_operands(pack, sect, fingerp, run_start, run, pre,
+				       run_ud, pre_ud, i, mode);
+		if (ret != OK)
+			return ret;
+	}
+	return OK;
 }
 
 static abort_t compare_operands(struct ksplice_pack *pack,
