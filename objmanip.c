@@ -1222,7 +1222,8 @@ void rm_relocs(struct superbfd *isbfd)
 		struct supersect *ss = fetch_supersect(isbfd, p);
 		bool remove_relocs = ss->keep;
 
-		if (mode("keep") && ss->type == SS_TYPE_SPECIAL)
+		if (mode("keep") && ss->type == SS_TYPE_SPECIAL &&
+		    strcmp(ss->name, "__bug_table") != 0)
 			remove_relocs = false;
 
 		if (ss->type == SS_TYPE_KSPLICE)
@@ -1259,6 +1260,17 @@ void rm_some_relocs(struct supersect *ss)
 		    (bfd_is_const_section(sym_ptr->section) ||
 		     reloc_target_span(ss, *relocp)->new))
 			rm_reloc = false;
+
+		if (mode("keep-primary")) {
+			const struct table_section *ts =
+			    get_table_section(ss->name);
+			if (ts != NULL && ts->has_addr &&
+			    ((*relocp)->address % ts->entry_size ==
+			     ts->addr_offset ||
+			     (*relocp)->address % ts->entry_size ==
+			     ts->other_offset))
+				rm_reloc = false;
+		}
 
 		if (mode("finalize") && bfd_is_und_section(sym_ptr->section))
 			rm_reloc = true;
@@ -1883,15 +1895,6 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 			if (span->keep)
 				keep_span(sym_span);
 		}
-	}
-
-	arelent **relocp;
-	for (relocp = ss->relocs.data;
-	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
-		struct span *addr_span = find_span(ss, (*relocp)->address);
-		struct span *target_span = reloc_target_span(ss, *relocp);
-		if (addr_span->keep && mode("keep-primary"))
-			keep_span(target_span);
 	}
 }
 
