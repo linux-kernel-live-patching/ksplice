@@ -209,12 +209,26 @@ void show_ksplice_sections(struct supersect *ksect_ss)
 		show_ksplice_section(ksect_ss, ksect);
 }
 
+const char *str_ksplice_patch_type(struct supersect *ss,
+				   const struct ksplice_patch *kpatch)
+{
+	char *buf;
+	switch(kpatch->type) {
+	case KSPLICE_PATCH_TEXT:
+		assert(asprintf(&buf, "text\n  repladdr: %s", str_pointer
+				(ss, (void *const *)&kpatch->repladdr)) >= 0);
+		return buf;
+	default:
+		return "unknown";
+	}
+}
+
 void show_ksplice_patch(struct supersect *ss,
 			const struct ksplice_patch *kpatch)
 {
-	printf("  repladdr: %s\n"
+	printf("  type: %s\n"
 	       "  oldaddr: %s\n\n",
-	       str_pointer(ss, (void *const *)&kpatch->repladdr),
+	       str_ksplice_patch_type(ss, kpatch),
 	       str_pointer(ss, (void *const *)&kpatch->oldaddr));
 }
 

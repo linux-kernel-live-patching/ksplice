@@ -1286,9 +1286,11 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 			return NO_MATCH;
 		}
 
-		ret = prepare_trampoline(pack, p);
-		if (ret != OK)
-			return ret;
+		if (p->type == KSPLICE_PATCH_TEXT) {
+			ret = prepare_trampoline(pack, p);
+			if (ret != OK)
+				return ret;
+		}
 
 		if (rec->addr + rec->size < p->oldaddr + p->size) {
 			ksdebug(pack, "Safety record %s is too short for "
@@ -1296,10 +1298,12 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 			return UNEXPECTED;
 		}
 
-		if (p->repladdr == 0)
-			p->repladdr = (unsigned long)ksplice_deleted;
-		else
-			rec->first_byte_safe = true;
+		if (p->type == KSPLICE_PATCH_TEXT) {
+			if (p->repladdr == 0)
+				p->repladdr = (unsigned long)ksplice_deleted;
+			else
+				rec->first_byte_safe = true;
+		}
 
 		ret = add_dependency_on_address(pack, p->oldaddr);
 		if (ret != OK)

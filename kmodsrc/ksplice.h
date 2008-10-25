@@ -88,10 +88,15 @@ struct ksplice_section {
 
 #define MAX_TRAMPOLINE_SIZE 5
 
+enum ksplice_patch_type {
+	KSPLICE_PATCH_TEXT,
+};
+
 /**
  * struct ksplice_patch - A function replacement that Ksplice should perform
  * @oldaddr:		The address of the obsolete function
  * @repladdr:		The address of the replacement function
+ * @type:		The type of the ksplice patch
  * @vaddr:		The address of the page mapping used to write at oldaddr
  * @trampoline:		The bytes of the trampoline itself
  * @saved:		The bytes of the original function which were
@@ -101,6 +106,7 @@ struct ksplice_section {
 struct ksplice_patch {
 	unsigned long oldaddr;
 	unsigned long repladdr;
+	enum ksplice_patch_type type;
 /* private: */
 	void *vaddr;
 	char trampoline[MAX_TRAMPOLINE_SIZE];
