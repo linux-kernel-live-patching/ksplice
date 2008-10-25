@@ -1242,6 +1242,11 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 				p->symbol->label);
 			return NO_MATCH;
 		}
+
+		ret = prepare_trampoline(pack, p);
+		if (ret != OK)
+			return ret;
+
 		if (rec->size < p->size) {
 			ksdebug(pack, "Symbol %s is too short for trampoline\n",
 				p->symbol->label);
@@ -1255,10 +1260,6 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 			p->repladdr = (unsigned long)ksplice_deleted;
 		else
 			rec->first_byte_safe = true;
-
-		ret = prepare_trampoline(pack, p);
-		if (ret != OK)
-			return ret;
 
 		ret = add_dependency_on_address(pack, p->oldaddr);
 		if (ret != OK)
