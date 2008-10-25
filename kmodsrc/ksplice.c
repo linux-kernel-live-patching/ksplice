@@ -496,6 +496,8 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 			   const struct ksplice_reloc *r);
 static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r);
+static abort_t apply_howto_date(struct ksplice_pack *pack,
+				const struct ksplice_reloc *r);
 static abort_t read_reloc_value(struct ksplice_pack *pack,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp);
@@ -1409,6 +1411,9 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	switch (r->howto->type) {
 	case KSPLICE_HOWTO_RELOC:
 		return apply_howto_reloc(pack, r);
+	case KSPLICE_HOWTO_DATE:
+	case KSPLICE_HOWTO_TIME:
+		return apply_howto_date(pack, r);
 	default:
 		ksdebug(pack, "Unexpected howto type %d\n", r->howto->type);
 		return UNEXPECTED;
@@ -1497,6 +1502,18 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 		return ret;
 
 	return add_dependency_on_address(pack, sym_addr);
+}
+
+static abort_t apply_howto_date(struct ksplice_pack *pack,
+				const struct ksplice_reloc *r)
+{
+	if (r->symbol->vals != NULL) {
+		ksdebug(pack, "Failed to find %s for date\n", r->symbol->label);
+		return FAILED_TO_FIND;
+	}
+	memcpy((unsigned char *)r->blank_addr,
+	       (const unsigned char *)r->symbol->value, r->howto->size);
+	return OK;
 }
 
 static abort_t read_reloc_value(struct ksplice_pack *pack,

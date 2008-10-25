@@ -1598,13 +1598,19 @@ static void write_date_relocs(struct superbfd *sbfd, const char *str,
 		if (ss->type != SS_TYPE_STRING && ss->type != SS_TYPE_RODATA)
 			continue;
 		void *ptr;
-		for (ptr = ss->contents.data;
-		     ptr + strlen(str) < ss->contents.data + ss->contents.size;
-		     ptr++) {
-			if (strcmp((const char *)ptr, str) == 0)
-				write_ksplice_date_reloc(ss,
-							 addr_offset(ss, ptr),
-							 str, type);
+		struct span *span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (!span->keep)
+				continue;
+			for (ptr = ss->contents.data + span->start;
+			     ptr + strlen(str) < ss->contents.data +
+			     span->start + span->size; ptr++) {
+				if (strcmp((const char *)ptr, str) == 0)
+					write_ksplice_date_reloc
+					    (ss, addr_offset(ss, ptr), str,
+					     type);
+			}
 		}
 	}
 }
