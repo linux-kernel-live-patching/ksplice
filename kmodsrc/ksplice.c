@@ -542,6 +542,11 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode);
+static abort_t handle_howto_reloc(struct ksplice_pack *pack,
+				  const struct ksplice_section *sect,
+				  const struct ksplice_reloc *r,
+				  unsigned long run_addr,
+				  enum run_pre_mode mode);
 static struct ksplice_section *symbol_section(struct ksplice_pack *pack,
 					      const struct ksplice_symbol *sym);
 static int compare_section_labels(const void *va, const void *vb);
@@ -2027,6 +2032,21 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode)
+{
+	switch (r->howto->type) {
+	case KSPLICE_HOWTO_RELOC:
+		return handle_howto_reloc(pack, sect, r, run_addr, mode);
+	default:
+		ksdebug(pack, "Unexpected howto type %d\n", r->howto->type);
+		return UNEXPECTED;
+	}
+}
+
+static abort_t handle_howto_reloc(struct ksplice_pack *pack,
+				  const struct ksplice_section *sect,
+				  const struct ksplice_reloc *r,
+				  unsigned long run_addr,
+				  enum run_pre_mode mode)
 {
 	struct ksplice_section *sym_sect;
 	unsigned long val;
