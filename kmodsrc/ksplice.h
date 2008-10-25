@@ -34,7 +34,6 @@ enum ksplice_reloc_howto_type {
 	KSPLICE_HOWTO_DATE,
 	KSPLICE_HOWTO_TIME,
 	KSPLICE_HOWTO_BUG,
-	KSPLICE_HOWTO_IGNORE,
 	KSPLICE_HOWTO_EXTABLE,
 };
 
@@ -90,6 +89,7 @@ struct ksplice_section {
 
 enum ksplice_patch_type {
 	KSPLICE_PATCH_TEXT,
+	KSPLICE_PATCH_BUGLINE,
 };
 
 /**
@@ -97,21 +97,21 @@ enum ksplice_patch_type {
  * @oldaddr:		The address of the obsolete function
  * @repladdr:		The address of the replacement function
  * @type:		The type of the ksplice patch
- * @vaddr:		The address of the page mapping used to write at oldaddr
+ * @size:		The size of the trampoline
  * @trampoline:		The bytes of the trampoline itself
+ * @vaddr:		The address of the page mapping used to write at oldaddr
  * @saved:		The bytes of the original function which were
  * 			overwritten by the trampoline
- * @size:		The size of the trampoline
  **/
 struct ksplice_patch {
 	unsigned long oldaddr;
 	unsigned long repladdr;
 	enum ksplice_patch_type type;
+	unsigned int size;
+	char trampoline[MAX_TRAMPOLINE_SIZE];
 /* private: */
 	void *vaddr;
-	char trampoline[MAX_TRAMPOLINE_SIZE];
 	char saved[MAX_TRAMPOLINE_SIZE];
-	unsigned int size;
 };
 
 /**

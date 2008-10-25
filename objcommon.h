@@ -188,6 +188,7 @@ struct span {
 	bool keep;
 	bool new;
 	bool patch;
+	bool bugpatch;
 	struct span *match;
 	bfd_size_type shift;
 };

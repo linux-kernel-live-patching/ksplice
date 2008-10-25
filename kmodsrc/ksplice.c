@@ -2127,8 +2127,6 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 		return handle_bug(pack, r, run_addr);
 	case KSPLICE_HOWTO_EXTABLE:
 		return handle_extable(pack, r, run_addr);
-	case KSPLICE_HOWTO_IGNORE:
-		return OK;
 	default:
 		ksdebug(pack, "Unexpected howto type %d\n", r->howto->type);
 		return UNEXPECTED;

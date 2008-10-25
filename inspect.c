@@ -137,8 +137,6 @@ static const char *str_howto_type(const struct ksplice_reloc_howto *howto)
 		return "bug";
 	case KSPLICE_HOWTO_EXTABLE:
 		return "extable";
-	case KSPLICE_HOWTO_IGNORE:
-		return "ignore";
 	default:
 		return "unknown";
 	}
@@ -217,6 +215,10 @@ const char *str_ksplice_patch_type(struct supersect *ss,
 	case KSPLICE_PATCH_TEXT:
 		assert(asprintf(&buf, "text\n  repladdr: %s", str_pointer
 				(ss, (void *const *)&kpatch->repladdr)) >= 0);
+		return buf;
+	case KSPLICE_PATCH_BUGLINE:
+		assert(asprintf(&buf, "bugline\n  line: %hx",
+				*(unsigned short *)kpatch->trampoline) >= 0);
 		return buf;
 	default:
 		return "unknown";
