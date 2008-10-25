@@ -735,6 +735,9 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 	sort(pack->helper_relocs,
 	     (pack->helper_relocs_end - pack->helper_relocs),
 	     sizeof(*pack->helper_relocs), compare_relocs, NULL);
+	sort(pack->primary_relocs,
+	     (pack->primary_relocs_end - pack->primary_relocs),
+	     sizeof(*pack->primary_relocs), compare_relocs, NULL);
 	sort(pack->helper_sections,
 	     (pack->helper_sections_end - pack->helper_sections),
 	     sizeof(*pack->helper_sections), compare_section_labels, NULL);
@@ -1266,13 +1269,6 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		bool found = false;
-		if (p->symbol->vals != NULL) {
-			ksdebug(pack, "Failed to find %s for oldaddr\n",
-				p->symbol->label);
-			return FAILED_TO_FIND;
-		}
-		p->oldaddr = p->symbol->value;
-
 		list_for_each_entry(rec, &pack->safety_records, list) {
 			if (strcmp(rec->label, p->symbol->label) == 0 &&
 			    follow_trampolines(pack, p->oldaddr)
@@ -1410,6 +1406,7 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 {
 	switch (r->howto->type) {
 	case KSPLICE_HOWTO_RELOC:
+	case KSPLICE_HOWTO_RELOC_PATCH:
 		return apply_howto_reloc(pack, r);
 	case KSPLICE_HOWTO_DATE:
 	case KSPLICE_HOWTO_TIME:
@@ -1454,7 +1451,8 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 		release_vals(&vals);
 		return ret;
 	}
-	if (!singular(&vals)) {
+	if (!singular(&vals) || (r->symbol->vals != NULL &&
+				 r->howto->type == KSPLICE_HOWTO_RELOC_PATCH)) {
 		release_vals(&vals);
 		ksdebug(pack, "Failed to find %s for reloc\n",
 			r->symbol->label);

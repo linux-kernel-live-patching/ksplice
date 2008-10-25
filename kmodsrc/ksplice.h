@@ -30,6 +30,7 @@ struct ksplice_reloc {
 
 enum ksplice_reloc_howto_type {
 	KSPLICE_HOWTO_RELOC,
+	KSPLICE_HOWTO_RELOC_PATCH,
 	KSPLICE_HOWTO_DATE,
 	KSPLICE_HOWTO_TIME,
 	KSPLICE_HOWTO_BUG,
@@ -99,9 +100,9 @@ struct ksplice_section {
  **/
 struct ksplice_patch {
 	struct ksplice_symbol *symbol;
+	unsigned long oldaddr;
 	unsigned long repladdr;
 /* private: */
-	unsigned long oldaddr;
 	void *vaddr;
 	char trampoline[MAX_TRAMPOLINE_SIZE];
 	char saved[MAX_TRAMPOLINE_SIZE];
@@ -204,7 +205,7 @@ struct ksplice_pack {
 	unsigned long map_printk;
 #endif /* KSPLICE_STANDALONE */
 	struct module *primary;
-	const struct ksplice_reloc *primary_relocs, *primary_relocs_end;
+	struct ksplice_reloc *primary_relocs, *primary_relocs_end;
 	const struct ksplice_section *primary_sections, *primary_sections_end;
 	struct ksplice_symbol *primary_symbols, *primary_symbols_end;
 	struct ksplice_reloc *helper_relocs, *helper_relocs_end;

@@ -7,6 +7,8 @@
 #include <string.h>
 
 #define BITS_PER_LONG LONG_BIT
+#define _PASTE(x, y) x##y
+#define PASTE(x, y) _PASTE(x, y)
 
 #define DIE do { fprintf(stderr, "ksplice: died at %s:%d\n", __FILE__, __LINE__); abort(); } while(0)
 #define assert(x) do { if(!(x)) DIE; } while(0)

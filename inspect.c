@@ -78,6 +78,8 @@ static const char *str_howto_type(const struct ksplice_reloc_howto *howto)
 	switch (howto->type) {
 	case KSPLICE_HOWTO_RELOC:
 		return "reloc";
+	case KSPLICE_HOWTO_RELOC_PATCH:
+		return "reloc(patch)";
 	case KSPLICE_HOWTO_TIME:
 		return "time";
 	case KSPLICE_HOWTO_DATE:

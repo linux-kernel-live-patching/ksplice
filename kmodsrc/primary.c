@@ -22,7 +22,7 @@
 #include <linux/ksplice.h>
 #endif
 
-extern const struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
+extern struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
 extern const struct ksplice_section ksplice_sections[], ksplice_sections_end[];
 extern struct ksplice_symbol ksplice_symbols[], ksplice_symbols_end[];
 extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
