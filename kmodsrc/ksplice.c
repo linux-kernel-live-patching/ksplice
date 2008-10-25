@@ -488,6 +488,8 @@ static abort_t apply_relocs(struct ksplice_pack *pack,
 			    const struct ksplice_reloc *relocs_end);
 static abort_t apply_reloc(struct ksplice_pack *pack,
 			   const struct ksplice_reloc *r);
+static abort_t apply_howto_reloc(struct ksplice_pack *pack,
+				 const struct ksplice_reloc *r);
 static abort_t read_reloc_value(struct ksplice_pack *pack,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp);
@@ -1375,6 +1377,18 @@ static abort_t apply_relocs(struct ksplice_pack *pack,
 
 static abort_t apply_reloc(struct ksplice_pack *pack,
 			   const struct ksplice_reloc *r)
+{
+	switch (r->howto->type) {
+	case KSPLICE_HOWTO_RELOC:
+		return apply_howto_reloc(pack, r);
+	default:
+		ksdebug(pack, "Unexpected howto type %d\n", r->howto->type);
+		return UNEXPECTED;
+	}
+}
+
+static abort_t apply_howto_reloc(struct ksplice_pack *pack,
+				 const struct ksplice_reloc *r)
 {
 	abort_t ret;
 	int canary_ret;
