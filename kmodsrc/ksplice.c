@@ -415,14 +415,6 @@ static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
 }
 #endif
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,17)
-/* 5e376613899076396d0c97de67ad072587267370 was after 2.6.16 */
-static int core_kernel_text(unsigned long addr)
-{
-	return addr >= init_mm.start_code && addr < init_mm.end_code;
-}
-#endif /* LINUX_VERSION_CODE */
-
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
 #endif /* !task_thread_info */
@@ -1351,12 +1343,11 @@ static void *map_writable(void *addr, size_t len)
 {
 	void *vaddr;
 	int nr_pages = 2;
+	unsigned long laddr = (unsigned long)addr;
 	struct page *pages[2];
 
-	if (!core_kernel_text((unsigned long)addr)) {
-		pages[0] = vmalloc_to_page(addr);
-		pages[1] = vmalloc_to_page(addr + PAGE_SIZE);
-	} else {
+	if ((laddr >= init_mm.start_code && laddr < init_mm.end_code) ||
+	    (laddr >= init_mm.start_data && laddr < init_mm.end_data)) {
 #if defined(CONFIG_X86_64) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
 /* e3ebadd95cb621e2c7436f3d3646447ac9d5c16d was after 2.6.21 */
 		pages[0] = pfn_to_page(__pa_symbol(addr) >> PAGE_SHIFT);
@@ -1368,6 +1359,9 @@ static void *map_writable(void *addr, size_t len)
 		WARN_ON(!PageReserved(pages[0]));
 		pages[1] = virt_to_page(addr + PAGE_SIZE);
 #endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
+	} else {
+		pages[0] = vmalloc_to_page(addr);
+		pages[1] = vmalloc_to_page(addr + PAGE_SIZE);
 	}
 	if (!pages[0])
 		return NULL;

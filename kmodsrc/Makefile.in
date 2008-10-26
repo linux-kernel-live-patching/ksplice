@@ -79,7 +79,6 @@ extra-y += ksplice.o
 
 RMSYMS = \
 	apply_paravirt \
-	core_kernel_text \
 	find_bug \
 	search_exception_tables \
 	thread_return \
