@@ -62,8 +62,7 @@ static const struct ksplice_reloc *
 find_ksplice_reloc(struct supersect *ss, void *const *addr,
 		   struct supersect **reloc_ss)
 {
-	char *key;
-	assert(asprintf(&key, "%p", addr) >= 0);
+	char *key = strprintf("%p", addr);
 	struct kreloc_section **ksp =
 	    kreloc_section_hash_lookup(&ksplice_relocs, key, FALSE);
 	free(key);
@@ -76,11 +75,9 @@ find_ksplice_reloc(struct supersect *ss, void *const *addr,
 char *str_ksplice_symbol(struct supersect *ss,
 			 const struct ksplice_symbol *ksymbol)
 {
-	char *str;
-	assert(asprintf(&str, "%s (%s)",
-			read_string(ss, &ksymbol->label),
-			read_string(ss, &ksymbol->name)));
-	return str;
+	return strprintf("%s (%s)",
+			 read_string(ss, &ksymbol->label),
+			 read_string(ss, &ksymbol->name));
 }
 
 char *str_ksplice_symbolp(struct supersect *ptr_ss,
@@ -88,13 +85,9 @@ char *str_ksplice_symbolp(struct supersect *ptr_ss,
 {
 	asymbol *sym;
 	bfd_vma offset = read_reloc(ptr_ss, ksymbolp, sizeof(*ksymbolp), &sym);
-	if (bfd_is_const_section(sym->section)) {
-		char *str;
-		assert(asprintf(&str, "*(%s)",
-				str_pointer(ptr_ss, (void *const *)ksymbolp)) >=
-		       0);
-		return str;
-	}
+	if (bfd_is_const_section(sym->section))
+		return strprintf("*(%s)",
+				 str_pointer(ptr_ss, (void *const *)ksymbolp));
 	struct supersect *ksymbol_ss = fetch_supersect(ptr_ss->parent,
 						       sym->section);
 	return str_ksplice_symbol(ksymbol_ss, ksymbol_ss->contents.data +
@@ -103,22 +96,18 @@ char *str_ksplice_symbolp(struct supersect *ptr_ss,
 
 char *str_pointer(struct supersect *ss, void *const *addr)
 {
-	char *str;
 	asymbol *sym;
 	struct supersect *kreloc_ss;
 	const struct ksplice_reloc *kreloc =
 	    find_ksplice_reloc(ss, addr, &kreloc_ss);
 	if (kreloc == NULL) {
 		bfd_vma offset = read_reloc(ss, addr, sizeof(*addr), &sym);
-		assert(asprintf(&str, "%s+%lx", sym->name,
-				(unsigned long)offset) >= 0);
-		return str;
+		return strprintf("%s+%lx", sym->name, (unsigned long)offset);
 	} else {
-		assert(asprintf(&str, "[%s]+%lx",
+		return strprintf("[%s]+%lx",
 				 str_ksplice_symbolp(kreloc_ss,
 						     &kreloc->symbol),
-				 kreloc->target_addend) >= 0);
-		return str;
+				 kreloc->target_addend);
 	}
 }
 
@@ -210,16 +199,13 @@ void show_ksplice_sections(struct supersect *ksect_ss)
 const char *str_ksplice_patch_type(struct supersect *ss,
 				   const struct ksplice_patch *kpatch)
 {
-	char *buf;
 	switch(kpatch->type) {
 	case KSPLICE_PATCH_TEXT:
-		assert(asprintf(&buf, "text\n  repladdr: %s", str_pointer
-				(ss, (void *const *)&kpatch->repladdr)) >= 0);
-		return buf;
+		return strprintf("text\n  repladdr: %s", str_pointer
+				 (ss, (void *const *)&kpatch->repladdr));
 	case KSPLICE_PATCH_BUGLINE:
-		assert(asprintf(&buf, "bugline\n  line: %hx",
-				*(unsigned short *)kpatch->trampoline) >= 0);
-		return buf;
+		return strprintf("bugline\n  line: %hx",
+				 *(unsigned short *)kpatch->trampoline);
 	default:
 		return "unknown";
 	}
@@ -339,12 +325,11 @@ static void load_ksplice_reloc_offsets(struct superbfd *sbfd)
 			const void *ptr =
 			    read_pointer(ss, (void *const *)&kreloc->blank_addr,
 					 &sym_ss);
-			char *buf;
-			assert(asprintf(&buf, "%p", ptr) >= 0);
+			char *key = strprintf("%p", ptr);
 			struct kreloc_section *ks, **ksp =
-			    kreloc_section_hash_lookup(&ksplice_relocs, buf,
+			    kreloc_section_hash_lookup(&ksplice_relocs, key,
 						       TRUE);
-			free(buf);
+			free(key);
 			assert(*ksp == NULL);
 			ks = malloc(sizeof(*ks));
 			*ksp = ks;

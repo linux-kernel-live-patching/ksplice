@@ -274,9 +274,7 @@ void load_system_map()
 {
 	const char *config_dir = getenv("KSPLICE_CONFIG_DIR");
 	assert(config_dir);
-	char *file;
-	assert(asprintf(&file, "%s/System.map", config_dir) >= 0);
-	FILE *fp = fopen(file, "r");
+	FILE *fp = fopen(strprintf("%s/System.map", config_dir), "r");
 	assert(fp);
 	addr_vec_hash_init(&system_map);
 	unsigned long addr;
@@ -308,10 +306,9 @@ void load_ksplice_symbol_offsets(struct superbfd *sbfd)
 
 void load_offsets()
 {
-	char *kmodsrc = getenv("KSPLICE_KMODSRC"), *offsets_file;
+	char *kmodsrc = getenv("KSPLICE_KMODSRC");
 	assert(kmodsrc != NULL);
-	assert(asprintf(&offsets_file, "%s/offsets.o", kmodsrc) >= 0);
-	bfd *offsets_bfd = bfd_openr(offsets_file, NULL);
+	bfd *offsets_bfd = bfd_openr(strprintf("%s/offsets.o", kmodsrc), NULL);
 	assert(offsets_bfd != NULL);
 	char **matching;
 	assert(bfd_check_format_matches(offsets_bfd, bfd_object, &matching));
@@ -653,10 +650,9 @@ struct export_desc *new_export_desc(struct supersect *ss, bool deletion)
 	vec_init(&ed->names);
 	ed->export_type = strdup(ss->name) + strlen("__ksymtab");
 	ed->sym_ss = ss;
-	char *crc_sect_name;
-	assert(asprintf(&crc_sect_name, "__kcrctab%s", ed->export_type) >= 0);
 	asection *crc_sect =
-	    bfd_get_section_by_name(ss->parent->abfd, crc_sect_name);
+	    bfd_get_section_by_name(ss->parent->abfd,
+				    strprintf("__kcrctab%s", ed->export_type));
 	if (crc_sect == NULL)
 		ed->crc_ss = NULL;
 	else
@@ -1307,9 +1303,8 @@ void rm_some_relocs(struct supersect *ss)
 struct supersect *make_section(struct superbfd *sbfd, const char *fmt, ...)
 {
 	va_list ap;
-	char *name;
 	va_start(ap, fmt);
-	assert(vasprintf(&name, fmt, ap) >= 0);
+	char *name = vstrprintf(fmt, ap);
 	va_end(ap);
 
 	asection *sect = bfd_get_section_by_name(sbfd->abfd, name);
@@ -1475,13 +1470,10 @@ void write_ksplice_symbol(struct supersect *ss,
 			  const char *addstr_sect)
 {
 	const char *label, *name;
-	char *output;
 	if (span != NULL && span->start != 0)
 		label = span->label;
 	else
 		label = label_lookup(ss->parent, sym);
-
-	assert(asprintf(&output, "%s%s", label, addstr_sect) >= 0);
 
 	asymbol *gsym = canonical_symbol(ss->parent, sym);
 	if (strcmp(addstr_sect, "") != 0)
@@ -1497,7 +1489,9 @@ void write_ksplice_symbol(struct supersect *ss,
 	else
 		name = gsym->name;
 
-	write_ksplice_symbol_backend(ss, addr, sym, output, name);
+	write_ksplice_symbol_backend(ss, addr, sym,
+				     strprintf("%s%s", label, addstr_sect),
+				     name);
 }
 
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
@@ -1545,9 +1539,7 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	write_reloc(kreloc_ss, &kreloc->blank_addr,
 		    &ss->symbol, orig_reloc->address + address_span->shift);
 	if (bfd_is_und_section(sym_ptr->section) && mode("keep")) {
-		char *name;
-		assert(asprintf(&name, KSPLICE_SYMBOL_STR "%s", sym_ptr->name)
-		       >= 0);
+		char *name = strprintf(KSPLICE_SYMBOL_STR "%s", sym_ptr->name);
 		asymbol **symp = make_undefined_symbolp(ss->parent, name);
 		write_reloc(kreloc_ss, &kreloc->symbol, symp, 0);
 	} else {
@@ -1647,10 +1639,9 @@ static void write_ksplice_date_reloc(struct supersect *ss, unsigned long offset,
 	char *c = strstr(filename, ".KSPLICE");
 	int flen = (c == NULL ? strlen(filename) : c - filename);
 
-	char *label;
-	assert(asprintf(&label, "%s<%.*s>", str, flen, filename) >= 0);
 	write_ksplice_symbol_backend(kreloc_ss, &kreloc->symbol, NULL,
-				     label, NULL);
+				     strprintf("%s<%.*s>", str, flen, filename),
+				     NULL);
 
 	struct span *span = find_span(ss, offset);
 	write_reloc(kreloc_ss, &kreloc->blank_addr, &ss->symbol,
@@ -2482,8 +2473,7 @@ static void init_label_map(struct superbfd *sbfd)
 		asymbol *csym = canonical_symbol(sbfd, *symp);
 		if (csym == NULL)
 			continue;
-		char *key;
-		assert(asprintf(&key, "%p", csym) >= 0);
+		char *key = strprintf("%p", csym);
 		asymbol **csymp = symbol_hash_lookup(&csyms, key, TRUE);
 		free(key);
 		if (*csymp != NULL)
@@ -2508,22 +2498,15 @@ static void init_label_map(struct superbfd *sbfd)
 		}
 
 		struct label_map *first_map = *mapp;
-		char *buf;
-		if (first_map->count == 0) {
-			assert(asprintf(&buf, "%s~%d", map->label, 0) >= 0);
-			first_map->label = buf;
-		}
-		first_map->count++;
-		assert(asprintf(&buf, "%s~%d", map->label, first_map->count)
-		       >= 0);
-		map->label = buf;
+		if (first_map->count == 0)
+			first_map->label = strprintf("%s~%d", map->label, 0);
+		map->label = strprintf("%s~%d", map->label, ++first_map->count);
 	}
 
 	label_mapp_hash_init(&sbfd->maps_hash);
 	for (map = sbfd->maps.data;
 	     map < sbfd->maps.data + sbfd->maps.size; map++) {
-		char *key;
-		assert(asprintf(&key, "%p", map->csym) >= 0);
+		char *key = strprintf("%p", map->csym);
 		struct label_map **mapp =
 		    label_mapp_hash_lookup(&sbfd->maps_hash, key, TRUE);
 		free(key);
@@ -2535,8 +2518,7 @@ static void init_label_map(struct superbfd *sbfd)
 static const char *label_lookup(struct superbfd *sbfd, asymbol *sym)
 {
 	asymbol *csym = canonical_symbol(sbfd, sym);
-	char *key;
-	assert(asprintf(&key, "%p", csym) >= 0);
+	char *key = strprintf("%p", csym);
 	struct label_map **mapp =
 	    label_mapp_hash_lookup(&sbfd->maps_hash, key, FALSE);
 	free(key);
@@ -2584,8 +2566,7 @@ static void change_initial_label(struct span *span, const char *label)
 	span->orig_label = label;
 	if (span->symbol) {
 		asymbol *csym = canonical_symbol(sbfd, span->symbol);
-		char *key;
-		assert(asprintf(&key, "%p", csym) >= 0);
+		char *key = strprintf("%p", csym);
 		struct label_map **mapp =
 		    label_mapp_hash_lookup(&sbfd->maps_hash, key, FALSE);
 		free(key);
@@ -2608,9 +2589,8 @@ static void init_callers(struct superbfd *sbfd)
 			asymbol *sym = *(*relocp)->sym_ptr_ptr;
 			unsigned long val =
 			    sym->value + get_reloc_offset(ss, *relocp, true);
-			char *key;
-			assert(asprintf(&key, "%s+%lx", sym->section->name,
-					val) >= 0);
+			char *key = strprintf("%s+%lx", sym->section->name,
+					      val);
 			const char **ret = string_hash_lookup(&sbfd->callers,
 							      key, TRUE);
 			free(key);
@@ -2624,9 +2604,8 @@ static void init_callers(struct superbfd *sbfd)
 
 static const char *find_caller(struct supersect *ss, asymbol *sym)
 {
-	char *key;
-	assert(asprintf(&key, "%s+%lx", sym->section->name,
-			(unsigned long)sym->value) >= 0);
+	char *key = strprintf("%s+%lx", sym->section->name,
+			      (unsigned long)sym->value);
 	const char **ret = string_hash_lookup(&ss->parent->callers, key, FALSE);
 	free(key);
 
@@ -2645,9 +2624,8 @@ static void init_csyms(struct superbfd *sbfd)
 		asymbol *sym = *symp;
 		if ((sym->flags & BSF_DEBUGGING) != 0)
 			continue;
-		char *key;
-		assert(asprintf(&key, "%s+%lx", sym->section->name,
-				(unsigned long)sym->value) >= 0);
+		char *key = strprintf("%s+%lx", sym->section->name,
+				      (unsigned long)sym->value);
 		asymbol ***csympp = asymbolpp_hash_lookup(&sbfd->csyms, key,
 							  TRUE);
 		free(key);
@@ -2665,8 +2643,7 @@ static void init_csyms(struct superbfd *sbfd)
 
 static asymbol **symbolp_scan(struct supersect *ss, bfd_vma value)
 {
-	char *key;
-	assert(asprintf(&key, "%s+%lx", ss->name, (unsigned long)value) >= 0);
+	char *key = strprintf("%s+%lx", ss->name, (unsigned long)value);
 	asymbol ***csympp =
 	    asymbolpp_hash_lookup(&ss->parent->csyms, key, FALSE);
 	free(key);
@@ -2711,15 +2688,13 @@ static char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
 	if (dot == NULL || dot[1 + strspn(dot + 1, "0123546789")] != '\0')
 		return NULL;
 	char *basename = strndup(sym->name, dot - sym->name);
-	char *mangled_name;
+	const char *caller;
 	if (strcmp(basename, "__func__") == 0 ||
 	    strcmp(basename, "__PRETTY_FUNCTION__") == 0)
-		assert(asprintf(&mangled_name, "%s<%s>", basename,
-				(char *)ss->contents.data + sym->value) >= 0);
+		caller = (const char *)ss->contents.data + sym->value;
 	else
-		assert(asprintf(&mangled_name, "%s<%s>", basename,
-				find_caller(ss, sym)) >= 0);
-	return mangled_name;
+		caller = find_caller(ss, sym);
+	return strprintf("%s<%s>", basename, caller);
 }
 
 static char *symbol_label(struct superbfd *sbfd, asymbol *sym)
@@ -2732,26 +2707,25 @@ static char *symbol_label(struct superbfd *sbfd, asymbol *sym)
 	if (bfd_is_und_section(sym->section) || (sym->flags & BSF_GLOBAL) != 0) {
 		label = strdup(sym->name);
 	} else if (bfd_is_const_section(sym->section)) {
-		assert(asprintf(&label, "%s<%.*s>",
-				sym->name, flen, filename) >= 0);
+		label = strprintf("%s<%.*s>", sym->name, flen, filename);
 	} else {
 		asymbol *gsym = canonical_symbol(sbfd, sym);
 
 		if (gsym == NULL)
-			assert(asprintf(&label, "%s+%lx<%.*s>",
-					sym->section->name,
-					(unsigned long)sym->value,
-					flen, filename) >= 0);
+			label = strprintf("%s+%lx<%.*s>",
+					  sym->section->name,
+					  (unsigned long)sym->value,
+					  flen, filename);
 		else if ((gsym->flags & BSF_GLOBAL) != 0)
 			label = strdup(gsym->name);
 		else if (static_local_symbol(sbfd, gsym))
-			assert(asprintf(&label, "%s+%lx<%.*s>",
-					static_local_symbol(sbfd, gsym),
-					(unsigned long)sym->value,
-					flen, filename) >= 0);
+			label = strprintf("%s+%lx<%.*s>",
+					  static_local_symbol(sbfd, gsym),
+					  (unsigned long)sym->value,
+					  flen, filename);
 		else
-			assert(asprintf(&label, "%s<%.*s>",
-					gsym->name, flen, filename) >= 0);
+			label = strprintf("%s<%.*s>",
+					  gsym->name, flen, filename);
 	}
 
 	return label;
@@ -2782,14 +2756,11 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 	} else {
 		span->symbol = NULL;
 		const char *label = label_lookup(ss->parent, ss->symbol);
-		if (span->start != 0) {
-			char *buf;
-			assert(asprintf(&buf, "%s<span:%lx>", label,
-					(unsigned long)span->start) >= 0);
-			span->label = buf;
-		} else {
+		if (span->start != 0)
+			span->label = strprintf("%s<span:%lx>", label,
+						(unsigned long)span->start);
+		else
 			span->label = label;
-		}
 	}
 	span->orig_label = span->label;
 	return span;
@@ -2858,9 +2829,8 @@ static void initialize_table_spans(struct superbfd *sbfd,
 			unsigned long val = get_reloc_offset(ss, reloc, true) +
 			    sym->value - (target_span->start +
 					  target_span->shift);
-			char *label;
-			assert(asprintf(&label, "%s<target:%s+%lx>", ss->name,
-					target_span->label, val) >= 0);
+			char *label = strprintf("%s<target:%s+%lx>", ss->name,
+						target_span->label, val);
 			change_initial_label(span, label);
 		}
 
@@ -3051,9 +3021,7 @@ void mangle_section_name(struct superbfd *sbfd, const char *name)
 	if (sect == NULL)
 		return;
 	struct supersect *ss = fetch_supersect(sbfd, sect);
-	char *buf;
-	assert(asprintf(&buf, ".ksplice_pre.%s", ss->name) >= 0);
-	ss->name = buf;
+	ss->name = strprintf(".ksplice_pre.%s", ss->name);
 }
 
 static void write_bugline_patches(struct superbfd *sbfd)

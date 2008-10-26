@@ -1,5 +1,6 @@
 #include <bfd.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -264,3 +265,20 @@ const char *read_string(struct supersect *ss, const char *const *addr);
 
 #define read_num(ss, addr) ((typeof(*(addr))) \
 			    read_reloc(ss, addr, sizeof(*(addr)), NULL))
+
+static inline char *vstrprintf(const char *fmt, va_list ap)
+{
+	char *str;
+	assert(vasprintf(&str, fmt, ap) >= 0);
+	return str;
+}
+
+static inline char * __attribute__((format (printf, 1, 2)))
+strprintf(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	char *str = vstrprintf(fmt, ap);
+	va_end(ap);
+	return str;
+}

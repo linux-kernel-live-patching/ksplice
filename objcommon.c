@@ -125,9 +125,7 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	for (relocp = new->relocs.data;
 	     relocp < new->relocs.data + new->relocs.size; relocp++) {
 		arelent *reloc = *relocp;
-		char *key;
-		assert(asprintf(&key, "%lx", (unsigned long)reloc->address)
-		       >= 0);
+		char *key = strprintf("%lx", (unsigned long)reloc->address);
 		arelent **hash_relocp = arelentp_hash_lookup(&new->reloc_hash,
 							     key, TRUE);
 		free(key);
@@ -269,8 +267,7 @@ bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, bool adjust_pc)
 arelent *find_reloc(struct supersect *ss, const void *addr)
 {
 	bfd_vma address = addr_offset(ss, addr);
-	char *key;
-	assert(asprintf(&key, "%lx", (unsigned long)address) >= 0);
+	char *key = strprintf("%lx", (unsigned long)address);
 	arelent **relocp = arelentp_hash_lookup(&ss->reloc_hash, key, FALSE);
 	free(key);
 	return relocp != NULL ? *relocp : NULL;
