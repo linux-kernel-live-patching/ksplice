@@ -58,10 +58,19 @@ char *str_ksplice_symbol(struct supersect *ss,
 char *str_ksplice_symbolp(struct supersect *ptr_ss,
 			  struct ksplice_symbol *const *ksymbolp)
 {
-	struct supersect *ss;
-	const struct ksplice_symbol *ksymbol =
-	    read_pointer(ptr_ss, (void *const *)ksymbolp, &ss);
-	return ksymbol == NULL ? "(null)" : str_ksplice_symbol(ss, ksymbol);
+	asymbol *sym;
+	bfd_vma offset = read_reloc(ptr_ss, ksymbolp, sizeof(*ksymbolp), &sym);
+	if (bfd_is_const_section(sym->section)) {
+		char *str;
+		assert(asprintf(&str, "*(%s)",
+				str_pointer(ptr_ss, (void *const *)ksymbolp)) >=
+		       0);
+		return str;
+	}
+	struct supersect *ksymbol_ss = fetch_supersect(ptr_ss->parent,
+						       sym->section);
+	return str_ksplice_symbol(ksymbol_ss, ksymbol_ss->contents.data +
+				  sym->value + offset);
 }
 
 void show_ksplice_reloc(struct supersect *ss,
