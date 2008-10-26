@@ -544,6 +544,10 @@ static abort_t brute_search_all(struct ksplice_pack *pack,
 static const struct ksplice_reloc *
 init_reloc_search(struct ksplice_pack *pack,
 		  const struct ksplice_section *sect);
+static const struct ksplice_reloc *find_reloc(const struct ksplice_reloc *start,
+					      const struct ksplice_reloc *end,
+					      unsigned long address,
+					      unsigned long size);
 static abort_t lookup_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_reloc **fingerp,
 			    unsigned long addr,
@@ -566,6 +570,8 @@ static struct ksplice_section *symbol_section(struct ksplice_pack *pack,
 					      const struct ksplice_symbol *sym);
 static int compare_section_labels(const void *va, const void *vb);
 static int symbol_section_bsearch_compare(const void *a, const void *b);
+static const struct ksplice_reloc *patch_reloc(struct ksplice_pack *pack,
+					       const struct ksplice_patch *p);
 
 /* Computing possible addresses for symbols */
 static abort_t lookup_symbol(struct ksplice_pack *pack,
@@ -1270,16 +1276,21 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		bool found = false;
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			if (strcmp(rec->label, p->symbol->label) == 0 &&
-			    follow_trampolines(pack, p->oldaddr)
-			    == rec->addr) {
+			if (rec->addr <= p->oldaddr &&
+			    p->oldaddr < rec->addr + rec->size) {
 				found = true;
 				break;
 			}
 		}
 		if (!found) {
-			ksdebug(pack, "No safety record for patch %s\n",
-				p->symbol->label);
+			const struct ksplice_reloc *r = patch_reloc(pack, p);
+			if (r == NULL) {
+				ksdebug(pack, "A patch with no ksplice_reloc at"
+					" its oldaddr has no safety record\n");
+				return NO_MATCH;
+			}
+			ksdebug(pack, "No safety record for patch with oldaddr "
+				"%s+%lx\n", r->symbol->label, r->target_addend);
 			return NO_MATCH;
 		}
 
@@ -1287,14 +1298,11 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 		if (ret != OK)
 			return ret;
 
-		if (rec->size < p->size) {
-			ksdebug(pack, "Symbol %s is too short for trampoline\n",
-				p->symbol->label);
+		if (rec->addr + rec->size < p->oldaddr + p->size) {
+			ksdebug(pack, "Safety record %s is too short for "
+				"patch\n", rec->label);
 			return UNEXPECTED;
 		}
-		/* Make sure the record's label field won't get freed
-		   when the helper module is unloaded */
-		rec->label = p->symbol->label;
 
 		if (p->repladdr == 0)
 			p->repladdr = (unsigned long)ksplice_deleted;
@@ -2026,30 +2034,47 @@ out:
 }
 #endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
 
+struct range {
+	unsigned long address;
+	unsigned long size;
+};
+
 static int reloc_bsearch_compare(const void *key, const void *elt)
 {
-	const struct ksplice_section *sect = key;
+	const struct range *range = key;
 	const struct ksplice_reloc *r = elt;
-	if (sect->address + sect->size <= r->blank_addr)
+	if (range->address + range->size <= r->blank_addr)
 		return -1;
-	if (sect->address > r->blank_addr)
+	if (range->address > r->blank_addr)
 		return 1;
 	return 0;
+}
+
+static const struct ksplice_reloc *find_reloc(const struct ksplice_reloc *start,
+					      const struct ksplice_reloc *end,
+					      unsigned long address,
+					      unsigned long size)
+{
+	const struct ksplice_reloc *r;
+	struct range range = { address, size };
+	r = bsearch((void *)&range, start, end - start, sizeof(*r),
+		    reloc_bsearch_compare);
+	if (r == NULL)
+		return NULL;
+	while (r > start && (r - 1)->blank_addr >= address)
+		r--;
+	return r;
 }
 
 static const struct ksplice_reloc *
 init_reloc_search(struct ksplice_pack *pack, const struct ksplice_section *sect)
 {
 	const struct ksplice_reloc *r;
-	r = bsearch((void *)sect, pack->helper_relocs, pack->helper_relocs_end -
-		    pack->helper_relocs, sizeof(*r), reloc_bsearch_compare);
-	if (r != NULL) {
-		while (r > pack->helper_relocs &&
-		       (r - 1)->blank_addr >= sect->address)
-			r--;
-		return r;
-	}
-	return pack->helper_relocs_end;
+	r = find_reloc(pack->helper_relocs, pack->helper_relocs_end,
+		       sect->address, sect->size);
+	if (r == NULL)
+		return pack->helper_relocs_end;
+	return r;
 }
 
 static abort_t lookup_reloc(struct ksplice_pack *pack,
@@ -2286,6 +2311,19 @@ static struct ksplice_section *symbol_section(struct ksplice_pack *pack,
 	return bsearch(sym, pack->helper_sections, pack->helper_sections_end -
 		       pack->helper_sections, sizeof(struct ksplice_section),
 		       symbol_section_bsearch_compare);
+}
+
+static const struct ksplice_reloc *patch_reloc(struct ksplice_pack *pack,
+					       const struct ksplice_patch *p)
+{
+	unsigned long addr = (unsigned long)&p->oldaddr;
+	const struct ksplice_reloc *r =
+	    find_reloc(pack->primary_relocs, pack->primary_relocs_end, addr,
+		       sizeof(addr));
+	if (r == NULL || r->blank_addr < addr ||
+	    r->blank_addr >= addr + sizeof(addr))
+		return NULL;
+	return r;
 }
 
 static abort_t lookup_symbol(struct ksplice_pack *pack,
@@ -2859,7 +2897,8 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 		return OK;
 
 	for (p = pack->patches; p < pack->patches_end; p++) {
-		if (strcmp(sect->symbol->label, p->symbol->label) == 0)
+		const struct ksplice_reloc *r = patch_reloc(pack, p);
+		if (strcmp(sect->symbol->label, r->symbol->label) == 0)
 			break;
 	}
 	if (p >= pack->patches_end)
@@ -2874,9 +2913,13 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
 	if (rec == NULL)
 		return OUT_OF_MEMORY;
+	rec->label = kstrdup(sect->symbol->label, GFP_KERNEL);
+	if (rec->label == NULL) {
+		kfree(rec);
+		return OUT_OF_MEMORY;
+	}
 	rec->addr = run_addr;
 	rec->size = run_size;
-	rec->label = sect->symbol->label;
 	rec->first_byte_safe = false;
 
 	list_add(&rec->list, record_list);

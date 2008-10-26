@@ -296,15 +296,6 @@ bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
 	return get_reloc_offset(ss, reloc, false);
 }
 
-char *str_pointer(struct supersect *ss, void *const *addr)
-{
-	asymbol *sym;
-	bfd_vma offset = read_reloc(ss, addr, sizeof(*addr), &sym);
-	char *str;
-	assert(asprintf(&str, "%s+%lx", sym->name, (unsigned long)offset) >= 0);
-	return str;
-}
-
 const void *read_pointer(struct supersect *ss, void *const *addr,
 			 struct supersect **data_ssp)
 {

@@ -90,16 +90,15 @@ struct ksplice_section {
 
 /**
  * struct ksplice_patch - A function replacement that Ksplice should perform
- * @label:		The unique Ksplice name for the obsolete function
- * @repladdr:		The address of the replacement function
  * @oldaddr:		The address of the obsolete function
+ * @repladdr:		The address of the replacement function
+ * @vaddr:		The address of the page mapping used to write at oldaddr
  * @trampoline:		The bytes of the trampoline itself
  * @saved:		The bytes of the original function which were
  * 			overwritten by the trampoline
  * @size:		The size of the trampoline
  **/
 struct ksplice_patch {
-	struct ksplice_symbol *symbol;
 	unsigned long oldaddr;
 	unsigned long repladdr;
 /* private: */

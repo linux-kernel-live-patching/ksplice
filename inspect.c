@@ -25,6 +25,19 @@
 #include "kmodsrc/ksplice.h"
 #include <stdio.h>
 
+char *str_pointer(struct supersect *ss, void *const *addr);
+
+struct kreloc_section {
+	struct supersect *ss;
+	const struct ksplice_reloc *reloc;
+};
+
+#define kreloc_section_init(ks) *(ks) = NULL
+DEFINE_HASH_TYPE(struct kreloc_section *, kreloc_section_hash,
+		 kreloc_section_hash_init, kreloc_section_hash_free,
+		 kreloc_section_hash_lookup, kreloc_section_init);
+struct kreloc_section_hash ksplice_relocs;
+
 char *str_ulong_vec(struct supersect *ss, const unsigned long *const *datap,
 		    const unsigned long *sizep)
 {
@@ -43,6 +56,21 @@ char *str_ulong_vec(struct supersect *ss, const unsigned long *const *datap,
 	fprintf(fp, "]");
 	fclose(fp);
 	return buf;
+}
+
+static const struct ksplice_reloc *
+find_ksplice_reloc(struct supersect *ss, void *const *addr,
+		   struct supersect **reloc_ss)
+{
+	char *key;
+	assert(asprintf(&key, "%p", addr) >= 0);
+	struct kreloc_section **ksp =
+	    kreloc_section_hash_lookup(&ksplice_relocs, key, FALSE);
+	free(key);
+	if (ksp == NULL)
+		return NULL;
+	*reloc_ss = (*ksp)->ss;
+	return (*ksp)->reloc;
 }
 
 char *str_ksplice_symbol(struct supersect *ss,
@@ -71,6 +99,27 @@ char *str_ksplice_symbolp(struct supersect *ptr_ss,
 						       sym->section);
 	return str_ksplice_symbol(ksymbol_ss, ksymbol_ss->contents.data +
 				  sym->value + offset);
+}
+
+char *str_pointer(struct supersect *ss, void *const *addr)
+{
+	char *str;
+	asymbol *sym;
+	struct supersect *kreloc_ss;
+	const struct ksplice_reloc *kreloc =
+	    find_ksplice_reloc(ss, addr, &kreloc_ss);
+	if (kreloc == NULL) {
+		bfd_vma offset = read_reloc(ss, addr, sizeof(*addr), &sym);
+		assert(asprintf(&str, "%s+%lx", sym->name,
+				(unsigned long)offset) >= 0);
+		return str;
+	} else {
+		assert(asprintf(&str, "[%s]+%lx",
+				 str_ksplice_symbolp(kreloc_ss,
+						     &kreloc->symbol),
+				 kreloc->target_addend) >= 0);
+		return str;
+	}
 }
 
 static const char *str_howto_type(const struct ksplice_reloc_howto *howto)
@@ -163,11 +212,10 @@ void show_ksplice_sections(struct supersect *ksect_ss)
 void show_ksplice_patch(struct supersect *ss,
 			const struct ksplice_patch *kpatch)
 {
-	printf("  symbol: %s\n"
-	       "  repladdr: %s\n"
-	       "\n",
-	       str_ksplice_symbolp(ss, &kpatch->symbol),
-	       str_pointer(ss, (void *const *)&kpatch->repladdr));
+	printf("  repladdr: %s\n"
+	       "  oldaddr: %s\n\n",
+	       str_pointer(ss, (void *const *)&kpatch->repladdr),
+	       str_pointer(ss, (void *const *)&kpatch->oldaddr));
 }
 
 void show_ksplice_patches(struct supersect *kpatch_ss)
@@ -257,6 +305,39 @@ const struct inspect_section inspect_sections[] = {
 	},
 }, *const inspect_sections_end = *(&inspect_sections + 1);
 
+static void load_ksplice_reloc_offsets(struct superbfd *sbfd)
+{
+	kreloc_section_hash_init(&ksplice_relocs);
+
+	asection *sect;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		if (!starts_with(ss->name, ".ksplice_relocs") &&
+		    !starts_with(ss->name, ".ksplice_init_relocs"))
+			continue;
+		struct ksplice_reloc *kreloc;
+		for (kreloc = ss->contents.data;
+		     (void *)kreloc < ss->contents.data + ss->contents.size;
+		     kreloc++) {
+			struct supersect *sym_ss;
+			const void *ptr =
+			    read_pointer(ss, (void *const *)&kreloc->blank_addr,
+					 &sym_ss);
+			char *buf;
+			assert(asprintf(&buf, "%p", ptr) >= 0);
+			struct kreloc_section *ks, **ksp =
+			    kreloc_section_hash_lookup(&ksplice_relocs, buf,
+						       TRUE);
+			free(buf);
+			assert(*ksp == NULL);
+			ks = malloc(sizeof(*ks));
+			*ksp = ks;
+			ks->reloc = kreloc;
+			ks->ss = ss;
+		}
+	}
+}
+
 static void show_inspect_section(struct superbfd *sbfd,
 				 const struct inspect_section *isect)
 {
@@ -289,6 +370,7 @@ int main(int argc, char *argv[])
 	assert(bfd_check_format_matches(ibfd, bfd_object, &matching));
 
 	struct superbfd *sbfd = fetch_superbfd(ibfd);
+	load_ksplice_reloc_offsets(sbfd);
 	const struct inspect_section *isect;
 	for (isect = inspect_sections; isect < inspect_sections_end; isect++)
 		show_inspect_section(sbfd, isect);

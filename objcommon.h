@@ -260,7 +260,6 @@ bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
 const void *read_pointer(struct supersect *ss, void *const *addr,
 			 struct supersect **ssp);
 const char *read_string(struct supersect *ss, const char *const *addr);
-char *str_pointer(struct supersect *ss, void *const *addr);
 
 #define read_num(ss, addr) ((typeof(*(addr))) \
 			    read_reloc(ss, addr, sizeof(*(addr)), NULL))
