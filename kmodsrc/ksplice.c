@@ -1960,7 +1960,7 @@ static int reloc_bsearch_compare(const void *key, const void *elt)
 {
 	const struct ksplice_section *sect = key;
 	const struct ksplice_reloc *r = elt;
-	if (sect->address + sect->size < r->blank_addr)
+	if (sect->address + sect->size <= r->blank_addr)
 		return -1;
 	if (sect->address > r->blank_addr)
 		return 1;
