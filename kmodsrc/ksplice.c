@@ -1417,7 +1417,7 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 		return UNEXPECTED;
 	if (canary_ret == 0) {
 		ksdebug(pack, "reloc: skipped %lx to %s+%lx (altinstr)\n",
-			r->blank_addr, r->symbol->label, r->addend);
+			r->blank_addr, r->symbol->label, r->target_addend);
 		return OK;
 	}
 
@@ -1454,7 +1454,7 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 		return ret;
 
 	ksdebug(pack, "reloc: %lx to %s+%lx (S=%lx ", r->blank_addr,
-		r->symbol->label, r->addend, sym_addr);
+		r->symbol->label, r->target_addend, sym_addr);
 	switch (r->howto->size) {
 	case 1:
 		ksdebug(pack, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
@@ -1484,6 +1484,7 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 	ret = create_labelval(pack, r->symbol, sym_addr, VAL);
 	if (ret != OK)
 		return ret;
+
 	return add_dependency_on_address(pack, sym_addr);
 }
 
@@ -1527,7 +1528,7 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 	if (howto->signed_addend)
 		val |= -(val & (howto->dst_mask & ~(howto->dst_mask >> 1)));
 	val <<= howto->rightshift;
-	val -= r->addend;
+	val -= r->insn_addend + r->target_addend;
 	*valp = val;
 	return OK;
 }
@@ -1536,7 +1537,7 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long addr, unsigned long sym_addr)
 {
-	unsigned long val = sym_addr + r->addend;
+	unsigned long val = sym_addr + r->target_addend + r->insn_addend;
 	const struct ksplice_reloc_howto *howto = r->howto;
 	val >>= howto->rightshift;
 	switch (howto->size) {
@@ -2051,7 +2052,7 @@ static abort_t lookup_reloc(struct ksplice_pack *pack,
 	if (canary_ret == 0) {
 		ksdebug(pack, "run-pre: reloc skipped at p_a=%lx to %s+%lx "
 			"(altinstr)\n", r->blank_addr, r->symbol->label,
-			r->addend);
+			r->target_addend);
 		return NO_MATCH;
 	}
 	if (addr != r->blank_addr) {
@@ -2146,7 +2147,8 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 	if (mode == RUN_PRE_INITIAL)
 		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx to %s+%lx: "
 			"found %s = %lx\n", run_addr, r->blank_addr,
-			r->symbol->label, r->addend, r->symbol->label, val);
+			r->symbol->label, r->target_addend, r->symbol->label,
+			val);
 
 	if (contains_canary(pack, run_addr, r->howto) != 0) {
 		ksdebug(pack, "Aborted.  Unexpected canary in run code at %lx"

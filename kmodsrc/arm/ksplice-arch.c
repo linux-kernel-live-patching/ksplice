@@ -36,7 +36,8 @@ static const struct ksplice_reloc_howto trampoline_howto = {
 
 static const struct ksplice_reloc trampoline_reloc = {
 	.symbol = &trampoline_symbol,
-	.addend = -8,
+	.insn_addend = -8,
+	.target_addend = 0,
 	.howto = &trampoline_howto,
 };
 

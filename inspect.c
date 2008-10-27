@@ -96,14 +96,16 @@ void show_ksplice_reloc(struct supersect *ss,
 	printf("  blank_addr: %s  size: %x\n"
 	       "  type: %s\n"
 	       "  symbol: %s\n"
-	       "  addend: %lx\n"
+	       "  insn_addend: %lx\n"
+	       "  target_addend: %lx\n"
 	       "  pcrel: %x  dst_mask: %lx  rightshift: %x  signed_addend: %x\n"
 	       "\n",
 	       str_pointer(ss, (void *const *)&kreloc->blank_addr),
 	       read_num(khowto_ss, &khowto->size),
 	       str_howto_type(khowto),
 	       str_ksplice_symbolp(ss, &kreloc->symbol),
-	       read_num(ss, &kreloc->addend),
+	       read_num(ss, &kreloc->insn_addend),
+	       read_num(ss, &kreloc->target_addend),
 	       read_num(khowto_ss, &khowto->pcrel),
 	       read_num(khowto_ss, &khowto->dst_mask),
 	       read_num(khowto_ss, &khowto->rightshift),

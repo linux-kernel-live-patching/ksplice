@@ -1462,7 +1462,8 @@ void write_ksplice_symbol(struct supersect *ss,
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
-	bfd_vma addend = get_reloc_offset(ss, orig_reloc, false);
+	bfd_vma reloc_addend = get_reloc_offset(ss, orig_reloc, false);
+	bfd_vma target_addend = get_reloc_offset(ss, orig_reloc, true);
 	unsigned long *repladdr = ss->contents.data + orig_reloc->address;
 
 	if (mode("finalize") && starts_with(ss->name, ".ksplice_patches")) {
@@ -1484,7 +1485,7 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	}
 
 	struct span *span = reloc_target_span(ss, orig_reloc);
-	if (span == ss->spans.data && span->start != addend)
+	if (span == ss->spans.data && span->start != target_addend)
 		span = NULL;
 	blot_section(ss, orig_reloc->address, orig_reloc->howto);
 
@@ -1510,9 +1511,12 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 		write_ksplice_symbol(kreloc_ss, &kreloc->symbol, sym_ptr, span,
 				     "");
 	}
-	if (span != NULL && span->start != 0)
-		addend += sym_ptr->value - span->start;
-	kreloc->addend = addend;
+	if (span != NULL && span->start != 0) {
+		reloc_addend += sym_ptr->value - span->start;
+		target_addend += sym_ptr->value - span->start;
+	}
+	kreloc->insn_addend = reloc_addend - target_addend;
+	kreloc->target_addend = target_addend;
 	write_ksplice_reloc_howto(kreloc_ss, &kreloc->howto, orig_reloc->howto);
 }
 

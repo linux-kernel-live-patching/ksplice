@@ -24,7 +24,8 @@ struct ksplice_reloc {
 	unsigned long blank_addr;
 	struct ksplice_symbol *symbol;
 	const struct ksplice_reloc_howto *howto;
-	long addend;
+	long insn_addend;
+	long target_addend;
 };
 
 enum ksplice_reloc_howto_type {

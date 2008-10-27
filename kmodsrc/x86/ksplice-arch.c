@@ -334,8 +334,8 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 		run_howto.size = ud_operand_len(run_op);
 		if (r->howto->size != run_howto.size)
 			run_howto.dst_mask = ~(~0 << run_howto.size * 8);
-		run_reloc.addend += (ud_operand_len(pre_op) -
-				     ud_operand_len(run_op));
+		run_reloc.insn_addend += (ud_operand_len(pre_op) -
+					  ud_operand_len(run_op));
 		ret = handle_reloc(pack, sect, &run_reloc,
 				   (unsigned long)(run + run_off), mode);
 		if (ret != OK) {
@@ -529,7 +529,8 @@ static const struct ksplice_reloc_howto trampoline_howto = {
 
 static const struct ksplice_reloc trampoline_reloc = {
 	.symbol = &trampoline_symbol,
-	.addend = -4,
+	.insn_addend = -4,
+	.target_addend = 0,
 	.howto = &trampoline_howto,
 };
 
