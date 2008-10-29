@@ -1,6 +1,16 @@
 #ifndef _KSPLICE_PATCH_H
 #define _KSPLICE_PATCH_H
 
+enum ksplice_option_type {
+	KSPLICE_OPTION_ASSUME_RODATA,
+};
+
+struct ksplice_option {
+	enum ksplice_option_type type;
+	const void *target;
+};
+
+#ifdef __KERNEL__
 #ifndef __used
 #define __used __attribute_used__
 #endif
@@ -24,5 +34,14 @@
 #define ksplice_reverse(fn) ksplice_call_void(reverse, fn)
 #define ksplice_post_reverse(fn) ksplice_call_void(post_reverse, fn)
 #define ksplice_fail_reverse(fn) ksplice_call_void(fail_reverse, fn)
+
+#define ksplice_assume_rodata(obj)				\
+	const struct ksplice_option				\
+	__used __attribute__((__section__(".ksplice_options")))	\
+	assume_rodata_##obj = {					\
+		.type = KSPLICE_OPTION_ASSUME_RODATA,		\
+		.target = (const void *)&obj,			\
+	}
+#endif /* __KERNEL__ */
 
 #endif /* _KSPLICE_PATCH_H */

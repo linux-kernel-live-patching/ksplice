@@ -757,6 +757,23 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 		p->vaddr = NULL;
 	for (s = pack->helper_sections; s < pack->helper_sections_end; s++)
 		s->match_map = NULL;
+	for (p = pack->patches; p < pack->patches_end; p++) {
+		const struct ksplice_reloc *r = patch_reloc(pack, p);
+		if (r == NULL) {
+			ret = -ENOENT;
+			goto out;
+		}
+		if (p->type == KSPLICE_PATCH_DATA) {
+			s = symbol_section(pack, r->symbol);
+			if (s == NULL) {
+				ret = -ENOENT;
+				goto out;
+			}
+			if (s->flags & KSPLICE_SECTION_DATA)
+				s->flags = (s->flags & ~KSPLICE_SECTION_DATA) |
+				    KSPLICE_SECTION_RODATA;
+		}
+	}
 
 	list_for_each_entry(update, &updates, list) {
 		if (strcmp(pack->kid, update->kid) == 0) {

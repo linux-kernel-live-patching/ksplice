@@ -53,6 +53,7 @@
 #include "objcommon.h"
 #include "kmodsrc/ksplice.h"
 #include "kmodsrc/offsets.h"
+#include "ksplice-patch/ksplice-patch.h"
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -326,6 +327,33 @@ void load_offsets()
 	config = config_ss->contents.data;
 }
 
+void load_options(struct superbfd *sbfd)
+{
+	asection *sect = bfd_get_section_by_name(sbfd->abfd,
+						 ".ksplice_options");
+	if (sect == NULL)
+		return;
+	struct supersect *ss = fetch_supersect(sbfd, sect);
+	const struct ksplice_option *opt;
+	for (opt = ss->contents.data;
+	     (void *)opt < ss->contents.data + ss->contents.size; opt++) {
+		if (opt->type == KSPLICE_OPTION_ASSUME_RODATA) {
+			arelent *reloc = find_reloc(ss, &opt->target);
+			struct span *span = reloc_target_span(ss, reloc);
+			assert(span != NULL);
+			assert(span->ss->type == SS_TYPE_DATA);
+			assert(span->start == 0 &&
+			       span->size == span->ss->contents.size);
+			span->ss->type = SS_TYPE_RODATA;
+			break;
+		} else {
+			err(sbfd, "Unrecognized Ksplice option %d\n",
+			    opt->type);
+			DIE;
+		}
+	}
+}
+
 bool matchable_data_section(struct supersect *ss)
 {
 	if (ss->type == SS_TYPE_STRING)
@@ -449,7 +477,9 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			if (span->new || span->patch || span->datapatch)
+			if (starts_with(ss->name, ".ksplice_options"))
+				span->keep = false;
+			else if (span->new || span->patch || span->datapatch)
 				keep_span(span);
 			else
 				span->keep = false;
@@ -2370,6 +2400,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_EXIT;
 	if (starts_with(ss->name, ".ksplice_call"))
 		return SS_TYPE_KSPLICE_CALL;
+	if (starts_with(ss->name, ".ksplice_options"))
+		return SS_TYPE_SPECIAL;
 	if (starts_with(ss->name, ".ksplice"))
 		return SS_TYPE_KSPLICE;
 
@@ -3112,6 +3144,7 @@ static void init_objmanip_superbfd(struct superbfd *sbfd)
 	init_label_map(sbfd);
 	initialize_supersect_types(sbfd);
 	initialize_spans(sbfd);
+	load_options(sbfd);
 }
 
 void mangle_section_name(struct superbfd *sbfd, const char *name)
