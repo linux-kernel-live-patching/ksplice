@@ -482,7 +482,7 @@ static uint8_t ud_prefix_len(struct ud *ud)
 
 static long ud_operand_lval(struct ud_operand *operand)
 {
-	switch (operand->size) {
+	switch (operand->type == UD_OP_MEM ? operand->offset : operand->size) {
 	case 8:
 		return operand->lval.sbyte;
 	case 16:
