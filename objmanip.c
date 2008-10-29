@@ -625,12 +625,13 @@ void compare_exported_symbols(struct superbfd *oldsbfd,
 				}
 			}
 		}
-		if (last_ss != new->ss) {
-			last_ss = new->ss;
-			ed = new_export_desc(new->ss, deletion);
-		}
-		if (!found)
+		if (!found) {
+			if (last_ss != new->ss) {
+				last_ss = new->ss;
+				ed = new_export_desc(new->ss, deletion);
+			}
 			*vec_grow(&ed->names, 1) = new->name;
+		}
 	}
 }
 
