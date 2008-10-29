@@ -191,6 +191,7 @@ struct span {
 	bool patch;
 	bool bugpatch;
 	bool datapatch;
+	bool precallable;
 	struct span *match;
 	bfd_size_type shift;
 };
@@ -210,7 +211,7 @@ struct superbfd {
 enum supersect_type {
 	SS_TYPE_TEXT, SS_TYPE_DATA, SS_TYPE_RODATA, SS_TYPE_STRING,
 	SS_TYPE_SPECIAL, SS_TYPE_IGNORED, SS_TYPE_KSPLICE, SS_TYPE_EXPORT,
-	SS_TYPE_EXIT, SS_TYPE_UNKNOWN
+	SS_TYPE_EXIT, SS_TYPE_KSPLICE_CALL, SS_TYPE_UNKNOWN
 };
 
 struct supersect {

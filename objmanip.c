@@ -117,6 +117,7 @@ static void initialize_string_spans(struct supersect *ss);
 static void initialize_table_spans(struct superbfd *sbfd,
 				   struct table_section *s);
 static void initialize_table_section_spans(struct superbfd *sbfd);
+static void initialize_ksplice_call_spans(struct supersect *ss);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
 struct span *find_span(struct supersect *ss, bfd_size_type address);
 void remove_unkept_spans(struct superbfd *sbfd);
@@ -167,6 +168,7 @@ asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name);
 void filter_table_sections(struct superbfd *isbfd);
 void filter_table_section(struct superbfd *sbfd, const struct table_section *s);
 void keep_referenced_sections(struct superbfd *sbfd);
+void mark_precallable_spans(struct superbfd *sbfd);
 bfd_boolean copy_object(bfd *ibfd, bfd *obfd);
 void setup_section(bfd *ibfd, asection *isection, void *obfdarg);
 static void setup_new_section(bfd *obfd, struct supersect *ss);
@@ -435,6 +437,11 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 
 	assert(bfd_close(prebfd));
 
+	do {
+		changed = false;
+		mark_precallable_spans(isbfd);
+	} while (changed);
+
 	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
@@ -446,6 +453,11 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 				keep_span(span);
 			else
 				span->keep = false;
+			if (span->patch && span->precallable) {
+				err(isbfd, "Patched span %s can be reached "
+				    "by a precall function\n", span->label);
+				DIE;
+			}
 		}
 	}
 
@@ -505,6 +517,8 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (ss->type == SS_TYPE_KSPLICE_CALL)
+			continue;
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
@@ -1250,7 +1264,8 @@ void rm_relocs(struct superbfd *isbfd)
 		if (mode("keep") && ss->type == SS_TYPE_SPECIAL)
 			remove_relocs = false;
 
-		if (ss->type == SS_TYPE_KSPLICE)
+		if (ss->type == SS_TYPE_KSPLICE ||
+		    ss->type == SS_TYPE_KSPLICE_CALL)
 			remove_relocs = false;
 		if (mode("finalize") &&
 		    (starts_with(ss->name, ".ksplice_patches") ||
@@ -1941,6 +1956,34 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	}
 }
 
+void mark_precallable_spans(struct superbfd *sbfd)
+{
+	asection *sect;
+	struct supersect *ss, *sym_ss;
+	struct span *address_span, *target_span;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		ss = fetch_supersect(sbfd, sect);
+		arelent **relocp;
+		if (ss->type == SS_TYPE_SPECIAL || ss->type == SS_TYPE_EXPORT)
+			continue;
+		for (relocp = ss->relocs.data;
+		     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+			asymbol *sym = *(*relocp)->sym_ptr_ptr;
+			address_span = find_span(ss, (*relocp)->address);
+			if (!address_span->precallable)
+				continue;
+			target_span = reloc_target_span(ss, *relocp);
+			if (target_span == NULL || target_span->keep)
+				continue;
+			sym_ss = fetch_supersect(sbfd, sym->section);
+			if (sym_ss->type == SS_TYPE_IGNORED)
+				continue;
+			target_span->precallable = true;
+			changed = true;
+		}
+	}
+}
+
 void keep_referenced_sections(struct superbfd *sbfd)
 {
 	asection *sect;
@@ -2325,6 +2368,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 	     starts_with(ss->name, ".ksplice_sections.exit") ||
 	     starts_with(ss->name, ".ksplice_patches.exit")))
 		return SS_TYPE_EXIT;
+	if (starts_with(ss->name, ".ksplice_call"))
+		return SS_TYPE_KSPLICE_CALL;
 	if (starts_with(ss->name, ".ksplice"))
 		return SS_TYPE_KSPLICE;
 
@@ -2784,6 +2829,10 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 	span->patch = false;
 	span->bugpatch = false;
 	span->datapatch = false;
+	span->precallable = starts_with(ss->name, ".ksplice_call_pre_apply") ||
+	    starts_with(ss->name, ".ksplice_call_check_apply") ||
+	    starts_with(ss->name, ".ksplice_call_fail_apply") ||
+	    starts_with(ss->name, ".ksplice_call_post_remove");
 	span->match = NULL;
 	span->shift = 0;
 	asymbol **symp = symbolp_scan(ss, span->start);
@@ -2915,6 +2964,17 @@ static void initialize_table_section_spans(struct superbfd *sbfd)
 	}
 }
 
+static void initialize_ksplice_call_spans(struct supersect *ss)
+{
+	arelent **relocp;
+	for (relocp = ss->relocs.data;
+	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
+		arelent *reloc = *relocp;
+		new_span(ss, reloc->address, bfd_get_reloc_size(reloc->howto));
+		/* the span labels should already be unique */
+	}
+}
+
 static void initialize_spans(struct superbfd *sbfd)
 {
 	asection *sect;
@@ -2925,6 +2985,8 @@ static void initialize_spans(struct superbfd *sbfd)
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		if (ss->type == SS_TYPE_STRING)
 			initialize_string_spans(ss);
+		else if (ss->type == SS_TYPE_KSPLICE_CALL)
+			initialize_ksplice_call_spans(ss);
 		else if (!mode("keep") || ss->type != SS_TYPE_EXPORT)
 			new_span(ss, 0, ss->contents.size);
 	}

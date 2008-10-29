@@ -247,6 +247,19 @@ void show_ksplice_exports(struct supersect *export_ss)
 		show_ksplice_export(export_ss, exp);
 }
 
+void show_ksplice_call(struct supersect *ss, void *const *kcall)
+{
+	printf("%s\n", str_pointer(ss, kcall));
+}
+
+void show_ksplice_calls(struct supersect *kcall_ss)
+{
+	void *const *kcall;
+	for (kcall = kcall_ss->contents.data; (void *)kcall <
+	     kcall_ss->contents.data + kcall_ss->contents.size; kcall++)
+		show_ksplice_call(kcall_ss, kcall);
+}
+
 void show_ksplice_system_map(struct supersect *ss,
 			     const struct ksplice_system_map *smap)
 {
@@ -301,6 +314,12 @@ const struct inspect_section inspect_sections[] = {
 		.header = "KSPLICE EXPORTS",
 		.notfound = "No ksplice exports.\n",
 		.show = show_ksplice_exports,
+	},
+	{
+		.prefix = ".ksplice_call",
+		.header = "KSPLICE CALLS",
+		.notfound = "No ksplice calls.\n",
+		.show = show_ksplice_calls,
 	},
 	{
 		.prefix = ".ksplice_system_map",
