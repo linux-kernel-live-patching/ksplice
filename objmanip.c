@@ -2688,6 +2688,11 @@ static char *static_local_symbol(struct superbfd *sbfd, asymbol *sym)
 	if (dot == NULL || dot[1 + strspn(dot + 1, "0123546789")] != '\0')
 		return NULL;
 	char *basename = strndup(sym->name, dot - sym->name);
+
+	/* Handle C.123.12345 symbols */
+	dot = strrchr(basename, '.');
+	if (dot != NULL && dot[1 + strspn(dot + 1, "0123546789")] == '\0')
+		basename = strndup(basename, dot - basename);
 	const char *caller;
 	if (strcmp(basename, "__func__") == 0 ||
 	    strcmp(basename, "__PRETTY_FUNCTION__") == 0)
