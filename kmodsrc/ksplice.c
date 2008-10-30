@@ -158,7 +158,6 @@ struct safety_record {
 	const char *label;
 	unsigned long addr;
 	unsigned long size;
-	bool first_byte_safe;
 };
 
 struct candidate_val {
@@ -1347,8 +1346,6 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 		if (p->type == KSPLICE_PATCH_TEXT) {
 			if (p->repladdr == 0)
 				p->repladdr = (unsigned long)ksplice_deleted;
-			else
-				rec->first_byte_safe = true;
 		}
 
 		ret = add_dependency_on_address(pack, p->oldaddr);
@@ -2503,7 +2500,6 @@ static abort_t apply_patches(struct update *update)
 			rec->addr = sect->address;
 			rec->size = sect->size;
 			rec->label = sect->symbol->label;
-			rec->first_byte_safe = false;
 			list_add(&rec->list, &pack->safety_records);
 		}
 	}
@@ -2826,8 +2822,7 @@ static abort_t check_address(struct update *update,
 static abort_t check_record(struct conflict_addr *ca,
 			    const struct safety_record *rec, unsigned long addr)
 {
-	if ((addr > rec->addr && addr < rec->addr + rec->size) ||
-	    (addr == rec->addr && !rec->first_byte_safe)) {
+	if (addr >= rec->addr && addr < rec->addr + rec->size) {
 		if (ca != NULL) {
 			ca->label = rec->label;
 			ca->has_conflict = true;
@@ -2957,7 +2952,6 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 	}
 	rec->addr = run_addr;
 	rec->size = run_size;
-	rec->first_byte_safe = false;
 
 	list_add(&rec->list, record_list);
 	return OK;
