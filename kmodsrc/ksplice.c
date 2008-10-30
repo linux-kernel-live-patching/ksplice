@@ -3760,6 +3760,8 @@ static ssize_t abort_cause_show(struct update *update, char *buf)
 		return snprintf(buf, PAGE_SIZE, "call_failed\n");
 	case UNEXPECTED:
 		return snprintf(buf, PAGE_SIZE, "unexpected\n");
+	default:
+		return snprintf(buf, PAGE_SIZE, "unknown\n");
 	}
 	return 0;
 }
