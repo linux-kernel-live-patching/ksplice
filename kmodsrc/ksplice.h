@@ -108,10 +108,10 @@ struct ksplice_patch {
 	unsigned long repladdr;
 	enum ksplice_patch_type type;
 	unsigned int size;
-	char contents[MAX_TRAMPOLINE_SIZE];
+	void *contents;
 /* private: */
 	void *vaddr;
-	char saved[MAX_TRAMPOLINE_SIZE];
+	void *saved;
 };
 
 /**

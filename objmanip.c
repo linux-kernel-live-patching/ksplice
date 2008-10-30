@@ -158,6 +158,8 @@ void write_canary(struct supersect *ss, int offset, bfd_size_type size,
 		  bfd_vma dst_mask);
 static void write_ksplice_section(struct span *span);
 void write_ksplice_patch(struct superbfd *sbfd, struct span *span);
+void *write_patch_storage(struct supersect *ss, struct ksplice_patch *patch,
+			  size_t size);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 				 const char *label, const char *sectname);
 static void write_bugline_patches(struct superbfd *sbfd);
@@ -1799,6 +1801,7 @@ void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
 	kpatch->type = KSPLICE_PATCH_TEXT;
 	write_reloc(kpatch_ss, &kpatch->repladdr, &span->ss->symbol,
 		    span->start + span->shift);
+	write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE);
 }
 
 asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name)
@@ -1845,6 +1848,7 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 	kpatch->type = KSPLICE_PATCH_TEXT;
 	asymbol **symp = make_undefined_symbolp(sbfd, strdup(name));
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
+	write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE);
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
@@ -3063,10 +3067,24 @@ static void write_bugline_patches(struct superbfd *sbfd)
 		    (kpatch_ss, sym->section->name, &kpatch->oldaddr,
 		     sizeof(kpatch->oldaddr), span->label, ts->other_offset);
 
-		unsigned short line = *(unsigned short *)(entry +
-							  ts->other_offset);
-		*(unsigned short *)kpatch->contents = line;
-		kpatch->size = sizeof(unsigned short);
+		unsigned short *line =
+		    write_patch_storage(kpatch_ss, kpatch, sizeof(*line));
+		*line = *(unsigned short *)(entry + ts->other_offset);
 		kpatch->type = KSPLICE_PATCH_BUGLINE;
 	}
+}
+
+void *write_patch_storage(struct supersect *ss, struct ksplice_patch *kpatch,
+			  size_t size)
+{
+	struct supersect *data_ss = make_section(ss->parent,
+						 ".ksplice_patch_data");
+	char *saved = sect_do_grow(data_ss, 1, size, 1);
+	write_reloc(ss, &kpatch->saved, &data_ss->symbol,
+		    addr_offset(data_ss, saved));
+	char *data = sect_do_grow(data_ss, 1, size, 1);
+	write_reloc(ss, &kpatch->contents, &data_ss->symbol,
+		    addr_offset(data_ss, data));
+	kpatch->size = size;
+	return data;
 }

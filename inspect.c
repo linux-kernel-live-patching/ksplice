@@ -199,13 +199,14 @@ void show_ksplice_sections(struct supersect *ksect_ss)
 const char *str_ksplice_patch_type(struct supersect *ss,
 				   const struct ksplice_patch *kpatch)
 {
+	const unsigned short *line;
 	switch(kpatch->type) {
 	case KSPLICE_PATCH_TEXT:
 		return strprintf("text\n  repladdr: %s", str_pointer
 				 (ss, (void *const *)&kpatch->repladdr));
 	case KSPLICE_PATCH_BUGLINE:
-		return strprintf("bugline\n  line: %hx",
-				 *(unsigned short *)kpatch->contents);
+		line = read_pointer(ss, &kpatch->contents, NULL);
+		return strprintf("bugline\n  line: %hx", *line);
 	default:
 		return "unknown";
 	}
