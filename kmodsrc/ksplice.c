@@ -2947,12 +2947,6 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 	if (p >= pack->patches_end)
 		return OK;
 
-	if ((sect->flags & KSPLICE_SECTION_TEXT) == 0 && p->repladdr != 0) {
-		ksdebug(pack, "Error: ksplice_patch %s is matched to a "
-			"non-deleted non-text section!\n", sect->symbol->label);
-		return UNEXPECTED;
-	}
-
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
 	if (rec == NULL)
 		return OUT_OF_MEMORY;

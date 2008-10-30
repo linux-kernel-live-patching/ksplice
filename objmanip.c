@@ -442,7 +442,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			if (span->new || span->patch)
+			if (span->new || span->patch || span->datapatch)
 				keep_span(span);
 			else
 				span->keep = false;
@@ -456,7 +456,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			if (span->patch || span->bugpatch)
+			if (span->patch || span->bugpatch || span->datapatch)
 				debug0(isbfd, "Patching span %s\n",
 				       span->label);
 		}
@@ -510,9 +510,9 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		     span < ss->spans.data + ss->spans.size; span++) {
 			if (span->keep)
 				write_output = true;
-			if (span->patch || span->new)
+			if (span->patch || span->new || span->datapatch)
 				write_ksplice_section(span);
-			if (span->patch)
+			if (span->patch || span->datapatch)
 				write_ksplice_patch(isbfd, span);
 		}
 	}
@@ -715,6 +715,9 @@ void match_spans(struct span *old_span, struct span *new_span)
 	new_span->match = old_span;
 	debug1(sbfd, "Matched old %s to new %s\n", old_span->label,
 	       new_span->label);
+	if (old_span->ss->type != new_span->ss->type &&
+	    old_span->ss->type == new_span->ss->orig_type)
+		old_span->ss->type = new_span->ss->type;
 }
 
 static void match_global_symbols(struct span *old_span, asymbol *oldsym,
@@ -767,7 +770,8 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 			    fetch_supersect(oldsbfd, oldsym->section);
 			struct supersect *new_ss =
 			    fetch_supersect(newsbfd, newsym->section);
-			if (old_ss->type != new_ss->type ||
+			if ((old_ss->type != new_ss->type &&
+			     old_ss->type != new_ss->orig_type) ||
 			    old_ss->type == SS_TYPE_SPECIAL ||
 			    old_ss->type == SS_TYPE_EXPORT)
 				continue;
@@ -973,6 +977,13 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 		new_span->patch = true;
 		debug1(newsbfd, "Changing %s due to %s\n", new_span->label,
 		       reason);
+	} else if (new_span->ss->type == SS_TYPE_RODATA &&
+		   new_span->size == old_span->size) {
+		if (new_span->datapatch)
+			return;
+		new_span->datapatch = true;
+		debug1(newsbfd, "Changing %s in-place due to %s\n",
+		       new_span->label, reason);
 	} else {
 		debug1(newsbfd, "Unmatching %s and %s due to %s\n",
 		       old_span->label, new_span->label, reason);
@@ -1798,10 +1809,22 @@ void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
 
 	write_ksplice_patch_reloc(kpatch_ss, span->ss->name, &kpatch->oldaddr,
 				  sizeof(kpatch->oldaddr), span->label, 0);
-	kpatch->type = KSPLICE_PATCH_TEXT;
+	if (span->ss->type == SS_TYPE_TEXT) {
+		kpatch->type = KSPLICE_PATCH_TEXT;
+		write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE);
+	} else {
+		kpatch->type = KSPLICE_PATCH_DATA;
+		kpatch->size = span->size;
+		struct supersect *data_ss =
+		    make_section(sbfd, ".ksplice_patch_data");
+		write_reloc(kpatch_ss, &kpatch->contents, &span->ss->symbol,
+			    span->start + span->shift);
+		char *saved = sect_do_grow(data_ss, 1, span->size, 1);
+		write_reloc(kpatch_ss, &kpatch->saved, &data_ss->symbol,
+			    addr_offset(data_ss, saved));
+	}
 	write_reloc(kpatch_ss, &kpatch->repladdr, &span->ss->symbol,
 		    span->start + span->shift);
-	write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE);
 }
 
 asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name)
@@ -2453,6 +2476,7 @@ void initialize_supersect_types(struct superbfd *sbfd)
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
 		ss->type = supersect_type(ss);
+		ss->orig_type = ss->type;
 		if (ss->type == SS_TYPE_UNKNOWN) {
 			err(sbfd, "Unknown section type: %s\n", ss->name);
 			DIE;
@@ -2759,6 +2783,7 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 	span->new = false;
 	span->patch = false;
 	span->bugpatch = false;
+	span->datapatch = false;
 	span->match = NULL;
 	span->shift = 0;
 	asymbol **symp = symbolp_scan(ss, span->start);

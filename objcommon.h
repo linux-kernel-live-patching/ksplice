@@ -190,6 +190,7 @@ struct span {
 	bool new;
 	bool patch;
 	bool bugpatch;
+	bool datapatch;
 	struct span *match;
 	bfd_size_type shift;
 };
@@ -227,6 +228,7 @@ struct supersect {
 	asymbol *symbol;
 	bool keep;
 	enum supersect_type type;
+	enum supersect_type orig_type;
 };
 
 struct kernel_symbol {

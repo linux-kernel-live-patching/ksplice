@@ -207,6 +207,8 @@ const char *str_ksplice_patch_type(struct supersect *ss,
 	case KSPLICE_PATCH_BUGLINE:
 		line = read_pointer(ss, &kpatch->contents, NULL);
 		return strprintf("bugline\n  line: %hx", *line);
+	case KSPLICE_PATCH_DATA:
+		return strprintf("data\n  size: %x", kpatch->size);
 	default:
 		return "unknown";
 	}
