@@ -52,6 +52,18 @@ ifneq ($(filter snap diff,$(KSPLICE_MODE)),)
 include $(if $(KBUILD_SRC),$(KBUILD_SRC)/)scripts/Makefile.lib
 endif
 include $(if $(KBUILD_SRC),$(KBUILD_SRC)/)Makefile
+
+ifneq ($(skip-makefile),)
+
+PHONY += __ksplice
+__ksplice: FORCE
+	$(if $(KBUILD_VERBOSE:1=),@)$(MAKE) -C $(KBUILD_OUTPUT) \
+	KBUILD_SRC=$(CURDIR) \
+	KBUILD_EXTMOD="$(KBUILD_EXTMOD)" -f $(ksplice-makefile) \
+	$(if $(wildcard $(KBUILD_OUTPUT)/include/config/kernel.release),--old-file=include/config/kernel.release)
+
+else	# skip-makefile
+
 CC := ksplice-cc.pl $(CC)
 CFLAGS_KSPLICE = -ffunction-sections -fdata-sections -ksplice-cflags-api=1
 CFLAGS_KERNEL += $(CFLAGS_KSPLICE)
@@ -95,6 +107,8 @@ ksplice_modinst: $(ksplice-dirs)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modinst
 
 endif	# KSPLICE_MODE
+
+endif	# skip-makefile
 
 else	# obj
 
@@ -158,6 +172,8 @@ $(sort $(subdir-obj-y:=.KSPLICE)): $(ksplice-dirs) ;
 endif	# KSPLICE_MODE
 
 endif	# obj
+
+ifeq ($(skip-makefile),)
 
 ifeq ($(KSPLICE_MODE),revert)
 
@@ -242,6 +258,8 @@ __ksplice: $(ksplice-deps) $(ksplice-dirs)
 PHONY += $(ksplice-dirs)
 $(ksplice-dirs): $(ksplice-before)
 	$(Q)$(MAKE) -f $(ksplice-makefile) obj=$(@:_ksplice_%=%)
+
+endif	# skip-makefile
 
 $(eval $(ksplice-cow-eval))
 
