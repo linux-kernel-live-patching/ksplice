@@ -205,7 +205,7 @@ const char *str_ksplice_patch_type(struct supersect *ss,
 				 (ss, (void *const *)&kpatch->repladdr));
 	case KSPLICE_PATCH_BUGLINE:
 		return strprintf("bugline\n  line: %hx",
-				 *(unsigned short *)kpatch->trampoline);
+				 *(unsigned short *)kpatch->contents);
 	default:
 		return "unknown";
 	}

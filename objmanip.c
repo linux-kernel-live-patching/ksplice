@@ -3065,7 +3065,7 @@ static void write_bugline_patches(struct superbfd *sbfd)
 
 		unsigned short line = *(unsigned short *)(entry +
 							  ts->other_offset);
-		*(unsigned short *)kpatch->trampoline = line;
+		*(unsigned short *)kpatch->contents = line;
 		kpatch->size = sizeof(unsigned short);
 		kpatch->type = KSPLICE_PATCH_BUGLINE;
 	}

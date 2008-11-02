@@ -64,9 +64,9 @@ static abort_t prepare_trampoline(struct ksplice_pack *pack,
 				  struct ksplice_patch *p)
 {
 	p->size = 4;
-	*(uint32_t *)p->trampoline = 0xea000000;
+	*(uint32_t *)p->contents = 0xea000000;
 	return write_reloc_value(pack, &trampoline_reloc,
-				 (unsigned long)p->trampoline,
+				 (unsigned long)p->contents,
 				 p->repladdr - p->oldaddr);
 }
 

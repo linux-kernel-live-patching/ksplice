@@ -2881,7 +2881,7 @@ static void insert_trampoline(struct ksplice_patch *p)
 	mm_segment_t old_fs = get_fs();
 	set_fs(KERNEL_DS);
 	memcpy((void *)p->saved, p->vaddr, p->size);
-	memcpy(p->vaddr, (void *)p->trampoline, p->size);
+	memcpy(p->vaddr, (void *)p->contents, p->size);
 	flush_icache_range(p->oldaddr, p->oldaddr + p->size);
 	set_fs(old_fs);
 }
@@ -2889,7 +2889,7 @@ static void insert_trampoline(struct ksplice_patch *p)
 static abort_t verify_trampoline(struct ksplice_pack *pack,
 				 const struct ksplice_patch *p)
 {
-	if (memcmp(p->vaddr, (void *)p->trampoline, p->size) != 0) {
+	if (memcmp(p->vaddr, (void *)p->contents, p->size) != 0) {
 		ksdebug(pack, "Aborted.  Trampoline at %lx has been "
 			"overwritten.\n", p->oldaddr);
 		return CODE_BUSY;

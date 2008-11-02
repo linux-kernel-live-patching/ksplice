@@ -93,22 +93,22 @@ enum ksplice_patch_type {
 };
 
 /**
- * struct ksplice_patch - A function replacement that Ksplice should perform
- * @oldaddr:		The address of the obsolete function
+ * struct ksplice_patch - A replacement that Ksplice should perform
+ * @oldaddr:		The address of the obsolete function or structure
  * @repladdr:		The address of the replacement function
  * @type:		The type of the ksplice patch
- * @size:		The size of the trampoline
- * @trampoline:		The bytes of the trampoline itself
- * @vaddr:		The address of the page mapping used to write at oldaddr
- * @saved:		The bytes of the original function which were
- * 			overwritten by the trampoline
+ * @size:		The size of the patch
+ * @contents:		The bytes to be installed at oldaddr
+ * @vaddr		The address of the page mapping used to write at oldaddr
+ * @saved:		The bytes originally at oldaddr which were
+ * 			overwritten by the patch
  **/
 struct ksplice_patch {
 	unsigned long oldaddr;
 	unsigned long repladdr;
 	enum ksplice_patch_type type;
 	unsigned int size;
-	char trampoline[MAX_TRAMPOLINE_SIZE];
+	char contents[MAX_TRAMPOLINE_SIZE];
 /* private: */
 	void *vaddr;
 	char saved[MAX_TRAMPOLINE_SIZE];
