@@ -2810,8 +2810,9 @@ static abort_t check_address(struct update *update,
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
+		unsigned long tramp_addr = follow_trampolines(pack, addr);
 		list_for_each_entry(rec, &pack->safety_records, list) {
-			ret = check_record(ca, rec, addr);
+			ret = check_record(ca, rec, tramp_addr);
 			if (ret != OK)
 				status = ret;
 		}
@@ -3026,14 +3027,17 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 	struct module *m;
 
 	while (1) {
-		if (trampoline_target(pack, addr, &new_addr) != OK)
+#ifdef KSPLICE_STANDALONE
+		if (!bootstrapped)
+			return addr;
+#endif /* KSPLICE_STANDALONE */
+		if (!__kernel_text_address(addr) ||
+		    trampoline_target(pack, addr, &new_addr) != OK)
 			return addr;
 		m = __module_text_address(new_addr);
 		if (m == NULL || m == pack->target ||
 		    !starts_with(m->name, "ksplice"))
 			return addr;
-		ksdebug(pack, "Following trampoline %lx %lx(%s)\n", addr,
-			new_addr, m->name);
 		addr = new_addr;
 	}
 }
