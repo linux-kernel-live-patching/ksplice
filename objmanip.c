@@ -2658,6 +2658,7 @@ void remove_unkept_spans(struct superbfd *sbfd)
 	struct span *span;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
+		delete_obsolete_relocs(ss);
 		struct arelentp_vec orig_relocs;
 		vec_move(&orig_relocs, &ss->relocs);
 		arelent **relocp, *reloc;
