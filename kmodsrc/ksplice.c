@@ -992,6 +992,23 @@ static abort_t apply_update(struct update *update)
 	}
 
 	list_for_each_entry(pack, &update->packs, list) {
+		const struct ksplice_section *sect;
+		for (sect = pack->primary_sections;
+		     sect < pack->primary_sections_end; sect++) {
+			struct safety_record *rec = kmalloc(sizeof(*rec),
+							    GFP_KERNEL);
+			if (rec == NULL) {
+				ret = OUT_OF_MEMORY;
+				goto out;
+			}
+			rec->addr = sect->address;
+			rec->size = sect->size;
+			rec->label = sect->symbol->label;
+			list_add(&rec->list, &pack->safety_records);
+		}
+	}
+
+	list_for_each_entry(pack, &update->packs, list) {
 		ret = init_symbol_arrays(pack);
 		if (ret != OK) {
 			cleanup_symbol_arrays(pack);
@@ -2500,21 +2517,6 @@ static abort_t apply_patches(struct update *update)
 	int i;
 	abort_t ret;
 	struct ksplice_pack *pack;
-	const struct ksplice_section *sect;
-
-	list_for_each_entry(pack, &update->packs, list) {
-		for (sect = pack->primary_sections;
-		     sect < pack->primary_sections_end; sect++) {
-			struct safety_record *rec = kmalloc(sizeof(*rec),
-							    GFP_KERNEL);
-			if (rec == NULL)
-				return OUT_OF_MEMORY;
-			rec->addr = sect->address;
-			rec->size = sect->size;
-			rec->label = sect->symbol->label;
-			list_add(&rec->list, &pack->safety_records);
-		}
-	}
 
 	ret = map_trampoline_pages(update);
 	if (ret != OK)
