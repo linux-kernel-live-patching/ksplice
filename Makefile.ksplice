@@ -141,6 +141,7 @@ __ksplice: $(ksplice-deps) $(ksplice-dirs)
 
 ksplice-cmd-files := $(wildcard $(foreach f,$(sort $(ksplice-targets)),$(dir $(f)).$(notdir $(f)).cmd))
 ifneq ($(ksplice-cmd-files),)
+$(ksplice-cmd-files): ;
 include $(ksplice-cmd-files)
 endif
 
