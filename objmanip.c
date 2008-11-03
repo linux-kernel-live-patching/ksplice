@@ -1028,6 +1028,11 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 		new_span->datapatch = true;
 		debug1(newsbfd, "Changing %s in-place due to %s\n",
 		       new_span->label, reason);
+	} else if (new_span->ss->type == SS_TYPE_STRING &&
+		   old_span->ss->type == SS_TYPE_STRING && relocs_match &&
+		   strcmp(new_span->ss->contents.data + new_span->start,
+			  old_span->ss->contents.data + old_span->start) == 0) {
+		return;
 	} else {
 		debug1(newsbfd, "Unmatching %s and %s due to %s\n",
 		       old_span->label, new_span->label, reason);
@@ -2894,8 +2899,10 @@ static void initialize_string_spans(struct supersect *ss)
 		bfd_vma size = strlen(str) + 1;
 		while ((start + size) % (1 << ss->alignment) != 0 &&
 		       start + size < ss->contents.size) {
+			/* Some string sections, like __ksymtab_strings, only
+			   align some strings with the declared alignment */
 			if (str[size] != '\0')
-				DIE;
+				break;
 			size++;
 		}
 		new_span(ss, start, size);
