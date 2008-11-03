@@ -896,7 +896,7 @@ static abort_t apply_update(struct update *update)
 		ret = init_symbol_arrays(pack);
 		if (ret != OK) {
 			cleanup_symbol_arrays(pack);
-			return ret;
+			goto out;
 		}
 		ret = prepare_pack(pack);
 		cleanup_symbol_arrays(pack);
