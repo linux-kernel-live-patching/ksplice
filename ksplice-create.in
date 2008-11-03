@@ -65,9 +65,6 @@ else {
 if(!defined $orig_config_dir || ! -d $orig_config_dir) {
 	die "Failed to find ORIG_CONFIG directory ($orig_config_dir)";
 }
-if(! -e "$orig_config_dir/.config") {
-	die "Failed to find .config file in ORIG_CONFIG directory";
-}
 if(! -e "$orig_config_dir/System.map") {
 	die "Failed to find System.map file in ORIG_CONFIG directory";
 }
@@ -142,8 +139,11 @@ sub revert_orig() {
 revert_orig();
 
 if(!$skip_prebuild) {
-	copy("$orig_config_dir/.config", "$linuxtree/.config");
-	utime((stat("$orig_config_dir/.config"))[8, 9], "$linuxtree/.config");
+	if(-e "$orig_config_dir/.config") {
+		copy("$orig_config_dir/.config", "$linuxtree/.config");
+		utime((stat("$orig_config_dir/.config"))[8, 9],
+		      "$linuxtree/.config");
+	}
 	my @snap_flags = ("KSPLICE_MODE=snap");
 	if(-e "include/config/kernel.release") {
 		push(@snap_flags, "-o", "include/config/kernel.release");
