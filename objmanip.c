@@ -161,7 +161,7 @@ void write_canary(struct supersect *ss, int offset, bfd_size_type size,
 static void write_ksplice_section(struct span *span);
 void write_ksplice_patch(struct superbfd *sbfd, struct span *span);
 void *write_patch_storage(struct supersect *ss, struct ksplice_patch *patch,
-			  size_t size);
+			  size_t size, struct supersect **data_ssp);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 				 const char *label, const char *sectname);
 static void write_bugline_patches(struct superbfd *sbfd);
@@ -1861,7 +1861,8 @@ void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
 				  sizeof(kpatch->oldaddr), span->label, 0);
 	if (span->ss->type == SS_TYPE_TEXT) {
 		kpatch->type = KSPLICE_PATCH_TEXT;
-		write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE);
+		write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE,
+				    NULL);
 	} else {
 		kpatch->type = KSPLICE_PATCH_DATA;
 		kpatch->size = span->size;
@@ -1921,25 +1922,32 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 	kpatch->type = KSPLICE_PATCH_TEXT;
 	asymbol **symp = make_undefined_symbolp(sbfd, strdup(name));
 	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
-	write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE);
+	write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE, NULL);
 }
 
 void write_ksplice_export(struct superbfd *sbfd, const char *symname,
 			  const char *export_type, bool del)
 {
-	struct supersect *export_ss = make_section(sbfd, ".ksplice_exports");
-	struct ksplice_export *exp = sect_grow(export_ss, 1,
-					       struct ksplice_export);
-
+	struct supersect *kpatch_ss = make_section(sbfd, ".ksplice_patches");
+	struct ksplice_patch *kpatch = sect_grow(kpatch_ss, 1,
+						 struct ksplice_patch);
+	struct supersect *data_ss;
+	char *oldname, *newname;
 	if (del) {
-		write_string(export_ss, &exp->name, "%s", symname);
-		write_string(export_ss, &exp->new_name, "DISABLED_%s_%s",
-			     symname, kid);
+		oldname = strprintf("__ksymtab:%s", symname);
+		newname = strprintf("DISABLED_%s_%s", symname, kid);
 	} else {
-		write_string(export_ss, &exp->new_name, "%s", symname);
-		write_string(export_ss, &exp->name, "DISABLED_%s_%s", symname,
-			     kid);
+		oldname = strprintf("__ksymtab:DISABLED_%s_%s", symname, kid);
+		newname = strprintf("%s", symname);
 	}
+
+	write_ksplice_patch_reloc(kpatch_ss, "", &kpatch->oldaddr,
+				  sizeof(kpatch->oldaddr), oldname,
+				  offsetof(struct kernel_symbol, name));
+	kpatch->type = KSPLICE_PATCH_EXPORT;
+	const char **namep = write_patch_storage(kpatch_ss, kpatch,
+						 sizeof(newname), &data_ss);
+	write_string(data_ss, namep, "%s", newname);
 }
 
 void filter_table_sections(struct superbfd *isbfd)
@@ -3195,14 +3203,14 @@ static void write_bugline_patches(struct superbfd *sbfd)
 		     sizeof(kpatch->oldaddr), span->label, ts->other_offset);
 
 		unsigned short *line =
-		    write_patch_storage(kpatch_ss, kpatch, sizeof(*line));
+		    write_patch_storage(kpatch_ss, kpatch, sizeof(*line), NULL);
 		*line = *(unsigned short *)(entry + ts->other_offset);
 		kpatch->type = KSPLICE_PATCH_BUGLINE;
 	}
 }
 
 void *write_patch_storage(struct supersect *ss, struct ksplice_patch *kpatch,
-			  size_t size)
+			  size_t size, struct supersect **data_ssp)
 {
 	struct supersect *data_ss = make_section(ss->parent,
 						 ".ksplice_patch_data");
@@ -3213,5 +3221,7 @@ void *write_patch_storage(struct supersect *ss, struct ksplice_patch *kpatch,
 	write_reloc(ss, &kpatch->contents, &data_ss->symbol,
 		    addr_offset(data_ss, data));
 	kpatch->size = size;
+	if (data_ssp != NULL)
+		*data_ssp = data_ss;
 	return data;
 }

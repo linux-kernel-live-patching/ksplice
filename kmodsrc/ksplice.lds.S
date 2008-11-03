@@ -16,7 +16,6 @@ SECTIONS {
   PTR_KEEP_SQUASH(ksplice_sections)
   PTR_KEEP_SQUASH(ksplice_patches)
   PTR_KEEP(ksplice_symbols)
-  PTR_KEEP(ksplice_exports)
   PTR_KEEP(ksplice_system_map)
   PTR_KEEP(ksplice_call_pre_apply)
   PTR_KEEP(ksplice_call_check_apply)

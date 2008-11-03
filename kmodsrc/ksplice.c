@@ -478,7 +478,6 @@ static int ksplice_sysfs_init(struct update *update);
 static abort_t apply_update(struct update *update);
 static abort_t prepare_pack(struct ksplice_pack *pack);
 static abort_t finalize_pack(struct ksplice_pack *pack);
-static abort_t finalize_exports(struct ksplice_pack *pack);
 static abort_t finalize_patches(struct ksplice_pack *pack);
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr);
@@ -600,8 +599,8 @@ add_system_map_candidates(struct ksplice_pack *pack,
 static int compare_system_map(const void *a, const void *b);
 static int system_map_bsearch_compare(const void *key, const void *elt);
 #endif /* KSPLICE_STANDALONE */
-static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
-				 const char *name, struct list_head *vals);
+static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
+				 struct list_head *vals);
 
 /* Atomic update insertion and removal */
 static abort_t apply_patches(struct update *update);
@@ -1182,6 +1181,20 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 		return OK;
 
 	for (sym = start; sym < end; sym++) {
+		if (starts_with(sym->label, "__ksymtab:")) {
+			const char *name = sym->label + strlen("__ksymtab:");
+			const struct kernel_symbol *ksym =
+			    find_symbol(name, NULL, NULL, true, false);
+			if (ksym == NULL) {
+				ksdebug(pack, "Could not find kernel_symbol "
+					"structure for %s\n", name);
+				return MISSING_EXPORT;
+			}
+			sym->value = (unsigned long)ksym;
+			sym->vals = NULL;
+			continue;
+		}
+
 		sym->vals = kmalloc(sizeof(*sym->vals), GFP_KERNEL);
 		if (sym->vals == NULL)
 			return OUT_OF_MEMORY;
@@ -1287,38 +1300,6 @@ static abort_t finalize_pack(struct ksplice_pack *pack)
 	if (ret != OK)
 		return ret;
 
-	ret = finalize_exports(pack);
-	if (ret != OK)
-		return ret;
-
-	return OK;
-}
-
-static abort_t finalize_exports(struct ksplice_pack *pack)
-{
-	struct ksplice_export *exp;
-	struct module *m;
-	const struct kernel_symbol *sym;
-
-	for (exp = pack->exports; exp < pack->exports_end; exp++) {
-		sym = find_symbol(exp->name, &m, NULL, true, false);
-		if (sym == NULL) {
-			ksdebug(pack, "Could not find kernel_symbol struct for "
-				"%s\n", exp->name);
-			return MISSING_EXPORT;
-		}
-
-		/* Cast away const since we are planning to mutate the
-		 * kernel_symbol structure. */
-		exp->sym = (struct kernel_symbol *)sym;
-		exp->saved_name = exp->sym->name;
-		if (m != pack->primary && use_module(pack->primary, m) != 1) {
-			ksdebug(pack, "Aborted.  Could not add dependency on "
-				"symbol %s from module %s.\n", sym->name,
-				m->name);
-			return UNEXPECTED;
-		}
-	}
 	return OK;
 }
 
@@ -1337,7 +1318,7 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 				break;
 			}
 		}
-		if (!found) {
+		if (!found && p->type != KSPLICE_PATCH_EXPORT) {
 			const struct ksplice_reloc *r = patch_reloc(pack, p);
 			if (r == NULL) {
 				ksdebug(pack, "A patch with no ksplice_reloc at"
@@ -1355,7 +1336,7 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 				return ret;
 		}
 
-		if (rec->addr + rec->size < p->oldaddr + p->size) {
+		if (found && rec->addr + rec->size < p->oldaddr + p->size) {
 			ksdebug(pack, "Safety record %s is too short for "
 				"patch\n", rec->label);
 			return UNEXPECTED;
@@ -2419,7 +2400,7 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 				return ret;
 		}
 
-		ret = new_export_lookup(pack, pack->update, ksym->name, vals);
+		ret = new_export_lookup(pack, ksym->name, vals);
 		if (ret != OK)
 			return ret;
 	}
@@ -2478,24 +2459,37 @@ static int system_map_bsearch_compare(const void *key, const void *elt)
 }
 #endif /* !KSPLICE_STANDALONE */
 
-static abort_t new_export_lookup(struct ksplice_pack *p, struct update *update,
-				 const char *name, struct list_head *vals)
+static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
+				 struct list_head *vals)
 {
 	struct ksplice_pack *pack;
-	struct ksplice_export *exp;
-	list_for_each_entry(pack, &update->packs, list) {
-		for (exp = pack->exports; exp < pack->exports_end; exp++) {
-			struct ksplice_reloc_howto howto;
-			howto.size = sizeof(unsigned long);
-			howto.type = KSPLICE_HOWTO_RELOC;
-			howto.dst_mask = -1;
-			if (strcmp(exp->new_name, name) == 0 &&
-			    exp->sym != NULL &&
-			    contains_canary(pack,
-					    (unsigned long)&exp->sym->value,
-					    &howto) == 0)
-				return add_candidate_val(p, vals,
-							 exp->sym->value);
+	struct ksplice_patch *p;
+	list_for_each_entry(pack, &ipack->update->packs, list) {
+		for (p = pack->patches; p < pack->patches_end; p++) {
+			const struct kernel_symbol *sym;
+			const struct ksplice_reloc *r;
+			if (p->type != KSPLICE_PATCH_EXPORT ||
+			    strcmp(name, *(const char **)p->contents) != 0)
+				continue;
+
+			/* Check that the p->oldaddr reloc has been resolved */
+			r = patch_reloc(pack, p);
+			if (r == NULL ||
+			    contains_canary(pack, r->blank_addr, r->howto) != 0)
+				continue;
+			sym = (const struct kernel_symbol *)r->symbol->value;
+
+			/* Check that the sym->value reloc has been resolved,
+			   if there is a ksplice relocation there */
+			r = find_reloc(pack->primary_relocs,
+				       pack->primary_relocs_end,
+				       (unsigned long)&sym->value,
+				       sizeof(&sym->value));
+			if (r != NULL &&
+			    r->blank_addr == (unsigned long)&sym->value &&
+			    contains_canary(pack, r->blank_addr, r->howto) != 0)
+				continue;
+			return add_candidate_val(ipack, vals, sym->value);
 		}
 	}
 	return OK;
@@ -2681,7 +2675,6 @@ static int __apply_patches(void *updateptr)
 	struct update *update = updateptr;
 	struct ksplice_pack *pack;
 	struct ksplice_patch *p;
-	struct ksplice_export *exp;
 	abort_t ret;
 
 	if (update->stage == STAGE_APPLIED)
@@ -2723,11 +2716,6 @@ static int __apply_patches(void *updateptr)
 		list_add(&pack->module_list_entry.list, &ksplice_module_list);
 
 	list_for_each_entry(pack, &update->packs, list) {
-		for (exp = pack->exports; exp < pack->exports_end; exp++)
-			exp->sym->name = exp->new_name;
-	}
-
-	list_for_each_entry(pack, &update->packs, list) {
 		for (p = pack->patches; p < pack->patches_end; p++)
 			insert_trampoline(p);
 	}
@@ -2746,7 +2734,6 @@ static int __reverse_patches(void *updateptr)
 	struct update *update = updateptr;
 	struct ksplice_pack *pack;
 	const struct ksplice_patch *p;
-	struct ksplice_export *exp;
 	abort_t ret;
 
 	if (update->stage != STAGE_APPLIED)
@@ -2785,11 +2772,6 @@ static int __reverse_patches(void *updateptr)
 
 	list_for_each_entry(pack, &update->packs, list)
 		list_del(&pack->module_list_entry.list);
-
-	list_for_each_entry(pack, &update->packs, list) {
-		for (exp = pack->exports; exp < pack->exports_end; exp++)
-			exp->sym->name = exp->saved_name;
-	}
 
 	list_for_each_entry(pack, &update->packs, list) {
 		const typeof(void (*)(void)) *f;

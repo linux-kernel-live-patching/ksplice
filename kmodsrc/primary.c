@@ -26,7 +26,6 @@ extern struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
 extern const struct ksplice_section ksplice_sections[], ksplice_sections_end[];
 extern struct ksplice_symbol ksplice_symbols[], ksplice_symbols_end[];
 extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
-extern struct ksplice_export ksplice_exports[], ksplice_exports_end[];
 extern const typeof(int (*)(void)) ksplice_call_pre_apply[],
     ksplice_call_pre_apply_end[], ksplice_call_check_apply[],
     ksplice_call_check_apply_end[];
@@ -67,8 +66,6 @@ struct ksplice_pack pack = {
 	.primary_symbols_end = ksplice_symbols_end,
 	.patches = ksplice_patches,
 	.patches_end = ksplice_patches_end,
-	.exports = ksplice_exports,
-	.exports_end = ksplice_exports_end,
 	.pre_apply = ksplice_call_pre_apply,
 	.pre_apply_end = ksplice_call_pre_apply_end,
 	.check_apply = ksplice_call_check_apply,

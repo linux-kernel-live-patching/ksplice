@@ -200,6 +200,8 @@ const char *str_ksplice_patch_type(struct supersect *ss,
 				   const struct ksplice_patch *kpatch)
 {
 	const unsigned short *line;
+	const char *const *strp;
+	struct supersect *data_ss;
 	switch(kpatch->type) {
 	case KSPLICE_PATCH_TEXT:
 		return strprintf("text\n  repladdr: %s", str_pointer
@@ -209,6 +211,10 @@ const char *str_ksplice_patch_type(struct supersect *ss,
 		return strprintf("bugline\n  line: %hx", *line);
 	case KSPLICE_PATCH_DATA:
 		return strprintf("data\n  size: %x", kpatch->size);
+	case KSPLICE_PATCH_EXPORT:
+		strp = read_pointer(ss, &kpatch->contents, &data_ss);
+		return strprintf("export\n  newname: %s",
+				 read_string(data_ss, strp));
 	default:
 		return "unknown";
 	}
@@ -229,22 +235,6 @@ void show_ksplice_patches(struct supersect *kpatch_ss)
 	for (kpatch = kpatch_ss->contents.data; (void *)kpatch <
 	     kpatch_ss->contents.data + kpatch_ss->contents.size; kpatch++)
 		show_ksplice_patch(kpatch_ss, kpatch);
-}
-
-void show_ksplice_export(struct supersect *ss, const struct ksplice_export *exp)
-{
-	printf("  name: %s\n"
-	       "  newname: %s\n"
-	       "\n",
-	       read_string(ss, &exp->name), read_string(ss, &exp->new_name));
-}
-
-void show_ksplice_exports(struct supersect *export_ss)
-{
-	const struct ksplice_export *exp;
-	for (exp = export_ss->contents.data; (void *)exp <
-	     export_ss->contents.data + export_ss->contents.size; exp++)
-		show_ksplice_export(export_ss, exp);
 }
 
 void show_ksplice_call(struct supersect *ss, void *const *kcall)
@@ -308,12 +298,6 @@ const struct inspect_section inspect_sections[] = {
 		.header = "KSPLICE PATCHES",
 		.notfound = "No ksplice patches.\n",
 		.show = show_ksplice_patches,
-	},
-	{
-		.prefix = ".ksplice_exports",
-		.header = "KSPLICE EXPORTS",
-		.notfound = "No ksplice exports.\n",
-		.show = show_ksplice_exports,
 	},
 	{
 		.prefix = ".ksplice_call",

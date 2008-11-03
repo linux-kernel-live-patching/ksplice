@@ -91,6 +91,7 @@ enum ksplice_patch_type {
 	KSPLICE_PATCH_TEXT,
 	KSPLICE_PATCH_BUGLINE,
 	KSPLICE_PATCH_DATA,
+	KSPLICE_PATCH_EXPORT,
 };
 
 /**
@@ -113,21 +114,6 @@ struct ksplice_patch {
 /* private: */
 	void *vaddr;
 	void *saved;
-};
-
-/**
- * struct ksplice_export - A change to be made to the exported symbol table
- * @name:		The obsolete name of the exported symbol
- * @new_name:		The new name of the exported symbol
- * @sym:		The kernel_symbol being changed
- * @saved_name:		The pointer to the original name of the kernel_symbol
- **/
-struct ksplice_export {
-	const char *name;
-	const char *new_name;
-/* private: */
-	struct kernel_symbol *sym;
-	const char *saved_name;
 };
 
 #ifdef KSPLICE_STANDALONE
@@ -194,8 +180,6 @@ extern struct list_head ksplice_module_list;
  * @helper_sections_end:	The end pointer for helper_sections array
  * @patches:			The function replacements in the pack
  * @patches_end:		The end pointer for patches array
- * @exports:			The exported symbol changes in the pack
- * @exports_end:		The end pointer for the exports array
  * @update:			The atomic update the pack is part of
  * @target:			The module modified by the pack
  * @labelvals:			The mapping between Ksplice symbol labels and
@@ -218,7 +202,6 @@ struct ksplice_pack {
 	struct ksplice_section *helper_sections, *helper_sections_end;
 	struct ksplice_symbol *helper_symbols, *helper_symbols_end;
 	struct ksplice_patch *patches, *patches_end;
-	struct ksplice_export *exports, *exports_end;
 	const typeof(int (*)(void)) *pre_apply, *pre_apply_end, *check_apply,
 	    *check_apply_end;
 	const typeof(void (*)(void)) *apply, *apply_end, *post_apply,
