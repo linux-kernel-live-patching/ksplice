@@ -18,6 +18,7 @@
 
 #include <linux/kernel.h>
 #include <linux/version.h>
+#include <linux/module.h>
 
 #ifdef CONFIG_PARAVIRT
 #include <asm/paravirt.h>
@@ -111,4 +112,55 @@ const struct table_section table_sections[]
 		.has_addr = 1,
 		.addr_offset = 0,
 	},
+	{
+		.sect = "__ksymtab",
+		.entry_size = sizeof(struct kernel_symbol),
+		.entry_align = __alignof__(struct kernel_symbol),
+#ifdef CONFIG_MODVERSIONS
+		.crc_size = sizeof(unsigned long),
+		.crc_sect = "__kcrctab",
+#endif /* CONFIG_MODVERSIONS */
+	},
+	{
+		.sect = "__ksymtab_gpl",
+		.entry_size = sizeof(struct kernel_symbol),
+		.entry_align = __alignof__(struct kernel_symbol),
+#ifdef CONFIG_MODVERSIONS
+		.crc_size = sizeof(unsigned long),
+		.crc_sect = "__kcrctab_gpl",
+#endif /* CONFIG_MODVERSIONS */
+	},
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18) && defined(CONFIG_UNUSED_SYMBOLS)
+/* f71d20e961474dde77e6558396efb93d6ac80a4b was after 2.6.17 */
+	{
+		.sect = "__ksymtab_unused_gpl",
+		.entry_size = sizeof(struct kernel_symbol),
+		.entry_align = __alignof__(struct kernel_symbol),
+#ifdef CONFIG_MODVERSIONS
+		.crc_size = sizeof(unsigned long),
+		.crc_sect = "__kcrctab_unused_gpl",
+#endif /* CONFIG_MODVERSIONS */
+	},
+	{
+		.sect = "__ksymtab_unused",
+		.entry_size = sizeof(struct kernel_symbol),
+		.entry_align = __alignof__(struct kernel_symbol),
+#ifdef CONFIG_MODVERSIONS
+		.crc_size = sizeof(unsigned long),
+		.crc_sect = "__kcrctab_unused",
+#endif /* CONFIG_MODVERSIONS */
+	},
+#endif /* LINUX_VERSION_CODE */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17)
+/* 9f28bb7e1d0188a993403ab39b774785892805e1 was after 2.6.16 */
+	{
+		.sect = "__ksymtab_gpl_future",
+		.entry_size = sizeof(struct kernel_symbol),
+		.entry_align = __alignof__(struct kernel_symbol),
+#ifdef CONFIG_MODVERSIONS
+		.crc_size = sizeof(unsigned long),
+		.crc_sect = "__kcrctab_gpl_future",
+#endif /* CONFIG_MODVERSIONS */
+	},
+#endif /* LINUX_VERSION_CODE */
 };

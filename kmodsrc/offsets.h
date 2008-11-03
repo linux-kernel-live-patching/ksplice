@@ -6,6 +6,8 @@ struct table_section {
 	int addr_offset;
 	const char *other_sect;
 	int other_offset;
+	const char *crc_sect;
+	int crc_size;
 };
 
 struct ksplice_config {
