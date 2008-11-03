@@ -35,8 +35,8 @@ MAKE += --old-file=include/linux/compile.h
 endif
 # Makefile.lib must be included before Makefile because they contain
 # different filechk definitions in 2.6.12.
-include scripts/Makefile.lib
-include Makefile
+include $(if $(KBUILD_SRC),$(KBUILD_SRC)/)scripts/Makefile.lib
+include $(if $(KBUILD_SRC),$(KBUILD_SRC)/)Makefile
 CC := ksplice-cc.pl $(CC)
 CFLAGS_KSPLICE = -ffunction-sections -fdata-sections -ksplice-cflags-api=1
 CFLAGS_KERNEL += $(CFLAGS_KSPLICE)
