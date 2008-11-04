@@ -2594,10 +2594,13 @@ static void init_callers(struct superbfd *sbfd)
 			const char **ret = string_hash_lookup(&sbfd->callers,
 							      key, TRUE);
 			free(key);
-			if (*ret == NULL)
-				*ret = sect->name;
-			else
+			asymbol *csym = canonical_symbol(sbfd, sect->symbol);
+			if (*ret != NULL)
 				*ret = "*multiple_callers*";
+			else if (static_local_symbol(sbfd, csym))
+				*ret = static_local_symbol(sbfd, csym);
+			else
+				*ret = sect->name;
 		}
 	}
 }
