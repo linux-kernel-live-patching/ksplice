@@ -392,6 +392,13 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 				run_op->index, pre_op->index);
 		return NO_MATCH;
 	}
+	if (run_op->type == UD_OP_PTR &&
+	    run_op->lval.ptr.seg != pre_op->lval.ptr.seg) {
+		if (mode == RUN_PRE_DEBUG)
+			ksdebug(pack, "segment mismatch: %d %d\n",
+				run_op->lval.ptr.seg, pre_op->lval.ptr.seg);
+		return NO_MATCH;
+	}
 	if (ud_operand_len(run_op) == 0 && ud_operand_len(pre_op) == 0)
 		return OK;
 
@@ -399,14 +406,24 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 	if (ret == OK) {
 		struct ksplice_reloc run_reloc = *r;
 		struct ksplice_reloc_howto run_howto = *r->howto;
+		unsigned int run_reloc_len = ud_operand_len(run_op);
+		unsigned int pre_reloc_len = ud_operand_len(pre_op);
+
+		if (run_op->type == UD_OP_PTR) {
+			/* Adjust for reloc length != operand length for
+			   instructions take a segment:offset operand */
+			run_reloc_len -= 2;
+			pre_reloc_len -= 2;
+		}
+
 		run_reloc.howto = &run_howto;
-		if (r->howto->size != ud_operand_len(pre_op)) {
+		if (r->howto->size != pre_reloc_len) {
 			ksdebug(pack, "ksplice_h: run-pre: reloc size %d "
 				"differs from disassembled size %d\n",
-				r->howto->size, ud_operand_len(pre_op));
+				r->howto->size, pre_reloc_len);
 			return NO_MATCH;
 		}
-		if (r->howto->size != ud_operand_len(run_op) &&
+		if (r->howto->size != run_reloc_len &&
 		    (r->howto->dst_mask != 0xffffffff ||
 		     r->howto->rightshift != 0)) {
 			/* Reloc types unsupported with differing reloc sizes */
@@ -417,11 +434,10 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 			return UNEXPECTED;
 		}
 		/* adjust for differing relocation size */
-		run_howto.size = ud_operand_len(run_op);
+		run_howto.size = run_reloc_len;
 		if (r->howto->size != run_howto.size)
 			run_howto.dst_mask = ~(~0 << run_howto.size * 8);
-		run_reloc.insn_addend += (ud_operand_len(pre_op) -
-					  ud_operand_len(run_op));
+		run_reloc.insn_addend += pre_reloc_len - run_reloc_len;
 		ret = handle_reloc(pack, sect, &run_reloc,
 				   (unsigned long)(run + run_off), mode);
 		if (ret != OK) {
