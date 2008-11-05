@@ -548,7 +548,10 @@ void do_keep_helper(struct superbfd *isbfd)
 		    (sym->flags & BSF_GLOBAL) != 0) {
 			struct supersect *sym_ss =
 			    fetch_supersect(isbfd, sym->section);
+			if (sym->value == sym_ss->contents.size)
+				continue;
 			struct span *span = find_span(sym_ss, sym->value);
+			assert(span != NULL);
 			if (sym_ss->type != SS_TYPE_IGNORED)
 				keep_span(span);
 		}
