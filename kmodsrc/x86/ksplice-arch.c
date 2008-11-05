@@ -250,6 +250,24 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 			continue;
 		}
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
+#ifdef CONFIG_XEN
+		if (run_ud.mnemonic == pre_ud.mnemonic &&
+		    run_ud.mnemonic == UD_Iud2) {
+			unsigned char bytes[3];
+			unsigned char prefix[3] = { 0x78, 0x65, 0x63 };
+			if (probe_kernel_read(bytes, (void *)run + 2, 3) !=
+			    -EFAULT && pre - pre_start < sect->size &&
+			    memcmp(bytes, prefix, 3) == 0 &&
+			    memcmp(pre + 2, prefix, 3) == 0) {
+				/* Exception for XEN_EMULATE_PREFIX */
+				run += 5;
+				pre += 5;
+				ud_input_skip(&run_ud, 3);
+				ud_input_skip(&pre_ud, 3);
+				continue;
+			}
+		}
+#endif /* CONFIG_XEN */
 
 		ret = compare_instructions(pack, sect, &finger, run_start, run,
 					   pre, &run_ud, &pre_ud, mode);
