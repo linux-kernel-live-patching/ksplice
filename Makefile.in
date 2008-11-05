@@ -98,6 +98,7 @@ install: default $(addprefix install-,$(objutils)) $(addprefix install-,$(kmodsr
 	install -m755 -D $(srcdir)/ksplice-cc.pl $(DESTDIR)$(datadir)/ksplice/ksplice-cc.pl
 	install -m755 -D $(srcdir)/ksplice-obj.pl $(DESTDIR)$(datadir)/ksplice/ksplice-obj.pl
 	install -m644 -D $(srcdir)/ksplice-patch/ksplice-patch.h $(DESTDIR)$(datadir)/ksplice/ksplice-patch/ksplice-patch.h
+	install -m644 -D $(srcdir)/ksplice-patch/ksplice-shadow.h $(DESTDIR)$(datadir)/ksplice/ksplice-patch/ksplice-shadow.h
 	install -m644 -D $(srcdir)/Makefile.ksplice $(DESTDIR)$(datadir)/ksplice/Makefile.ksplice
 	install -m644 -D Ksplice.pm $(DESTDIR)$(datadir)/ksplice/Ksplice.pm
 	install -m644 -D Verbose.pm $(DESTDIR)$(datadir)/ksplice/Verbose.pm
