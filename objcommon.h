@@ -232,11 +232,6 @@ struct supersect {
 	enum supersect_type orig_type;
 };
 
-struct kernel_symbol {
-	unsigned long value;
-	char *name;
-};
-
 struct superbfd *fetch_superbfd(bfd *abfd);
 struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect);
 struct supersect *new_supersect(struct superbfd *sbfd, const char *name);

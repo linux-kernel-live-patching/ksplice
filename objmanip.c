@@ -340,6 +340,8 @@ bool matchable_data_section(struct supersect *ss)
 		return true;
 	if (ss->type == SS_TYPE_DATA && ss->relocs.size != 0)
 		return true;
+	if (ss->type == SS_TYPE_EXPORT)
+		return true;
 	return false;
 }
 
@@ -532,11 +534,12 @@ void do_keep_helper(struct superbfd *isbfd)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
+			span->keep = false;
 			if (ss->type == SS_TYPE_TEXT &&
 			    !starts_with(ss->name, ".fixup"))
 				keep_span(span);
-			else
-				span->keep = false;
+			if (ss->type == SS_TYPE_EXPORT)
+				keep_span(span);
 		}
 	}
 
@@ -594,6 +597,11 @@ void do_keep_helper(struct superbfd *isbfd)
 
 	mangle_section_name(isbfd, "__markers");
 	mangle_section_name(isbfd, "__ex_table");
+	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(isbfd, sect);
+		if (ss->type == SS_TYPE_EXPORT)
+			mangle_section_name(isbfd, ss->name);
+	}
 }
 
 void do_finalize(struct superbfd *isbfd)
@@ -636,9 +644,6 @@ void match_spans(struct span *old_span, struct span *new_span)
 		    new_span->label, new_span->match->label, old_span->label);
 		DIE;
 	}
-	if (old_span->ss->type == SS_TYPE_EXPORT &&
-	    strcmp(old_span->ss->name, new_span->ss->name) != 0)
-		return;
 	old_span->match = new_span;
 	new_span->match = old_span;
 	debug1(sbfd, "Matched old %s to new %s\n", old_span->label,
@@ -700,7 +705,8 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 			    fetch_supersect(newsbfd, newsym->section);
 			if ((old_ss->type != new_ss->type &&
 			     old_ss->type != new_ss->orig_type) ||
-			    old_ss->type == SS_TYPE_SPECIAL)
+			    old_ss->type == SS_TYPE_SPECIAL ||
+			    old_ss->type == SS_TYPE_EXPORT)
 				continue;
 
 			struct span *old_span =
@@ -1398,7 +1404,7 @@ void write_ksplice_symbol(struct supersect *ss,
 		name = gsym->name;
 
 	write_ksplice_symbol_backend(ss, addr, sym,
-				     strprintf("%s%s", label, addstr_sect),
+				     strprintf("%s%s", addstr_sect, label),
 				     name);
 }
 
@@ -1778,25 +1784,26 @@ void write_ksplice_export(struct superbfd *sbfd, struct span *span, bool del)
 						 struct ksplice_patch);
 	struct supersect *data_ss;
 
-	const struct kernel_symbol *ksym = span->ss->contents.data +
-	    span->start;
-	const char *symname =
-	    read_string(span->ss, (const char *const *)&ksym->name);
+	const struct table_section *ts = get_table_section(span->ss->name);
+	assert(ts != NULL);
+	const char **addr =
+	    span->ss->contents.data + span->start + ts->other_offset;
+	const char *symname = read_string(span->ss, addr);
 
 	char *oldname, *newname;
 	if (del) {
-		oldname = strprintf("__ksymtab:%s", symname);
+		oldname = strprintf("%s:%s", span->ss->name, symname);
 		newname = strprintf("DISABLED_%s_%s", symname, kid);
 	} else {
-		oldname = strprintf("__ksymtab:DISABLED_%s_%s", symname, kid);
+		oldname = strprintf("%s:DISABLED_%s_%s", span->ss->name,
+				    symname, kid);
 		newname = strprintf("%s", symname);
-		write_string(span->ss, (const char **)&ksym->name,
-			     "DISABLED_%s_%s", symname, kid);
+		write_string(span->ss, addr, "DISABLED_%s_%s", symname, kid);
 	}
 
 	write_ksplice_patch_reloc(kpatch_ss, "", &kpatch->oldaddr,
 				  sizeof(kpatch->oldaddr), oldname,
-				  offsetof(struct kernel_symbol, name));
+				  ts->other_offset);
 	kpatch->type = KSPLICE_PATCH_EXPORT;
 	const char **namep = write_patch_storage(kpatch_ss, kpatch,
 						 sizeof(newname), &data_ss);
@@ -2197,6 +2204,10 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    (sym->flags & BSF_KEEP) == 0)
 			keep = false;
 		if (deleted_table_section_symbol(ibfd, sym))
+			keep = false;
+
+		if (mode("keep-helper") && sym_ss != NULL &&
+		    sym_ss->type == SS_TYPE_EXPORT)
 			keep = false;
 
 		if (keep) {
@@ -2861,6 +2872,13 @@ static void initialize_table_spans(struct superbfd *sbfd,
 		if (crc_sect != NULL)
 			new_span(crc_ss, addr_offset(ss, entry) / s->entry_size
 				 * s->crc_size, s->crc_size);
+
+		if (ss->type == SS_TYPE_EXPORT) {
+			const char *symname = read_string(ss, entry +
+							  s->other_offset);
+			char *label = strprintf("%s:%s", ss->name, symname);
+			change_initial_label(span, label);
+		}
 	}
 
 	if (other_sect == NULL)

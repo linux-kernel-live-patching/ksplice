@@ -1198,14 +1198,17 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 		return OK;
 
 	for (sym = start; sym < end; sym++) {
-		if (starts_with(sym->label, "__ksymtab:")) {
-			const char *name = sym->label + strlen("__ksymtab:");
-			const struct kernel_symbol *ksym =
-			    find_symbol(name, NULL, NULL, true, false);
+		if (starts_with(sym->label, "__ksymtab")) {
+			const struct kernel_symbol *ksym;
+			const char *colon = strchr(sym->label, ':');
+			const char *name = colon + 1;
+			if (colon == NULL)
+				continue;
+			ksym = find_symbol(name, NULL, NULL, true, false);
 			if (ksym == NULL) {
 				ksdebug(pack, "Could not find kernel_symbol "
 					"structure for %s\n", name);
-				return MISSING_EXPORT;
+				continue;
 			}
 			sym->value = (unsigned long)ksym;
 			sym->vals = NULL;

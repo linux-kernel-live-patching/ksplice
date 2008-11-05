@@ -116,6 +116,7 @@ const struct table_section table_sections[]
 		.sect = "__ksymtab",
 		.entry_size = sizeof(struct kernel_symbol),
 		.entry_align = __alignof__(struct kernel_symbol),
+		.other_offset = offsetof(struct kernel_symbol, name),
 #ifdef CONFIG_MODVERSIONS
 		.crc_size = sizeof(unsigned long),
 		.crc_sect = "__kcrctab",
@@ -125,6 +126,7 @@ const struct table_section table_sections[]
 		.sect = "__ksymtab_gpl",
 		.entry_size = sizeof(struct kernel_symbol),
 		.entry_align = __alignof__(struct kernel_symbol),
+		.other_offset = offsetof(struct kernel_symbol, name),
 #ifdef CONFIG_MODVERSIONS
 		.crc_size = sizeof(unsigned long),
 		.crc_sect = "__kcrctab_gpl",
@@ -136,6 +138,7 @@ const struct table_section table_sections[]
 		.sect = "__ksymtab_unused_gpl",
 		.entry_size = sizeof(struct kernel_symbol),
 		.entry_align = __alignof__(struct kernel_symbol),
+		.other_offset = offsetof(struct kernel_symbol, name),
 #ifdef CONFIG_MODVERSIONS
 		.crc_size = sizeof(unsigned long),
 		.crc_sect = "__kcrctab_unused_gpl",
@@ -145,6 +148,7 @@ const struct table_section table_sections[]
 		.sect = "__ksymtab_unused",
 		.entry_size = sizeof(struct kernel_symbol),
 		.entry_align = __alignof__(struct kernel_symbol),
+		.other_offset = offsetof(struct kernel_symbol, name),
 #ifdef CONFIG_MODVERSIONS
 		.crc_size = sizeof(unsigned long),
 		.crc_sect = "__kcrctab_unused",
@@ -157,6 +161,7 @@ const struct table_section table_sections[]
 		.sect = "__ksymtab_gpl_future",
 		.entry_size = sizeof(struct kernel_symbol),
 		.entry_align = __alignof__(struct kernel_symbol),
+		.other_offset = offsetof(struct kernel_symbol, name),
 #ifdef CONFIG_MODVERSIONS
 		.crc_size = sizeof(unsigned long),
 		.crc_sect = "__kcrctab_gpl_future",
