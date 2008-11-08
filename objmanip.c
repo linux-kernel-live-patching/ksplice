@@ -2021,7 +2021,7 @@ void setup_section(bfd *ibfd, asection *isection, void *obfdarg)
 
 	osection->lma = isection->lma;
 	assert(bfd_set_section_alignment(obfd, osection, ss->alignment));
-	osection->entsize = isection->entsize;
+	osection->entsize = ss->entsize;
 	osection->output_section = osection;
 	osection->output_offset = 0;
 	isection->output_section = osection;
@@ -2042,7 +2042,7 @@ void setup_new_section(bfd *obfd, struct supersect *ss)
 
 	osection->lma = 0;
 	assert(bfd_set_section_alignment(obfd, osection, ss->alignment));
-	osection->entsize = 0;
+	osection->entsize = ss->entsize;
 	osection->output_section = osection;
 	osection->output_offset = 0;
 }
@@ -2382,7 +2382,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 	int n = -1;
 	if (sscanf(ss->name, ".rodata.str%*u.%*u%n", &n) >= 0 &&
 	    n == strlen(ss->name))
-		return SS_TYPE_STRING;
+		return ss->entsize == 1 ? SS_TYPE_STRING : SS_TYPE_RODATA;
 
 	if (starts_with(ss->name, ".rodata") ||
 	    starts_with(ss->name, ".kernel.rodata") ||

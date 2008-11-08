@@ -100,6 +100,7 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	assert(bfd_get_section_contents
 	       (sbfd->abfd, sect, new->contents.data, 0, new->contents.size));
 	new->alignment = bfd_get_section_alignment(sbfd->abfd, sect);
+	new->entsize = sect->entsize;
 
 	vec_init(&new->relocs);
 	vec_reserve(&new->relocs, bfd_get_reloc_upper_bound(sbfd->abfd, sect));
@@ -153,6 +154,7 @@ struct supersect *new_supersect(struct superbfd *sbfd, const char *name)
 
 	vec_init(&new->contents);
 	new->alignment = 0;
+	new->entsize = 0;
 	vec_init(&new->relocs);
 	vec_init(&new->new_relocs);
 

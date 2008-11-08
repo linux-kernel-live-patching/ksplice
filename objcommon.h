@@ -220,6 +220,7 @@ struct supersect {
 	flagword flags;
 	struct void_vec contents;
 	int alignment;
+	unsigned int entsize;
 	struct arelentp_vec relocs;
 	struct arelentp_vec new_relocs;
 	struct supersect *next;
