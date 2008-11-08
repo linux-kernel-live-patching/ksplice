@@ -40,6 +40,8 @@ extern const char thread_return[];
 extern ftrace_func_t ftrace_trace_function;
 #endif /* CONFIG_FTRACE */
 
+#define N_BITS(n) ((n) < sizeof(long) * 8 ? ~(~0L << (n)) : ~0L)
+
 static abort_t compare_instructions(struct ksplice_pack *pack,
 				    struct ksplice_section *sect,
 				    const struct ksplice_reloc **fingerp,
@@ -424,7 +426,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 			return NO_MATCH;
 		}
 		if (r->howto->size != run_reloc_len &&
-		    (r->howto->dst_mask != 0xffffffff ||
+		    (r->howto->dst_mask != N_BITS(r->howto->size * 8) ||
 		     r->howto->rightshift != 0)) {
 			/* Reloc types unsupported with differing reloc sizes */
 			ksdebug(pack, "ksplice_h: reloc: invalid flags for a "
@@ -436,7 +438,7 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 		/* adjust for differing relocation size */
 		run_howto.size = run_reloc_len;
 		if (r->howto->size != run_howto.size)
-			run_howto.dst_mask = ~(~0 << run_howto.size * 8);
+			run_howto.dst_mask = N_BITS(run_howto.size * 8);
 		run_reloc.insn_addend += pre_reloc_len - run_reloc_len;
 		ret = handle_reloc(pack, sect, &run_reloc,
 				   (unsigned long)(run + run_off), mode);
