@@ -1,3 +1,15 @@
+2008-11-07 : 0.9.3
+ - Added hooks for calling functions at various points during the update process
+ - Added support for applying an update only to loaded target modules
+ - Added support for building updated target modules along with a Ksplice update
+ - Added run-pre matching of the bug table, exception table, and exported
+   symbol table
+ - Improved robustness of the stack check with respect to optimized tail calls
+ - Fixed several bugs in the run-pre matching disassembly code
+ - Added patching of rodata sections that did not change in size
+ - Added patching of bug table entries whose line numbers changed
+ - Added an experimental API for shadow data structures
+
 2008-10-17 : 0.9.2
  - Added run-pre matching of string sections
  - Fixed safety_record handling for patch reversals
