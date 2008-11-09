@@ -242,22 +242,35 @@ if ($description) {
 	print DESCRIPTION "$description\n";
 	close(DESCRIPTION);
 }
+open(CONTENTS, ">", "$ksplice/contents");
 foreach my $mod (@modules) {
 	(my $target = $mod) =~ s/-/_/g;
 	my $mid = "${kid}_$target";
 	my $module = "ksplice-$mid";
 	rename("$kmodsrc/$module.ko", "$ksplice/$module.ko");
+	print CONTENTS "primary $target ksplice_$mid $module.ko\n";
 	rename("$kmodsrc/$module-helper.ko", "$ksplice/$module-helper.ko");
+	print CONTENTS "helper $target ksplice_$mid $module-helper.ko\n";
 }
-rename("$kmodsrc/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko") if ($standalone);
+if ($standalone) {
+	rename("$kmodsrc/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko");
+	print CONTENTS "core ksplice_$kid ksplice-$kid.ko\n";
+}
+if ($build_modules) {
+	foreach my $mod (@modulepaths) {
+		(my $target = basename($mod)) =~ s/-/_/g;
+		print CONTENTS "target $target $mod\n";
+	}
+}
 
 mkdir("$ksplice/debug");
 rename("objects", "$ksplice/debug/objects");
 rename("modules", "$ksplice/modules") if ($build_modules);
 rename("$kmodsrc", "$ksplice/debug/kmodsrc");
+
+close(CONTENTS);
 runval("tar", "czf", "$ksplice.tar.gz", "--", $ksplice);
 copy("$ksplice.tar.gz", "$origdir/$ksplice.tar.gz");
-
 print "Ksplice update tarball written to $ksplice.tar.gz\n";
 exit(0);
 
