@@ -122,19 +122,19 @@ my @make_ksplice = (@make, "-f", "$datadir/Makefile.ksplice", @kbuild_flags);
 
 push(@make_ksplice, "KSPLICE_BUILD_MODULES=1") if ($build_modules);
 
+my @revert_flags = ("KSPLICE_MODE=revert");
+push(@revert_flags, "KSPLICE_SERIES=y") if ($series);
+
 sub revert_orig() {
-	for(split(/\0/, runstr(qw(find -name *.KSPLICE_* -print0)))) {
-		if(my ($file) = m/^(.*)\.KSPLICE_pre(?:src)?$/) {
-			if ($series) {
-				unlink($_);
-			} else {
-				rename($_, $file);
-			}
-			runval("$datadir/ksplice-obj.pl", "snap", "$file.KSPLICE") if(-e "$file.KSPLICE");
-		} elsif(m/\.KSPLICE_(?:primary|helper)$/) {
-			unlink($_) if(-e $_);
+	for(split(/\0/, runstr(qw(find -name *.KSPLICE_presrc -print0)))) {
+		my ($file) = m/^(.*)\.KSPLICE_presrc$/;
+		if ($series) {
+			unlink($_);
+		} else {
+			rename($_, $file);
 		}
 	}
+	runval(@make_ksplice, @revert_flags);
 }
 revert_orig();
 
@@ -184,9 +184,10 @@ runval(@make_kmodsrc);
 @patch_opt = ("-s", @patch_opt) if ($Verbose::level < 0);
 
 runval_infile($patchfile, "patch", @patch_opt, "-bz", ".KSPLICE_presrc");
-push @make_ksplice, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
-push @make_ksplice, "KSPLICE_ONLY_TARGETS=@only_targets" if (@only_targets);
-if(runval_raw(@make_ksplice, "KSPLICE_MODE=diff") != 0) {
+my @diff_flags = ("KSPLICE_MODE=diff");
+push @diff_flags, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
+push @diff_flags, "KSPLICE_ONLY_TARGETS=@only_targets" if (@only_targets);
+if(runval_raw(@make_ksplice, @diff_flags) != 0) {
 	revert_orig() if(defined($diffext));
 	die "Aborting: Applying the patch appears to break the kernel build";
 }

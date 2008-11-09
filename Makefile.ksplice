@@ -2,12 +2,13 @@ ksplice-makefile := $(word $(words $(MAKEFILE_LIST)), $(MAKEFILE_LIST))
 ksplice-script = $(dir $(ksplice-makefile))ksplice-obj.pl
 
 KSPLICE_MODE ?= diff
-$(if $(filter_out snap diff,$(KSPLICE_MODE)), \
+$(if $(filter_out snap diff revert,$(KSPLICE_MODE)), \
   $(error Invalid KSPLICE_MODE $(KSPLICE_MODE).))
 
 KSPLICE_ONLY_TARGETS ?= %
 
-PHONY := __ksplice
+PHONY :=
+
 __ksplice:
 
 ksplice-extra = $(filter $(KSPLICE_EXTRA_MATCH),$(lib-y) $(real-objs-m) $(real-objs-y))
@@ -26,20 +27,39 @@ cmd_ksplice-cow = cp -a $@ $@.KSPLICE_pre
 rule_ksplice-mod = $(Q)if [ -s $< ]; then echo $(<:.o.KSPLICE=) > $@; elif [ -e $@ ]; then rm -f $@; fi
 quiet_cmd_ksplice-helper = HELPER  $(@:.KSPLICE_helper=)
 cmd_ksplice-helper = $(ksplice-script) helper $@
+quiet_cmd_ksplice-freeze = FREEZE  $(@:_ksplice-revert_%.KSPLICE_pre=%)
+cmd_ksplice-freeze = rm -f $(@:_ksplice-revert_%=%)
+quiet_cmd_ksplice-revert = REVERT  $(@:_ksplice-revert_%.KSPLICE_pre=%)
+cmd_ksplice-revert = mv $(@:_ksplice-revert_%=%) $(@:_ksplice-revert_%.KSPLICE_pre=%)
+quiet_cmd_ksplice-revert-snap = SNAP    $(@:_ksplice-revert-snap_%.KSPLICE=%)
+cmd_ksplice-revert-snap = $(ksplice-script) snap $(@:_ksplice-revert-snap_%=%)
+quiet_cmd_ksplice-clean = CLEAN   $(@:_ksplice-clean_%=%)
+cmd_ksplice-clean = rm -f $(@:_ksplice-clean_%=%)
 
 ifeq ($(KERNELRELEASE),)
 
 ifneq ($(wildcard include/linux/compile.h),)
 MAKE += --old-file=include/linux/compile.h
 endif
+ifneq ($(filter snap diff,$(KSPLICE_MODE)),)
 # Makefile.lib must be included before Makefile because they contain
 # different filechk definitions in 2.6.12.
 include $(if $(KBUILD_SRC),$(KBUILD_SRC)/)scripts/Makefile.lib
+endif
 include $(if $(KBUILD_SRC),$(KBUILD_SRC)/)Makefile
 CC := ksplice-cc.pl $(CC)
 CFLAGS_KSPLICE = -ffunction-sections -fdata-sections -ksplice-cflags-api=1
 CFLAGS_KERNEL += $(CFLAGS_KSPLICE)
 CFLAGS_MODULE += $(CFLAGS_KSPLICE)
+
+ifeq ($(KSPLICE_MODE),revert)
+
+ksplice-dirs += $(vmlinux-alldirs:%=_ksplice_%)
+
+endif	# KSPLICE_MODE
+
+ifneq ($(filter snap diff,$(KSPLICE_MODE)),)
+
 ksplice-mods += vmlinux
 ifdef KSPLICE_BUILD_MODULES
 ksplice-deps += ksplice_modpost
@@ -62,7 +82,19 @@ ksplice_modpost: $(ksplice-dirs)
 ksplice_modinst: $(ksplice-dirs)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modinst
 
+endif	# KSPLICE_MODE
+
 else	# KERNELRELEASE
+
+ifeq ($(KSPLICE_MODE),revert)
+
+-include .config	# workaround for missing obj- = subdir/ declarations
+include $(srctree)/scripts/Makefile.clean
+ksplice-dirs += $(subdir-ymn:%=_ksplice_%)
+
+endif	# KSPLICE_MODE
+
+ifneq ($(filter snap diff,$(KSPLICE_MODE)),)
 
 ifdef KSPLICE_BUILD_MODULES
 KBUILD_MODULES = 1
@@ -111,7 +143,44 @@ $(obj)/%.lds.KSPLICE:
 
 $(sort $(subdir-obj-y:=.KSPLICE)): $(ksplice-dirs) ;
 
+endif	# KSPLICE_MODE
+
 endif	# KERNELRELEASE
+
+ifeq ($(KSPLICE_MODE),revert)
+
+ksplice-revert-obj := $(wildcard $(obj)/*.KSPLICE_pre)
+ksplice-revert-files := $(ksplice-revert-obj)
+ifneq ($(obj),$(src))
+ksplice-revert-files += $(wildcard $(src)/*.KSPLICE_pre)
+endif
+ksplice-revert-deps := $(ksplice-revert-files:%=_ksplice-revert_%)
+ksplice-deps += $(ksplice-revert-deps)
+PHONY += $(ksplice-revert-deps)
+$(ksplice-revert-deps): FORCE
+ifdef KSPLICE_SERIES
+	$(call cmd,ksplice-freeze)
+else
+	$(call cmd,ksplice-revert)
+endif
+
+ksplice-revert-snap-files := $(wildcard $(ksplice-revert-obj:.KSPLICE_pre=.KSPLICE))
+ksplice-revert-snap-deps := $(ksplice-revert-snap-files:%=_ksplice-revert-snap_%)
+ksplice-deps += $(ksplice-revert-snap-deps)
+PHONY += $(ksplice-revert-snap-deps)
+$(ksplice-revert-snap-deps): $(ksplice-revert-snap-files:%.KSPLICE=_ksplice-revert_%.KSPLICE_pre) FORCE
+	$(call cmd,ksplice-revert-snap)
+
+ksplice-clean-files := $(filter-out $(ksplice-revert-snap-files:.KSPLICE_pre=.KSPLICE_primary) $(ksplice-revert-snap-files:.KSPLICE_pre=.KSPLICE_helper),$(wildcard $(obj)/*.KSPLICE_primary $(obj)/*.KSPLICE_helper))
+ksplice-clean-deps = $(ksplice-clean-files:%=_ksplice-clean_%)
+ksplice-deps += $(ksplice-clean-deps)
+PHONY += $(ksplice-clean-deps)
+$(ksplice-clean-deps): FORCE
+	$(call cmd,ksplice-clean)
+
+endif	# KSPLICE_MODE
+
+ifneq ($(filter snap diff,$(KSPLICE_MODE)),)
 
 ksplice-modnames = $(filter $(KSPLICE_ONLY_TARGETS),$(notdir $(ksplice-mods)))
 ksplice-deps += $(ksplice-modnames:%=$(MODVERDIR)/%.mod.KSPLICE)
@@ -142,14 +211,17 @@ ksplice-cow-eval += $(foreach v,if_changed if_changed_dep if_changed_rule,$(kspl
 
 endif	# KSPLICE_MODE
 
-__ksplice: $(ksplice-deps) $(ksplice-dirs)
-	@:
-
 ksplice-cmd-files := $(wildcard $(foreach f,$(sort $(ksplice-targets)),$(dir $(f)).$(notdir $(f)).cmd))
 ifneq ($(ksplice-cmd-files),)
 $(ksplice-cmd-files): ;
 include $(ksplice-cmd-files)
 endif
+
+endif	# KSPLICE_MODE
+
+PHONY += __ksplice
+__ksplice: $(ksplice-deps) $(ksplice-dirs)
+	@:
 
 PHONY += $(ksplice-dirs)
 $(ksplice-dirs): $(ksplice-before)
