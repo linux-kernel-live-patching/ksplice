@@ -64,15 +64,7 @@ static int next_run_byte(struct ud *ud);
 static bool is_nop(struct ud *ud);
 static bool is_unconditional_jump(struct ud *ud);
 static bool is_mcount_call(struct ud *ud, unsigned long addr);
-
-void initialize_ksplice_ud(struct ud *ud)
-{
-	ud_init(ud);
-	ud_set_mode(ud, BITS_PER_LONG);
-	ud_set_syntax(ud, NULL);
-	ud_set_pc(ud, 0);
-	ud_set_vendor(ud, UD_VENDOR_ANY);
-}
+static void initialize_ksplice_ud(struct ud *ud);
 
 static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 				struct ksplice_section *sect,
@@ -504,6 +496,15 @@ static abort_t compare_operands(struct ksplice_pack *pack,
 			ksdebug(pack, "<--Different operands!\n");
 		return NO_MATCH;
 	}
+}
+
+static void initialize_ksplice_ud(struct ud *ud)
+{
+	ud_init(ud);
+	ud_set_mode(ud, BITS_PER_LONG);
+	ud_set_syntax(ud, NULL);
+	ud_set_pc(ud, 0);
+	ud_set_vendor(ud, UD_VENDOR_ANY);
 }
 
 #ifdef CONFIG_FTRACE
