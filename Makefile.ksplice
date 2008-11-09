@@ -123,18 +123,25 @@ $(MODVERDIR)/%.mod.KSPLICE: $(obj)/%.o.KSPLICE
 $(obj)/%.o.KSPLICE_helper: $(obj)/%.o.KSPLICE
 	$(call cmd,ksplice-helper)
 
+ifdef ksplice-mode-diff
+
 define ksplice-cow-check
 	$(if $(filter-out %.KSPLICE,$@), \
-	  $(if $(ksplice-mode-diff), \
-	    $(if $(strip $(filter-out $(PHONY),$?) $(filter-out $(cmd_$(1)),$(cmd_$@)) $(filter-out $(cmd_$@),$(cmd_$(1)))), \
-	      $(if $(wildcard $@), \
-		$(if $(wildcard $@.KSPLICE_pre),, \
-		  $(call cmd,ksplice-cow))))))
+	  $(if $(strip $(filter-out $(PHONY),$?) $(filter-out $(cmd_$(1)),$(cmd_$@)) $(filter-out $(cmd_$@),$(cmd_$(1)))), \
+	    $(if $(wildcard $@), \
+	      $(if $(wildcard $@.KSPLICE_pre),, \
+		$(call cmd,ksplice-cow)))))
 
 endef
 
-$(foreach v,if_changed if_changed_dep if_changed_rule, \
-  $(eval $(v)=$$(ksplice-cow-check)$(value $(v))))
+define ksplice-add-cow-check
+$(v) = $$(ksplice-cow-check)$(value $(v))
+
+endef
+
+ksplice-cow-eval += $(foreach v,if_changed if_changed_dep if_changed_rule,$(ksplice-add-cow-check))
+
+endif	# ksplice-mode-diff
 
 __ksplice: $(ksplice-deps) $(ksplice-dirs)
 	@:
@@ -148,6 +155,8 @@ endif
 PHONY += $(ksplice-dirs)
 $(ksplice-dirs): $(ksplice-before)
 	$(Q)$(MAKE) -f $(ksplice-makefile) obj=$(@:_ksplice_%=%)
+
+$(eval $(ksplice-cow-eval))
 
 PHONY += FORCE
 FORCE:
