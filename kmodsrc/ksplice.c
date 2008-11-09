@@ -734,20 +734,20 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 	INIT_LIST_HEAD(&pack->safety_records);
 
 	sort(pack->helper_relocs,
-	     (pack->helper_relocs_end - pack->helper_relocs),
+	     pack->helper_relocs_end - pack->helper_relocs,
 	     sizeof(*pack->helper_relocs), compare_relocs, NULL);
 	sort(pack->primary_relocs,
-	     (pack->primary_relocs_end - pack->primary_relocs),
+	     pack->primary_relocs_end - pack->primary_relocs,
 	     sizeof(*pack->primary_relocs), compare_relocs, NULL);
 	sort(pack->helper_sections,
-	     (pack->helper_sections_end - pack->helper_sections),
+	     pack->helper_sections_end - pack->helper_sections,
 	     sizeof(*pack->helper_sections), compare_section_labels, NULL);
 #ifdef KSPLICE_STANDALONE
 	sort(pack->primary_system_map,
-	     (pack->primary_system_map_end - pack->primary_system_map),
+	     pack->primary_system_map_end - pack->primary_system_map,
 	     sizeof(*pack->primary_system_map), compare_system_map, NULL);
 	sort(pack->helper_system_map,
-	     (pack->helper_system_map_end - pack->helper_system_map),
+	     pack->helper_system_map_end - pack->helper_system_map,
 	     sizeof(*pack->helper_system_map), compare_system_map, NULL);
 #endif /* KSPLICE_STANDALONE */
 
