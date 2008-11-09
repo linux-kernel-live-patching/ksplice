@@ -37,6 +37,21 @@ chdir($tmpdir);
 my $ksplice = unpack_update($file);
 chdir($ksplice);
 
+die "No contents file in $file\n" if (!-e "contents");
+open(CONTENTS, '<', "contents");
+my $core;
+while (<CONTENTS>) {
+	my @line = split(' ', $_);
+	if ($line[0] eq 'core') {
+		die "Multiple core modules in $file!" if (defined $core);
+		$core = {
+			module => $line[1],
+			file => $line[2],
+		};
+	}
+}
+close(CONTENTS);
+
 my $nounload = runstr("lsmod") =~ m/- $/m;
 
 (my $kid = $ksplice) =~s|ksplice[-_]([^-_]+)|$1|;
@@ -51,12 +66,13 @@ if(update_loaded($kid)) {
 }
 
 runstr_err(qw(modprobe -q ksplice)) eq "" || die;
-if (-e "ksplice-$kid.ko") {
-	if (runstr("lsmod") =~ m/^ksplice_$kid\s+/) {
-		die "Ksplice core module ksplice_$kid already loaded.";
+if (defined $core) {
+	die "Could not find Ksplice core module $core->{file}\n" if (!-e $core->{file});
+	if (runstr("lsmod") =~ m/^\Q$core->{module}\E\s+/) {
+		die "Ksplice core module $core already loaded.";
 	}
-	if (!load_module("ksplice-$kid.ko", "debug=$debug")) {
-		die "Error loading Ksplice core for update $kid";
+	if (!load_module($core->{file}, "debug=$debug")) {
+		die "Error loading Ksplice core module $core->{module} for update $kid";
 	}
 }
 
