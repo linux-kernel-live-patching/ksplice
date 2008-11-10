@@ -22,6 +22,7 @@ our @EXPORT = qw(
 	child_error runval runval_raw runstr runstr_err runval_in runval_infile unpack_update
 	get_stage set_stage set_debug_level set_partial get_abort_cause get_patch update_loaded
 	get_debug_output get_conflicts get_short_description
+	read_file write_file
 	abs_path getcwd basename dirname tmpdir
 	copy rename move utime chdir mkdir mkpath unlink rmtree tempfile tempdir
 );
