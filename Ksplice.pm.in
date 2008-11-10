@@ -19,7 +19,8 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	Verbose GetOptions pod2usage shellwords
 	$datadir $libexecdir @common_options $help
-	child_error runval runval_raw runstr runstr_err runval_in runval_infile unpack_update
+	child_error runval runval_raw runstr runstr_err runval_in runval_infile runval_outfile
+	unpack_update
 	get_stage set_stage set_debug_level set_partial get_abort_cause get_patch update_loaded
 	get_debug_output get_conflicts get_short_description
 	read_file write_file
@@ -106,6 +107,18 @@ sub runval_infile {
 	local (*INFILE);
 	open(INFILE, '<', $infile) or die "Can't open $infile: $!";
 	my $pid = open2('>&STDOUT', '<&INFILE', @cmd) or die "Can't run @cmd: $!";
+	waitpid($pid, 0);
+	if(child_error()) {
+		die "Failed during: @cmd";
+	}
+}
+
+sub runval_outfile {
+	my ($outfile, @cmd) = @_;
+	print "+ @cmd > $outfile\n" if($Verbose::level >= 1);
+	local (*OUTFILE);
+	open(OUTFILE, '>', $outfile) or die "Can't open $outfile: $!";
+	my $pid = open2('>&OUTFILE', '</dev/null', @cmd) or die "Can't run @cmd: $!";
 	waitpid($pid, 0);
 	if(child_error()) {
 		die "Failed during: @cmd";

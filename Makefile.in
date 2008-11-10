@@ -21,7 +21,7 @@ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
 
 perl_primary = ksplice-create ksplice-view ksplice-apply ksplice-undo Ksplice.pm ksplice-obj.pl
 perl_man = $(patsubst %,%.8,$(perl_primary))
-objutils = objmanip inspect
+objutils = objmanip inspect kernel-utsname
 itab = kmodsrc/x86/libudis86/itab.h kmodsrc/x86/libudis86/itab.c
 
 have_static := $(wildcard $(srcdir)/objmanip-static)

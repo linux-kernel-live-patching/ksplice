@@ -16,9 +16,16 @@
  *  02110-1301, USA.
  */
 
+#include <linux/compile.h>
 #include <linux/kernel.h>
 #include <linux/version.h>
 #include <linux/module.h>
+#include <linux/uts.h>
+#include <linux/utsname.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+/* 63104eec234bdecb55fd9c15467ae00d0a3f42ac was after 2.6.17 */
+#include <linux/utsrelease.h>
+#endif /* LINUX_VERSION_CODE */
 
 #ifdef CONFIG_PARAVIRT
 #include <asm/paravirt.h>
@@ -169,3 +176,8 @@ const struct table_section table_sections[]
 	},
 #endif /* LINUX_VERSION_CODE */
 };
+
+const char *__attribute__((section(".uts_sysname"))) sysname = UTS_SYSNAME;
+const char *__attribute__((section(".uts_release"))) release = UTS_RELEASE;
+const char *__attribute__((section(".uts_version"))) version = UTS_VERSION;
+const char *__attribute__((section(".uts_machine"))) machine = UTS_MACHINE;

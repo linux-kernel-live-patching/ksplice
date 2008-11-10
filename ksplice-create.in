@@ -242,6 +242,7 @@ if ($description) {
 }
 write_file("$ksplice/api-version", "KSPLICE_API_VERSION\n");
 write_file("$ksplice/timestamp", time() . "\n");
+runval_outfile("$ksplice/utsname", "/usr/local/libexec/ksplice-kernel-utsname", "$kmodsrc/offsets.o");
 open(CONTENTS, ">", "$ksplice/contents");
 foreach my $mod (@modules) {
 	(my $target = $mod) =~ s/-/_/g;
