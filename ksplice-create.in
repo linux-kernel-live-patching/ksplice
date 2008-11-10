@@ -241,6 +241,7 @@ if ($description) {
 	write_file("$ksplice/description", "$description\n");
 }
 write_file("$ksplice/api-version", "KSPLICE_API_VERSION\n");
+write_file("$ksplice/timestamp", time() . "\n");
 open(CONTENTS, ">", "$ksplice/contents");
 foreach my $mod (@modules) {
 	(my $target = $mod) =~ s/-/_/g;
