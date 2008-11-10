@@ -16,6 +16,7 @@ CPPFLAGS = @CPPFLAGS@
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
 PACKAGE_VERSION = @PACKAGE_VERSION@
+KSPLICE_API_VERSION = @KSPLICE_API_VERSION@
 PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
 
 perl_primary = ksplice-create ksplice-view ksplice-apply ksplice-undo Ksplice.pm ksplice-obj.pl
@@ -45,7 +46,7 @@ $(addprefix install-,$(objutils)): install-%: %-static
 endif
 
 $(perl_primary): %: %.in Makefile
-	sed 's|PACKAGE_VERSION|$(PACKAGE_VERSION)|;s|PACKAGE_BUGREPORT|$(PACKAGE_BUGREPORT)|;s|KSPLICE_DATA_DIR|$(datadir)/ksplice|;s|KSPLICE_LIBEXEC_DIR|$(libexecdir)|' $< > $@
+	sed 's|PACKAGE_VERSION|$(PACKAGE_VERSION)|;s|KSPLICE_API_VERSION|$(KSPLICE_API_VERSION)|;s|PACKAGE_BUGREPORT|$(PACKAGE_BUGREPORT)|;s|KSPLICE_DATA_DIR|$(datadir)/ksplice|;s|KSPLICE_LIBEXEC_DIR|$(libexecdir)|' $< > $@
 
 $(perl_man): %.8: %
 	pod2man --center="Ksplice" --release="Ksplice v$(PACKAGE_VERSION)" --section=8 $< $@
