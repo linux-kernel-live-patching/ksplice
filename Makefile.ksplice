@@ -45,7 +45,7 @@ ksplice-mods += vmlinux
 ifdef KSPLICE_BUILD_MODULES
 ksplice-deps += ksplice_modpost
 endif
-ksplice-dirs += $(addprefix _ksplice_,$(vmlinux-dirs))
+ksplice-dirs += $(vmlinux-dirs:%=_ksplice_%)
 ifdef ksplice-mode-snap
 ksplice-before += prepare0 prepare scripts
 endif
@@ -75,7 +75,7 @@ ksplice-deps += $(if $(filter $(KSPLICE_ONLY_TARGETS),vmlinux),$(builtin-target:
 ifdef KSPLICE_BUILD_MODULES
 ksplice-deps += $(obj-m)
 endif
-ksplice-dirs += $(addprefix _ksplice_,$(subdir-ym))
+ksplice-dirs += $(subdir-ym:%=_ksplice_%)
 
 ifdef builtin-target
 $(builtin-target:=.KSPLICE): ksplice-link-deps = $(obj-y)
@@ -91,7 +91,7 @@ $(lib-target:=.KSPLICE): $(call ksplice-objs,$(lib-y)) FORCE
 ksplice-targets += $(lib-target:=.KSPLICE)
 endif
 
-$(sort $(multi-used-y:=.KSPLICE) $(multi-used-m:=.KSPLICE)): ksplice-link-deps = $(addprefix $(obj)/,$($(patsubst $(obj)/%,%,$(@:.o.KSPLICE=-objs))) $($(patsubst $(obj)/%,%,$(@:.o.KSPLICE=-y))))
+$(sort $(multi-used-y:=.KSPLICE) $(multi-used-m:=.KSPLICE)): ksplice-link-deps = $($(@:$(obj)/%.o.KSPLICE=%-objs):%=$(obj)/%) $($(@:$(obj)/%.o.KSPLICE=%-y):%=$(obj)/%)
 $(sort $(multi-used-y:=.KSPLICE)): $(obj)/%.o.KSPLICE: $(call ksplice-objs,$(multi-objs-y)) FORCE
 	$(call if_changed,ksplice-combine)
 $(sort $(multi-used-m:=.KSPLICE)): $(obj)/%.o.KSPLICE: $(call ksplice-objs,$(multi-objs-m)) FORCE
@@ -144,11 +144,9 @@ ifneq ($(ksplice-cmd-files),)
 include $(ksplice-cmd-files)
 endif
 
-ksplice := -f $(ksplice-makefile) obj
-
 PHONY += $(ksplice-dirs)
 $(ksplice-dirs): $(ksplice-before)
-	$(Q)$(MAKE) $(ksplice)=$(patsubst _ksplice_%,%,$@)
+	$(Q)$(MAKE) -f $(ksplice-makefile) obj=$(@:_ksplice_%=%)
 
 PHONY += FORCE
 FORCE:
