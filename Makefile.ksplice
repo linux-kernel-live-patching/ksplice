@@ -4,7 +4,6 @@ ksplice-script = $(dir $(ksplice-makefile))ksplice-obj.pl
 KSPLICE_MODE ?= diff
 $(if $(filter_out snap diff,$(KSPLICE_MODE)), \
   $(error Invalid KSPLICE_MODE $(KSPLICE_MODE).))
-ksplice-mode-$(KSPLICE_MODE) = y
 
 KSPLICE_ONLY_TARGETS ?= %
 
@@ -46,7 +45,7 @@ ifdef KSPLICE_BUILD_MODULES
 ksplice-deps += ksplice_modpost
 endif
 ksplice-dirs += $(vmlinux-dirs:%=_ksplice_%)
-ifdef ksplice-mode-snap
+ifeq ($(KSPLICE_MODE),snap)
 ksplice-before += prepare0 prepare scripts
 endif
 
@@ -98,7 +97,7 @@ $(sort $(multi-used-m:=.KSPLICE)): $(obj)/%.o.KSPLICE: $(call ksplice-objs,$(mul
 	$(call if_changed,ksplice-combine)
 ksplice-targets += $(sort $(multi-used-y:=.KSPLICE) $(multi-used-m:=.KSPLICE))
 
-ifdef ksplice-mode-snap
+ifeq ($(KSPLICE_MODE),snap)
 $(obj)/%.o.KSPLICE: $(obj)/%.o FORCE
 	$(if $(strip $(wildcard $<.KSPLICE_pre) $(filter $<,$?)), \
 	  $(call cmd,ksplice-snap))
@@ -123,7 +122,7 @@ $(MODVERDIR)/%.mod.KSPLICE: $(obj)/%.o.KSPLICE
 $(obj)/%.o.KSPLICE_helper: $(obj)/%.o.KSPLICE
 	$(call cmd,ksplice-helper)
 
-ifdef ksplice-mode-diff
+ifeq ($(KSPLICE_MODE),diff)
 
 define ksplice-cow-check
 	$(if $(filter-out %.KSPLICE,$@), \
@@ -141,7 +140,7 @@ endef
 
 ksplice-cow-eval += $(foreach v,if_changed if_changed_dep if_changed_rule,$(ksplice-add-cow-check))
 
-endif	# ksplice-mode-diff
+endif	# KSPLICE_MODE
 
 __ksplice: $(ksplice-deps) $(ksplice-dirs)
 	@:
