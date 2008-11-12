@@ -94,7 +94,7 @@ ksplice-targets += $(obj)/vmlinux.o.KSPLICE
 $(ksplice-vmlinux-objs:=.KSPLICE): $(ksplice-dirs) ;
 
 PHONY += ksplice_modpost
-ksplice_modpost: $(ksplice-dirs)
+ksplice_modpost: $(ksplice-dirs) vmlinux
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
 
 endif	# KSPLICE_MODE
