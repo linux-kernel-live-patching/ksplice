@@ -182,9 +182,11 @@ sub write_sysfs {
 }
 
 sub get_debug_output {
-	my ($kid) = @_;
+	my ($kid, $debugfs_out) = @_;
 	my $update = "ksplice_$kid";
-	my (undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX', DIR => tmpdir());
+	if ($debugfs_out eq '') {
+		(undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX', DIR => tmpdir());
+	}
 	my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX',
 				 TMPDIR => 1, CLEANUP => 1);
 	if (runval_raw("grep", "-qFx", "nodev\tdebugfs", "/proc/filesystems") == 0) {

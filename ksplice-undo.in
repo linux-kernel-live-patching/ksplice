@@ -23,11 +23,14 @@ use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 use Time::HiRes qw(usleep);
 
-my $debug = 0;
+my $debug;
+my $debugon = 0;
 GetOptions(@common_options,
-	"debug" => \$debug) or pod2usage(1);
+	"debug" => \$debugon,
+	"debugfile=s" => \$debug) or pod2usage(1);
 
 pod2usage(1) if($help || scalar(@ARGV) != 1);
+$debugon = 1 if (defined($debug));
 
 my $kid = $ARGV[0];
 $kid =~ s/^ksplice[-_]//;
@@ -41,7 +44,7 @@ if (!update_loaded($kid)) {
 }
 
 chdir("/sys/module/");
-set_debug_level($kid, $debug) if(defined($debug));
+set_debug_level($kid, $debugon);
 my $stage = get_stage($kid);
 if ($stage ne 'applied') {
 	print "Ksplice id $kid is not applied\n";
@@ -74,7 +77,7 @@ if ($failed == 0 && -e "/sys/module/$update") {
 	}
 }
 unless($failed == 0) {
-	my ($debugfile, $debugout) = get_debug_output($kid);
+	my ($debugfile, $debugout) = get_debug_output($kid, $debug);
 	print STDERR "Error undoing Ksplice update $kid:\n";
 	print $debugout;
 	my $abort_cause = get_abort_cause($kid);
@@ -83,7 +86,7 @@ unless($failed == 0) {
 	if ($abort_cause eq 'code_busy') {
 		print $conflicts;
 	}
-	if($debug && defined $debugfile) {
+	if($debugon && defined $debugfile) {
 		print $debugout;
 		print("Debugging output saved to $debugfile\n");
 	}
@@ -157,6 +160,10 @@ L<ksplice-view(8)>, and it reverses that update within the running binary kernel
 
 Reverses the update with debugging output enabled.  Recommended only for
 debugging.
+
+=item B<--debugfile=>I<filename>
+
+Sets the location where debugging output should be saved.  Implies --debug.
 
 =back
 

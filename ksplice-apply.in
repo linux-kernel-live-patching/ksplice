@@ -22,15 +22,18 @@ use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
-my $debug = 0;
+my $debug;
+my $debugon = 0;
 my $partial = 0;
 GetOptions(@common_options,
 	"partial" => \$partial,
-	"debug" => \$debug) or pod2usage(1);
+	"debug" => \$debugon,
+	"debugfile=s" => \$debug) or pod2usage(1);
 
 pod2usage(1) if($help || scalar(@ARGV) != 1);
 
 my $file = abs_path($ARGV[0]);
+$debugon = 1 if(defined $debug);
 
 my $tmpdir = tempdir('ksplice-tmp-XXXXXX', TMPDIR => 1, CLEANUP => 1);
 chdir($tmpdir);
@@ -71,7 +74,7 @@ if (defined $core) {
 	if (runstr("lsmod") =~ m/^\Q$core->{module}\E\s+/) {
 		die "Ksplice core module $core already loaded.";
 	}
-	if (!load_module($core->{file}, "debug=$debug")) {
+	if (!load_module($core->{file}, "debug=$debugon")) {
 		die "Error loading Ksplice core module $core->{module} for update $kid";
 	}
 }
@@ -96,12 +99,12 @@ foreach my $helper (@helpers) {
 		die "Error loading primary module $primary";
 	}
 	if(!load_module($helper)) {
-		my ($debugfile, $debugout) = get_debug_output("init_$kid");
+		my ($debugfile, $debugout) = get_debug_output("init_$kid", $debug);
 		print STDERR "Error loading helper module $helper\n";
 		(my $module = $primary) =~ s/-/_/g;
 		$module =~ s/\.ko//;
 		cleanup_modules();
-		if($debug && defined $debugfile) {
+		if($debugon && defined $debugfile) {
 			print $debugout;
 			print("Debugging output saved to $debugfile\n");
 		}
@@ -109,12 +112,12 @@ foreach my $helper (@helpers) {
 	}
 }
 
-set_debug_level($kid, $debug);
+set_debug_level($kid, $debugon);
 set_partial($kid, $partial);
 set_stage($kid, "applied");
 my $stage = get_stage($kid);
 if($stage ne 'applied') {
-	my ($debugfile, $debugout) = get_debug_output($kid);
+	my ($debugfile, $debugout) = get_debug_output($kid, $debug);
 	my $abort_cause = get_abort_cause($kid);
 	my $conflicts = get_conflicts($kid);
 	cleanup_modules();
@@ -124,7 +127,7 @@ if($stage ne 'applied') {
 	if ($abort_cause eq 'code_busy') {
 		print $conflicts;
 	}
-	if ($debug && defined $debugfile) {
+	if ($debugon && defined $debugfile) {
 		print("Debugging output saved to $debugfile\n");
 	}
 	die;
@@ -270,6 +273,10 @@ running kernel's version.
 
 Applies the update with debugging output enabled.  Recommended only for
 debugging.
+
+=item B<--debugfile=>I<filename>
+
+Sets the location where debugging output should be saved.  Implies --debug.
 
 =item B<--partial>
 
