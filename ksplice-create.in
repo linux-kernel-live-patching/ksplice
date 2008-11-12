@@ -121,6 +121,9 @@ $ENV{PATH} = "$datadir:$ENV{PATH}";
 my @make_ksplice = (@make, "-f", "$datadir/Makefile.ksplice", @kbuild_flags);
 
 push(@make_ksplice, "KSPLICE_BUILD_MODULES=1") if ($build_modules);
+if(-e "include/config/kernel.release") {
+	push(@make_ksplice, "-o", "include/config/kernel.release");
+}
 
 my @revert_flags = ("KSPLICE_MODE=revert");
 push(@revert_flags, "KSPLICE_SERIES=y") if ($series);
@@ -145,9 +148,6 @@ if(!$skip_prebuild) {
 		      "$linuxtree/.config");
 	}
 	my @snap_flags = ("KSPLICE_MODE=snap");
-	if(-e "include/config/kernel.release") {
-		push(@snap_flags, "-o", "include/config/kernel.release");
-	}
 	runval_raw(@make_ksplice, @snap_flags) == 0 or
 	    die "Aborting: Prebuild failed";
 	sleep(1);
