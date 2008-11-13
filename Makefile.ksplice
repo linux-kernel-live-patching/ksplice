@@ -41,7 +41,7 @@ cmd_ksplice-revert-snap = $(ksplice-script) snap $(@:_ksplice-revert-snap_%=%)
 quiet_cmd_ksplice-clean = CLEAN   $(@:_ksplice-clean_%=%)
 cmd_ksplice-clean = rm -f $(@:_ksplice-clean_%=%)
 
-ifeq ($(KERNELRELEASE),)
+ifeq ($(obj),)
 
 ifneq ($(wildcard include/linux/compile.h),)
 MAKE += --old-file=include/linux/compile.h
@@ -89,7 +89,7 @@ ksplice_modinst: $(ksplice-dirs)
 
 endif	# KSPLICE_MODE
 
-else	# KERNELRELEASE
+else	# obj
 
 ifeq ($(KSPLICE_MODE),revert)
 
@@ -150,7 +150,7 @@ $(sort $(subdir-obj-y:=.KSPLICE)): $(ksplice-dirs) ;
 
 endif	# KSPLICE_MODE
 
-endif	# KERNELRELEASE
+endif	# obj
 
 ifeq ($(KSPLICE_MODE),revert)
 
