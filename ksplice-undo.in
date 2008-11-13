@@ -31,6 +31,7 @@ GetOptions(@common_options,
 
 pod2usage(1) if($help || scalar(@ARGV) != 1);
 $debugon = 1 if (defined($debug));
+$debug = abs_path($debug) if (defined $debug);
 
 my $kid = $ARGV[0];
 $kid =~ s/^ksplice[-_]//;
@@ -77,9 +78,8 @@ if ($failed == 0 && -e "/sys/module/$update") {
 	}
 }
 unless($failed == 0) {
-	my ($debugfile, $debugout) = get_debug_output($kid, $debug);
+	my $debugfile = get_debug_output($kid, $debug);
 	print STDERR "Error undoing Ksplice update $kid:\n";
-	print $debugout;
 	my $abort_cause = get_abort_cause($kid);
 	my $conflicts = get_conflicts($kid);
 	print_error($abort_cause);
@@ -87,7 +87,6 @@ unless($failed == 0) {
 		print $conflicts;
 	}
 	if($debugon && defined $debugfile) {
-		print $debugout;
 		print("Debugging output saved to $debugfile\n");
 	}
 	die;

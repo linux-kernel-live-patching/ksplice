@@ -184,7 +184,7 @@ sub write_sysfs {
 sub get_debug_output {
 	my ($kid, $debugfs_out) = @_;
 	my $update = "ksplice_$kid";
-	if ($debugfs_out eq '') {
+	if (!$debugfs_out) {
 		(undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX', DIR => tmpdir());
 	}
 	my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX',
@@ -192,9 +192,8 @@ sub get_debug_output {
 	if (runval_raw("grep", "-qFx", "nodev\tdebugfs", "/proc/filesystems") == 0) {
 		runval(qw(mount -t debugfs debugfs), $debugfsdir);
 		copy("$debugfsdir/$update", "$debugfs_out");
-		my $debug = read_file("$debugfsdir/$update");
 		runval(qw(umount), $debugfsdir);
-		return ($debugfs_out, $debug);
+		return $debugfs_out;
 	} elsif ($? >> 8 == 1) {
 		return ();
 	} else {
