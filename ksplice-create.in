@@ -209,14 +209,10 @@ for (split(/\0/, runstr(qw(find -name *.KSPLICE* ! ( -name *.KSPLICE -empty ) ! 
 
 my @modulepaths = ();
 my @modules = ();
-foreach(glob(".tmp_versions/*.mod.KSPLICE")) {
+foreach(glob("$kmodsrc/*.mod.KSPLICE")) {
 	open MOD, '<', $_;
 	chomp(my $mod = <MOD>);
 	close MOD;
-	foreach my $collect ("$mod.o.KSPLICE", "$mod.o.KSPLICE_primary",
-			     "$mod.o.KSPLICE_helper") {
-		copy($collect, "$kmodsrc/" . basename($collect));
-	}
 	push @modulepaths, "$mod.ko" if ($mod ne "vmlinux");
 	push @modules, basename($mod);
 }

@@ -27,8 +27,8 @@ quiet_cmd_ksplice-ignore = IGNORE  $(@:.KSPLICE=)
 cmd_ksplice-ignore = touch $@
 quiet_cmd_ksplice-cow = COW     $@
 cmd_ksplice-cow = cp -a $@ $@.KSPLICE_pre
-quiet_cmd_ksplice-mod = MOD     $(@:$(MODVERDIR)/%.mod.KSPLICE=%)
-cmd_ksplice-mod = echo $(<:.o.KSPLICE=) > $@
+quiet_cmd_ksplice-mod = MOD     $(@:$(KSPLICE_KMODSRC)/%.mod.KSPLICE=%)
+cmd_ksplice-mod = echo $(<:.o.KSPLICE=) > $@; cp -a $< $(<:.KSPLICE=.KSPLICE_primary) $(<:.KSPLICE=.KSPLICE_helper) $(KSPLICE_KMODSRC)/
 rule_ksplice-mod = if [ -s $< ]; then $(echo-cmd) $(cmd_$(1)); fi
 quiet_cmd_ksplice-helper = HELPER  $(@:.KSPLICE_helper=)
 cmd_ksplice-helper = $(ksplice-script) helper $@
@@ -188,9 +188,13 @@ endif	# KSPLICE_MODE
 ifneq ($(filter snap diff,$(KSPLICE_MODE)),)
 
 ksplice-modnames = $(filter $(KSPLICE_ONLY_TARGETS),$(notdir $(ksplice-mods)))
-ksplice-deps += $(ksplice-modnames:%=$(MODVERDIR)/%.mod.KSPLICE)
-$(MODVERDIR)/%.mod.KSPLICE: $(obj)/%.o.KSPLICE
+ifdef KSPLICE_KMODSRC
+ksplice-deps += $(ksplice-modnames:%=$(KSPLICE_KMODSRC)/%.mod.KSPLICE)
+$(KSPLICE_KMODSRC)/%.mod.KSPLICE: $(obj)/%.o.KSPLICE
 	$(Q)$(call rule_ksplice-mod,ksplice-mod)
+else
+ksplice-deps += $(ksplice-modnames:%=$(obj)/%.o.KSPLICE)
+endif
 .PRECIOUS: $(obj)/%.o.KSPLICE
 
 $(obj)/%.o.KSPLICE_helper: $(obj)/%.o.KSPLICE
