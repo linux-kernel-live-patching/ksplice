@@ -86,7 +86,7 @@ ifeq ($(KSPLICE_MODE),snap)
 ksplice-before += prepare0 prepare scripts
 endif
 
-ksplice-vmlinux-objs = $(filter-out $(head-y),$(if $(vmlinux-all),$(vmlinux-all),$(vmlinux-objs)))
+ksplice-vmlinux-objs = $(if $(vmlinux-all),$(vmlinux-all),$(vmlinux-objs))
 $(obj)/vmlinux.o.KSPLICE: ksplice-link-deps = $(ksplice-vmlinux-objs)
 $(obj)/vmlinux.o.KSPLICE: $(call ksplice-objs,$(ksplice-vmlinux-objs)) FORCE
 	$(call if_changed,ksplice-combine)
