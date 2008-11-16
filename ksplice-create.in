@@ -224,7 +224,7 @@ if(!@modules) {
 
 if ($build_modules) {
 	mkdir("$tmpdir/modules");
-	runval(@make_ksplice, "KSPLICE_MODE=diff", "ksplice_modinst", "MODLIB=$tmpdir/modules", "modules=@modulepaths");
+	runval(@make_ksplice, "KSPLICE_MODE=modinst", "MODLIB=$tmpdir/modules", "modules=@modulepaths");
 }
 
 revert_orig() if(defined($diffext));

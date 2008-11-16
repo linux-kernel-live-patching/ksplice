@@ -2,7 +2,7 @@ ksplice-makefile := $(word $(words $(MAKEFILE_LIST)), $(MAKEFILE_LIST))
 ksplice-script = $(dir $(ksplice-makefile))ksplice-obj.pl
 
 KSPLICE_MODE ?= diff
-$(if $(filter_out snap diff revert,$(KSPLICE_MODE)), \
+$(if $(filter_out snap diff revert modinst,$(KSPLICE_MODE)), \
   $(error Invalid KSPLICE_MODE $(KSPLICE_MODE).))
 
 KSPLICE_ONLY_TARGETS ?= %
@@ -81,9 +81,16 @@ $(obj)/vmlinux.o.KSPLICE: $(call ksplice-objs,$(ksplice-vmlinux-objs)) FORCE
 ksplice-targets += $(obj)/vmlinux.o.KSPLICE
 $(ksplice-vmlinux-objs:=.KSPLICE): $(ksplice-dirs) ;
 
-PHONY += ksplice_modpost ksplice_modinst
+PHONY += ksplice_modpost
 ksplice_modpost: $(ksplice-dirs)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
+
+endif	# KSPLICE_MODE
+
+ifeq ($(KSPLICE_MODE),modinst)
+
+ksplice-deps += ksplice_modinst
+PHONY += ksplice_modinst
 ksplice_modinst: $(ksplice-dirs)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modinst
 
