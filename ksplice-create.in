@@ -220,7 +220,8 @@ foreach(glob("$kmodsrc/*.mod.KSPLICE")) {
 
 if(!@modules) {
 	revert_orig() if(defined($diffext));
-	die "Aborting: No changes detected";
+	print STDERR "No changes detected.\n";
+	exit(66);
 }
 
 if ($build_modules) {
