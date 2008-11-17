@@ -81,20 +81,17 @@ ksplice-mods += vmlinux
 ifdef KSPLICE_BUILD_MODULES
 ksplice-deps += ksplice_modpost
 endif
-ksplice-dirs += $(vmlinux-dirs:%=_ksplice_%)
-ifeq ($(KSPLICE_MODE),snap)
-ksplice-before += prepare0 prepare scripts
-endif
+ksplice-deps += $(vmlinux-dirs)
 
 ksplice-vmlinux-objs = $(if $(vmlinux-all),$(vmlinux-all),$(vmlinux-objs))
 $(obj)/vmlinux.o.KSPLICE: ksplice-link-deps = $(ksplice-vmlinux-objs)
 $(obj)/vmlinux.o.KSPLICE: $(call ksplice-objs,$(ksplice-vmlinux-objs)) FORCE
 	$(call if_changed,ksplice-combine)
 ksplice-targets += $(obj)/vmlinux.o.KSPLICE
-$(ksplice-vmlinux-objs:=.KSPLICE): $(ksplice-dirs) ;
+$(ksplice-vmlinux-objs:=.KSPLICE): $(vmlinux-dirs) ;
 
 PHONY += ksplice_modpost
-ksplice_modpost: $(ksplice-dirs) vmlinux
+ksplice_modpost: $(vmlinux-dirs) vmlinux
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
 
 endif	# KSPLICE_MODE
@@ -103,7 +100,7 @@ ifeq ($(KSPLICE_MODE),modinst)
 
 ksplice-deps += ksplice_modinst
 PHONY += ksplice_modinst
-ksplice_modinst: $(ksplice-dirs)
+ksplice_modinst:
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modinst
 
 endif	# KSPLICE_MODE
@@ -130,9 +127,9 @@ include $(srctree)/scripts/Makefile.build
 ksplice-mods += $(obj-m:.o=)
 ksplice-deps += $(if $(filter $(KSPLICE_ONLY_TARGETS),vmlinux),$(builtin-target:=.KSPLICE) $(lib-target:=.KSPLICE))
 ifdef KSPLICE_BUILD_MODULES
-ksplice-deps += $(obj-m)
+ksplice-deps += __build
 endif
-ksplice-dirs += $(subdir-ym:%=_ksplice_%)
+ksplice-deps += $(subdir-ym)
 
 ifdef builtin-target
 $(builtin-target:=.KSPLICE): ksplice-link-deps = $(obj-y)
@@ -167,7 +164,7 @@ endif
 $(obj)/%.lds.KSPLICE:
 	$(call cmd,ksplice-ignore)
 
-$(sort $(subdir-obj-y:=.KSPLICE)): $(ksplice-dirs) ;
+$(sort $(subdir-obj-y:=.KSPLICE)): $(subdir-ym) ;
 
 ifeq ($(MAKECMDGOALS),missing-syscalls)
 cmd = @:
@@ -259,9 +256,12 @@ PHONY += __ksplice
 __ksplice: $(ksplice-deps) $(ksplice-dirs)
 	@:
 
+build := -f $(ksplice-makefile) obj
+descend =$(Q)$(MAKE) $(build)=$(1) $(2)
+
 PHONY += $(ksplice-dirs)
-$(ksplice-dirs): $(ksplice-before)
-	$(Q)$(MAKE) -f $(ksplice-makefile) obj=$(@:_ksplice_%=%)
+$(ksplice-dirs):
+	$(Q)$(MAKE) $(build)=$(@:_ksplice_%=%)
 
 endif	# skip-makefile
 
