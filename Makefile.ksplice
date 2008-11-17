@@ -169,6 +169,10 @@ $(obj)/%.lds.KSPLICE:
 
 $(sort $(subdir-obj-y:=.KSPLICE)): $(ksplice-dirs) ;
 
+ifeq ($(MAKECMDGOALS),missing-syscalls)
+cmd = @:
+endif
+
 endif	# KSPLICE_MODE
 
 endif	# obj
