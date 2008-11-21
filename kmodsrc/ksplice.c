@@ -36,9 +36,10 @@
 #include <linux/pagemap.h>
 #include <linux/sched.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
-/* 8c63b6d337534a6b5fb111dc27d0850f535118c0 was after 2.6.11 */
 #include <linux/sort.h>
-#endif /* LINUX_VERSION_CODE < */
+#else /* LINUX_VERSION_CODE < */
+/* 8c63b6d337534a6b5fb111dc27d0850f535118c0 was after 2.6.11 */
+#endif /* LINUX_VERSION_CODE */
 #include <linux/stop_machine.h>
 #include <linux/sysfs.h>
 #include <linux/time.h>
