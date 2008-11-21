@@ -16,7 +16,8 @@
  *  02110-1301, USA.
  */
 
-#ifdef __ASM_X86_PROCESSOR_H	/* New unified x86 */
+#if defined(_ASM_X86_PROCESSOR_H) || \
+    defined(__ASM_X86_PROCESSOR_H)	/* New unified x86 */
 #define KSPLICE_IP(x) ((x)->thread.ip)
 #define KSPLICE_SP(x) ((x)->thread.sp)
 #elif defined(CONFIG_X86_64)	/* Old x86 64-bit */
