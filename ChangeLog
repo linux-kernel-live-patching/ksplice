@@ -1,3 +1,9 @@
+2008-11-21 : 0.9.4
+ - Added support for patching kernels built in a separate Kbuild output
+   directory (O=dir)
+ - Added additional metadata to the Ksplice update tarballs
+ - Updated Ksplice for kernel 2.6.28
+
 2008-11-07 : 0.9.3
  - Added hooks for calling functions at various points during the update process
  - Added support for applying an update only to loaded target modules
