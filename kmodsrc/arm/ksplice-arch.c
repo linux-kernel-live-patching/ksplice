@@ -1,4 +1,4 @@
-/*  Copyright (C) 2007-2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+/*  Copyright (C) 2007-2008  Jeff Arnold <jbarnold@mit.edu>
  *  Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
  *                      Tim Abbott <tabbott@mit.edu>
  *

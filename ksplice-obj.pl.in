@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
-#                     Jeffrey Brian Arnold <jbarnold@mit.edu>,
+#                     Jeff Arnold <jbarnold@mit.edu>,
 #                     Tim Abbott <tabbott@mit.edu>
 #
 # This program is free software; you can redistribute it and/or modify

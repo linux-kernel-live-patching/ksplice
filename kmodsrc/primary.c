@@ -1,4 +1,4 @@
-/*  Copyright (C) 2007-2008  Jeffrey Brian Arnold <jbarnold@mit.edu>
+/*  Copyright (C) 2007-2008  Jeff Arnold <jbarnold@mit.edu>
  *  Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
  *                      Tim Abbott <tabbott@mit.edu>
  *
@@ -110,7 +110,7 @@ static void cleanup_primary(void)
 module_init(init_primary);
 module_exit(cleanup_primary);
 
-MODULE_AUTHOR("Jeffrey Brian Arnold <jbarnold@mit.edu>");
+MODULE_AUTHOR("Jeff Arnold <jbarnold@mit.edu>");
 MODULE_DESCRIPTION("Ksplice rebootless update primary module");
 #ifdef KSPLICE_VERSION
 MODULE_VERSION(KSPLICE_VERSION);

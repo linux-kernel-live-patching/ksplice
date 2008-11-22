@@ -1,6 +1,6 @@
 /*  Copyright (C) 2008  Tim Abbott <tabbott@mit.edu>,
  *                      Anders Kaseorg <andersk@mit.edu>,
- *                      Jeffrey Brian Arnold <jbarnold@mit.edu>
+ *                      Jeff Arnold <jbarnold@mit.edu>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License, version 2.
