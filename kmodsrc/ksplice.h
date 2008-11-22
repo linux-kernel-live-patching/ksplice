@@ -4,6 +4,8 @@
  * struct ksplice_symbol - Ksplice's analogue of an ELF symbol
  * @name:	The ELF name of the symbol
  * @label:	A unique Ksplice name for the symbol
+ * @vals:	A linked list of possible values for the symbol, or NULL
+ * @value:	The value of the symbol (valid when vals is NULL)
  **/
 struct ksplice_symbol {
 	const char *name;
@@ -39,6 +41,7 @@ enum ksplice_reloc_howto_type {
 
 /**
  * struct ksplice_reloc_howto - Ksplice's relocation type information
+ * @type:		The type of the relocation
  * @pcrel:		Is the relocation PC relative?
  * @size:		The size, in bytes, of the item to be relocated
  * @dst_mask:		Bitmask for which parts of the instruction or data are
@@ -69,8 +72,8 @@ struct ksplice_reloc_howto {
  * @symbol:		The ksplice_symbol associated with this section
  * @size:		The length, in bytes, of this section
  * @address:		The address of the section
- * @flags:		Specifies whether this section contains text, read-only
- * 			data, or data
+ * @flags:		Flags indicating the type of the section, whether or
+ *			not it has been matched, etc.
  **/
 struct ksplice_section {
 	struct ksplice_symbol *symbol;
@@ -182,8 +185,6 @@ extern struct list_head ksplice_module_list;
  * @patches_end:		The end pointer for patches array
  * @update:			The atomic update the pack is part of
  * @target:			The module modified by the pack
- * @labelvals:			The mapping between Ksplice symbol labels and
- *				their values
  * @safety_records:		The ranges of addresses that must not be on a
  *				kernel stack for the patch to apply safely
  **/
