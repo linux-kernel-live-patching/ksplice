@@ -1410,11 +1410,10 @@ static void *map_writable(void *addr, size_t len)
 {
 	void *vaddr;
 	int nr_pages = 2;
-	unsigned long laddr = (unsigned long)addr;
 	struct page *pages[2];
 
-	if ((laddr >= init_mm.start_code && laddr < init_mm.end_code) ||
-	    (laddr >= init_mm.start_data && laddr < init_mm.end_data)) {
+	if (__module_text_address((unsigned long)addr) == NULL &&
+	    __module_data_address((unsigned long)addr) == NULL) {
 #if defined(CONFIG_X86_64) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
 /* e3ebadd95cb621e2c7436f3d3646447ac9d5c16d was after 2.6.21 */
 		pages[0] = pfn_to_page(__pa_symbol(addr) >> PAGE_SHIFT);
