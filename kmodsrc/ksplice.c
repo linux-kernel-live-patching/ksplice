@@ -4104,11 +4104,9 @@ static int init_ksplice(void)
 #ifdef KSPLICE_STANDALONE
 	struct ksplice_pack *pack = &bootstrap_pack;
 	pack->update = init_ksplice_update(pack->kid);
-#ifdef KSPLICE_STANDALONE
 	sort(pack->primary_system_map,
-	     (pack->primary_system_map_end - pack->primary_system_map),
+	     pack->primary_system_map_end - pack->primary_system_map,
 	     sizeof(struct ksplice_system_map), compare_system_map, NULL);
-#endif /* KSPLICE_STANDALONE */
 	if (pack->update == NULL)
 		return -ENOMEM;
 	add_to_update(pack, pack->update);
