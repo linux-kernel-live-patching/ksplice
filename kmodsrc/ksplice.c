@@ -248,7 +248,7 @@ EXPORT_SYMBOL_GPL(ksplice_module_list);
 static struct kobject *ksplice_kobj;
 #endif /* KSPLICE_STANDALONE */
 
-static struct kobj_type ksplice_ktype;
+static struct kobj_type update_ktype;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 /* Old kernels do not have kcalloc
@@ -944,11 +944,11 @@ static int ksplice_sysfs_init(struct update *update)
 	memset(&update->kobj, 0, sizeof(update->kobj));
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 #ifndef KSPLICE_STANDALONE
-	ret = kobject_init_and_add(&update->kobj, &ksplice_ktype,
+	ret = kobject_init_and_add(&update->kobj, &update_ktype,
 				   ksplice_kobj, "%s", update->kid);
 #else /* KSPLICE_STANDALONE */
 /* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
-	ret = kobject_init_and_add(&update->kobj, &ksplice_ktype,
+	ret = kobject_init_and_add(&update->kobj, &update_ktype,
 				   &THIS_MODULE->mkobj.kobj, "ksplice");
 #endif /* KSPLICE_STANDALONE */
 #else /* LINUX_VERSION_CODE < */
@@ -961,7 +961,7 @@ static int ksplice_sysfs_init(struct update *update)
 /* b86ab02803095190d6b72bcc18dcf620bf378df9 was after 2.6.10 */
 	update->kobj.parent = &THIS_MODULE->mkobj->kobj;
 #endif /* LINUX_VERSION_CODE */
-	update->kobj.ktype = &ksplice_ktype;
+	update->kobj.ktype = &update_ktype;
 	ret = kobject_register(&update->kobj);
 #endif /* LINUX_VERSION_CODE */
 	if (ret != 0)
@@ -3876,40 +3876,40 @@ static struct module *__module_data_address(unsigned long addr)
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
-struct ksplice_attribute {
+struct update_attribute {
 	struct attribute attr;
 	ssize_t (*show)(struct update *update, char *buf);
 	ssize_t (*store)(struct update *update, const char *buf, size_t len);
 };
 
-static ssize_t ksplice_attr_show(struct kobject *kobj, struct attribute *attr,
-				 char *buf)
+static ssize_t update_attr_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct ksplice_attribute *attribute =
-	    container_of(attr, struct ksplice_attribute, attr);
+	struct update_attribute *attribute =
+	    container_of(attr, struct update_attribute, attr);
 	struct update *update = container_of(kobj, struct update, kobj);
 	if (attribute->show == NULL)
 		return -EIO;
 	return attribute->show(update, buf);
 }
 
-static ssize_t ksplice_attr_store(struct kobject *kobj, struct attribute *attr,
-				  const char *buf, size_t len)
+static ssize_t update_attr_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buf, size_t len)
 {
-	struct ksplice_attribute *attribute =
-	    container_of(attr, struct ksplice_attribute, attr);
+	struct update_attribute *attribute =
+	    container_of(attr, struct update_attribute, attr);
 	struct update *update = container_of(kobj, struct update, kobj);
 	if (attribute->store == NULL)
 		return -EIO;
 	return attribute->store(update, buf, len);
 }
 
-static struct sysfs_ops ksplice_sysfs_ops = {
-	.show = ksplice_attr_show,
-	.store = ksplice_attr_store,
+static struct sysfs_ops update_sysfs_ops = {
+	.show = update_attr_show,
+	.store = update_attr_store,
 };
 
-static void ksplice_release(struct kobject *kobj)
+static void update_release(struct kobject *kobj)
 {
 	struct update *update;
 	update = container_of(kobj, struct update, kobj);
@@ -4054,18 +4054,18 @@ static ssize_t partial_store(struct update *update, const char *buf, size_t len)
 	return len;
 }
 
-static struct ksplice_attribute stage_attribute =
+static struct update_attribute stage_attribute =
 	__ATTR(stage, 0600, stage_show, stage_store);
-static struct ksplice_attribute abort_cause_attribute =
+static struct update_attribute abort_cause_attribute =
 	__ATTR(abort_cause, 0400, abort_cause_show, NULL);
-static struct ksplice_attribute debug_attribute =
+static struct update_attribute debug_attribute =
 	__ATTR(debug, 0600, debug_show, debug_store);
-static struct ksplice_attribute partial_attribute =
+static struct update_attribute partial_attribute =
 	__ATTR(partial, 0600, partial_show, partial_store);
-static struct ksplice_attribute conflict_attribute =
+static struct update_attribute conflict_attribute =
 	__ATTR(conflicts, 0400, conflict_show, NULL);
 
-static struct attribute *ksplice_attrs[] = {
+static struct attribute *update_attrs[] = {
 	&stage_attribute.attr,
 	&abort_cause_attribute.attr,
 	&debug_attribute.attr,
@@ -4074,10 +4074,10 @@ static struct attribute *ksplice_attrs[] = {
 	NULL
 };
 
-static struct kobj_type ksplice_ktype = {
-	.sysfs_ops = &ksplice_sysfs_ops,
-	.release = ksplice_release,
-	.default_attrs = ksplice_attrs,
+static struct kobj_type update_ktype = {
+	.sysfs_ops = &update_sysfs_ops,
+	.release = update_release,
+	.default_attrs = update_attrs,
 };
 
 #ifdef KSPLICE_STANDALONE
