@@ -35,7 +35,7 @@ cmd_ksplice-helper = $(ksplice-script) helper $@
 quiet_cmd_ksplice-freeze = FREEZE  $(@:_ksplice-revert_%.KSPLICE_pre=%)
 cmd_ksplice-freeze = rm -f $(@:_ksplice-revert_%=%)
 quiet_cmd_ksplice-revert = REVERT  $(@:_ksplice-revert_%.KSPLICE_pre=%)
-cmd_ksplice-revert = mv $(@:_ksplice-revert_%=%) $(@:_ksplice-revert_%.KSPLICE_pre=%)
+cmd_ksplice-revert = touch -r ksplice-revert-stamp $(@:_ksplice-revert_%=%); mv $(@:_ksplice-revert_%=%) $(@:_ksplice-revert_%.KSPLICE_pre=%)
 quiet_cmd_ksplice-revert-snap = SNAP    $(@:_ksplice-revert-snap_%.KSPLICE=%)
 cmd_ksplice-revert-snap = $(ksplice-script) snap $(@:_ksplice-revert-snap_%=%)
 quiet_cmd_ksplice-clean = CLEAN   $(@:_ksplice-clean_%=%)
@@ -71,7 +71,12 @@ CFLAGS_MODULE += $(CFLAGS_KSPLICE)
 
 ifeq ($(KSPLICE_MODE),revert)
 
-ksplice-dirs += $(vmlinux-alldirs:%=_ksplice_%)
+ksplice-revert-dirs = $(vmlinux-alldirs:%=_ksplice_%)
+ksplice-dirs += $(ksplice-revert-dirs)
+
+.INTERMEDIATE $(ksplice-revert-dirs): ksplice-revert-stamp
+ksplice-revert-stamp: FORCE
+	$(Q)touch $@
 
 endif	# KSPLICE_MODE
 
