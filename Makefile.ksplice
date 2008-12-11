@@ -219,7 +219,7 @@ $(KSPLICE_KMODSRC)/%.mod.KSPLICE: $(obj)/%.o.KSPLICE
 else
 ksplice-deps += $(ksplice-modnames:%=$(obj)/%.o.KSPLICE)
 endif
-.PRECIOUS: $(obj)/%.o.KSPLICE
+.SECONDARY: $(obj)/%.o.KSPLICE
 
 $(obj)/%.o.KSPLICE_helper: $(obj)/%.o.KSPLICE
 	$(call cmd,ksplice-helper)
