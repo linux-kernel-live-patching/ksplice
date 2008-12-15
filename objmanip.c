@@ -185,6 +185,7 @@ static void match_global_symbols(struct span *old_span, asymbol *oldsym,
 				 struct span *new_span, asymbol *newsym);
 static void match_symbol_spans(struct span *old_span, asymbol *oldsym,
 			       struct span *new_span, asymbol *newsym);
+static void match_table_spans(struct span *old_span, struct span *new_span);
 
 static struct span *get_crc_span(struct span *span,
 				 const struct table_section *ts);
@@ -197,6 +198,8 @@ static void match_string_spans(struct span *old_span, struct span *new_span);
 static void mark_new_spans(struct superbfd *sbfd);
 static void handle_deleted_spans(struct superbfd *oldsbfd,
 				 struct superbfd *newsbfd);
+static void unmatch_addr_spans(struct span *old_span, struct span *new_span,
+			       const struct table_section *ts);
 static void compare_matched_spans(struct superbfd *newsbfd);
 static void compare_spans(struct span *old_span, struct span *new_span);
 static void update_nonzero_offsets(struct superbfd *sbfd);
@@ -428,6 +431,8 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	debug1(isbfd, "Matched by name\n");
 	foreach_span_pair(presbfd, isbfd, match_spans_by_label);
 	debug1(isbfd, "Matched by label\n");
+	foreach_span_pair(presbfd, isbfd, match_table_spans);
+	debug1(isbfd, "Matched table spans\n");
 
 	do {
 		changed = false;
@@ -654,6 +659,16 @@ void match_spans(struct span *old_span, struct span *new_span)
 	if (old_span->ss->type != new_span->ss->type &&
 	    old_span->ss->type == new_span->ss->orig_type)
 		old_span->ss->type = new_span->ss->type;
+
+	const struct table_section *ts = get_table_section(old_span->ss->name);
+	if (ts == NULL || !ts->has_addr || ts->other_sect == NULL)
+		return;
+	struct span *old_sym_span =
+	    span_offset_target_span(old_span, ts->other_offset);
+	struct span *new_sym_span =
+	    span_offset_target_span(new_span, ts->other_offset);
+	assert(old_sym_span != NULL && new_sym_span != NULL);
+	match_spans(old_sym_span, new_sym_span);
 }
 
 static void match_global_symbols(struct span *old_span, asymbol *oldsym,
@@ -748,7 +763,9 @@ static void match_symbol_spans(struct span *old_span, asymbol *oldsym,
 
 static void match_spans_by_label(struct span *old_span, struct span *new_span)
 {
-	if (old_span->ss->type == SS_TYPE_STRING)
+	if (old_span->ss->type == SS_TYPE_STRING ||
+	    (is_table_section(old_span->ss->name, true, false) &&
+	     !is_table_section(old_span->ss->name, false, false)))
 		return;
 	if (strcmp(old_span->label, new_span->label) == 0)
 		match_spans(old_span, new_span);
@@ -775,8 +792,6 @@ static void foreach_span_pair(struct superbfd *oldsbfd,
 	for (newsect = newsbfd->abfd->sections; newsect != NULL;
 	     newsect = newsect->next) {
 		newss = fetch_supersect(newsbfd, newsect);
-		if (newss->type == SS_TYPE_SPECIAL)
-			continue;
 		for (oldsect = oldsbfd->abfd->sections; oldsect != NULL;
 		     oldsect = oldsect->next) {
 			oldss = fetch_supersect(oldsbfd, oldsect);
@@ -880,6 +895,34 @@ static void update_nonzero_offsets(struct superbfd *sbfd)
 	}
 }
 
+static void unmatch_addr_spans(struct span *old_span, struct span *new_span,
+			       const struct table_section *ts)
+{
+	struct span *old_sym_span =
+	    span_offset_target_span(old_span, ts->addr_offset);
+	struct span *new_sym_span =
+	    span_offset_target_span(new_span, ts->addr_offset);
+	assert(old_sym_span != NULL && new_sym_span != NULL);
+	if (old_sym_span->match == new_sym_span &&
+	    new_sym_span->match == old_sym_span &&
+	    !(new_sym_span->patch && new_sym_span->ss->type == SS_TYPE_TEXT)) {
+		if (old_sym_span->ss->type == SS_TYPE_TEXT) {
+			debug1(new_span->ss->parent, "Patching %s due "
+			       "to relocations from special section %s\n",
+			       new_sym_span->label, new_span->label);
+			new_sym_span->patch = true;
+		} else {
+			debug1(new_span->ss->parent, "Unmatching %s and %s due "
+			       "to relocations from special section %s/%s\n",
+			       old_sym_span->label, new_sym_span->label,
+			       old_span->label, new_span->label);
+			old_sym_span->match = NULL;
+			new_sym_span->match = NULL;
+		}
+		changed = true;
+	}
+}
+
 static void compare_spans(struct span *old_span, struct span *new_span)
 {
 	struct superbfd *newsbfd = new_span->ss->parent;
@@ -929,6 +972,12 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 		       old_span->label, new_span->label, reason);
 		new_span->match = NULL;
 		old_span->match = NULL;
+		if (old_span->ss->type == SS_TYPE_SPECIAL) {
+			const struct table_section *ts =
+			    get_table_section(old_span->ss->name);
+			if (ts != NULL && ts->has_addr)
+				unmatch_addr_spans(old_span, new_span, ts);
+		}
 	}
 	changed = true;
 	if (unchangeable_section(new_span->ss))
@@ -1878,6 +1927,39 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 			if (span->keep && mode("keep-primary"))
 				keep_span(crc_span);
 		}
+	}
+}
+
+static void match_table_spans(struct span *old_span, struct span *new_span)
+{
+	const struct table_section *ts = get_table_section(old_span->ss->name);
+
+	if (strcmp(old_span->ss->name, new_span->ss->name) != 0)
+		return;
+	if (ts == NULL || old_span->ss->type != SS_TYPE_SPECIAL ||
+	    new_span->ss->type != SS_TYPE_SPECIAL)
+		return;
+	if (old_span->match != NULL || new_span->match != NULL)
+		return;
+
+	if (ts->has_addr) {
+		void *old_entry = old_span->ss->contents.data + old_span->start;
+		void *new_entry = new_span->ss->contents.data + new_span->start;
+		arelent *old_reloc =
+		    find_reloc(old_span->ss, old_entry + ts->addr_offset);
+		arelent *new_reloc =
+		    find_reloc(new_span->ss, new_entry + ts->addr_offset);
+		assert(old_reloc != NULL && new_reloc != NULL);
+		struct span *old_sym_span =
+		    reloc_target_span(old_span->ss, old_reloc);
+		struct span *new_sym_span =
+		    reloc_target_span(new_span->ss, new_reloc);
+		assert(old_sym_span != NULL && new_sym_span != NULL);
+		if (old_sym_span->match == new_sym_span &&
+		    new_sym_span->match == old_sym_span &&
+		    old_reloc->address - old_sym_span->start ==
+		    new_reloc->address - new_sym_span->start)
+			match_spans(old_span, new_span);
 	}
 }
 
