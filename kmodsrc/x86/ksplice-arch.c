@@ -248,7 +248,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
 		if (run_ud.mnemonic == pre_ud.mnemonic &&
 		    run_ud.mnemonic == UD_Iud2) {
 			unsigned char bytes[3];
-			unsigned char prefix[3] = { 0x78, 0x65, 0x63 };
+			unsigned char prefix[3] = { 0x78, 0x65, 0x6e };
 			if (probe_kernel_read(bytes, (void *)run + 2, 3) !=
 			    -EFAULT && pre - pre_start < sect->size &&
 			    memcmp(bytes, prefix, 3) == 0 &&
