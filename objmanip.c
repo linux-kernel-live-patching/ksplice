@@ -2883,6 +2883,7 @@ static void initialize_table_spans(struct superbfd *sbfd,
 	if (other_sect == NULL)
 		return;
 
+	*vec_grow(&offsets, 1) = 0;
 	qsort(offsets.data, offsets.size, sizeof(*offsets.data),
 	      compare_ulongs);
 	*vec_grow(&offsets, 1) = other_ss->contents.size;
