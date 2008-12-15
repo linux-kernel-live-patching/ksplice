@@ -232,6 +232,7 @@ if ($build_modules) {
 revert_orig() if(defined($diffext));
 
 runval(@make_kmodsrc, "modules", "KSPLICE_MODULES=@modules");
+runval(@make_kmodsrc, qw(modules_install --old-file=_modinst_post --old-file=_emodinst_post INSTALL_MOD_STRIP=1), "MODLIB=$tmpdir/ksplice-modules", "KSPLICE_MODULES=@modules");
 
 chdir($tmpdir);
 mkdir($ksplice);
@@ -247,13 +248,13 @@ foreach my $mod (@modules) {
 	(my $target = $mod) =~ s/-/_/g;
 	my $mid = "${kid}_$target";
 	my $module = "ksplice-$mid";
-	rename("$kmodsrc/$module.ko", "$ksplice/$module.ko");
+	rename("$tmpdir/ksplice-modules/extra/$module.ko", "$ksplice/$module.ko");
 	print CONTENTS "primary $target ksplice_$mid $module.ko\n";
-	rename("$kmodsrc/$module-helper.ko", "$ksplice/$module-helper.ko");
+	rename("$tmpdir/ksplice-modules/extra/$module-helper.ko", "$ksplice/$module-helper.ko");
 	print CONTENTS "helper $target ksplice_$mid $module-helper.ko\n";
 }
 if ($standalone) {
-	rename("$kmodsrc/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko");
+	rename("$tmpdir/ksplice-modules/extra/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko");
 	print CONTENTS "core ksplice_$kid ksplice-$kid.ko\n";
 }
 if ($build_modules) {
