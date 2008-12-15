@@ -159,6 +159,11 @@ struct debugfs_blob_wrapper {
 };
 #endif /* CONFIG_DEBUG_FS && LINUX_VERSION_CODE */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+/* 930631edd4b1fe2781d9fe90edbe35d89dfc94cc was after 2.6.18 */
+#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+#endif
+
 struct labelval {
 	struct list_head list;
 	struct ksplice_symbol *symbol;
@@ -1452,31 +1457,36 @@ static void unmap_trampoline_pages(struct update *update)
 static void *map_writable(void *addr, size_t len)
 {
 	void *vaddr;
-	int nr_pages = 2;
-	struct page *pages[2];
+	int nr_pages = DIV_ROUND_UP(offset_in_page(addr) + len, PAGE_SIZE);
+	struct page **pages = kmalloc(nr_pages * sizeof(*pages), GFP_KERNEL);
+	void *page_addr = (void *)((unsigned long)addr & PAGE_MASK);
+	int i;
 
-	if (__module_text_address((unsigned long)addr) == NULL &&
-	    __module_data_address((unsigned long)addr) == NULL) {
-#if defined(CONFIG_X86_64) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
-/* e3ebadd95cb621e2c7436f3d3646447ac9d5c16d was after 2.6.21 */
-		pages[0] = pfn_to_page(__pa_symbol(addr) >> PAGE_SHIFT);
-		WARN_ON(!PageReserved(pages[0]));
-		pages[1] = pfn_to_page(__pa_symbol(addr + PAGE_SIZE) >>
-				       PAGE_SHIFT);
-#else /* !CONFIG_X86_64 || LINUX_VERSION_CODE >= */
-		pages[0] = virt_to_page(addr);
-		WARN_ON(!PageReserved(pages[0]));
-		pages[1] = virt_to_page(addr + PAGE_SIZE);
-#endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
-	} else {
-		pages[0] = vmalloc_to_page(addr);
-		pages[1] = vmalloc_to_page(addr + PAGE_SIZE);
-	}
-	if (!pages[0])
+	if (pages == NULL)
 		return NULL;
-	if (!pages[1])
-		nr_pages = 1;
+
+	for (i = 0; i < nr_pages; i++) {
+		if (__module_text_address((unsigned long)page_addr) == NULL &&
+		    __module_data_address((unsigned long)page_addr) == NULL) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22) || !defined(CONFIG_X86_64)
+			pages[i] = virt_to_page(page_addr);
+#else /* LINUX_VERSION_CODE < && CONFIG_X86_64 */
+/* e3ebadd95cb621e2c7436f3d3646447ac9d5c16d was after 2.6.21 */
+			pages[i] =
+			    pfn_to_page(__pa_symbol(page_addr) >> PAGE_SHIFT);
+#endif /* LINUX_VERSION_CODE || !CONFIG_X86_64 */
+			WARN_ON(!PageReserved(pages[i]));
+		} else {
+			pages[i] = vmalloc_to_page(addr);
+		}
+		if (pages[i] == NULL) {
+			kfree(pages);
+			return NULL;
+		}
+		page_addr += PAGE_SIZE;
+	}
 	vaddr = vmap(pages, nr_pages, VM_MAP, PAGE_KERNEL);
+	kfree(pages);
 	if (vaddr == NULL)
 		return NULL;
 	return vaddr + offset_in_page(addr);
