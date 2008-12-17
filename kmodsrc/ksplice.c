@@ -63,13 +63,6 @@
 #define KSPLICE_NO_KERNEL_SUPPORT 1
 #endif /* KSPLICE_STANDALONE && !CONFIG_KSPLICE && !CONFIG_KSPLICE_MODULE */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
-/* 6e21828743247270d09a86756a0c11702500dbfb was after 2.6.18 */
-#define bool _Bool
-#define false 0
-#define true 1
-#endif /* LINUX_VERSION_CODE */
-
 enum stage {
 	STAGE_PREPARING,	/* the update is not yet applied */
 	STAGE_APPLIED,		/* the update is applied */
@@ -110,8 +103,9 @@ typedef int __bitwise__ abort_t;
 #define UNEXPECTED ((__force abort_t) 9)
 #define TARGET_NOT_LOADED ((__force abort_t) 10)
 #define CALL_FAILED ((__force abort_t) 11)
+#define COLD_UPDATE_LOADED ((__force abort_t) 12)
 #ifdef KSPLICE_STANDALONE
-#define BAD_SYSTEM_MAP ((__force abort_t) 12)
+#define BAD_SYSTEM_MAP ((__force abort_t) 13)
 #endif /* KSPLICE_STANDALONE */
 
 struct update {
@@ -132,6 +126,7 @@ struct update {
 	struct list_head unused_packs;	/* packs for non-loaded target mods */
 	struct list_head conflicts;
 	struct list_head list;
+	struct list_head ksplice_module_list;
 };
 
 /* a process conflicting with an update */
@@ -513,6 +508,9 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long addr, unsigned long sym_addr);
+static abort_t create_module_list_entry(struct ksplice_pack *pack,
+					bool to_be_applied);
+static void cleanup_module_list_entries(struct update *update);
 static void __attribute__((noreturn)) ksplice_deleted(void);
 
 /* run-pre matching */
@@ -893,6 +891,7 @@ static struct update *init_ksplice_update(const char *kid)
 	}
 	INIT_LIST_HEAD(&update->packs);
 	INIT_LIST_HEAD(&update->unused_packs);
+	INIT_LIST_HEAD(&update->ksplice_module_list);
 	if (init_debug_buf(update) != OK) {
 		module_put(THIS_MODULE);
 		kfree(update->kid);
@@ -913,6 +912,7 @@ static void cleanup_ksplice_update(struct update *update)
 	list_del(&update->list);
 	cleanup_conflicts(update);
 	clear_debug_buf(update);
+	cleanup_module_list_entries(update);
 	kfree(update->kid);
 	kfree(update->name);
 	kfree(update);
@@ -935,7 +935,6 @@ static void add_to_update(struct ksplice_pack *pack, struct update *update)
 {
 	pack->update = update;
 	list_add(&pack->list, &update->unused_packs);
-	pack->module_list_entry.primary = pack->primary;
 }
 
 static int ksplice_sysfs_init(struct update *update)
@@ -982,6 +981,12 @@ static abort_t apply_update(struct update *update)
 	abort_t ret;
 	int retval;
 
+	list_for_each_entry(pack, &update->packs, list) {
+		ret = create_module_list_entry(pack, true);
+		if (ret != OK)
+			goto out;
+	}
+
 	list_for_each_entry_safe(pack, n, &update->unused_packs, list) {
 		if (strcmp(pack->target_name, "vmlinux") == 0) {
 			pack->target = NULL;
@@ -989,12 +994,14 @@ static abort_t apply_update(struct update *update)
 			pack->target = find_module(pack->target_name);
 			if (pack->target == NULL ||
 			    !module_is_live(pack->target)) {
-				if (update->partial) {
-					continue;
-				} else {
+				if (!update->partial) {
 					ret = TARGET_NOT_LOADED;
 					goto out;
 				}
+				ret = create_module_list_entry(pack, false);
+				if (ret != OK)
+					goto out;
+				continue;
 			}
 			retval = use_module(pack->primary, pack->target);
 			if (retval != 1) {
@@ -1002,9 +1009,11 @@ static abort_t apply_update(struct update *update)
 				goto out;
 			}
 		}
+		ret = create_module_list_entry(pack, true);
+		if (ret != OK)
+			goto out;
 		list_del(&pack->list);
 		list_add_tail(&pack->list, &update->packs);
-		pack->module_list_entry.target = pack->target;
 
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 		if (pack->target == NULL) {
@@ -1059,6 +1068,8 @@ out:
 			}
 		}
 	}
+	if (update->stage == STAGE_PREPARING)
+		cleanup_module_list_entries(update);
 	return ret;
 }
 
@@ -1744,6 +1755,42 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 	}
 
 	return OK;
+}
+
+static abort_t create_module_list_entry(struct ksplice_pack *pack,
+					bool to_be_applied)
+{
+	struct ksplice_module_list_entry *entry =
+	    kmalloc(sizeof(*entry), GFP_KERNEL);
+	if (entry == NULL)
+		return OUT_OF_MEMORY;
+	entry->primary_name = kstrdup(pack->primary->name, GFP_KERNEL);
+	if (entry->primary_name == NULL) {
+		kfree(entry);
+		return OUT_OF_MEMORY;
+	}
+	entry->target_name = kstrdup(pack->target_name, GFP_KERNEL);
+	if (entry->target_name == NULL) {
+		kfree(entry->primary_name);
+		kfree(entry);
+		return OUT_OF_MEMORY;
+	}
+	/* The update's kid is guaranteed to outlast the module_list_entry */
+	entry->kid = pack->update->kid;
+	entry->applied = to_be_applied;
+	list_add(&entry->update_list, &pack->update->ksplice_module_list);
+	return OK;
+}
+
+static void cleanup_module_list_entries(struct update *update)
+{
+	struct ksplice_module_list_entry *entry;
+	list_for_each_entry(entry, &update->ksplice_module_list, update_list) {
+		kfree(entry->target_name);
+		kfree(entry->primary_name);
+	}
+	clear_list(&update->ksplice_module_list,
+		   struct ksplice_module_list_entry, update_list);
 }
 
 /* Replacement address used for functions deleted by the patch */
@@ -2823,6 +2870,7 @@ static int __apply_patches(void *updateptr)
 {
 	struct update *update = updateptr;
 	struct ksplice_pack *pack;
+	struct ksplice_module_list_entry *entry;
 	struct ksplice_patch *p;
 	abort_t ret;
 
@@ -2863,8 +2911,8 @@ static int __apply_patches(void *updateptr)
 	add_taint(TAINT_KSPLICE);
 #endif
 
-	list_for_each_entry(pack, &update->packs, list)
-		list_add(&pack->module_list_entry.list, &ksplice_module_list);
+	list_for_each_entry(entry, &update->ksplice_module_list, update_list)
+		list_add(&entry->list, &ksplice_module_list);
 
 	list_for_each_entry(pack, &update->packs, list) {
 		for (p = pack->patches; p < pack->patches_end; p++)
@@ -2885,6 +2933,7 @@ static int __reverse_patches(void *updateptr)
 {
 	struct update *update = updateptr;
 	struct ksplice_pack *pack;
+	struct ksplice_module_list_entry *entry;
 	const struct ksplice_patch *p;
 	abort_t ret;
 
@@ -2897,6 +2946,11 @@ static int __reverse_patches(void *updateptr)
 			return (__force int)MODULE_BUSY;
 	}
 #endif /* CONFIG_MODULE_UNLOAD */
+
+	list_for_each_entry(entry, &update->ksplice_module_list, update_list) {
+		if (!entry->applied && find_module(entry->target_name) != NULL)
+			return COLD_UPDATE_LOADED;
+	}
 
 	ret = check_each_task(update);
 	if (ret != OK)
@@ -2924,8 +2978,8 @@ static int __reverse_patches(void *updateptr)
 	list_for_each_entry(pack, &update->packs, list)
 		module_put(pack->primary);
 
-	list_for_each_entry(pack, &update->packs, list)
-		list_del(&pack->module_list_entry.list);
+	list_for_each_entry(entry, &update->ksplice_module_list, update_list)
+		list_del(&entry->list);
 
 	list_for_each_entry(pack, &update->packs, list) {
 		const typeof(void (*)(void)) *f;
@@ -3343,7 +3397,8 @@ static bool patches_module(const struct module *a, const struct module *b)
 	if (a == b)
 		return true;
 	list_for_each_entry(entry, &ksplice_module_list, list) {
-		if (entry->target == b && entry->primary == a)
+		if (strcmp(entry->target_name, b->name) == 0 &&
+		    strcmp(entry->primary_name, a->name) == 0)
 			return true;
 	}
 	return false;
@@ -3958,6 +4013,8 @@ static ssize_t abort_cause_show(struct update *update, char *buf)
 		return snprintf(buf, PAGE_SIZE, "target_not_loaded\n");
 	case CALL_FAILED:
 		return snprintf(buf, PAGE_SIZE, "call_failed\n");
+	case COLD_UPDATE_LOADED:
+		return snprintf(buf, PAGE_SIZE, "cold_update_loaded\n");
 	case UNEXPECTED:
 		return snprintf(buf, PAGE_SIZE, "unexpected\n");
 	default:

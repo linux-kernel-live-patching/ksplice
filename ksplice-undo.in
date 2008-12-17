@@ -120,6 +120,12 @@ pre-application hooks that were included as part of this Ksplice
 update.  This is likely the result of a bug in the patch used to
 generate this update.
 END
+		"cold_update_loaded" => <<'END',
+Ksplice has aborted the undo operation because the update was applied using the
+--partial option, and one of the modules that was changed by the update was loaded
+since the update was applied.  You must first unload that (cold patched) module
+before you can undo this update.
+END
 		"unexpected" => <<'END',
 Ksplice has aborted because of an unexpected error.
 Please consider reporting a bug to PACKAGE_BUGREPORT.

@@ -132,6 +132,13 @@ struct ksplice_system_map {
 #include <linux/stringify.h>
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+/* 6e21828743247270d09a86756a0c11702500dbfb was after 2.6.18 */
+#define bool _Bool
+#define false 0
+#define true 1
+#endif /* LINUX_VERSION_CODE */
+
 #if defined(CONFIG_PARAVIRT) && defined(CONFIG_X86_64) &&	\
     LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25) &&		\
     LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
@@ -154,14 +161,20 @@ struct ksplice_system_map {
 
 /**
  * struct ksplice_module_list_entry - A record of a Ksplice pack's target
- * @target:	A module that is patched
- * @primary:	A Ksplice module that patches target
+ * @target_name:	The name of the pack's target module
+ * @primary_name:	The name of the pack's primary module
+ * @applied:		Whether the pack was applied or not (this will be
+ *			false for packs patching targets that are not loaded
+ *			when the partial flag is set)
  **/
 struct ksplice_module_list_entry {
-	struct module *target;
-	struct module *primary;
+	const char *target_name;
+	const char *primary_name;
+	const char *kid;
+	bool applied;
 /* private: */
-	struct list_head list;
+	struct list_head update_list;	/* list head for this is per-update */
+	struct list_head list;	/* list head for this is global */
 };
 
 /* List of all ksplice modules and the module they patch */
@@ -222,7 +235,6 @@ struct ksplice_pack {
 	    *helper_system_map, *helper_system_map_end;
 #endif /* KSPLICE_STANDALONE */
 /* private: */
-	struct ksplice_module_list_entry module_list_entry;
 	struct update *update;
 	struct module *target;
 	struct list_head temp_labelvals;
