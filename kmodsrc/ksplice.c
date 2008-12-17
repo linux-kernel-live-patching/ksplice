@@ -76,7 +76,12 @@ enum stage {
 };
 
 enum run_pre_mode {
-	RUN_PRE_INITIAL, RUN_PRE_DEBUG, RUN_PRE_FINAL, RUN_PRE_SILENT
+	RUN_PRE_INITIAL,
+	RUN_PRE_DEBUG,
+	RUN_PRE_FINAL,
+#ifdef KSPLICE_STANDALONE
+	RUN_PRE_SILENT,
+#endif /* KSPLICE_STANDALONE */
 };
 
 enum { NOVAL, TEMP, VAL };
@@ -165,12 +170,6 @@ struct safety_record {
 struct candidate_val {
 	struct list_head list;
 	unsigned long val;
-};
-
-struct accumulate_struct {
-	struct ksplice_pack *pack;
-	const char *desired_name;
-	struct list_head *vals;
 };
 
 struct ksplice_lookup {
