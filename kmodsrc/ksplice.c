@@ -1406,10 +1406,6 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 			if (p->repladdr == 0)
 				p->repladdr = (unsigned long)ksplice_deleted;
 		}
-
-		ret = add_dependency_on_address(pack, p->oldaddr);
-		if (ret != OK)
-			return ret;
 	}
 	return OK;
 }
