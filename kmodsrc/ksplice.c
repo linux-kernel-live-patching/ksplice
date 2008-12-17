@@ -775,23 +775,18 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 	     sizeof(*pack->helper_system_map), compare_system_map, NULL);
 #endif /* KSPLICE_STANDALONE */
 
-	mutex_lock(&module_mutex);
 	for (p = pack->patches; p < pack->patches_end; p++)
 		p->vaddr = NULL;
 	for (s = pack->helper_sections; s < pack->helper_sections_end; s++)
 		s->match_map = NULL;
 	for (p = pack->patches; p < pack->patches_end; p++) {
 		const struct ksplice_reloc *r = patch_reloc(pack, p);
-		if (r == NULL) {
-			ret = -ENOENT;
-			goto out;
-		}
+		if (r == NULL)
+			return -ENOENT;
 		if (p->type == KSPLICE_PATCH_DATA) {
 			s = symbol_section(pack, r->symbol);
-			if (s == NULL) {
-				ret = -ENOENT;
-				goto out;
-			}
+			if (s == NULL)
+				return -ENOENT;
 			/* Ksplice creates KSPLICE_PATCH_DATA patches in order
 			 * to modify rodata sections that have been explicitly
 			 * marked for patching using the ksplice-patch.h macro
@@ -804,6 +799,7 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 		}
 	}
 
+	mutex_lock(&module_mutex);
 	list_for_each_entry(update, &updates, list) {
 		if (strcmp(pack->kid, update->kid) == 0) {
 			if (update->stage != STAGE_PREPARING) {
@@ -840,6 +836,8 @@ void cleanup_ksplice_pack(struct ksplice_pack *pack)
 {
 	if (pack->update == NULL)
 		return;
+
+	mutex_lock(&module_mutex);
 	if (pack->update->stage == STAGE_APPLIED) {
 		/* If the pack wasn't actually applied (because we
 		 * only applied this update to loaded modules and this
@@ -849,7 +847,6 @@ void cleanup_ksplice_pack(struct ksplice_pack *pack)
 		struct ksplice_pack *p;
 		bool found = false;
 
-		mutex_lock(&module_mutex);
 		list_for_each_entry(p, &pack->update->unused_packs, list) {
 			if (p == pack)
 				found = true;
@@ -859,12 +856,11 @@ void cleanup_ksplice_pack(struct ksplice_pack *pack)
 		mutex_unlock(&module_mutex);
 		return;
 	}
-	mutex_lock(&module_mutex);
 	list_del(&pack->list);
-	mutex_unlock(&module_mutex);
 	if (pack->update->stage == STAGE_PREPARING)
 		maybe_cleanup_ksplice_update(pack->update);
 	pack->update = NULL;
+	mutex_unlock(&module_mutex);
 }
 EXPORT_SYMBOL_GPL(cleanup_ksplice_pack);
 
@@ -910,17 +906,7 @@ static struct update *init_ksplice_update(const char *kid)
 
 static void cleanup_ksplice_update(struct update *update)
 {
-#ifdef KSPLICE_STANDALONE
-	if (bootstrapped)
-		mutex_lock(&module_mutex);
 	list_del(&update->list);
-	if (bootstrapped)
-		mutex_unlock(&module_mutex);
-#else /* !KSPLICE_STANDALONE */
-	mutex_lock(&module_mutex);
-	list_del(&update->list);
-	mutex_unlock(&module_mutex);
-#endif /* KSPLICE_STANDALONE */
 	cleanup_conflicts(update);
 	clear_debug_buf(update);
 	kfree(update->kid);
@@ -992,7 +978,6 @@ static abort_t apply_update(struct update *update)
 	abort_t ret;
 	int retval;
 
-	mutex_lock(&module_mutex);
 	list_for_each_entry_safe(pack, n, &update->unused_packs, list) {
 		if (strcmp(pack->target_name, "vmlinux") == 0) {
 			pack->target = NULL;
@@ -1070,7 +1055,6 @@ out:
 			}
 		}
 	}
-	mutex_unlock(&module_mutex);
 	return ret;
 }
 
@@ -3982,6 +3966,7 @@ static ssize_t conflict_show(struct update *update, char *buf)
 	const struct conflict *conf;
 	const struct conflict_addr *ca;
 	int used = 0;
+	mutex_lock(&module_mutex);
 	list_for_each_entry(conf, &update->conflicts, list) {
 		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
 				 conf->process_name, conf->pid);
@@ -3993,6 +3978,7 @@ static ssize_t conflict_show(struct update *update, char *buf)
 		}
 		used += snprintf(buf + used, PAGE_SIZE - used, "\n");
 	}
+	mutex_unlock(&module_mutex);
 	return used;
 }
 
@@ -4000,13 +3986,17 @@ static ssize_t conflict_show(struct update *update, char *buf)
 static int maybe_cleanup_ksplice_update_wrapper(void *updateptr)
 {
 	struct update *update = updateptr;
+	mutex_lock(&module_mutex);
 	maybe_cleanup_ksplice_update(update);
+	mutex_unlock(&module_mutex);
 	return 0;
 }
 
 static ssize_t stage_store(struct update *update, const char *buf, size_t len)
 {
-	enum stage old_stage = update->stage;
+	enum stage old_stage;
+	mutex_lock(&module_mutex);
+	old_stage = update->stage;
 	if ((strncmp(buf, "applied", len) == 0 ||
 	     strncmp(buf, "applied\n", len) == 0) &&
 	    update->stage == STAGE_PREPARING)
@@ -4025,6 +4015,7 @@ static ssize_t stage_store(struct update *update, const char *buf, size_t len)
 		printk(KERN_INFO "ksplice: Update %s %s successfully\n",
 		       update->kid,
 		       update->stage == STAGE_APPLIED ? "applied" : "reversed");
+	mutex_unlock(&module_mutex);
 	return len;
 }
 
