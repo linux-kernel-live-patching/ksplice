@@ -231,19 +231,8 @@ struct ksplice_pack {
 };
 
 
-/**
- * init_ksplice_pack() - Initializes a pack
- * @pack:	The pack to be initialized.  All of the public fields of the
- * 		pack and its associated data structures should be populated
- * 		before this function is called.  The values of the private
- * 		fields will be ignored.
- **/
 int init_ksplice_pack(struct ksplice_pack *pack);
 
-/**
- * cleanup_ksplice_pack() - Cleans up a pack
- * @pack:	The pack to be cleaned up
- */
 void cleanup_ksplice_pack(struct ksplice_pack *pack);
 
 #endif /* __KERNEL__ */

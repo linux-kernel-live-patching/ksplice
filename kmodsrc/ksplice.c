@@ -72,13 +72,16 @@
 #endif /* LINUX_VERSION_CODE */
 
 enum stage {
-	STAGE_PREPARING, STAGE_APPLIED, STAGE_REVERSED
+	STAGE_PREPARING,	/* the update is not yet applied */
+	STAGE_APPLIED,		/* the update is applied */
+	STAGE_REVERSED,		/* the update has been applied and reversed */
 };
 
+/* parameter to modify run-pre matching */
 enum run_pre_mode {
-	RUN_PRE_INITIAL,
-	RUN_PRE_DEBUG,
-	RUN_PRE_FINAL,
+	RUN_PRE_INITIAL,	/* dry run (only change temp_labelvals) */
+	RUN_PRE_DEBUG,		/* dry run with byte-by-byte debugging */
+	RUN_PRE_FINAL,		/* finalizes the matching */
 #ifdef KSPLICE_STANDALONE
 	RUN_PRE_SILENT,
 #endif /* KSPLICE_STANDALONE */
@@ -125,13 +128,14 @@ struct update {
 #else /* !CONFIG_DEBUG_FS */
 	bool debug_continue_line;
 #endif /* CONFIG_DEBUG_FS */
-	bool partial;
-	struct list_head packs;
-	struct list_head unused_packs;
+	bool partial;		/* is it OK if some target mods aren't loaded */
+	struct list_head packs;	/* packs for loaded target mods */
+	struct list_head unused_packs;	/* packs for non-loaded target mods */
 	struct list_head conflicts;
 	struct list_head list;
 };
 
+/* a process conflicting with an update */
 struct conflict {
 	const char *process_name;
 	pid_t pid;
@@ -139,10 +143,11 @@ struct conflict {
 	struct list_head list;
 };
 
+/* an address on the stack of a conflict */
 struct conflict_addr {
-	unsigned long addr;
-	bool has_conflict;
-	const char *label;
+	unsigned long addr;	/* the address on the stack */
+	bool has_conflict;	/* does this address in particular conflict? */
+	const char *label;	/* the label of the conflicting safety_record */
 	struct list_head list;
 };
 
@@ -160,18 +165,23 @@ struct labelval {
 	struct list_head *saved_vals;
 };
 
+/* region to be checked for conflicts in the stack check */
 struct safety_record {
 	struct list_head list;
 	const char *label;
-	unsigned long addr;
-	unsigned long size;
+	unsigned long addr;	/* the address to be checked for conflicts
+				 * (e.g. an obsolete function's starting addr)
+				 */
+	unsigned long size;	/* the size of the region to be checked */
 };
 
+/* possible value for a symbol */
 struct candidate_val {
 	struct list_head list;
 	unsigned long val;
 };
 
+/* private struct used by init_symbol_array */
 struct ksplice_lookup {
 /* input */
 	struct ksplice_pack *pack;
@@ -602,7 +612,7 @@ static int system_map_bsearch_compare(const void *key, const void *elt);
 static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
 				 struct list_head *vals);
 
-/* Atomic update insertion and removal */
+/* Atomic update trampoline insertion and removal */
 static abort_t apply_patches(struct update *update);
 static abort_t reverse_patches(struct update *update);
 static int __apply_patches(void *update);
@@ -687,18 +697,25 @@ static struct module *__module_data_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* Architecture-specific functions defined in arch/ARCH/kernel/ksplice-arch.c */
+
+/* Prepare a trampoline for the given patch */
 static abort_t prepare_trampoline(struct ksplice_pack *pack,
 				  struct ksplice_patch *p);
+/* What address does the trampoline at addr jump to? */
 static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
 				 unsigned long *new_addr);
+/* Hook to handle pc-relative jumps inserted by parainstructions */
 static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
 			       unsigned long run, int *matched);
+/* Called for relocations of type KSPLICE_HOWTO_BUG */
 static abort_t handle_bug(struct ksplice_pack *pack,
 			  const struct ksplice_reloc *r,
 			  unsigned long run_addr);
+/* Called for relocations of type KSPLICE_HOWTO_EXTABLE */
 static abort_t handle_extable(struct ksplice_pack *pack,
 			      const struct ksplice_reloc *r,
 			      unsigned long run_addr);
+/* Is address p on the stack of the given thread? */
 static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 
 #ifndef KSPLICE_STANDALONE
@@ -718,6 +735,13 @@ static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 		}						\
 	} while (0)
 
+/**
+ * init_ksplice_pack() - Initializes a ksplice pack
+ * @pack:	The pack to be initialized.  All of the public fields of the
+ * 		pack and its associated data structures should be populated
+ * 		before this function is called.  The values of the private
+ * 		fields will be ignored.
+ **/
 int init_ksplice_pack(struct ksplice_pack *pack)
 {
 	struct update *update;
@@ -768,6 +792,12 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 				ret = -ENOENT;
 				goto out;
 			}
+			/* Ksplice creates KSPLICE_PATCH_DATA patches in order
+			 * to modify rodata sections that have been explicitly
+			 * marked for patching using the ksplice-patch.h macro
+			 * ksplice_assume_rodata.  Here we modify the section
+			 * flags appropriately.
+			 */
 			if (s->flags & KSPLICE_SECTION_DATA)
 				s->flags = (s->flags & ~KSPLICE_SECTION_DATA) |
 				    KSPLICE_SECTION_RODATA;
@@ -802,15 +832,20 @@ out:
 }
 EXPORT_SYMBOL_GPL(init_ksplice_pack);
 
+/**
+ * cleanup_ksplice_pack() - Cleans up a pack
+ * @pack:	The pack to be cleaned up
+ */
 void cleanup_ksplice_pack(struct ksplice_pack *pack)
 {
 	if (pack->update == NULL)
 		return;
 	if (pack->update->stage == STAGE_APPLIED) {
 		/* If the pack wasn't actually applied (because we
-		   only applied this update to loaded modules and this
-		   target wasn't loaded), then unregister the pack
-		   from the list of unused packs */
+		 * only applied this update to loaded modules and this
+		 * target was not loaded), then unregister the pack
+		 * from the list of unused packs.
+		 */
 		struct ksplice_pack *p;
 		bool found = false;
 
@@ -894,6 +929,7 @@ static void cleanup_ksplice_update(struct update *update)
 	module_put(THIS_MODULE);
 }
 
+/* Clean up the update if it no longer has any packs */
 static void maybe_cleanup_ksplice_update(struct update *update)
 {
 	if (list_empty(&update->packs) && list_empty(&update->unused_packs))
@@ -1140,6 +1176,12 @@ static void cleanup_symbol_arrays(struct ksplice_pack *pack)
 	}
 }
 
+/*
+ * The primary and helper modules each have their own independent
+ * ksplice_symbol structures.  uniquify_symbols unifies these separate
+ * pieces of kernel symbol information by replacing all references to
+ * the helper copy of symbols with references to the primary copy.
+ */
 static abort_t uniquify_symbols(struct ksplice_pack *pack)
 {
 	struct ksplice_reloc *r;
@@ -1185,6 +1227,10 @@ static abort_t uniquify_symbols(struct ksplice_pack *pack)
 	return OK;
 }
 
+/*
+ * Initialize the ksplice_symbol structures in the given array using
+ * the kallsyms and exported symbol tables.
+ */
 static abort_t init_symbol_array(struct ksplice_pack *pack,
 				 struct ksplice_symbol *start,
 				 struct ksplice_symbol *end)
@@ -1248,6 +1294,7 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 	return ret;
 }
 
+/* Prepare the pack's ksplice_symbol structures for run-pre matching */
 static abort_t init_symbol_arrays(struct ksplice_pack *pack)
 {
 	abort_t ret;
@@ -1277,11 +1324,11 @@ static abort_t prepare_pack(struct ksplice_pack *pack)
 	ret = match_pack_sections(pack, false);
 	if (ret == NO_MATCH) {
 		/* It is possible that by using relocations from .data sections
-		   we can successfully run-pre match the rest of the sections.
-		   To avoid using any symbols obtained from .data sections
-		   (which may be unreliable) in the post code, we first prepare
-		   the post code and then try to run-pre match the remaining
-		   sections with the help of .data sections.
+		 * we can successfully run-pre match the rest of the sections.
+		 * To avoid using any symbols obtained from .data sections
+		 * (which may be unreliable) in the post code, we first prepare
+		 * the post code and then try to run-pre match the remaining
+		 * sections with the help of .data sections.
 		 */
 		ksdebug(pack, "Continuing without some sections; we might "
 			"find them later.\n");
@@ -1308,6 +1355,11 @@ static abort_t prepare_pack(struct ksplice_pack *pack)
 	return finalize_pack(pack);
 }
 
+/*
+ * Finish preparing the pack for insertion into the kernel.
+ * Afterwards, the replacement code should be ready to run and the
+ * ksplice_patches should all be ready for trampoline insertion.
+ */
 static abort_t finalize_pack(struct ksplice_pack *pack)
 {
 	abort_t ret;
@@ -1404,7 +1456,15 @@ static void unmap_trampoline_pages(struct update *update)
 	}
 }
 
-/* Based off of linux's text_poke.  */
+/*
+ * map_writable creates a shadow page mapping of the range
+ * [addr, addr + len) so that we can write to code mapped read-only.
+ *
+ * It is similar to a generalized version of x86's text_poke.  But
+ * because one cannot use vmalloc/vfree() inside stop_machine, we use
+ * map_writable to map the pages before stop_machine, then use the
+ * mapping inside stop_machine, and unmap the pages afterwards.
+ */
 static void *map_writable(void *addr, size_t len)
 {
 	void *vaddr;
@@ -1438,6 +1498,14 @@ static void *map_writable(void *addr, size_t len)
 	return vaddr + offset_in_page(addr);
 }
 
+/*
+ * Ksplice adds a dependency on any symbol address used to resolve relocations
+ * in the primary module.
+ *
+ * Be careful to follow_trampolines so that we always depend on the
+ * latest version of the target function, since that's the code that
+ * will run if we call addr.
+ */
 static abort_t add_dependency_on_address(struct ksplice_pack *pack,
 					 unsigned long addr)
 {
@@ -1484,6 +1552,10 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
 	}
 }
 
+/*
+ * Applies a relocation.  Aborts if the symbol referenced in it has
+ * not been uniquely resolved.
+ */
 static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r)
 {
@@ -1518,6 +1590,10 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 		release_vals(&vals);
 		return ret;
 	}
+	/*
+	 * Relocations for the oldaddr fields of patches must have
+	 * been resolved via run-pre matching.
+	 */
 	if (!singular(&vals) || (r->symbol->vals != NULL &&
 				 r->howto->type == KSPLICE_HOWTO_RELOC_PATCH)) {
 		release_vals(&vals);
@@ -1560,8 +1636,10 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 		return OK;
 #endif /* KSPLICE_STANDALONE */
 
-	/* Create labelvals so that we can verify our choices in the second
-	   round of run-pre matching that considers data sections. */
+	/*
+	 * Create labelvals so that we can verify our choices in the
+	 * second round of run-pre matching that considers data sections.
+	 */
 	ret = create_labelval(pack, r->symbol, sym_addr, VAL);
 	if (ret != OK)
 		return ret;
@@ -1569,6 +1647,11 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 	return add_dependency_on_address(pack, sym_addr);
 }
 
+/*
+ * Date relocations are created wherever __DATE__ or __TIME__ is used
+ * in the kernel; we resolve them by simply copying in the date/time
+ * obtained from run-pre matching the relevant compilation unit.
+ */
 static abort_t apply_howto_date(struct ksplice_pack *pack,
 				const struct ksplice_reloc *r)
 {
@@ -1581,6 +1664,10 @@ static abort_t apply_howto_date(struct ksplice_pack *pack,
 	return OK;
 }
 
+/*
+ * Given a relocation and its run address, compute the address of the
+ * symbol the relocation referenced, and store it in *valp.
+ */
 static abort_t read_reloc_value(struct ksplice_pack *pack,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp)
@@ -1626,6 +1713,11 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 	return OK;
 }
 
+/*
+ * Given a relocation, the address of its storage unit, and the
+ * address of the symbol the relocation references, write the
+ * relocation's final value into the storage unit.
+ */
 static abort_t write_reloc_value(struct ksplice_pack *pack,
 				 const struct ksplice_reloc *r,
 				 unsigned long addr, unsigned long sym_addr)
@@ -1665,6 +1757,7 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 	return OK;
 }
 
+/* Replacement address used for functions deleted by the patch */
 static void __attribute__((noreturn)) ksplice_deleted(void)
 {
 	printk(KERN_CRIT "Called a kernel function deleted by Ksplice!\n");
@@ -1675,6 +1768,7 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 #endif
 }
 
+/* Floodfill to run-pre match the sections within a pack. */
 static abort_t match_pack_sections(struct ksplice_pack *pack,
 				   bool consider_data_sections)
 {
@@ -1734,6 +1828,11 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 	return OK;
 }
 
+/*
+ * Search for the section in the running kernel.  Returns OK if and
+ * only if it finds precisely one address in the kernel matching the
+ * section.
+ */
 static abort_t find_section(struct ksplice_pack *pack,
 			    struct ksplice_section *sect)
 {
@@ -1782,8 +1881,10 @@ static abort_t find_section(struct ksplice_pack *pack,
 			release_vals(&vals);
 			return ret;
 		}
-		/* Make sure run-pre matching output is displayed if
-		   brute_search succeeds */
+		/*
+		 * Make sure run-pre matching output is displayed if
+		 * brute_search succeeds.
+		 */
 		if (singular(&vals)) {
 			run_addr = list_entry(vals.next, struct candidate_val,
 					      list)->val;
@@ -1834,6 +1935,11 @@ static abort_t find_section(struct ksplice_pack *pack,
 	return NO_MATCH;
 }
 
+/*
+ * try_addr is the the interface to run-pre matching.  Its primary
+ * purpose is to manage debugging information for run-pre matching;
+ * all the hard work is in run_pre_cmp.
+ */
 static abort_t try_addr(struct ksplice_pack *pack,
 			struct ksplice_section *sect,
 			unsigned long run_addr,
@@ -1919,6 +2025,17 @@ static abort_t try_addr(struct ksplice_pack *pack,
 	return OK;
 }
 
+/*
+ * run_pre_cmp is the primary run-pre matching function; it determines
+ * whether the given ksplice_section matches the code or data in the
+ * running kernel starting at run_addr.
+ *
+ * If run_pre_mode is RUN_PRE_FINAL, a safety record for the matched
+ * section is created.
+ *
+ * The run_pre_mode is also used to determine what debugging
+ * information to display.
+ */
 static abort_t run_pre_cmp(struct ksplice_pack *pack,
 			   const struct ksplice_section *sect,
 			   unsigned long run_addr,
@@ -2136,6 +2253,15 @@ init_reloc_search(struct ksplice_pack *pack, const struct ksplice_section *sect)
 	return r;
 }
 
+/*
+ * lookup_reloc implements an amortized O(1) lookup for the next
+ * helper relocation.  It must be called with a strictly increasing
+ * sequence of addresses.
+ *
+ * The fingerp is private data for lookup_reloc, and needs to have
+ * been initialized as a pointer to the result of find_reloc (or
+ * init_reloc_search).
+ */
 static abort_t lookup_reloc(struct ksplice_pack *pack,
 			    const struct ksplice_reloc **fingerp,
 			    unsigned long addr,
@@ -2194,6 +2320,10 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
 	}
 }
 
+/*
+ * For date/time relocations, we check that the sequence of bytes
+ * matches the format of a date or time.
+ */
 static abort_t handle_howto_date(struct ksplice_pack *pack,
 				 const struct ksplice_section *sect,
 				 const struct ksplice_reloc *r,
@@ -2243,6 +2373,11 @@ out:
 	return ret;
 }
 
+/*
+ * Extract the value of a symbol used in a relocation in the pre code
+ * during run-pre matching, giving an error if it conflicts with a
+ * previously found value of that symbol
+ */
 static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 				  const struct ksplice_section *sect,
 				  const struct ksplice_reloc *r,
@@ -2370,6 +2505,7 @@ static struct ksplice_section *symbol_section(struct ksplice_pack *pack,
 		       symbol_section_bsearch_compare);
 }
 
+/* Find the relocation for the oldaddr of a ksplice_patch */
 static const struct ksplice_reloc *patch_reloc(struct ksplice_pack *pack,
 					       const struct ksplice_patch *p)
 {
@@ -2383,6 +2519,10 @@ static const struct ksplice_reloc *patch_reloc(struct ksplice_pack *pack,
 	return r;
 }
 
+/*
+ * Populates vals with the possible values for ksym from the various
+ * sources Ksplice uses to resolve symbols
+ */
 static abort_t lookup_symbol(struct ksplice_pack *pack,
 			     const struct ksplice_symbol *ksym,
 			     struct list_head *vals)
@@ -2478,6 +2618,14 @@ static int system_map_bsearch_compare(const void *key, const void *elt)
 }
 #endif /* !KSPLICE_STANDALONE */
 
+/*
+ * An update could one module to export a symbol and at the same time
+ * change another module to use that symbol.  This violates the normal
+ * situation where the packs can be handled independently.
+ *
+ * new_export_lookup obtains symbol values from the changes to the
+ * exported symbol table made by other packs.
+ */
 static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
 				 struct list_head *vals)
 {
@@ -2491,15 +2639,17 @@ static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
 			    strcmp(name, *(const char **)p->contents) != 0)
 				continue;
 
-			/* Check that the p->oldaddr reloc has been resolved */
+			/* Check that the p->oldaddr reloc has been resolved. */
 			r = patch_reloc(pack, p);
 			if (r == NULL ||
 			    contains_canary(pack, r->blank_addr, r->howto) != 0)
 				continue;
 			sym = (const struct kernel_symbol *)r->symbol->value;
 
-			/* Check that the sym->value reloc has been resolved,
-			   if there is a ksplice relocation there */
+			/*
+			 * Check that the sym->value reloc has been resolved,
+			 * if there is a Ksplice relocation there.
+			 */
 			r = find_reloc(pack->primary_relocs,
 				       pack->primary_relocs_end,
 				       (unsigned long)&sym->value,
@@ -2514,6 +2664,11 @@ static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
 	return OK;
 }
 
+/*
+ * When apply_patches is called, the update should be fully prepared.
+ * apply_patches will try to actually insert trampolines for the
+ * update.
+ */
 static abort_t apply_patches(struct update *update)
 {
 	int i;
@@ -2674,6 +2829,7 @@ out:
 	return OK;
 }
 
+/* Atomically insert the update; run from within stop_machine */
 static int __apply_patches(void *updateptr)
 {
 	struct update *update = updateptr;
@@ -2711,6 +2867,8 @@ static int __apply_patches(void *updateptr)
 				return (__force int)CALL_FAILED;
 	}
 
+	/* Commit point: the update application will succeed. */
+
 	update->stage = STAGE_APPLIED;
 #ifdef TAINT_KSPLICE
 	add_taint(TAINT_KSPLICE);
@@ -2733,6 +2891,7 @@ static int __apply_patches(void *updateptr)
 	return (__force int)OK;
 }
 
+/* Atomically remove the update; run from within stop_machine */
 static int __reverse_patches(void *updateptr)
 {
 	struct update *update = updateptr;
@@ -2769,6 +2928,8 @@ static int __reverse_patches(void *updateptr)
 				return (__force int)CALL_FAILED;
 	}
 
+	/* Commit point: the update reversal will succeed. */
+
 	update->stage = STAGE_REVERSED;
 
 	list_for_each_entry(pack, &update->packs, list)
@@ -2791,6 +2952,15 @@ static int __reverse_patches(void *updateptr)
 	return (__force int)OK;
 }
 
+/*
+ * Check whether any thread's instruction pointer or any address of
+ * its stack is contained in one of the safety_records associated with
+ * the update.
+ *
+ * check_each_task must be called from inside stop_machine, because it
+ * does not take tasklist_lock (which cannot be held by anyone else
+ * during stop_machine).
+ */
 static abort_t check_each_task(struct update *update)
 {
 	const struct task_struct *g, *p;
@@ -2917,6 +3087,7 @@ static abort_t check_record(struct conflict_addr *ca,
 	return OK;
 }
 
+/* Is the task one of the stop_machine tasks? */
 static bool is_stop_machine(const struct task_struct *t)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
@@ -2993,6 +3164,7 @@ static void remove_trampoline(const struct ksplice_patch *p)
 	set_fs(old_fs);
 }
 
+/* Returns NO_MATCH if there's already a labelval with a different value */
 static abort_t create_labelval(struct ksplice_pack *pack,
 			       struct ksplice_symbol *ksym,
 			       unsigned long val, int status)
@@ -3014,6 +3186,10 @@ static abort_t create_labelval(struct ksplice_pack *pack,
 	return OK;
 }
 
+/*
+ * Creates a new safety_record for a helper section based on its
+ * ksplice_section and run-pre matching information.
+ */
 static abort_t create_safety_record(struct ksplice_pack *pack,
 				    const struct ksplice_section *sect,
 				    struct list_head *record_list,
@@ -3037,6 +3213,10 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
 	if (rec == NULL)
 		return OUT_OF_MEMORY;
+	/*
+	 * The helper might be unloaded when checking reversing
+	 * patches, so we need to kstrdup the label here.
+	 */
 	rec->label = kstrdup(sect->symbol->label, GFP_KERNEL);
 	if (rec->label == NULL) {
 		kfree(rec);
@@ -3053,6 +3233,11 @@ static abort_t add_candidate_val(struct ksplice_pack *pack,
 				 struct list_head *vals, unsigned long val)
 {
 	struct candidate_val *tmp, *new;
+
+/*
+ * Careful: follow trampolines before comparing values so that we do
+ * not mistake the obsolete function for another copy of the function.
+ */
 	val = follow_trampolines(pack, val);
 
 	list_for_each_entry(tmp, vals, list) {
@@ -3072,6 +3257,16 @@ static void release_vals(struct list_head *vals)
 	clear_list(vals, struct candidate_val, list);
 }
 
+/*
+ * The temp_labelvals list is used to cache those temporary labelvals
+ * that have been created to cross-check the symbol values obtained
+ * from different relocations within a single section being matched.
+ *
+ * If status is VAL, commit the temp_labelvals as final values.
+ *
+ * If status is NOVAL, restore the list of possible values to the
+ * ksplice_symbol, so that it no longer has a known value.
+ */
 static void set_temp_labelvals(struct ksplice_pack *pack, int status)
 {
 	struct labelval *lv, *n;
@@ -3087,6 +3282,7 @@ static void set_temp_labelvals(struct ksplice_pack *pack, int status)
 	}
 }
 
+/* Is there a Ksplice canary with given howto at blank_addr? */
 static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 			   const struct ksplice_reloc_howto *howto)
 {
@@ -3111,6 +3307,11 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 	}
 }
 
+/*
+ * Compute the address of the code you would actually run if you were
+ * to call the function at addr (i.e., follow the sequence of jumps
+ * starting at addr)
+ */
 static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr)
 {
@@ -3795,6 +3996,7 @@ static ssize_t conflict_show(struct update *update, char *buf)
 	return used;
 }
 
+/* Used to pass maybe_cleanup_ksplice_update to kthread_run */
 static int maybe_cleanup_ksplice_update_wrapper(void *updateptr)
 {
 	struct update *update = updateptr;
