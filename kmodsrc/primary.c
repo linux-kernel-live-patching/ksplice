@@ -1,6 +1,5 @@
-/*  Copyright (C) 2007-2008  Jeff Arnold <jbarnold@mit.edu>
- *  Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
- *                      Tim Abbott <tabbott@mit.edu>
+/*  Copyright (C) 2007-2008  Ksplice, Inc.
+ *  Authors: Jeff Arnold, Anders Kaseorg, Tim Abbott
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License, version 2.
@@ -110,7 +109,7 @@ static void cleanup_primary(void)
 module_init(init_primary);
 module_exit(cleanup_primary);
 
-MODULE_AUTHOR("Jeff Arnold <jbarnold@mit.edu>");
+MODULE_AUTHOR("Ksplice, Inc.");
 MODULE_DESCRIPTION("Ksplice rebootless update primary module");
 #ifdef KSPLICE_VERSION
 MODULE_VERSION(KSPLICE_VERSION);

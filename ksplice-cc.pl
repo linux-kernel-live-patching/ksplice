@@ -1,8 +1,7 @@
 #!/usr/bin/perl
 
-# Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
-#                     Jeff Arnold <jbarnold@mit.edu>,
-#                     Tim Abbott <tabbott@mit.edu>
+# Copyright (C) 2008  Ksplice, Inc.
+# Authors: Anders Kaseorg, Jeff Arnold, Tim Abbott
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.

@@ -1,8 +1,7 @@
 #!/usr/bin/perl
 
-# Copyright (C) 2007-2008  Jeff Arnold <jbarnold@mit.edu>
-# Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
-#                     Tim Abbott <tabbott@mit.edu>
+# Copyright (C) 2007-2008  Ksplice, Inc.
+# Authors: Jeff Arnold, Anders Kaseorg, Tim Abbott
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.
@@ -174,12 +173,13 @@ L<ksplice-create(8)>, L<ksplice-apply(8)>, L<ksplice-view(8)>
 
 Please report bugs to <PACKAGE_BUGREPORT>.
 
+=head1 AUTHORS
+
+Jeff Arnold, Anders Kaseorg, and Tim Abbott
+
 =head1 COPYRIGHT
 
-Copyright (C) 2007-2008  Jeff Arnold <jbarnold@mit.edu>
-
-Copyright (C) 2008  Anders Kaseorg <andersk@mit.edu>,
-                    Tim Abbott <tabbott@mit.edu>
+Copyright (C) 2007-2008  Ksplice, Inc.
 
 This is free software and documentation.  You can redistribute and/or modify it
 under the terms of the GNU General Public License, version 2.
