@@ -21,7 +21,7 @@ use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
-my ($patchfile, $diffext, $orig_config_dir, $jobs, $kid);
+my ($patchfile, $diffext, $git, $orig_config_dir, $jobs, $kid);
 my $description;
 my $series = 0;
 my $build_modules = 0;
@@ -35,6 +35,7 @@ GetOptions(@common_options,
 	"patch=s" => \$patchfile,
 	"description=s" => \$description,
 	"diffext=s" => \$diffext,
+	"git=s" => \$git,
 	"prebuild" => \$prebuild,
 	"series!" => \$series,
 	"build-modules!" => \$build_modules,
@@ -47,8 +48,11 @@ GetOptions(@common_options,
 	"patch-opt=s" => \@patch_opt) or pod2usage(1);
 
 pod2usage(1) if($help || scalar(@ARGV) != 1);
-my $actions = (defined $patchfile) + (defined $diffext) + ($prebuild);
+my $actions = (defined $patchfile) + (defined $diffext) + (defined $git) + $prebuild;
 pod2usage(1) if($actions != 1);
+
+my $have_Git = eval { require Git };
+$have_Git or die $@ if defined $git;
 
 my ($linuxtree) = (abs_path($ARGV[0]));
 
@@ -103,6 +107,15 @@ $patchfile = abs_path($patchfile) if(defined $patchfile);
 my $origdir = getcwd();
 chdir($linuxtree);
 
+my $git_rev;
+my $git_repo;
+if (defined $git) {
+	$git_repo = Git->repository();
+	($git_rev) = $git_repo->command(qw(rev-parse --verify), $git);
+} else {
+	$git_repo = eval { Git->repository() };
+}
+
 my @make = ("make", "-rR");
 if(defined $jobs) {
 	push @make, "-j$jobs";
@@ -127,6 +140,10 @@ if(-e "include/config/kernel.release") {
 my @revert_flags = ("KSPLICE_MODE=revert");
 push(@revert_flags, "KSPLICE_SERIES=y") if ($series);
 
+sub git_have_ksplice_pre {
+	return $git_repo->command(qw(for-each-ref refs/ksplice/pre)) ne '';
+}
+
 sub revert_orig() {
 	for(split(/\0/, runstr(qw(find -name *.KSPLICE_presrc -print0)))) {
 		my ($file) = m/^(.*)\.KSPLICE_presrc$/;
@@ -136,9 +153,22 @@ sub revert_orig() {
 			rename($_, $file);
 		}
 	}
+	if (defined $git_repo && git_have_ksplice_pre) {
+		if ($series) {
+			$git_repo->command_noisy(qw(update-ref -m), "ksplice-create: freeze", qw(refs/ksplice/pre HEAD refs/ksplice/pre));
+		} else {
+			$git_repo->command_noisy(qw(update-index --refresh));
+			$git_repo->command_noisy(qw(read-tree -m --trivial -u refs/ksplice/pre));
+			$git_repo->command_noisy(qw(update-ref -m), "ksplice-create: revert", qw(HEAD refs/ksplice/pre HEAD));
+		}
+	}
 	runval(@make_ksplice, @revert_flags);
 }
 revert_orig();
+
+if (defined $git_repo && !git_have_ksplice_pre) {
+	$git_repo->command_noisy(qw(update-ref -m), "ksplice-create: snap", qw(refs/ksplice/pre HEAD), '');
+}
 
 if(!$skip_prebuild) {
 	if(-e "$orig_config_dir/.config") {
@@ -182,7 +212,25 @@ runval(@make_kmodsrc);
 
 @patch_opt = ("-s", @patch_opt) if ($Verbose::level < 0);
 
-runval_infile($patchfile, "patch", @patch_opt, "-bz", ".KSPLICE_presrc");
+if (defined $git) {
+	if (!git_have_ksplice_pre) {
+		$git_repo->command_noisy(qw(update-ref -m), "ksplice-create: snap", qw(refs/ksplice/pre HEAD), '');
+	}
+	$git_repo->command_noisy(qw(update-index --refresh));
+	$git_repo->command_noisy(qw(read-tree -m --trivial -u), $git_rev);
+	$git_repo->command_noisy(qw(update-ref -m), "ksplice-create: diff", "HEAD", $git_rev);
+
+	open(PATCH, '>', $patchfile) or die;
+	if ($git_repo->command(qw(rev-parse --verify HEAD^)) eq
+	    $git_repo->command(qw(rev-parse --verify refs/ksplice/pre))) {
+		print PATCH scalar($git_repo->command(qw(log -1 HEAD --))), "\n";
+	}
+	print PATCH scalar($git_repo->command(qw(diff-tree -p refs/ksplice/pre HEAD --)));
+	close(PATCH) or die;
+} else {
+	runval_infile($patchfile, "patch", @patch_opt, "-bz", ".KSPLICE_presrc");
+}
+
 my @diff_flags = ("KSPLICE_MODE=diff");
 push @diff_flags, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
 push @diff_flags, "KSPLICE_ONLY_TARGETS=@only_targets" if (@only_targets);
