@@ -204,7 +204,7 @@ $ENV{KSPLICE_KMODSRC} = $kmodsrc;
 my @make_kmodsrc = (@make, "-C", $kernel_headers_dir, "M=$kmodsrc", "KSPLICE_KID=$kid", "KSPLICE_VERSION=PACKAGE_VERSION", "map_printk=$map_printk");
 
 if (!defined($standalone)) {
-	$standalone = (runval_raw(qw(grep -q ^CONFIG_KSPLICE=[ym]$), "$linuxtree/.config") != 0);
+	$standalone = (!-e "$linuxtree/.config" || runval_raw(qw(grep -q ^CONFIG_KSPLICE=[ym]$), "$linuxtree/.config") != 0);
 }
 push(@make_kmodsrc, "KSPLICE_STANDALONE=1") if ($standalone);
 
