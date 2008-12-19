@@ -1,3 +1,7 @@
+2008-12-19 : 0.9.5
+ - Added support for building updates from Git commits in ksplice-create
+ - Prevent reversing Ksplice updates that have been partially cold applied
+
 2008-11-21 : 0.9.4
  - Added support for patching kernels built in a separate Kbuild output
    directory (O=dir)
