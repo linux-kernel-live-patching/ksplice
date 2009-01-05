@@ -929,8 +929,25 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 
 	bool nonrelocs_match = nonrelocs_equal(old_span, new_span);
 	bool relocs_match = all_relocs_equal(old_span, new_span);
-	if (nonrelocs_match && relocs_match)
+	if (nonrelocs_match && relocs_match) {
+		const struct table_section *ts =
+		    get_table_section(old_span->ss->name);
+		if (ts != NULL && ts->crc_sect != NULL) {
+			struct span *old_crc_span = get_crc_span(old_span, ts);
+			struct span *new_crc_span = get_crc_span(new_span, ts);
+			assert(old_crc_span != NULL);
+			assert(new_crc_span != NULL);
+			if (old_crc_span->match != new_crc_span ||
+			    new_crc_span->match != old_crc_span) {
+				debug1(newsbfd, "Unmatching %s and %s due to "
+				       "nonmatching CRCs\n", old_span->label,
+				       new_span->label);
+				old_span->match = NULL;
+				new_span->match = NULL;
+			}
+		}
 		return;
+	}
 	if (strcmp(old_span->ss->name, "__bug_table") == 0 &&
 	    strcmp(new_span->ss->name, "__bug_table") == 0 && relocs_match) {
 		debug1(newsbfd, "Changing %s due to nonmatching line numbers\n",
