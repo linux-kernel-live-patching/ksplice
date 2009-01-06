@@ -1055,6 +1055,17 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 		    old_offset == new_offset;
 	}
 
+	if (bfd_is_abs_section(old_sect) && bfd_is_abs_section(new_sect)) {
+		if (old_offset + old_sym->value == new_offset + new_sym->value)
+			return true;
+		debug1(newsbfd, "Differing relocations from %s/%s to ABS "
+		       "section: %lx/%lx\n", old_addr_span->label,
+		       new_addr_span->label,
+		       (unsigned long)(old_offset + old_sym->value),
+		       (unsigned long)(new_offset + new_sym->value));
+		return false;
+	}
+
 	if (bfd_is_const_section(old_sect) || bfd_is_const_section(new_sect))
 		DIE;
 
