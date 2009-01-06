@@ -2284,7 +2284,13 @@ const struct table_section *get_table_section(const char *name)
 				assert(align(ts->entry_contents_size,
 					     ts->entry_align) ==
 				       ts->entry_size);
-			return ts;
+			struct table_section *ns = malloc(sizeof(*ns));
+			*ns = *ts;
+			ns->sect = read_string(tables_ss, &ts->sect);
+			ns->crc_sect = read_string(tables_ss, &ts->crc_sect);
+			ns->other_sect =
+			    read_string(tables_ss, &ts->other_sect);
+			return ns;
 		}
 	}
 	return NULL;
