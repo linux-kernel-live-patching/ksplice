@@ -134,7 +134,7 @@ ksplice-deps += $(if $(filter $(KSPLICE_ONLY_TARGETS),vmlinux),$(builtin-target:
 ifdef KSPLICE_BUILD_MODULES
 ksplice-deps += __build
 endif
-ksplice-deps += $(subdir-ym)
+ksplice-deps += $(subdir-ym) $(always)
 
 ifdef builtin-target
 $(builtin-target:=.KSPLICE): ksplice-link-deps = $(obj-y)
