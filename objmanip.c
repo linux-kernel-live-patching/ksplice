@@ -1838,16 +1838,14 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 	for (entry = ss->contents.data;
 	     entry < ss->contents.data + ss->contents.size;
 	     entry += s->entry_size) {
-		asymbol *sym;
 		struct span *span = find_span(ss, addr_offset(ss, entry));
 		assert(span != NULL);
 
 		if (s->has_addr) {
-			read_reloc(ss, entry + s->addr_offset,
-				   sizeof(void *), &sym);
-			struct supersect *sym_ss =
-			    fetch_supersect(sbfd, sym->section);
-			if (sym_ss->keep)
+			arelent *reloc = find_reloc(ss, entry + s->addr_offset);
+			assert(reloc != NULL);
+			struct span *sym_span = reloc_target_span(ss, reloc);
+			if (sym_span->keep)
 				keep_span(span);
 		}
 
