@@ -83,7 +83,8 @@ sub view_list {
 		$module = "ksplice_$mid";
 		($kid = $mid) =~ s/[-_].*$//;
 		next unless (-e "/sys/module/$module/ksplice/stage");
-		open STAGE, '<', "/sys/module/$module/ksplice/stage" or next;
+		open STAGE, '<', "/sys/module/$module/ksplice/stage" or die
+		    "Unable to read stage file; are you root?";
 		show_kid($kid) if(<STAGE> eq "applied\n");
 		close STAGE;
 	}
