@@ -279,7 +279,7 @@ if ($build_modules) {
 revert_orig() if(defined($diffext));
 
 runval(@make_kmodsrc, "modules", "KSPLICE_MODULES=@modules");
-runval(@make_kmodsrc, qw(modules_install --old-file=_modinst_post --old-file=_emodinst_post INSTALL_MOD_STRIP=1), "MODLIB=$tmpdir/ksplice-modules", "KSPLICE_MODULES=@modules");
+runval(@make_kmodsrc, qw(modules_install --old-file=_modinst_post --old-file=_emodinst_post), "MAKE=make --old-file=_modinst_post --old-file=_emodinst_post", "INSTALL_MOD_STRIP=1", "MODLIB=$tmpdir/ksplice-modules", "KSPLICE_MODULES=@modules");
 
 chdir($tmpdir);
 mkdir($ksplice);
