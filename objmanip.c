@@ -2223,6 +2223,10 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (bfd_is_und_section(sym->section) &&
 		    (sym->flags & BSF_KEEP) == 0)
 			keep = false;
+		if (bfd_is_abs_section(sym->section) &&
+		    (sym->flags & BSF_KEEP) == 0 &&
+		    (sym->flags & BSF_FILE) == 0)
+			keep = false;
 		if (deleted_table_section_symbol(ibfd, sym))
 			keep = false;
 
