@@ -1874,7 +1874,7 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 		if (s->crc_sect != NULL) {
 			struct span *crc_span = get_crc_span(span, s);
 			assert(crc_span != NULL);
-			if (span->keep)
+			if (span->keep && mode("keep-primary"))
 				keep_span(crc_span);
 		}
 	}
