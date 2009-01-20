@@ -104,7 +104,8 @@ struct span *find_span(struct supersect *ss, bfd_size_type address);
 void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
 static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size);
-bool is_table_section(const char *name, bool consider_other);
+static bool is_table_section(const char *name, bool consider_other,
+			     bool consider_crc);
 const struct table_section *get_table_section(const char *name);
 void mangle_section_name(struct superbfd *sbfd, const char *name);
 
@@ -2271,7 +2272,8 @@ bool str_in_set(const char *str, const struct str_vec *strs)
 	return false;
 }
 
-bool is_table_section(const char *name, bool consider_other)
+static bool is_table_section(const char *name, bool consider_other,
+			     bool consider_crc)
 {
 	struct supersect *tables_ss =
 	    fetch_supersect(offsets_sbfd,
@@ -2289,7 +2291,7 @@ bool is_table_section(const char *name, bool consider_other)
 		    strcmp(name, osect_name) == 0)
 			return true;
 		const char *crc_name = read_string(tables_ss, &ts->crc_sect);
-		if (consider_other && crc_name != NULL &&
+		if (consider_crc && crc_name != NULL &&
 		    strcmp(name, crc_name) == 0)
 			return true;
 	}
@@ -2460,7 +2462,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 	if (starts_with(ss->name, "__kcrctab"))
 		return SS_TYPE_SPECIAL;
 
-	if (is_table_section(ss->name, true))
+	if (is_table_section(ss->name, true, true))
 		return SS_TYPE_SPECIAL;
 
 	if (starts_with(ss->name, ".ARM."))
@@ -2970,7 +2972,7 @@ static void initialize_spans(struct superbfd *sbfd)
 {
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
-		if (is_table_section(sect->name, true) && mode("keep"))
+		if (is_table_section(sect->name, true, true) && mode("keep"))
 			continue;
 
 		struct supersect *ss = fetch_supersect(sbfd, sect);
