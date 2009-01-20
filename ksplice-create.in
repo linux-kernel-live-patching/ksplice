@@ -213,9 +213,6 @@ runval(@make_kmodsrc);
 @patch_opt = ("-s", @patch_opt) if ($Verbose::level < 0);
 
 if (defined $git) {
-	if (!git_have_ksplice_pre) {
-		$git_repo->command_noisy(qw(update-ref -m), "ksplice-create: snap", qw(refs/ksplice/pre HEAD), '');
-	}
 	$git_repo->command_noisy(qw(update-index --refresh));
 	$git_repo->command_noisy(qw(read-tree -m --trivial -u), $git_rev);
 	$git_repo->command_noisy(qw(update-ref -m), "ksplice-create: diff", "HEAD", $git_rev);
