@@ -184,6 +184,8 @@ static void match_global_symbols(struct span *old_span, asymbol *oldsym,
 static void match_symbol_spans(struct span *old_span, asymbol *oldsym,
 			       struct span *new_span, asymbol *newsym);
 
+static struct span *get_crc_span(struct span *span,
+				 const struct table_section *ts);
 static void foreach_span_pair(struct superbfd *oldsbfd,
 			      struct superbfd *newsbfd,
 			      void (*fn)(struct span *old_span,
@@ -1859,18 +1861,28 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 		}
 
 		if (s->crc_sect != NULL) {
-			asection *crc_sect =
-			    bfd_get_section_by_name(sbfd->abfd, s->crc_sect);
-			struct supersect *crc_ss =
-			    fetch_supersect(sbfd, crc_sect);
-			struct span *crc_span =
-			    find_span(crc_ss, addr_offset(ss, entry) /
-				      s->entry_size * s->crc_size);
-			assert(crc_span);
+			struct span *crc_span = get_crc_span(span, s);
+			assert(crc_span != NULL);
 			if (span->keep)
 				keep_span(crc_span);
 		}
 	}
+}
+
+static struct span *get_crc_span(struct span *span,
+				 const struct table_section *ts)
+{
+	void *entry = span->ss->contents.data + span->start;
+	asection *crc_sect = bfd_get_section_by_name(span->ss->parent->abfd,
+						     ts->crc_sect);
+	if (crc_sect == NULL)
+		return NULL;
+	struct supersect *crc_ss = fetch_supersect(span->ss->parent, crc_sect);
+	if (crc_ss == NULL)
+		return NULL;
+	struct span *crc_span = find_span(crc_ss, addr_offset(span->ss, entry) /
+					  ts->entry_size * ts->crc_size);
+	return crc_span;
 }
 
 void mark_precallable_spans(struct superbfd *sbfd)
