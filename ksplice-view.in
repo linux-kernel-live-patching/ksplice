@@ -102,7 +102,11 @@ ksplice-view - View in-kernel or on-disk Ksplice kernel updates
 
 =head1 SYNOPSIS
 
-B<ksplice-view> [B<--id=>I<KSPLICE_ID> | B<--file=>I<UPDATE_TARBALL>]
+B<ksplice-view>
+
+B<ksplice-view> B<--id=>I<KSPLICE_ID>
+
+B<ksplice-view> B<--file=>I<UPDATE_TARBALL>
 
 =head1 DESCRIPTION
 
@@ -112,6 +116,21 @@ all of the Ksplice updates that are currently present in the running kernel.
 B<ksplice-view> can report about a specific Ksplice update when given the
 update's identification tag (if the update is in the kernel) or given the
 update's tarball filename I<UPDATE_TARBALL> (if the update is on disk).
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--id=>I<KSPLICE_ID>
+
+Report information about the Ksplice update I<KSPLICE_ID> currently loaded in
+the running kernel.
+
+=item B<--file=>I<UPDATE_TARBALL>
+
+Report information about the Ksplice update I<UPDATE_TARBALL> on disk.
+
+=back
 
 =head1 SEE ALSO
 
