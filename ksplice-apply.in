@@ -253,7 +253,7 @@ ksplice-apply - Apply an on-disk Ksplice update to the running kernel
 
 =head1 SYNOPSIS
 
-B<ksplice-apply> I<UPDATE_TARBALL>
+B<ksplice-apply> [I<OPTIONS>] I<UPDATE_TARBALL>
 
 =head1 DESCRIPTION
 

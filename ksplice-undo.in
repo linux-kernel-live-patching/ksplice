@@ -149,7 +149,7 @@ ksplice-undo - Undo a Ksplice update that has been applied to the running kernel
 
 =head1 SYNOPSIS
 
-B<ksplice-undo> I<KSPLICE_ID>
+B<ksplice-undo> [I<OPTIONS>] I<KSPLICE_ID>
 
 =head1 DESCRIPTION
 

@@ -325,11 +325,11 @@ ksplice-create - Create a set of kernel modules for a rebootless kernel update
 
 =head1 SYNOPSIS
 
-B<ksplice-create> [B<--config=>I<ORIG_CONFIG>] B<--patch=>I<PATCH_FILE> I<KERNEL_SOURCE>
+B<ksplice-create> [I<OPTIONS>] B<--patch=>I<PATCH_FILE> I<KERNEL_SOURCE>
 
-B<ksplice-create> [B<--config=>I<ORIG_CONFIG>] B<--diffext=>I<EXTENSION> I<KERNEL_SOURCE>
+B<ksplice-create> [I<OPTIONS>] B<--diffext=>I<EXTENSION> I<KERNEL_SOURCE>
 
-B<ksplice-create> [B<--config=>I<ORIG_CONFIG>] B<--prebuild> I<KERNEL_SOURCE>
+B<ksplice-create> [I<OPTIONS>] B<--prebuild> I<KERNEL_SOURCE>
 
 =head1 DESCRIPTION
 
