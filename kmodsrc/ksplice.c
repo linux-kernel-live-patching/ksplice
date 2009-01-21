@@ -1,4 +1,4 @@
-/*  Copyright (C) 2007-2008  Ksplice, Inc.
+/*  Copyright (C) 2007-2009  Ksplice, Inc.
  *  Authors: Jeff Arnold, Anders Kasoerg, Tim Abbott
  *
  *  This program is free software; you can redistribute it and/or modify

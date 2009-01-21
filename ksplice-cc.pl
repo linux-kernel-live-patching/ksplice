@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright (C) 2008  Ksplice, Inc.
+# Copyright (C) 2008-2009  Ksplice, Inc.
 # Authors: Anders Kaseorg, Jeff Arnold, Tim Abbott
 #
 # This program is free software; you can redistribute it and/or modify
