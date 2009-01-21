@@ -895,7 +895,7 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 	}
 
 	char *reason;
-	if (new_span->size != old_span->size)
+	if (new_span->contents_size != old_span->contents_size)
 		reason = "differing sizes";
 	else if (!nonrelocs_match)
 		reason = "differing contents";
@@ -909,7 +909,7 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 		debug1(newsbfd, "Changing %s due to %s\n", new_span->label,
 		       reason);
 	} else if (new_span->ss->type == SS_TYPE_RODATA &&
-		   new_span->size == old_span->size) {
+		   new_span->contents_size == old_span->contents_size) {
 		if (new_span->datapatch)
 			return;
 		new_span->datapatch = true;
@@ -988,11 +988,11 @@ static bool nonrelocs_equal(struct span *old_span, struct span *new_span)
 {
 	int i;
 	struct supersect *old_ss = old_span->ss, *new_ss = new_span->ss;
-	if (old_span->size != new_span->size)
+	if (old_span->contents_size != new_span->contents_size)
 		return false;
 	const unsigned char *old = old_ss->contents.data + old_span->start;
 	const unsigned char *new = new_ss->contents.data + new_span->start;
-	for (i = 0; i < old_span->size; i++) {
+	for (i = 0; i < old_span->contents_size; i++) {
 		if (old[i] != new[i] &&
 		    !(part_of_reloc(old_ss, i + old_span->start) &&
 		      part_of_reloc(new_ss, i + new_span->start)))
@@ -1529,7 +1529,7 @@ static void write_date_relocs(struct superbfd *sbfd, const char *str,
 				continue;
 			for (ptr = ss->contents.data + span->start;
 			     ptr + strlen(str) < ss->contents.data +
-			     span->start + span->size; ptr++) {
+			     span->start + span->contents_size; ptr++) {
 				if (strcmp((const char *)ptr, str) == 0)
 					write_ksplice_date_reloc
 					    (ss, addr_offset(ss, ptr), str,
@@ -1716,12 +1716,12 @@ void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
 				    NULL);
 	} else {
 		kpatch->type = KSPLICE_PATCH_DATA;
-		kpatch->size = span->size;
+		kpatch->size = span->contents_size;
 		struct supersect *data_ss =
 		    make_section(sbfd, ".ksplice_patch_data");
 		write_reloc(kpatch_ss, &kpatch->contents, &span->ss->symbol,
 			    span->start + span->shift);
-		char *saved = sect_do_grow(data_ss, 1, span->size, 1);
+		char *saved = sect_do_grow(data_ss, 1, span->contents_size, 1);
 		write_reloc(kpatch_ss, &kpatch->saved, &data_ss->symbol,
 			    addr_offset(data_ss, saved));
 	}
