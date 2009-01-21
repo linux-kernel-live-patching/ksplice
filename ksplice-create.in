@@ -329,6 +329,8 @@ B<ksplice-create> [I<OPTIONS>] B<--patch=>I<PATCH_FILE> I<KERNEL_SOURCE>
 
 B<ksplice-create> [I<OPTIONS>] B<--diffext=>I<EXTENSION> I<KERNEL_SOURCE>
 
+B<ksplice-create> [I<OPTIONS>] B<--git=>I<COMMIT> I<KERNEL_SOURCE>
+
 B<ksplice-create> [I<OPTIONS>] B<--prebuild> I<KERNEL_SOURCE>
 
 =head1 DESCRIPTION
@@ -408,6 +410,15 @@ Builds a Ksplice update using the modified source files with names ending in
 I<EXTENSION>.  The patch will be determined by comparing all of the files in the
 I<KERNEL_SOURCE> directory tree whose names end with the extra extension
 I<EXTENSION> against the corresponding files without the extra extension.
+
+=item B<--git>=I<COMMIT>
+
+Builds a Ksplice update using the commit I<COMMIT> in the Git working tree
+I<KERNEL_SOURCE>.  The original state corresponding to the running kernel is
+remembered in the Git ref B<refs/ksplice/pre>, which will be created from the
+current B<HEAD> if it does not yet exist (and can be changed using the
+B<--series> option).  Therefore, the source code change to be applied
+corresponds to the output of B<git diff ksplice/pre> I<COMMIT>.
 
 =item B<--prebuild>
 
