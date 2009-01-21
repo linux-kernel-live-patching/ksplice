@@ -111,7 +111,8 @@ B<ksplice-view> B<--file=>I<UPDATE_TARBALL>
 =head1 DESCRIPTION
 
 When called with no arguments, B<ksplice-view> lists the identification tags of
-all of the Ksplice updates that are currently present in the running kernel.
+all of the Ksplice updates that are currently present in the running kernel,
+along with their descriptions.
 
 B<ksplice-view> can report about a specific Ksplice update when given the
 update's identification tag (if the update is in the kernel) or given the
@@ -129,6 +130,10 @@ the running kernel.
 =item B<--file=>I<UPDATE_TARBALL>
 
 Report information about the Ksplice update I<UPDATE_TARBALL> on disk.
+
+=item B<-q>
+
+Output only the update IDs, one per line, omitting descriptions.
 
 =back
 
