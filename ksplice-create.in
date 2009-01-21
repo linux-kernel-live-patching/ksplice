@@ -436,6 +436,15 @@ the Ksplice update being built should be applied after the previous update in
 series.  This option can be used with B<--prebuild> to forget the previous
 original state and perform no other action.
 
+=item B<--build-modules>
+
+For a patch that includes changes to kernel modules, in addition to building a
+hot update that can be applied to the running kernel, this option will cause
+B<ksplice-create> to generate a set of new modules based on the updated source
+code.  These modules can be used to replace the kernel modules stored on disk,
+where they can later be loaded normally after part of the hot update has been
+applied using L<ksplice-apply(1)> B<--partial>.
+
 =item B<-v>, B<--verbose>
 
 Causes B<ksplice-create> to print debugging messages about its progress.  Using
