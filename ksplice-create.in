@@ -416,6 +416,15 @@ updates.  If any Ksplice updates have previously been built in the
 I<KERNEL_SOURCE> tree, the source files in the tree are reverted to their
 original state.
 
+=item B<--series>
+
+Specifies that the current state of the I<KERNEL_SOURCE> tree should be used as
+the original source that corresponds to the running kernel.  If a Ksplice update
+has recently been built in the I<KERNEL_SOURCE> tree, this option specifies that
+the Ksplice update being built should be applied after the previous update in
+series.  This option can be used with B<--prebuild> to forget the previous
+original state and perform no other action.
+
 =item B<-v>, B<--verbose>
 
 Causes B<ksplice-create> to print debugging messages about its progress.  Using
