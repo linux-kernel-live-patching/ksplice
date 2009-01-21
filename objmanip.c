@@ -100,6 +100,7 @@ static void initialize_table_spans(struct superbfd *sbfd,
 static void initialize_table_section_spans(struct superbfd *sbfd);
 static void initialize_ksplice_call_spans(struct supersect *ss);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
+static struct span *span_offset_target_span(struct span *span, int offset);
 struct span *find_span(struct supersect *ss, bfd_size_type address);
 void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
@@ -1856,18 +1857,17 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 		assert(span != NULL);
 
 		if (s->has_addr) {
-			arelent *reloc = find_reloc(ss, entry + s->addr_offset);
-			assert(reloc != NULL);
-			struct span *sym_span = reloc_target_span(ss, reloc);
+			struct span *sym_span =
+			    span_offset_target_span(span, s->addr_offset);
+			assert(sym_span != NULL);
 			if (sym_span->keep)
 				keep_span(span);
 		}
 
 		if (s->other_sect != NULL) {
-			arelent *reloc =
-			    find_reloc(ss, entry + s->other_offset);
-			assert(reloc != NULL);
-			struct span *sym_span = reloc_target_span(ss, reloc);
+			struct span *sym_span =
+			    span_offset_target_span(span, s->other_offset);
+			assert(sym_span != NULL);
 			if (span->keep)
 				keep_span(sym_span);
 		}
@@ -2985,6 +2985,19 @@ static void initialize_spans(struct superbfd *sbfd)
 	}
 	if (mode("keep"))
 		initialize_table_section_spans(sbfd);
+}
+
+/* Returns the span pointed to by the relocation at span->start + offset */
+static struct span *span_offset_target_span(struct span *span, int offset)
+{
+	void *entry = span->ss->contents.data + span->start;
+	arelent *reloc = find_reloc(span->ss, entry + offset);
+	if (reloc == NULL)
+		return NULL;
+	struct span *sym_span = reloc_target_span(span->ss, reloc);
+	if (sym_span == NULL)
+		return NULL;
+	return sym_span;
 }
 
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc)
