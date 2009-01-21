@@ -1,6 +1,7 @@
 struct table_section {
 	const char *sect;
 	int entry_size;
+	int entry_contents_size;
 	int entry_align;
 	int has_addr;
 	int addr_offset;

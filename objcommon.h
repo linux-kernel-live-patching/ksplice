@@ -186,6 +186,7 @@ struct span {
 	const char *label;
 	bfd_vma start;
 	bfd_vma size;
+	bfd_vma contents_size;
 	bool keep;
 	bool new;
 	bool patch;

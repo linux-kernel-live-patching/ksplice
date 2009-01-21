@@ -58,12 +58,20 @@ const struct ksplice_config config
 #endif /* LINUX_VERSION_CODE */
 };
 
+#define FIELD_ENDOF(t, f) (offsetof(t, f) + FIELD_SIZEOF(t, f))
+
 const struct table_section table_sections[]
     __attribute__((section(".ksplice_table_sections"))) = {
 #ifdef CONFIG_X86
 	{
 		.sect = ".altinstructions",
 		.entry_size = sizeof(struct alt_instr),
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+		.entry_contents_size = offsetof(struct alt_instr, pad1),
+#else
+/* 1d8a1f6b51f6b195dfdcf05821be97edede5664a was after 2.6.24 */
+		.entry_contents_size = offsetof(struct alt_instr, pad),
+#endif
 		.entry_align = __alignof__(struct alt_instr),
 		.has_addr = 1,
 		.addr_offset = offsetof(struct alt_instr, instr),
@@ -75,6 +83,7 @@ const struct table_section table_sections[]
 	{
 		.sect = "__bug_table",
 		.entry_size = sizeof(struct bug_entry),
+		.entry_contents_size = FIELD_ENDOF(struct bug_entry, flags),
 		.entry_align = __alignof__(struct bug_entry),
 		.has_addr = 1,
 		.addr_offset = offsetof(struct bug_entry, bug_addr),
@@ -106,6 +115,8 @@ const struct table_section table_sections[]
 	{
 		.sect = ".parainstructions",
 		.entry_size = sizeof(struct paravirt_patch_site),
+		.entry_contents_size = FIELD_ENDOF(struct paravirt_patch_site,
+						   clobbers),
 		.entry_align = __alignof__(struct paravirt_patch_site),
 		.has_addr = 1,
 		.addr_offset = offsetof(struct paravirt_patch_site, instr),

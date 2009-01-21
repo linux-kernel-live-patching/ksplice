@@ -2281,8 +2281,13 @@ const struct table_section *get_table_section(const char *name)
 	for (ts = tables_ss->contents.data;
 	     (void *)ts < tables_ss->contents.data + tables_ss->contents.size;
 	     ts++) {
-		if (strcmp(name, read_string(tables_ss, &ts->sect)) == 0)
+		if (strcmp(name, read_string(tables_ss, &ts->sect)) == 0) {
+			if (ts->entry_contents_size != 0)
+				assert(align(ts->entry_contents_size,
+					     ts->entry_align) ==
+				       ts->entry_size);
 			return ts;
+		}
 	}
 	return NULL;
 }
@@ -2751,6 +2756,7 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 {
 	struct span *span = vec_grow(&ss->spans, 1);
 	span->size = size;
+	span->contents_size = size;
 	span->start = start;
 	span->ss = ss;
 	span->keep = true;
@@ -2789,6 +2795,7 @@ static void initialize_string_spans(struct supersect *ss)
 		bfd_vma start = (unsigned long)str -
 		    (unsigned long)ss->contents.data;
 		bfd_vma size = strlen(str) + 1;
+		bfd_vma contents_size = size;
 		while ((start + size) % (1 << ss->alignment) != 0 &&
 		       start + size < ss->contents.size) {
 			/* Some string sections, like __ksymtab_strings, only
@@ -2797,7 +2804,8 @@ static void initialize_string_spans(struct supersect *ss)
 				break;
 			size++;
 		}
-		new_span(ss, start, size);
+		struct span *span = new_span(ss, start, size);
+		span->contents_size = contents_size;
 		str += size;
 	}
 }
@@ -2841,6 +2849,8 @@ static void initialize_table_spans(struct superbfd *sbfd,
 	     entry += s->entry_size) {
 		struct span *span = new_span(ss, addr_offset(ss, entry),
 					     s->entry_size);
+		if (s->entry_contents_size != 0)
+			span->contents_size = s->entry_contents_size;
 		if ((span->symbol == NULL ||
 		     (span->symbol->flags & BSF_SECTION_SYM) != 0) &&
 		    s->has_addr) {
