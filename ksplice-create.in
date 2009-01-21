@@ -398,6 +398,24 @@ that have previously been applied by Ksplice.
 
 =over 8
 
+=item B<--patch=>I<PATCH_FILE>
+
+Builds a Ksplice update out of the given L<patch(1)> file I<PATCH_FILE>.
+
+=item B<--diffext=>I<EXTENSION>
+
+Builds a Ksplice update using the modified source files with names ending in
+I<EXTENSION>.  The patch will be determined by comparing all of the files in the
+I<KERNEL_SOURCE> directory tree whose names end with the extra extension
+I<EXTENSION> against the corresponding files without the extra extension.
+
+=item B<--prebuild>
+
+Compiles the original source code that will be needed to build future Ksplice
+updates.  If any Ksplice updates have previously been built in the
+I<KERNEL_SOURCE> tree, the source files in the tree are reverted to their
+original state.
+
 =item B<-v>, B<--verbose>
 
 Causes B<ksplice-create> to print debugging messages about its progress.  Using
