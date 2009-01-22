@@ -1,3 +1,10 @@
+2009-01-21 : 0.9.6
+ - Fixed a Makefile bug that prevented the initial prebuild from succeeding
+ - Documented the ksplice-create --series, --git, and --build-modules options
+ - Added support for changing CRCs of exported symbols
+ - Added pre-post matching of altinstructions and other table sections
+ - Fixed a build failure due to depmod when using a kbuild output directory
+
 2008-12-19 : 0.9.5
  - Added support for building updates from Git commits in ksplice-create
  - Prevent reversing Ksplice updates that have been partially cold applied
