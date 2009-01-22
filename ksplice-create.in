@@ -144,6 +144,12 @@ sub git_have_ksplice_pre {
 	return $git_repo->command(qw(for-each-ref refs/ksplice/pre)) ne '';
 }
 
+if(-e "$orig_config_dir/.config" && !-e "$linuxtree/.config") {
+	copy("$orig_config_dir/.config", "$linuxtree/.config");
+	utime((stat("$orig_config_dir/.config"))[8, 9],
+	      "$linuxtree/.config");
+}
+
 sub revert_orig() {
 	for(split(/\0/, runstr(qw(find -name *.KSPLICE_presrc -print0)))) {
 		my ($file) = m/^(.*)\.KSPLICE_presrc$/;
