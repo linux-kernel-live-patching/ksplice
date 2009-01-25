@@ -35,7 +35,9 @@ ksplice-primary-objs = primary-$(target).o collect-primary-$(mod).o
 ksplice-helper-objs = helper-$(target).o collect-helper-$(mod).o
 
 ifneq ($(KSPLICE_STANDALONE),)
+ifeq ($(KSPLICE_SKIP_CORE),)
 obj-m += $(KSPLICE_CORE).o
+endif
 UDIS86 = x86/libudis86
 kudis86 += \
 	$(UDIS86)/itab.o \
@@ -85,7 +87,9 @@ $(obj)/ksplice.lds: $(src)/ksplice.lds.S FORCE
 	$(call if_changed_dep,cpp_lds_S)
 
 CFLAGS_offsets.o += $(KSPLICE_CFLAGS)
+ifeq ($(KSPLICE_SKIP_CORE),)
 extra-y += offsets.o
+endif
 
 ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
