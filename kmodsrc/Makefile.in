@@ -45,7 +45,9 @@ kudis86 += \
 	$(UDIS86)/syn-intel.o \
 	$(UDIS86)/syn-att.o \
 	$(UDIS86)/udis86.o
-$(KSPLICE_CORE)-objs = ksplice-rmsyms.o $(kudis86)
+$(KSPLICE_CORE)-objs = $(fake-ksplice.o) ksplice-rmsyms.o $(kudis86)
+fake-ksplice.o = ksplice.o
+$(obj)/$(KSPLICE_CORE).o: fake-ksplice.o =
 endif
 
 define ksplice-pack-vars
@@ -87,7 +89,6 @@ extra-y += offsets.o
 
 ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
-extra-y += ksplice.o
 
 RMSYMS = \
 	apply_paravirt \
