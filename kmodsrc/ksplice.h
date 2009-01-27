@@ -180,6 +180,29 @@ struct ksplice_module_list_entry {
 /* List of all ksplice modules and the module they patch */
 extern struct list_head ksplice_modules;
 
+/* There are two actions, apply and reverse */
+#define KS_ACTIONS 2
+enum ksplice_action {
+	KS_APPLY,
+	KS_REVERSE,
+};
+
+/**
+ * struct ksplice_hooks - Hooks to be run during an action (apply or reverse)
+ * @pre:			Runs before the action;
+ * 				may return nonzero to abort the action
+ * @check:			Runs inside stop_machine before the action;
+ * 				may return nonzero to abort the action
+ * @intra:			Runs inside stop_machine during the action
+ * @post:			Runs after the action is successfully performed
+ * @fail:			Runs if the action is aborted for any reason
+ */
+struct ksplice_hooks {
+	const typeof(int (*)(void)) *pre, *pre_end, *check, *check_end;
+	const typeof(void (*)(void)) *intra, *intra_end, *post, *post_end,
+	    *fail, *fail_end;
+};
+
 /**
  * struct ksplice_code - Ksplice metadata for an object
  * @relocs:		The Ksplice relocations for the object
@@ -208,6 +231,7 @@ struct ksplice_code {
  * @new_code:			The new code to switch to
  * @patches:			The function replacements in the change
  * @patches_end:		The end pointer for patches array
+ * @hooks:			Hooks to be run during apply and reverse
  * @update:			The atomic update the change is part of
  * @target:			The module modified by the change
  * @safety_records:		The ranges of addresses that must not be on a
@@ -223,14 +247,7 @@ struct ksplice_mod_change {
 	struct module *new_code_mod;
 	struct ksplice_code old_code, new_code;
 	struct ksplice_patch *patches, *patches_end;
-	const typeof(int (*)(void)) *pre_apply, *pre_apply_end, *check_apply,
-	    *check_apply_end;
-	const typeof(void (*)(void)) *apply, *apply_end, *post_apply,
-	    *post_apply_end, *fail_apply, *fail_apply_end;
-	const typeof(int (*)(void)) *pre_reverse, *pre_reverse_end,
-	    *check_reverse, *check_reverse_end;
-	const typeof(void (*)(void)) *reverse, *reverse_end, *post_reverse,
-	    *post_reverse_end, *fail_reverse, *fail_reverse_end;
+	struct ksplice_hooks hooks[KS_ACTIONS];
 /* private: */
 	struct update *update;
 	struct module *target;

@@ -2740,7 +2740,8 @@ static abort_t apply_patches(struct update *update)
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = change->pre_apply; f < change->pre_apply_end; f++) {
+		for (f = change->hooks[KS_APPLY].pre;
+		     f < change->hooks[KS_APPLY].pre_end; f++) {
 			if ((*f)() != 0) {
 				ret = CALL_FAILED;
 				goto out;
@@ -2778,8 +2779,8 @@ out:
 	if (ret != OK) {
 		list_for_each_entry(change, &update->changes, list) {
 			const typeof(void (*)(void)) *f;
-			for (f = change->fail_apply; f < change->fail_apply_end;
-			     f++)
+			for (f = change->hooks[KS_APPLY].fail;
+			     f < change->hooks[KS_APPLY].fail_end; f++)
 				(*f)();
 		}
 
@@ -2788,7 +2789,8 @@ out:
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = change->post_apply; f < change->post_apply_end; f++)
+		for (f = change->hooks[KS_APPLY].post;
+		     f < change->hooks[KS_APPLY].post_end; f++)
 			(*f)();
 	}
 
@@ -2816,7 +2818,8 @@ static abort_t reverse_patches(struct update *update)
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = change->pre_reverse; f < change->pre_reverse_end; f++) {
+		for (f = change->hooks[KS_REVERSE].pre;
+		     f < change->hooks[KS_REVERSE].pre_end; f++) {
 			if ((*f)() != 0) {
 				ret = CALL_FAILED;
 				goto out;
@@ -2854,8 +2857,8 @@ out:
 	if (ret != OK) {
 		list_for_each_entry(change, &update->changes, list) {
 			const typeof(void (*)(void)) *f;
-			for (f = change->fail_reverse;
-			     f < change->fail_reverse_end; f++)
+			for (f = change->hooks[KS_REVERSE].fail;
+			     f < change->hooks[KS_REVERSE].fail_end; f++)
 				(*f)();
 		}
 
@@ -2864,8 +2867,8 @@ out:
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = change->post_reverse; f < change->post_reverse_end;
-		     f++)
+		for (f = change->hooks[KS_REVERSE].post;
+		     f < change->hooks[KS_REVERSE].post_end; f++)
 			(*f)();
 	}
 
@@ -2910,9 +2913,11 @@ static int __apply_patches(void *updateptr)
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = change->check_apply; f < change->check_apply_end; f++)
+		for (f = change->hooks[KS_APPLY].check;
+		     f < change->hooks[KS_APPLY].check_end; f++) {
 			if ((*f)() != 0)
 				return (__force int)CALL_FAILED;
+		}
 	}
 
 	/* Commit point: the update application will succeed. */
@@ -2932,7 +2937,8 @@ static int __apply_patches(void *updateptr)
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = change->apply; f < change->apply_end; f++)
+		for (f = change->hooks[KS_APPLY].intra;
+		     f < change->hooks[KS_APPLY].intra_end; f++)
 			(*f)();
 	}
 
@@ -2978,8 +2984,8 @@ static int __reverse_patches(void *updateptr)
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = change->check_reverse; f < change->check_reverse_end;
-		     f++) {
+		for (f = change->hooks[KS_REVERSE].check;
+		     f < change->hooks[KS_REVERSE].check_end; f++) {
 			if ((*f)() != 0)
 				return (__force int)CALL_FAILED;
 		}
@@ -2997,7 +3003,8 @@ static int __reverse_patches(void *updateptr)
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = change->reverse; f < change->reverse_end; f++)
+		for (f = change->hooks[KS_REVERSE].intra;
+		     f < change->hooks[KS_REVERSE].intra_end; f++)
 			(*f)();
 	}
 
