@@ -427,6 +427,12 @@ static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
+/* Assume cpus == NULL. */
+#define stop_machine(fn, data, cpus) stop_machine_run(fn, data, NR_CPUS);
+#endif /* LINUX_VERSION_CODE */
+
 #ifndef task_thread_info
 #define task_thread_info(task) (task)->thread_info
 #endif /* !task_thread_info */
@@ -2747,14 +2753,8 @@ static abort_t apply_patches(struct update *update)
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(1);
 #endif /* KSPLICE_STANDALONE */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 		ret = (__force abort_t)stop_machine(__apply_patches, update,
 						    NULL);
-#else /* LINUX_VERSION_CODE < */
-/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
-		ret = (__force abort_t)stop_machine_run(__apply_patches, update,
-							NR_CPUS);
-#endif /* LINUX_VERSION_CODE */
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(0);
 #endif /* KSPLICE_STANDALONE */
@@ -2829,14 +2829,8 @@ static abort_t reverse_patches(struct update *update)
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(1);
 #endif /* KSPLICE_STANDALONE */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 		ret = (__force abort_t)stop_machine(__reverse_patches, update,
 						    NULL);
-#else /* LINUX_VERSION_CODE < */
-/* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
-		ret = (__force abort_t)stop_machine_run(__reverse_patches,
-							update, NR_CPUS);
-#endif /* LINUX_VERSION_CODE */
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(0);
 #endif /* KSPLICE_STANDALONE */
