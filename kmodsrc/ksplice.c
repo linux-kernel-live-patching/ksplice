@@ -624,8 +624,7 @@ static abort_t new_export_lookup(struct ksplice_mod_change *ichange,
 				 const char *name, struct list_head *vals);
 
 /* Atomic update trampoline insertion and removal */
-static abort_t apply_patches(struct update *update);
-static abort_t reverse_patches(struct update *update);
+static abort_t patch_action(struct update *update, enum ksplice_action action);
 static int __apply_patches(void *update);
 static int __reverse_patches(void *update);
 static abort_t check_each_task(struct update *update);
@@ -1067,7 +1066,7 @@ static abort_t apply_update(struct update *update)
 		if (ret != OK)
 			goto out;
 	}
-	ret = apply_patches(update);
+	ret = patch_action(update, KS_APPLY);
 out:
 	list_for_each_entry(change, &update->changes, list) {
 		struct ksplice_section *s;
@@ -1103,7 +1102,7 @@ static abort_t reverse_update(struct update *update)
 
 	_ksdebug(update, "Preparing to reverse %s\n", update->kid);
 
-	ret = reverse_patches(update);
+	ret = patch_action(update, KS_REVERSE);
 	if (ret != OK)
 		return ret;
 
@@ -2754,12 +2753,16 @@ static abort_t new_export_lookup(struct ksplice_mod_change *ichange,
 }
 
 /*
- * When apply_patches is called, the update should be fully prepared.
- * apply_patches will try to actually insert trampolines for the
- * update.
+ * When patch_action is called, the update should be fully prepared.
+ * patch_action will try to actually insert or remove trampolines for
+ * the update.
  */
-static abort_t apply_patches(struct update *update)
+static abort_t patch_action(struct update *update, enum ksplice_action action)
 {
+	static int (*const __patch_actions[KS_ACTIONS])(void *) = {
+		[KS_APPLY] = __apply_patches,
+		[KS_REVERSE] = __reverse_patches,
+	};
 	int i;
 	abort_t ret;
 	struct ksplice_mod_change *change;
@@ -2770,8 +2773,8 @@ static abort_t apply_patches(struct update *update)
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = change->hooks[KS_APPLY].pre;
-		     f < change->hooks[KS_APPLY].pre_end; f++) {
+		for (f = change->hooks[action].pre;
+		     f < change->hooks[action].pre_end; f++) {
 			if ((*f)() != 0) {
 				ret = CALL_FAILED;
 				goto out;
@@ -2784,8 +2787,8 @@ static abort_t apply_patches(struct update *update)
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(1);
 #endif /* KSPLICE_STANDALONE */
-		ret = (__force abort_t)stop_machine(__apply_patches, update,
-						    NULL);
+		ret = (__force abort_t)stop_machine(__patch_actions[action],
+						    update, NULL);
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(0);
 #endif /* KSPLICE_STANDALONE */
@@ -2799,79 +2802,12 @@ out:
 
 	if (ret == CODE_BUSY) {
 		print_conflicts(update);
-		_ksdebug(update, "Aborted %s.  stack check: to-be-replaced "
-			 "code is busy.\n", update->kid);
+		_ksdebug(update, "Aborted %s.  stack check: to-be-%s "
+			 "code is busy.\n", update->kid,
+			 action == KS_APPLY ? "replaced" : "reversed");
 	} else if (ret == ALREADY_REVERSED) {
 		_ksdebug(update, "Aborted %s.  Ksplice update %s is already "
 			 "reversed.\n", update->kid, update->kid);
-	}
-
-	if (ret != OK) {
-		list_for_each_entry(change, &update->changes, list) {
-			const typeof(void (*)(void)) *f;
-			for (f = change->hooks[KS_APPLY].fail;
-			     f < change->hooks[KS_APPLY].fail_end; f++)
-				(*f)();
-		}
-
-		return ret;
-	}
-
-	list_for_each_entry(change, &update->changes, list) {
-		const typeof(void (*)(void)) *f;
-		for (f = change->hooks[KS_APPLY].post;
-		     f < change->hooks[KS_APPLY].post_end; f++)
-			(*f)();
-	}
-
-	_ksdebug(update, "Atomic patch insertion for %s complete\n",
-		 update->kid);
-	return OK;
-}
-
-static abort_t reverse_patches(struct update *update)
-{
-	int i;
-	abort_t ret;
-	struct ksplice_mod_change *change;
-
-	ret = map_trampoline_pages(update);
-	if (ret != OK)
-		return ret;
-
-	list_for_each_entry(change, &update->changes, list) {
-		const typeof(int (*)(void)) *f;
-		for (f = change->hooks[KS_REVERSE].pre;
-		     f < change->hooks[KS_REVERSE].pre_end; f++) {
-			if ((*f)() != 0) {
-				ret = CALL_FAILED;
-				goto out;
-			}
-		}
-	}
-
-	for (i = 0; i < 5; i++) {
-		cleanup_conflicts(update);
-#ifdef KSPLICE_STANDALONE
-		bust_spinlocks(1);
-#endif /* KSPLICE_STANDALONE */
-		ret = (__force abort_t)stop_machine(__reverse_patches, update,
-						    NULL);
-#ifdef KSPLICE_STANDALONE
-		bust_spinlocks(0);
-#endif /* KSPLICE_STANDALONE */
-		if (ret != CODE_BUSY)
-			break;
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(1000));
-	}
-out:
-	unmap_trampoline_pages(update);
-
-	if (ret == CODE_BUSY) {
-		print_conflicts(update);
-		_ksdebug(update, "Aborted %s.  stack check: to-be-reversed "
-			 "code is busy.\n", update->kid);
 	} else if (ret == MODULE_BUSY) {
 		_ksdebug(update, "Update %s is in use by another module\n",
 			 update->kid);
@@ -2880,8 +2816,8 @@ out:
 	if (ret != OK) {
 		list_for_each_entry(change, &update->changes, list) {
 			const typeof(void (*)(void)) *f;
-			for (f = change->hooks[KS_REVERSE].fail;
-			     f < change->hooks[KS_REVERSE].fail_end; f++)
+			for (f = change->hooks[action].fail;
+			     f < change->hooks[action].fail_end; f++)
 				(*f)();
 		}
 
@@ -2890,12 +2826,13 @@ out:
 
 	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = change->hooks[KS_REVERSE].post;
-		     f < change->hooks[KS_REVERSE].post_end; f++)
+		for (f = change->hooks[action].post;
+		     f < change->hooks[action].post_end; f++)
 			(*f)();
 	}
 
-	_ksdebug(update, "Atomic patch removal for %s complete\n", update->kid);
+	_ksdebug(update, "Atomic patch %s for %s complete\n",
+		 action == KS_APPLY ? "insertion" : "removal", update->kid);
 	return OK;
 }
 
