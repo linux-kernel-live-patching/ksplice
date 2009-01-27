@@ -2826,7 +2826,6 @@ static abort_t reverse_patches(struct update *update)
 
 	for (i = 0; i < 5; i++) {
 		cleanup_conflicts(update);
-		clear_list(&update->conflicts, struct conflict, list);
 #ifdef KSPLICE_STANDALONE
 		bust_spinlocks(1);
 #endif /* KSPLICE_STANDALONE */
