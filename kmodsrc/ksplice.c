@@ -1084,6 +1084,10 @@ out:
 	}
 	if (update->stage == STAGE_PREPARING)
 		cleanup_module_list_entries(update);
+
+	if (ret == OK)
+		printk(KERN_INFO "ksplice: Update %s applied successfully\n",
+		       update->kid);
 	return ret;
 }
 
@@ -1106,6 +1110,8 @@ static abort_t reverse_update(struct update *update)
 	list_for_each_entry(change, &update->changes, list)
 		clear_list(&change->safety_records, struct safety_record, list);
 
+	printk(KERN_INFO "ksplice: Update %s reversed successfully\n",
+	       update->kid);
 	return OK;
 }
 
@@ -4127,10 +4133,6 @@ static ssize_t stage_store(struct update *update, const char *buf, size_t len)
 		kthread_run(maybe_cleanup_ksplice_update_wrapper, update,
 			    "ksplice_cleanup_%s", update->kid);
 
-	if (old_stage != STAGE_REVERSED && update->abort_cause == OK)
-		printk(KERN_INFO "ksplice: Update %s %s successfully\n",
-		       update->kid,
-		       update->stage == STAGE_APPLIED ? "applied" : "reversed");
 	mutex_unlock(&module_mutex);
 	return len;
 }
