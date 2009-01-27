@@ -492,6 +492,7 @@ static int ksplice_sysfs_init(struct update *update);
 
 /* Preparing the relocations and patches for application */
 static abort_t apply_update(struct update *update);
+static abort_t reverse_update(struct update *update);
 static abort_t prepare_change(struct ksplice_mod_change *change);
 static abort_t finalize_change(struct ksplice_mod_change *change);
 static abort_t finalize_patches(struct ksplice_mod_change *change);
@@ -1084,6 +1085,28 @@ out:
 	if (update->stage == STAGE_PREPARING)
 		cleanup_module_list_entries(update);
 	return ret;
+}
+
+static abort_t reverse_update(struct update *update)
+{
+	abort_t ret;
+	struct ksplice_mod_change *change;
+
+	clear_debug_buf(update);
+	ret = init_debug_buf(update);
+	if (ret != OK)
+		return ret;
+
+	_ksdebug(update, "Preparing to reverse %s\n", update->kid);
+
+	ret = reverse_patches(update);
+	if (ret != OK)
+		return ret;
+
+	list_for_each_entry(change, &update->changes, list)
+		clear_list(&change->safety_records, struct safety_record, list);
+
+	return OK;
 }
 
 static int compare_symbolp_names(const void *a, const void *b)
@@ -2805,13 +2828,6 @@ static abort_t reverse_patches(struct update *update)
 	abort_t ret;
 	struct ksplice_mod_change *change;
 
-	clear_debug_buf(update);
-	ret = init_debug_buf(update);
-	if (ret != OK)
-		return ret;
-
-	_ksdebug(update, "Preparing to reverse %s\n", update->kid);
-
 	ret = map_trampoline_pages(update);
 	if (ret != OK)
 		return ret;
@@ -2871,9 +2887,6 @@ out:
 		     f < change->hooks[KS_REVERSE].post_end; f++)
 			(*f)();
 	}
-
-	list_for_each_entry(change, &update->changes, list)
-		clear_list(&change->safety_records, struct safety_record, list);
 
 	_ksdebug(update, "Atomic patch removal for %s complete\n", update->kid);
 	return OK;
@@ -4107,7 +4120,7 @@ static ssize_t stage_store(struct update *update, const char *buf, size_t len)
 	else if ((strncmp(buf, "reversed", len) == 0 ||
 		  strncmp(buf, "reversed\n", len) == 0) &&
 		 update->stage == STAGE_APPLIED)
-		update->abort_cause = reverse_patches(update);
+		update->abort_cause = reverse_update(update);
 	else if ((strncmp(buf, "cleanup", len) == 0 ||
 		  strncmp(buf, "cleanup\n", len) == 0) &&
 		 update->stage == STAGE_REVERSED)
