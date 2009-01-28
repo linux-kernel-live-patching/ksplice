@@ -1467,7 +1467,8 @@ static abort_t finalize_patches(struct ksplice_mod_change *change)
 	return OK;
 }
 
-static abort_t map_trampoline_pages(struct update *update)
+/* noinline to prevent garbage on the stack from confusing check_stack */
+static noinline abort_t map_trampoline_pages(struct update *update)
 {
 	struct ksplice_mod_change *change;
 	list_for_each_entry(change, &update->changes, list) {
