@@ -3927,11 +3927,15 @@ static struct module *__module_address(unsigned long addr)
 {
 	struct module *mod;
 
-	list_for_each_entry(mod, &modules, list) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
+	list_for_each_entry_rcu(mod, &modules, list)
+#else
+/* d72b37513cdfbd3f53f3d485a8c403cc96d2c95f was after 2.6.27 */
+	list_for_each_entry(mod, &modules, list)
+#endif
 		if (within_module_core(addr, mod) ||
 		    within_module_init(addr, mod))
 			return mod;
-	}
 	return NULL;
 }
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
