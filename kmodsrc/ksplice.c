@@ -695,7 +695,7 @@ static bool each_symbol(bool (*fn)(const struct symsearch *arr,
 				   struct module *owner,
 				   unsigned int symnum, void *data),
 			void *data);
-static struct module *__module_data_address(unsigned long addr);
+static struct module *__module_address(unsigned long addr);
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 /* Architecture-specific functions defined in arch/ARCH/kernel/ksplice-arch.c */
@@ -1472,8 +1472,7 @@ static void *map_writable(void *addr, size_t len)
 		return NULL;
 
 	for (i = 0; i < nr_pages; i++) {
-		if (__module_text_address((unsigned long)page_addr) == NULL &&
-		    __module_data_address((unsigned long)page_addr) == NULL) {
+		if (__module_address((unsigned long)page_addr) == NULL) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22) || !defined(CONFIG_X86_64)
 			pages[i] = virt_to_page(page_addr);
 #else /* LINUX_VERSION_CODE < && CONFIG_X86_64 */
@@ -1983,13 +1982,8 @@ static abort_t try_addr(struct ksplice_pack *pack,
 			enum run_pre_mode mode)
 {
 	abort_t ret;
-	const struct module *run_module;
+	const struct module *run_module = __module_address(run_addr);
 
-	if ((sect->flags & KSPLICE_SECTION_RODATA) != 0 ||
-	    (sect->flags & KSPLICE_SECTION_DATA) != 0)
-		run_module = __module_data_address(run_addr);
-	else
-		run_module = __module_text_address(run_addr);
 	if (run_module == pack->primary) {
 		ksdebug(pack, "run-pre: unexpected address %lx in primary "
 			"module %s for sect %s\n", run_addr, run_module->name,
@@ -3917,14 +3911,25 @@ static const struct kernel_symbol *find_symbol(const char *name,
 	return NULL;
 }
 
-static struct module *__module_data_address(unsigned long addr)
+static inline int within_module_core(unsigned long addr, struct module *mod)
+{
+        return (unsigned long)mod->module_core <= addr &&
+               addr < (unsigned long)mod->module_core + mod->core_size;
+}
+
+static inline int within_module_init(unsigned long addr, struct module *mod)
+{
+        return (unsigned long)mod->module_init <= addr &&
+               addr < (unsigned long)mod->module_init + mod->init_size;
+}
+
+static struct module *__module_address(unsigned long addr)
 {
 	struct module *mod;
 
 	list_for_each_entry(mod, &modules, list) {
-		if (addr >= (unsigned long)mod->module_core +
-		    mod->core_text_size &&
-		    addr < (unsigned long)mod->module_core + mod->core_size)
+		if (within_module_core(addr, mod) ||
+		    within_module_init(addr, mod))
 			return mod;
 	}
 	return NULL;
