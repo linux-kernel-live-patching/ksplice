@@ -178,7 +178,7 @@ struct ksplice_module_list_entry {
 };
 
 /* List of all ksplice modules and the module they patch */
-extern struct list_head ksplice_module_list;
+extern struct list_head ksplice_modules;
 
 /**
  * struct ksplice_pack - Data for one module modified by a Ksplice update

@@ -233,13 +233,13 @@ static long probe_kernel_read(void *dst, void *src, size_t size)
 static LIST_HEAD(updates);
 #ifdef KSPLICE_STANDALONE
 #if defined(CONFIG_KSPLICE) || defined(CONFIG_KSPLICE_MODULE)
-extern struct list_head ksplice_module_list;
+extern struct list_head ksplice_modules;
 #else /* !CONFIG_KSPLICE */
-LIST_HEAD(ksplice_module_list);
+LIST_HEAD(ksplice_modules);
 #endif /* CONFIG_KSPLICE */
 #else /* !KSPLICE_STANDALONE */
-LIST_HEAD(ksplice_module_list);
-EXPORT_SYMBOL_GPL(ksplice_module_list);
+LIST_HEAD(ksplice_modules);
+EXPORT_SYMBOL_GPL(ksplice_modules);
 static struct kobject *ksplice_kobj;
 #endif /* KSPLICE_STANDALONE */
 
@@ -2906,7 +2906,7 @@ static int __apply_patches(void *updateptr)
 #endif
 
 	list_for_each_entry(entry, &update->ksplice_module_list, update_list)
-		list_add(&entry->list, &ksplice_module_list);
+		list_add(&entry->list, &ksplice_modules);
 
 	list_for_each_entry(pack, &update->packs, list) {
 		for (p = pack->patches; p < pack->patches_end; p++)
@@ -3390,7 +3390,7 @@ static bool patches_module(const struct module *a, const struct module *b)
 	struct ksplice_module_list_entry *entry;
 	if (a == b)
 		return true;
-	list_for_each_entry(entry, &ksplice_module_list, list) {
+	list_for_each_entry(entry, &ksplice_modules, list) {
 		if (strcmp(entry->target_name, b->name) == 0 &&
 		    strcmp(entry->primary_name, a->name) == 0)
 			return true;
