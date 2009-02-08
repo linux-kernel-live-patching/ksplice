@@ -319,8 +319,8 @@ static void load_ksplice_reloc_offsets(struct superbfd *sbfd)
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (!starts_with(ss->name, ".ksplice_relocs") &&
-		    !starts_with(ss->name, ".ksplice_init_relocs"))
+		if (!strstarts(ss->name, ".ksplice_relocs") &&
+		    !strstarts(ss->name, ".ksplice_init_relocs"))
 			continue;
 		struct ksplice_reloc *kreloc;
 		for (kreloc = ss->contents.data;
@@ -351,7 +351,7 @@ static void show_inspect_section(struct superbfd *sbfd,
 	asection *sect;
 	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(sbfd, sect);
-		if (starts_with(ss->name, isect->prefix) &&
+		if (strstarts(ss->name, isect->prefix) &&
 		    ss->contents.size != 0) {
 			printf("%s IN [%s]:\n", isect->header, sect->name);
 			found = true;

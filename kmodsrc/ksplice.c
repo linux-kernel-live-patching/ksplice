@@ -656,7 +656,7 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 static unsigned long follow_trampolines(struct ksplice_pack *pack,
 					unsigned long addr);
 static bool patches_module(const struct module *a, const struct module *b);
-static bool starts_with(const char *str, const char *prefix);
+static bool strstarts(const char *str, const char *prefix);
 static bool singular(struct list_head *list);
 static void *bsearch(const void *key, const void *base, size_t n,
 		     size_t size, int (*cmp)(const void *key, const void *elt));
@@ -1243,7 +1243,7 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 		return OK;
 
 	for (sym = start; sym < end; sym++) {
-		if (starts_with(sym->label, "__ksymtab")) {
+		if (strstarts(sym->label, "__ksymtab")) {
 			const struct kernel_symbol *ksym;
 			const char *colon = strchr(sym->label, ':');
 			const char *name = colon + 1;
@@ -3135,7 +3135,7 @@ static bool is_stop_machine(const struct task_struct *t)
 	const char *kstop_prefix = "kstop";
 #endif /* LINUX_VERSION_CODE */
 	const char *num;
-	if (!starts_with(t->comm, kstop_prefix))
+	if (!strstarts(t->comm, kstop_prefix))
 		return false;
 	num = t->comm + strlen(kstop_prefix);
 	return num[strspn(num, "0123456789")] == '\0';
@@ -3365,7 +3365,7 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 			return addr;
 		m = __module_text_address(new_addr);
 		if (m == NULL || m == pack->target ||
-		    !starts_with(m->name, "ksplice"))
+		    !strstarts(m->name, "ksplice"))
 			return addr;
 		addr = new_addr;
 	}
@@ -3378,7 +3378,7 @@ static bool patches_module(const struct module *a, const struct module *b)
 	const char *name;
 	if (a == b)
 		return true;
-	if (a == NULL || !starts_with(a->name, "ksplice_"))
+	if (a == NULL || !strstarts(a->name, "ksplice_"))
 		return false;
 	name = a->name + strlen("ksplice_");
 	name += strcspn(name, "_");
@@ -3399,10 +3399,12 @@ static bool patches_module(const struct module *a, const struct module *b)
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 }
 
-static bool starts_with(const char *str, const char *prefix)
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+static bool strstarts(const char *str, const char *prefix)
 {
 	return strncmp(str, prefix, strlen(prefix)) == 0;
 }
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
 
 static bool singular(struct list_head *list)
 {

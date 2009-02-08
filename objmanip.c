@@ -246,7 +246,7 @@ bool write_output = true;
 
 struct superbfd *offsets_sbfd = NULL;
 
-#define mode(str) starts_with(modestr, str)
+#define mode(str) strstarts(modestr, str)
 
 DECLARE_VEC_TYPE(unsigned long, addr_vec);
 DEFINE_HASH_TYPE(struct addr_vec, addr_vec_hash,
@@ -355,7 +355,7 @@ bool unchangeable_section(struct supersect *ss)
 {
 	if (ss->type == SS_TYPE_DATA)
 		return true;
-	if (ss->type == SS_TYPE_IGNORED && !starts_with(ss->name, ".debug") &&
+	if (ss->type == SS_TYPE_IGNORED && !strstarts(ss->name, ".debug") &&
 	    strcmp(ss->name, "__ksymtab_strings") != 0)
 		return true;
 	return false;
@@ -461,7 +461,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			if (starts_with(ss->name, ".ksplice_options"))
+			if (strstarts(ss->name, ".ksplice_options"))
 				span->keep = false;
 			else if (span->new || span->patch || span->datapatch)
 				keep_span(span);
@@ -544,7 +544,7 @@ void do_keep_helper(struct superbfd *isbfd)
 		     span < ss->spans.data + ss->spans.size; span++) {
 			span->keep = false;
 			if (ss->type == SS_TYPE_TEXT &&
-			    !starts_with(ss->name, ".fixup"))
+			    !strstarts(ss->name, ".fixup"))
 				keep_span(span);
 			if (ss->type == SS_TYPE_EXPORT)
 				keep_span(span);
@@ -1234,8 +1234,8 @@ void rm_relocs(struct superbfd *isbfd)
 		    ss->type == SS_TYPE_KSPLICE_CALL)
 			remove_relocs = false;
 		if (mode("finalize") &&
-		    (starts_with(ss->name, ".ksplice_patches") ||
-		     starts_with(ss->name, ".ksplice_relocs")))
+		    (strstarts(ss->name, ".ksplice_patches") ||
+		     strstarts(ss->name, ".ksplice_relocs")))
 			remove_relocs = true;
 
 		if (remove_relocs)
@@ -1504,12 +1504,12 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 	bfd_vma target_addend = get_reloc_offset(ss, orig_reloc, true);
 	unsigned long *repladdr = ss->contents.data + orig_reloc->address;
 
-	if (mode("finalize") && starts_with(ss->name, ".ksplice_patches")) {
+	if (mode("finalize") && strstarts(ss->name, ".ksplice_patches")) {
 		*repladdr = 0;
 		return;
 	}
-	if (mode("finalize") && starts_with(ss->name, ".ksplice_relocs")) {
-		assert(starts_with(sym_ptr->name, KSPLICE_SYMBOL_STR));
+	if (mode("finalize") && strstarts(ss->name, ".ksplice_relocs")) {
+		assert(strstarts(sym_ptr->name, KSPLICE_SYMBOL_STR));
 		asymbol fake_sym;
 		fake_sym.name = sym_ptr->name + strlen(KSPLICE_SYMBOL_STR);
 		fake_sym.section = bfd_und_section_ptr;
@@ -2437,91 +2437,91 @@ enum supersect_type supersect_type(struct supersect *ss)
 {
 	if (mode("finalize") &&
 	    strcmp(finalize_target, "vmlinux") == 0 &&
-	    (starts_with(ss->name, ".ksplice_relocs.exit") ||
-	     starts_with(ss->name, ".ksplice_sections.exit") ||
-	     starts_with(ss->name, ".ksplice_patches.exit")))
+	    (strstarts(ss->name, ".ksplice_relocs.exit") ||
+	     strstarts(ss->name, ".ksplice_sections.exit") ||
+	     strstarts(ss->name, ".ksplice_patches.exit")))
 		return SS_TYPE_EXIT;
-	if (starts_with(ss->name, ".ksplice_call"))
+	if (strstarts(ss->name, ".ksplice_call"))
 		return SS_TYPE_KSPLICE_CALL;
-	if (starts_with(ss->name, ".ksplice_options"))
+	if (strstarts(ss->name, ".ksplice_options"))
 		return SS_TYPE_SPECIAL;
-	if (starts_with(ss->name, ".ksplice"))
+	if (strstarts(ss->name, ".ksplice"))
 		return SS_TYPE_KSPLICE;
 
-	if (starts_with(ss->name, ".init"))
+	if (strstarts(ss->name, ".init"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".security_initcall.init"))
+	if (strstarts(ss->name, ".security_initcall.init"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".con_initcall.init"))
+	if (strstarts(ss->name, ".con_initcall.init"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".x86cpuvendor.init"))
+	if (strstarts(ss->name, ".x86cpuvendor.init"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".early_param.init"))
+	if (strstarts(ss->name, ".early_param.init"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".taglist.init"))
+	if (strstarts(ss->name, ".taglist.init"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".arch.info.init"))
+	if (strstarts(ss->name, ".arch.info.init"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".proc.info.init"))
+	if (strstarts(ss->name, ".proc.info.init"))
 		return SS_TYPE_IGNORED;
 	/* .pci_fixup_* sections really should be treated as global rodata
 	   referenced only from quirks.c */
-	if (starts_with(ss->name, ".pci_fixup_"))
+	if (strstarts(ss->name, ".pci_fixup_"))
 		return SS_TYPE_IGNORED;
 	/* .builtin_fw sections are similar to .pci_fixup */
-	if (starts_with(ss->name, ".builtin_fw"))
+	if (strstarts(ss->name, ".builtin_fw"))
 		return SS_TYPE_IGNORED;
 	/* same for .tracedata */
-	if (starts_with(ss->name, ".tracedata"))
+	if (strstarts(ss->name, ".tracedata"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".debug"))
+	if (strstarts(ss->name, ".debug"))
 		return SS_TYPE_IGNORED;
 	/* .eh_frame should probably be discarded, not ignored */
-	if (starts_with(ss->name, ".eh_frame"))
+	if (strstarts(ss->name, ".eh_frame"))
 		return SS_TYPE_IGNORED;
-	if (config->ignore_devinit && starts_with(ss->name, ".devinit"))
+	if (config->ignore_devinit && strstarts(ss->name, ".devinit"))
 		return SS_TYPE_IGNORED;
-	if (config->ignore_meminit && starts_with(ss->name, ".meminit"))
+	if (config->ignore_meminit && strstarts(ss->name, ".meminit"))
 		return SS_TYPE_IGNORED;
-	if (config->ignore_cpuinit && starts_with(ss->name, ".cpuinit"))
+	if (config->ignore_cpuinit && strstarts(ss->name, ".cpuinit"))
 		return SS_TYPE_IGNORED;
-	if (config->ignore_devinit && starts_with(ss->name, ".devexit"))
+	if (config->ignore_devinit && strstarts(ss->name, ".devexit"))
 		return SS_TYPE_IGNORED;
-	if (config->ignore_meminit && starts_with(ss->name, ".memexit"))
+	if (config->ignore_meminit && strstarts(ss->name, ".memexit"))
 		return SS_TYPE_IGNORED;
-	if (config->ignore_cpuinit && starts_with(ss->name, ".cpuexit"))
+	if (config->ignore_cpuinit && strstarts(ss->name, ".cpuexit"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".vgetcpu_mode") ||
-	    starts_with(ss->name, ".jiffies") ||
-	    starts_with(ss->name, ".wall_jiffies") ||
-	    starts_with(ss->name, ".vxtime") ||
-	    starts_with(ss->name, ".sys_tz") ||
-	    starts_with(ss->name, ".sysctl_vsyscall") ||
-	    starts_with(ss->name, ".xtime") ||
-	    starts_with(ss->name, ".xtime_lock") ||
-	    starts_with(ss->name, ".vsyscall"))
+	if (strstarts(ss->name, ".vgetcpu_mode") ||
+	    strstarts(ss->name, ".jiffies") ||
+	    strstarts(ss->name, ".wall_jiffies") ||
+	    strstarts(ss->name, ".vxtime") ||
+	    strstarts(ss->name, ".sys_tz") ||
+	    strstarts(ss->name, ".sysctl_vsyscall") ||
+	    strstarts(ss->name, ".xtime") ||
+	    strstarts(ss->name, ".xtime_lock") ||
+	    strstarts(ss->name, ".vsyscall"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".vdso"))
+	if (strstarts(ss->name, ".vdso"))
 		return SS_TYPE_IGNORED;
 
-	if (starts_with(ss->name, ".exit.text"))
+	if (strstarts(ss->name, ".exit.text"))
 		return SS_TYPE_TEXT;
-	if (starts_with(ss->name, ".exit.data"))
+	if (strstarts(ss->name, ".exit.data"))
 		return SS_TYPE_DATA;
 
-	if (starts_with(ss->name, ".text") ||
-	    starts_with(ss->name, ".kernel.text") ||
-	    starts_with(ss->name, ".devinit.text") ||
-	    starts_with(ss->name, ".meminit.text") ||
-	    starts_with(ss->name, ".cpuinit.text") ||
-	    starts_with(ss->name, ".devexit.text") ||
-	    starts_with(ss->name, ".memexit.text") ||
-	    starts_with(ss->name, ".cpuexit.text") ||
-	    starts_with(ss->name, ".ref.text") ||
-	    starts_with(ss->name, ".spinlock.text") ||
-	    starts_with(ss->name, ".kprobes.text") ||
-	    starts_with(ss->name, ".sched.text") ||
-	    (mode("keep-helper") && starts_with(ss->name, ".fixup")))
+	if (strstarts(ss->name, ".text") ||
+	    strstarts(ss->name, ".kernel.text") ||
+	    strstarts(ss->name, ".devinit.text") ||
+	    strstarts(ss->name, ".meminit.text") ||
+	    strstarts(ss->name, ".cpuinit.text") ||
+	    strstarts(ss->name, ".devexit.text") ||
+	    strstarts(ss->name, ".memexit.text") ||
+	    strstarts(ss->name, ".cpuexit.text") ||
+	    strstarts(ss->name, ".ref.text") ||
+	    strstarts(ss->name, ".spinlock.text") ||
+	    strstarts(ss->name, ".kprobes.text") ||
+	    strstarts(ss->name, ".sched.text") ||
+	    (mode("keep-helper") && strstarts(ss->name, ".fixup")))
 		return SS_TYPE_TEXT;
 
 	int n = -1;
@@ -2529,60 +2529,60 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    n == strlen(ss->name))
 		return ss->entsize == 1 ? SS_TYPE_STRING : SS_TYPE_RODATA;
 
-	if (starts_with(ss->name, ".rodata") ||
-	    starts_with(ss->name, ".kernel.rodata") ||
-	    starts_with(ss->name, ".devinit.rodata") ||
-	    starts_with(ss->name, ".meminit.rodata") ||
-	    starts_with(ss->name, ".cpuinit.rodata") ||
-	    starts_with(ss->name, ".devexit.rodata") ||
-	    starts_with(ss->name, ".memexit.rodata") ||
-	    starts_with(ss->name, ".cpuexit.rodata") ||
-	    starts_with(ss->name, ".ref.rodata") ||
-	    starts_with(ss->name, "__markers_strings") ||
-	    starts_with(ss->name, "__bug_table") ||
-	    (mode("keep-helper") && starts_with(ss->name, "__ex_table")))
+	if (strstarts(ss->name, ".rodata") ||
+	    strstarts(ss->name, ".kernel.rodata") ||
+	    strstarts(ss->name, ".devinit.rodata") ||
+	    strstarts(ss->name, ".meminit.rodata") ||
+	    strstarts(ss->name, ".cpuinit.rodata") ||
+	    strstarts(ss->name, ".devexit.rodata") ||
+	    strstarts(ss->name, ".memexit.rodata") ||
+	    strstarts(ss->name, ".cpuexit.rodata") ||
+	    strstarts(ss->name, ".ref.rodata") ||
+	    strstarts(ss->name, "__markers_strings") ||
+	    strstarts(ss->name, "__bug_table") ||
+	    (mode("keep-helper") && strstarts(ss->name, "__ex_table")))
 		return SS_TYPE_RODATA;
 
-	if (starts_with(ss->name, ".bss"))
+	if (strstarts(ss->name, ".bss"))
 		return SS_TYPE_DATA;
 
 	/* Ignore .data.percpu sections */
-	if (starts_with(ss->name, ".data.percpu") ||
-	    starts_with(ss->name, ".kernel.data.percpu"))
+	if (strstarts(ss->name, ".data.percpu") ||
+	    strstarts(ss->name, ".kernel.data.percpu"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".data") ||
-	    starts_with(ss->name, ".kernel.data") ||
-	    starts_with(ss->name, ".devinit.data") ||
-	    starts_with(ss->name, ".cpuinit.data") ||
-	    starts_with(ss->name, ".meminit.data") ||
-	    starts_with(ss->name, ".devexit.data") ||
-	    starts_with(ss->name, ".memexit.data") ||
-	    starts_with(ss->name, ".cpuexit.data") ||
-	    starts_with(ss->name, ".ref.data") ||
-	    starts_with(ss->name, "__markers"))
+	if (strstarts(ss->name, ".data") ||
+	    strstarts(ss->name, ".kernel.data") ||
+	    strstarts(ss->name, ".devinit.data") ||
+	    strstarts(ss->name, ".cpuinit.data") ||
+	    strstarts(ss->name, ".meminit.data") ||
+	    strstarts(ss->name, ".devexit.data") ||
+	    strstarts(ss->name, ".memexit.data") ||
+	    strstarts(ss->name, ".cpuexit.data") ||
+	    strstarts(ss->name, ".ref.data") ||
+	    strstarts(ss->name, "__markers"))
 		return SS_TYPE_DATA;
 
 	/* We replace all the ksymtab strings, so delete them */
 	if (strcmp(ss->name, "__ksymtab_strings") == 0)
 		return SS_TYPE_STRING;
-	if (starts_with(ss->name, "__ksymtab"))
+	if (strstarts(ss->name, "__ksymtab"))
 		return SS_TYPE_EXPORT;
 
 	if (is_table_section(ss->name, true, true))
 		return SS_TYPE_SPECIAL;
 
-	if (starts_with(ss->name, ".ARM."))
+	if (strstarts(ss->name, ".ARM."))
 		return SS_TYPE_SPECIAL;
 
-	if (starts_with(ss->name, ".note"))
+	if (strstarts(ss->name, ".note"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".comment"))
+	if (strstarts(ss->name, ".comment"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, "__param"))
+	if (strstarts(ss->name, "__param"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".exitcall.exit"))
+	if (strstarts(ss->name, ".exitcall.exit"))
 		return SS_TYPE_IGNORED;
-	if (starts_with(ss->name, ".modinfo"))
+	if (strstarts(ss->name, ".modinfo"))
 		return SS_TYPE_IGNORED;
 
 	return SS_TYPE_UNKNOWN;
@@ -2903,10 +2903,10 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 	span->patch = false;
 	span->bugpatch = false;
 	span->datapatch = false;
-	span->precallable = starts_with(ss->name, ".ksplice_call_pre_apply") ||
-	    starts_with(ss->name, ".ksplice_call_check_apply") ||
-	    starts_with(ss->name, ".ksplice_call_fail_apply") ||
-	    starts_with(ss->name, ".ksplice_call_post_remove");
+	span->precallable = strstarts(ss->name, ".ksplice_call_pre_apply") ||
+	    strstarts(ss->name, ".ksplice_call_check_apply") ||
+	    strstarts(ss->name, ".ksplice_call_fail_apply") ||
+	    strstarts(ss->name, ".ksplice_call_post_remove");
 	span->match = NULL;
 	span->shift = 0;
 	asymbol **symp = symbolp_scan(ss, span->start);

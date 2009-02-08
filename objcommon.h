@@ -248,7 +248,7 @@ void *sect_do_grow(struct supersect *ss, size_t n, size_t size, int alignment);
 void sect_do_copy(struct supersect *dest_ss, void *dest,
 		  struct supersect *src_ss, const void *src, size_t n);
 
-#define starts_with(str, prefix)			\
+#define strstarts(str, prefix)				\
 	(strncmp(str, prefix, strlen(prefix)) == 0)
 #define ends_with(str, suffix)						\
 	(strlen(str) >= strlen(suffix) &&				\
