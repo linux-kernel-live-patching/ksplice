@@ -44,8 +44,7 @@ extern const typeof(void (*)(void)) ksplice_call_reverse[],
 extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 #endif
 #ifdef KSPLICE_STANDALONE
-extern struct ksplice_system_map ksplice_system_map[],
-    ksplice_system_map_end[];
+extern struct ksplice_system_map ksplice_system_map[], ksplice_system_map_end[];
 #endif /* KSPLICE_STANDALONE */
 
 #define change KSPLICE_UNIQ(change)

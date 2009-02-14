@@ -28,8 +28,7 @@ extern struct ksplice_symbol ksplice_symbols[], ksplice_symbols_end[];
 extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 #endif
 #ifdef KSPLICE_STANDALONE
-extern struct ksplice_system_map ksplice_system_map[],
-    ksplice_system_map_end[];
+extern struct ksplice_system_map ksplice_system_map[], ksplice_system_map_end[];
 #endif /* KSPLICE_STANDALONE */
 
 /* Defined in primary.c */
