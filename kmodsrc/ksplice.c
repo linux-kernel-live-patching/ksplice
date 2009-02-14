@@ -1009,7 +1009,8 @@ static abort_t apply_update(struct update *update)
 					goto out;
 				continue;
 			}
-			retval = use_module(change->primary, change->target);
+			retval = use_module(change->new_code_mod,
+					    change->target);
 			if (retval != 1) {
 				ret = UNEXPECTED;
 				goto out;
@@ -1138,7 +1139,7 @@ static int add_kallsyms_values(void *data, const char *name,
 			       struct module *owner, unsigned long val)
 {
 	struct ksplice_lookup *lookup = data;
-	if (owner == lookup->change->primary ||
+	if (owner == lookup->change->new_code_mod ||
 	    !patches_module(owner, lookup->change->target))
 		return (__force int)OK;
 	return (__force int)add_matching_values(lookup, name, val);
@@ -1524,10 +1525,10 @@ static abort_t add_dependency_on_address(struct ksplice_mod_change *change,
 	if (m == NULL)
 		return OK;
 	list_for_each_entry(c, &change->update->changes, list) {
-		if (m == c->primary)
+		if (m == c->new_code_mod)
 			return OK;
 	}
-	if (use_module(change->primary, m) != 1)
+	if (use_module(change->new_code_mod, m) != 1)
 		return MODULE_BUSY;
 	return OK;
 }
@@ -1774,7 +1775,8 @@ static abort_t create_module_list_entry(struct ksplice_mod_change *change,
 	    kmalloc(sizeof(*entry), GFP_KERNEL);
 	if (entry == NULL)
 		return OUT_OF_MEMORY;
-	entry->new_code_mod_name = kstrdup(change->primary->name, GFP_KERNEL);
+	entry->new_code_mod_name =
+	    kstrdup(change->new_code_mod->name, GFP_KERNEL);
 	if (entry->new_code_mod_name == NULL) {
 		kfree(entry);
 		return OUT_OF_MEMORY;
@@ -1995,7 +1997,7 @@ static abort_t try_addr(struct ksplice_mod_change *change,
 	abort_t ret;
 	const struct module *run_module = __module_address(run_addr);
 
-	if (run_module == change->primary) {
+	if (run_module == change->new_code_mod) {
 		ksdebug(change, "run-pre: unexpected address %lx in primary "
 			"module %s for sect %s\n", run_addr, run_module->name,
 			sect->symbol->label);
@@ -2231,7 +2233,8 @@ static abort_t brute_search_all(struct ksplice_mod_change *change,
 	change->update->debug = 0;
 
 	list_for_each_entry(m, &modules, list) {
-		if (!patches_module(m, change->target) || m == change->primary)
+		if (!patches_module(m, change->target) ||
+		    m == change->new_code_mod)
 			continue;
 		ret = brute_search(change, sect, m->module_core, m->core_size,
 				   vals);
@@ -2900,12 +2903,12 @@ static int __apply_patches(void *updateptr)
 		return (__force int)ret;
 
 	list_for_each_entry(change, &update->changes, list) {
-		if (try_module_get(change->primary) != 1) {
+		if (try_module_get(change->new_code_mod) != 1) {
 			struct ksplice_mod_change *change1;
 			list_for_each_entry(change1, &update->changes, list) {
 				if (change1 == change)
 					break;
-				module_put(change1->primary);
+				module_put(change1->new_code_mod);
 			}
 			module_put(THIS_MODULE);
 			return (__force int)UNEXPECTED;
@@ -2957,7 +2960,7 @@ static int __reverse_patches(void *updateptr)
 
 #ifdef CONFIG_MODULE_UNLOAD
 	list_for_each_entry(change, &update->changes, list) {
-		if (module_refcount(change->primary) != 1)
+		if (module_refcount(change->new_code_mod) != 1)
 			return (__force int)MODULE_BUSY;
 	}
 #endif /* CONFIG_MODULE_UNLOAD */
@@ -2994,7 +2997,7 @@ static int __reverse_patches(void *updateptr)
 	update->stage = STAGE_REVERSED;
 
 	list_for_each_entry(change, &update->changes, list)
-		module_put(change->primary);
+		module_put(change->new_code_mod);
 
 	list_for_each_entry(entry, &update->ksplice_module_list, update_list)
 		list_del(&entry->list);
@@ -4186,7 +4189,7 @@ static struct ksplice_mod_change bootstrap_mod_change = {
 	.target_name = NULL,
 	.target = NULL,
 	.map_printk = MAP_PRINTK,
-	.primary = THIS_MODULE,
+	.new_code_mod = THIS_MODULE,
 	.new_code.system_map = ksplice_system_map,
 	.new_code.system_map_end = ksplice_system_map_end,
 };

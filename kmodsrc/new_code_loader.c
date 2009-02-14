@@ -55,7 +55,7 @@ struct ksplice_mod_change change = {
 #ifdef KSPLICE_STANDALONE
 	.map_printk = MAP_PRINTK,
 #endif /* KSPLICE_STANDALONE */
-	.primary = THIS_MODULE,
+	.new_code_mod = THIS_MODULE,
 	.new_code = {
 		.relocs = ksplice_relocs,
 		.relocs_end = ksplice_relocs_end,

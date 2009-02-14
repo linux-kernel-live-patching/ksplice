@@ -200,10 +200,10 @@ struct ksplice_code {
 
 /**
  * struct ksplice_mod_change - Data for one module modified by a Ksplice update
- * @name:			The name of the primary module for the change
+ * @name:			The name of the new_code module for the change
  * @kid:			The Ksplice unique identifier for the change
  * @target_name:		The name of the module modified by the change
- * @primary:			The primary module associated with the change
+ * @new_code_mod:		The new_code module for the change
  * @old_code:			The old code for run-pre matching
  * @new_code:			The new code to switch to
  * @patches:			The function replacements in the change
@@ -220,7 +220,7 @@ struct ksplice_mod_change {
 #ifdef KSPLICE_STANDALONE
 	unsigned long map_printk;
 #endif /* KSPLICE_STANDALONE */
-	struct module *primary;
+	struct module *new_code_mod;
 	struct ksplice_code old_code, new_code;
 	struct ksplice_patch *patches, *patches_end;
 	const typeof(int (*)(void)) *pre_apply, *pre_apply_end, *check_apply,
