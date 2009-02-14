@@ -31,7 +31,7 @@ extern struct paravirt_patch_site parainstructions[], parainstructions_end[];
 extern struct ksplice_system_map ksplice_system_map[], ksplice_system_map_end[];
 #endif /* KSPLICE_STANDALONE */
 
-/* Defined in primary.c */
+/* Defined in new_code_loader.c */
 #define change KSPLICE_UNIQ(change)
 extern struct ksplice_mod_change change;
 

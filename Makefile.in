@@ -59,8 +59,8 @@ kmodsrcfiles = \
 	kmodsrc/ksplice.h \
 	kmodsrc/x86/ksplice-arch.c \
 	kmodsrc/arm/ksplice-arch.c \
-	kmodsrc/helper.c \
-	kmodsrc/primary.c \
+	kmodsrc/old_code_loader.c \
+	kmodsrc/new_code_loader.c \
 	kmodsrc/Makefile \
 	kmodsrc/ksplice.lds.S \
 	kmodsrc/ksplice-rmsyms.lds \
