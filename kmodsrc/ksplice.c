@@ -122,8 +122,8 @@ struct update {
 	bool debug_continue_line;
 #endif /* CONFIG_DEBUG_FS */
 	bool partial;		/* is it OK if some target mods aren't loaded */
-	struct list_head packs;	/* packs for loaded target mods */
-	struct list_head unused_packs;	/* packs for non-loaded target mods */
+	struct list_head changes,	/* changes for loaded target mods */
+	    unused_changes;		/* changes for non-loaded target mods */
 	struct list_head conflicts;
 	struct list_head list;
 	struct list_head ksplice_module_list;
@@ -183,7 +183,7 @@ struct candidate_val {
 /* private struct used by init_symbol_array */
 struct ksplice_lookup {
 /* input */
-	struct ksplice_pack *pack;
+	struct ksplice_mod_change *change;
 	struct ksplice_symbol **arr;
 	size_t size;
 /* output */
@@ -480,116 +480,118 @@ extern const unsigned long __start___kcrctab_gpl_future[];
 static struct update *init_ksplice_update(const char *kid);
 static void cleanup_ksplice_update(struct update *update);
 static void maybe_cleanup_ksplice_update(struct update *update);
-static void add_to_update(struct ksplice_pack *pack, struct update *update);
+static void add_to_update(struct ksplice_mod_change *change,
+			  struct update *update);
 static int ksplice_sysfs_init(struct update *update);
 
 /* Preparing the relocations and patches for application */
 static abort_t apply_update(struct update *update);
-static abort_t prepare_pack(struct ksplice_pack *pack);
-static abort_t finalize_pack(struct ksplice_pack *pack);
-static abort_t finalize_patches(struct ksplice_pack *pack);
-static abort_t add_dependency_on_address(struct ksplice_pack *pack,
+static abort_t prepare_change(struct ksplice_mod_change *change);
+static abort_t finalize_change(struct ksplice_mod_change *change);
+static abort_t finalize_patches(struct ksplice_mod_change *change);
+static abort_t add_dependency_on_address(struct ksplice_mod_change *change,
 					 unsigned long addr);
 static abort_t map_trampoline_pages(struct update *update);
 static void unmap_trampoline_pages(struct update *update);
 static void *map_writable(void *addr, size_t len);
-static abort_t apply_relocs(struct ksplice_pack *pack,
+static abort_t apply_relocs(struct ksplice_mod_change *change,
 			    const struct ksplice_reloc *relocs,
 			    const struct ksplice_reloc *relocs_end);
-static abort_t apply_reloc(struct ksplice_pack *pack,
+static abort_t apply_reloc(struct ksplice_mod_change *change,
 			   const struct ksplice_reloc *r);
-static abort_t apply_howto_reloc(struct ksplice_pack *pack,
+static abort_t apply_howto_reloc(struct ksplice_mod_change *change,
 				 const struct ksplice_reloc *r);
-static abort_t apply_howto_date(struct ksplice_pack *pack,
+static abort_t apply_howto_date(struct ksplice_mod_change *change,
 				const struct ksplice_reloc *r);
-static abort_t read_reloc_value(struct ksplice_pack *pack,
+static abort_t read_reloc_value(struct ksplice_mod_change *change,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp);
-static abort_t write_reloc_value(struct ksplice_pack *pack,
+static abort_t write_reloc_value(struct ksplice_mod_change *change,
 				 const struct ksplice_reloc *r,
 				 unsigned long addr, unsigned long sym_addr);
-static abort_t create_module_list_entry(struct ksplice_pack *pack,
+static abort_t create_module_list_entry(struct ksplice_mod_change *change,
 					bool to_be_applied);
 static void cleanup_module_list_entries(struct update *update);
 static void __attribute__((noreturn)) ksplice_deleted(void);
 
 /* run-pre matching */
-static abort_t match_pack_sections(struct ksplice_pack *pack,
+static abort_t match_change_sections(struct ksplice_mod_change *change,
 				   bool consider_data_sections);
-static abort_t find_section(struct ksplice_pack *pack,
+static abort_t find_section(struct ksplice_mod_change *change,
 			    struct ksplice_section *sect);
-static abort_t try_addr(struct ksplice_pack *pack,
+static abort_t try_addr(struct ksplice_mod_change *change,
 			struct ksplice_section *sect,
 			unsigned long run_addr,
 			struct list_head *safety_records,
 			enum run_pre_mode mode);
-static abort_t run_pre_cmp(struct ksplice_pack *pack,
+static abort_t run_pre_cmp(struct ksplice_mod_change *change,
 			   const struct ksplice_section *sect,
 			   unsigned long run_addr,
 			   struct list_head *safety_records,
 			   enum run_pre_mode mode);
 #ifndef CONFIG_FUNCTION_DATA_SECTIONS
 /* defined in arch/ARCH/kernel/ksplice-arch.c */
-static abort_t arch_run_pre_cmp(struct ksplice_pack *pack,
+static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 				struct ksplice_section *sect,
 				unsigned long run_addr,
 				struct list_head *safety_records,
 				enum run_pre_mode mode);
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
-static void print_bytes(struct ksplice_pack *pack,
+static void print_bytes(struct ksplice_mod_change *change,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec);
 #if defined(KSPLICE_STANDALONE) && !defined(CONFIG_KALLSYMS)
-static abort_t brute_search(struct ksplice_pack *pack,
+static abort_t brute_search(struct ksplice_mod_change *change,
 			    struct ksplice_section *sect,
 			    const void *start, unsigned long len,
 			    struct list_head *vals);
-static abort_t brute_search_all(struct ksplice_pack *pack,
+static abort_t brute_search_all(struct ksplice_mod_change *change,
 				struct ksplice_section *sect,
 				struct list_head *vals);
 #endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
 static const struct ksplice_reloc *
-init_reloc_search(struct ksplice_pack *pack,
+init_reloc_search(struct ksplice_mod_change *change,
 		  const struct ksplice_section *sect);
 static const struct ksplice_reloc *find_reloc(const struct ksplice_reloc *start,
 					      const struct ksplice_reloc *end,
 					      unsigned long address,
 					      unsigned long size);
-static abort_t lookup_reloc(struct ksplice_pack *pack,
+static abort_t lookup_reloc(struct ksplice_mod_change *change,
 			    const struct ksplice_reloc **fingerp,
 			    unsigned long addr,
 			    const struct ksplice_reloc **relocp);
-static abort_t handle_reloc(struct ksplice_pack *pack,
+static abort_t handle_reloc(struct ksplice_mod_change *change,
 			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode);
-static abort_t handle_howto_date(struct ksplice_pack *pack,
+static abort_t handle_howto_date(struct ksplice_mod_change *change,
 				 const struct ksplice_section *sect,
 				 const struct ksplice_reloc *r,
 				 unsigned long run_addr,
 				 enum run_pre_mode mode);
-static abort_t handle_howto_reloc(struct ksplice_pack *pack,
+static abort_t handle_howto_reloc(struct ksplice_mod_change *change,
 				  const struct ksplice_section *sect,
 				  const struct ksplice_reloc *r,
 				  unsigned long run_addr,
 				  enum run_pre_mode mode);
-static struct ksplice_section *symbol_section(struct ksplice_pack *pack,
+static struct ksplice_section *symbol_section(struct ksplice_mod_change *change,
 					      const struct ksplice_symbol *sym);
 static int compare_section_labels(const void *va, const void *vb);
 static int symbol_section_bsearch_compare(const void *a, const void *b);
-static const struct ksplice_reloc *patch_reloc(struct ksplice_pack *pack,
-					       const struct ksplice_patch *p);
+static const struct ksplice_reloc *
+patch_reloc(struct ksplice_mod_change *change,
+	    const struct ksplice_patch *p);
 
 /* Computing possible addresses for symbols */
-static abort_t lookup_symbol(struct ksplice_pack *pack,
+static abort_t lookup_symbol(struct ksplice_mod_change *change,
 			     const struct ksplice_symbol *ksym,
 			     struct list_head *vals);
-static void cleanup_symbol_arrays(struct ksplice_pack *pack);
-static abort_t init_symbol_arrays(struct ksplice_pack *pack);
-static abort_t init_symbol_array(struct ksplice_pack *pack,
+static void cleanup_symbol_arrays(struct ksplice_mod_change *change);
+static abort_t init_symbol_arrays(struct ksplice_mod_change *change);
+static abort_t init_symbol_array(struct ksplice_mod_change *change,
 				 struct ksplice_symbol *start,
 				 struct ksplice_symbol *end);
-static abort_t uniquify_symbols(struct ksplice_pack *pack);
+static abort_t uniquify_symbols(struct ksplice_mod_change *change);
 static abort_t add_matching_values(struct ksplice_lookup *lookup,
 				   const char *sym_name, unsigned long sym_val);
 static bool add_export_values(const struct symsearch *syms,
@@ -604,15 +606,15 @@ static int add_kallsyms_values(void *data, const char *name,
 #endif /* CONFIG_KALLSYMS */
 #ifdef KSPLICE_STANDALONE
 static abort_t
-add_system_map_candidates(struct ksplice_pack *pack,
+add_system_map_candidates(struct ksplice_mod_change *change,
 			  const struct ksplice_system_map *start,
 			  const struct ksplice_system_map *end,
 			  const char *label, struct list_head *vals);
 static int compare_system_map(const void *a, const void *b);
 static int system_map_bsearch_compare(const void *key, const void *elt);
 #endif /* KSPLICE_STANDALONE */
-static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
-				 struct list_head *vals);
+static abort_t new_export_lookup(struct ksplice_mod_change *ichange,
+				 const char *name, struct list_head *vals);
 
 /* Atomic update trampoline insertion and removal */
 static abort_t apply_patches(struct update *update);
@@ -634,26 +636,27 @@ static bool is_stop_machine(const struct task_struct *t);
 static void cleanup_conflicts(struct update *update);
 static void print_conflicts(struct update *update);
 static void insert_trampoline(struct ksplice_patch *p);
-static abort_t verify_trampoline(struct ksplice_pack *pack,
+static abort_t verify_trampoline(struct ksplice_mod_change *change,
 				 const struct ksplice_patch *p);
 static void remove_trampoline(const struct ksplice_patch *p);
 
-static abort_t create_labelval(struct ksplice_pack *pack,
+static abort_t create_labelval(struct ksplice_mod_change *change,
 			       struct ksplice_symbol *ksym,
 			       unsigned long val, int status);
-static abort_t create_safety_record(struct ksplice_pack *pack,
+static abort_t create_safety_record(struct ksplice_mod_change *change,
 				    const struct ksplice_section *sect,
 				    struct list_head *record_list,
 				    unsigned long run_addr,
 				    unsigned long run_size);
-static abort_t add_candidate_val(struct ksplice_pack *pack,
+static abort_t add_candidate_val(struct ksplice_mod_change *change,
 				 struct list_head *vals, unsigned long val);
 static void release_vals(struct list_head *vals);
-static void set_temp_labelvals(struct ksplice_pack *pack, int status_val);
+static void set_temp_labelvals(struct ksplice_mod_change *change, int status);
 
-static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
+static int contains_canary(struct ksplice_mod_change *change,
+			   unsigned long blank_addr,
 			   const struct ksplice_reloc_howto *howto);
-static unsigned long follow_trampolines(struct ksplice_pack *pack,
+static unsigned long follow_trampolines(struct ksplice_mod_change *change,
 					unsigned long addr);
 static bool patches_module(const struct module *a, const struct module *b);
 static bool strstarts(const char *str, const char *prefix);
@@ -668,8 +671,8 @@ static abort_t init_debug_buf(struct update *update);
 static void clear_debug_buf(struct update *update);
 static int __attribute__((format(printf, 2, 3)))
 _ksdebug(struct update *update, const char *fmt, ...);
-#define ksdebug(pack, fmt, ...) \
-	_ksdebug(pack->update, fmt, ## __VA_ARGS__)
+#define ksdebug(change, fmt, ...) \
+	_ksdebug(change->update, fmt, ## __VA_ARGS__)
 
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 /* Functions defined here that will be exported in later kernels */
@@ -701,20 +704,21 @@ static struct module *__module_address(unsigned long addr);
 /* Architecture-specific functions defined in arch/ARCH/kernel/ksplice-arch.c */
 
 /* Prepare a trampoline for the given patch */
-static abort_t prepare_trampoline(struct ksplice_pack *pack,
+static abort_t prepare_trampoline(struct ksplice_mod_change *change,
 				  struct ksplice_patch *p);
 /* What address does the trampoline at addr jump to? */
-static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
-				 unsigned long *new_addr);
+static abort_t trampoline_target(struct ksplice_mod_change *change,
+				 unsigned long addr, unsigned long *new_addr);
 /* Hook to handle pc-relative jumps inserted by parainstructions */
-static abort_t handle_paravirt(struct ksplice_pack *pack, unsigned long pre,
-			       unsigned long run, int *matched);
+static abort_t handle_paravirt(struct ksplice_mod_change *change,
+			       unsigned long pre, unsigned long run,
+			       int *matched);
 /* Called for relocations of type KSPLICE_HOWTO_BUG */
-static abort_t handle_bug(struct ksplice_pack *pack,
+static abort_t handle_bug(struct ksplice_mod_change *change,
 			  const struct ksplice_reloc *r,
 			  unsigned long run_addr);
 /* Called for relocations of type KSPLICE_HOWTO_EXTABLE */
-static abort_t handle_extable(struct ksplice_pack *pack,
+static abort_t handle_extable(struct ksplice_mod_change *change,
 			      const struct ksplice_reloc *r,
 			      unsigned long run_addr);
 /* Is address p on the stack of the given thread? */
@@ -738,13 +742,13 @@ static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 	} while (0)
 
 /**
- * init_ksplice_pack() - Initializes a ksplice pack
- * @pack:	The pack to be initialized.  All of the public fields of the
- * 		pack and its associated data structures should be populated
+ * init_ksplice_mod_change() - Initializes a ksplice change
+ * @change:	The change to be initialized.  All of the public fields of the
+ * 		change and its associated data structures should be populated
  * 		before this function is called.  The values of the private
  * 		fields will be ignored.
  **/
-int init_ksplice_pack(struct ksplice_pack *pack)
+int init_ksplice_mod_change(struct ksplice_mod_change *change)
 {
 	struct update *update;
 	struct ksplice_patch *p;
@@ -756,37 +760,37 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 		return -1;
 #endif /* KSPLICE_STANDALONE */
 
-	INIT_LIST_HEAD(&pack->temp_labelvals);
-	INIT_LIST_HEAD(&pack->safety_records);
+	INIT_LIST_HEAD(&change->temp_labelvals);
+	INIT_LIST_HEAD(&change->safety_records);
 
-	sort(pack->helper_relocs,
-	     pack->helper_relocs_end - pack->helper_relocs,
-	     sizeof(*pack->helper_relocs), compare_relocs, NULL);
-	sort(pack->primary_relocs,
-	     pack->primary_relocs_end - pack->primary_relocs,
-	     sizeof(*pack->primary_relocs), compare_relocs, NULL);
-	sort(pack->helper_sections,
-	     pack->helper_sections_end - pack->helper_sections,
-	     sizeof(*pack->helper_sections), compare_section_labels, NULL);
+	sort(change->helper_relocs,
+	     change->helper_relocs_end - change->helper_relocs,
+	     sizeof(*change->helper_relocs), compare_relocs, NULL);
+	sort(change->primary_relocs,
+	     change->primary_relocs_end - change->primary_relocs,
+	     sizeof(*change->primary_relocs), compare_relocs, NULL);
+	sort(change->helper_sections,
+	     change->helper_sections_end - change->helper_sections,
+	     sizeof(*change->helper_sections), compare_section_labels, NULL);
 #ifdef KSPLICE_STANDALONE
-	sort(pack->primary_system_map,
-	     pack->primary_system_map_end - pack->primary_system_map,
-	     sizeof(*pack->primary_system_map), compare_system_map, NULL);
-	sort(pack->helper_system_map,
-	     pack->helper_system_map_end - pack->helper_system_map,
-	     sizeof(*pack->helper_system_map), compare_system_map, NULL);
+	sort(change->primary_system_map,
+	     change->primary_system_map_end - change->primary_system_map,
+	     sizeof(*change->primary_system_map), compare_system_map, NULL);
+	sort(change->helper_system_map,
+	     change->helper_system_map_end - change->helper_system_map,
+	     sizeof(*change->helper_system_map), compare_system_map, NULL);
 #endif /* KSPLICE_STANDALONE */
 
-	for (p = pack->patches; p < pack->patches_end; p++)
+	for (p = change->patches; p < change->patches_end; p++)
 		p->vaddr = NULL;
-	for (s = pack->helper_sections; s < pack->helper_sections_end; s++)
+	for (s = change->helper_sections; s < change->helper_sections_end; s++)
 		s->match_map = NULL;
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		const struct ksplice_reloc *r = patch_reloc(pack, p);
+	for (p = change->patches; p < change->patches_end; p++) {
+		const struct ksplice_reloc *r = patch_reloc(change, p);
 		if (r == NULL)
 			return -ENOENT;
 		if (p->type == KSPLICE_PATCH_DATA) {
-			s = symbol_section(pack, r->symbol);
+			s = symbol_section(change, r->symbol);
 			if (s == NULL)
 				return -ENOENT;
 			/* Ksplice creates KSPLICE_PATCH_DATA patches in order
@@ -803,17 +807,17 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 
 	mutex_lock(&module_mutex);
 	list_for_each_entry(update, &updates, list) {
-		if (strcmp(pack->kid, update->kid) == 0) {
+		if (strcmp(change->kid, update->kid) == 0) {
 			if (update->stage != STAGE_PREPARING) {
 				ret = -EPERM;
 				goto out;
 			}
-			add_to_update(pack, update);
+			add_to_update(change, update);
 			ret = 0;
 			goto out;
 		}
 	}
-	update = init_ksplice_update(pack->kid);
+	update = init_ksplice_update(change->kid);
 	if (update == NULL) {
 		ret = -ENOMEM;
 		goto out;
@@ -823,48 +827,48 @@ int init_ksplice_pack(struct ksplice_pack *pack)
 		cleanup_ksplice_update(update);
 		goto out;
 	}
-	add_to_update(pack, update);
+	add_to_update(change, update);
 out:
 	mutex_unlock(&module_mutex);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(init_ksplice_pack);
+EXPORT_SYMBOL_GPL(init_ksplice_mod_change);
 
 /**
- * cleanup_ksplice_pack() - Cleans up a pack
- * @pack:	The pack to be cleaned up
+ * cleanup_ksplice_mod_change() - Cleans up a change
+ * @change:	The change to be cleaned up
  */
-void cleanup_ksplice_pack(struct ksplice_pack *pack)
+void cleanup_ksplice_mod_change(struct ksplice_mod_change *change)
 {
-	if (pack->update == NULL)
+	if (change->update == NULL)
 		return;
 
 	mutex_lock(&module_mutex);
-	if (pack->update->stage == STAGE_APPLIED) {
-		/* If the pack wasn't actually applied (because we
+	if (change->update->stage == STAGE_APPLIED) {
+		/* If the change wasn't actually applied (because we
 		 * only applied this update to loaded modules and this
-		 * target was not loaded), then unregister the pack
-		 * from the list of unused packs.
+		 * target was not loaded), then unregister the change
+		 * from the list of unused changes.
 		 */
-		struct ksplice_pack *p;
+		struct ksplice_mod_change *c;
 		bool found = false;
 
-		list_for_each_entry(p, &pack->update->unused_packs, list) {
-			if (p == pack)
+		list_for_each_entry(c, &change->update->unused_changes, list) {
+			if (c == change)
 				found = true;
 		}
 		if (found)
-			list_del(&pack->list);
+			list_del(&change->list);
 		mutex_unlock(&module_mutex);
 		return;
 	}
-	list_del(&pack->list);
-	if (pack->update->stage == STAGE_PREPARING)
-		maybe_cleanup_ksplice_update(pack->update);
-	pack->update = NULL;
+	list_del(&change->list);
+	if (change->update->stage == STAGE_PREPARING)
+		maybe_cleanup_ksplice_update(change->update);
+	change->update = NULL;
 	mutex_unlock(&module_mutex);
 }
-EXPORT_SYMBOL_GPL(cleanup_ksplice_pack);
+EXPORT_SYMBOL_GPL(cleanup_ksplice_mod_change);
 
 static struct update *init_ksplice_update(const char *kid)
 {
@@ -889,8 +893,8 @@ static struct update *init_ksplice_update(const char *kid)
 		kfree(update);
 		return NULL;
 	}
-	INIT_LIST_HEAD(&update->packs);
-	INIT_LIST_HEAD(&update->unused_packs);
+	INIT_LIST_HEAD(&update->changes);
+	INIT_LIST_HEAD(&update->unused_changes);
 	INIT_LIST_HEAD(&update->ksplice_module_list);
 	if (init_debug_buf(update) != OK) {
 		module_put(THIS_MODULE);
@@ -919,10 +923,10 @@ static void cleanup_ksplice_update(struct update *update)
 	module_put(THIS_MODULE);
 }
 
-/* Clean up the update if it no longer has any packs */
+/* Clean up the update if it no longer has any changes */
 static void maybe_cleanup_ksplice_update(struct update *update)
 {
-	if (list_empty(&update->packs) && list_empty(&update->unused_packs))
+	if (list_empty(&update->changes) && list_empty(&update->unused_changes))
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 		kobject_put(&update->kobj);
 #else /* LINUX_VERSION_CODE < */
@@ -931,10 +935,11 @@ static void maybe_cleanup_ksplice_update(struct update *update)
 #endif /* LINUX_VERSION_CODE */
 }
 
-static void add_to_update(struct ksplice_pack *pack, struct update *update)
+static void add_to_update(struct ksplice_mod_change *change,
+			  struct update *update)
 {
-	pack->update = update;
-	list_add(&pack->list, &update->unused_packs);
+	change->update = update;
+	list_add(&change->list, &update->unused_changes);
 }
 
 static int ksplice_sysfs_init(struct update *update)
@@ -977,58 +982,58 @@ static int ksplice_sysfs_init(struct update *update)
 
 static abort_t apply_update(struct update *update)
 {
-	struct ksplice_pack *pack, *n;
+	struct ksplice_mod_change *change, *n;
 	abort_t ret;
 	int retval;
 
-	list_for_each_entry(pack, &update->packs, list) {
-		ret = create_module_list_entry(pack, true);
+	list_for_each_entry(change, &update->changes, list) {
+		ret = create_module_list_entry(change, true);
 		if (ret != OK)
 			goto out;
 	}
 
-	list_for_each_entry_safe(pack, n, &update->unused_packs, list) {
-		if (strcmp(pack->target_name, "vmlinux") == 0) {
-			pack->target = NULL;
-		} else if (pack->target == NULL) {
-			pack->target = find_module(pack->target_name);
-			if (pack->target == NULL ||
-			    !module_is_live(pack->target)) {
+	list_for_each_entry_safe(change, n, &update->unused_changes, list) {
+		if (strcmp(change->target_name, "vmlinux") == 0) {
+			change->target = NULL;
+		} else if (change->target == NULL) {
+			change->target = find_module(change->target_name);
+			if (change->target == NULL ||
+			    !module_is_live(change->target)) {
 				if (!update->partial) {
 					ret = TARGET_NOT_LOADED;
 					goto out;
 				}
-				ret = create_module_list_entry(pack, false);
+				ret = create_module_list_entry(change, false);
 				if (ret != OK)
 					goto out;
 				continue;
 			}
-			retval = use_module(pack->primary, pack->target);
+			retval = use_module(change->primary, change->target);
 			if (retval != 1) {
 				ret = UNEXPECTED;
 				goto out;
 			}
 		}
-		ret = create_module_list_entry(pack, true);
+		ret = create_module_list_entry(change, true);
 		if (ret != OK)
 			goto out;
-		list_del(&pack->list);
-		list_add_tail(&pack->list, &update->packs);
+		list_del(&change->list);
+		list_add_tail(&change->list, &update->changes);
 
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-		if (pack->target == NULL) {
-			apply_paravirt(pack->primary_parainstructions,
-				       pack->primary_parainstructions_end);
-			apply_paravirt(pack->helper_parainstructions,
-				       pack->helper_parainstructions_end);
+		if (change->target == NULL) {
+			apply_paravirt(change->primary_parainstructions,
+				       change->primary_parainstructions_end);
+			apply_paravirt(change->helper_parainstructions,
+				       change->helper_parainstructions_end);
 		}
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const struct ksplice_section *sect;
-		for (sect = pack->primary_sections;
-		     sect < pack->primary_sections_end; sect++) {
+		for (sect = change->primary_sections;
+		     sect < change->primary_sections_end; sect++) {
 			struct safety_record *rec = kmalloc(sizeof(*rec),
 							    GFP_KERNEL);
 			if (rec == NULL) {
@@ -1038,30 +1043,30 @@ static abort_t apply_update(struct update *update)
 			rec->addr = sect->address;
 			rec->size = sect->size;
 			rec->label = sect->symbol->label;
-			list_add(&rec->list, &pack->safety_records);
+			list_add(&rec->list, &change->safety_records);
 		}
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
-		ret = init_symbol_arrays(pack);
+	list_for_each_entry(change, &update->changes, list) {
+		ret = init_symbol_arrays(change);
 		if (ret != OK) {
-			cleanup_symbol_arrays(pack);
+			cleanup_symbol_arrays(change);
 			goto out;
 		}
-		ret = prepare_pack(pack);
-		cleanup_symbol_arrays(pack);
+		ret = prepare_change(change);
+		cleanup_symbol_arrays(change);
 		if (ret != OK)
 			goto out;
 	}
 	ret = apply_patches(update);
 out:
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		struct ksplice_section *s;
 		if (update->stage == STAGE_PREPARING)
-			clear_list(&pack->safety_records, struct safety_record,
-				   list);
-		for (s = pack->helper_sections; s < pack->helper_sections_end;
-		     s++) {
+			clear_list(&change->safety_records,
+				   struct safety_record, list);
+		for (s = change->helper_sections;
+		     s < change->helper_sections_end; s++) {
 			if (s->match_map != NULL) {
 				vfree(s->match_map);
 				s->match_map = NULL;
@@ -1120,7 +1125,7 @@ static abort_t add_matching_values(struct ksplice_lookup *lookup,
 		struct ksplice_symbol *sym = *symp;
 		if (sym->name == NULL || strcmp(sym_name, sym->name) != 0)
 			break;
-		ret = add_candidate_val(lookup->pack, sym->vals, sym_val);
+		ret = add_candidate_val(lookup->change, sym->vals, sym_val);
 		if (ret != OK)
 			return ret;
 	}
@@ -1132,8 +1137,8 @@ static int add_kallsyms_values(void *data, const char *name,
 			       struct module *owner, unsigned long val)
 {
 	struct ksplice_lookup *lookup = data;
-	if (owner == lookup->pack->primary ||
-	    !patches_module(owner, lookup->pack->target))
+	if (owner == lookup->change->primary ||
+	    !patches_module(owner, lookup->change->target))
 		return (__force int)OK;
 	return (__force int)add_matching_values(lookup, name, val);
 }
@@ -1155,10 +1160,10 @@ static bool add_export_values(const struct symsearch *syms,
 	return false;
 }
 
-static void cleanup_symbol_arrays(struct ksplice_pack *pack)
+static void cleanup_symbol_arrays(struct ksplice_mod_change *change)
 {
 	struct ksplice_symbol *sym;
-	for (sym = pack->primary_symbols; sym < pack->primary_symbols_end;
+	for (sym = change->primary_symbols; sym < change->primary_symbols_end;
 	     sym++) {
 		if (sym->vals != NULL) {
 			clear_list(sym->vals, struct candidate_val, list);
@@ -1166,7 +1171,8 @@ static void cleanup_symbol_arrays(struct ksplice_pack *pack)
 			sym->vals = NULL;
 		}
 	}
-	for (sym = pack->helper_symbols; sym < pack->helper_symbols_end; sym++) {
+	for (sym = change->helper_symbols; sym < change->helper_symbols_end;
+	     sym++) {
 		if (sym->vals != NULL) {
 			clear_list(sym->vals, struct candidate_val, list);
 			kfree(sym->vals);
@@ -1181,12 +1187,12 @@ static void cleanup_symbol_arrays(struct ksplice_pack *pack)
  * pieces of kernel symbol information by replacing all references to
  * the helper copy of symbols with references to the primary copy.
  */
-static abort_t uniquify_symbols(struct ksplice_pack *pack)
+static abort_t uniquify_symbols(struct ksplice_mod_change *change)
 {
 	struct ksplice_reloc *r;
 	struct ksplice_section *s;
 	struct ksplice_symbol *sym, **sym_arr, **symp;
-	size_t size = pack->primary_symbols_end - pack->primary_symbols;
+	size_t size = change->primary_symbols_end - change->primary_symbols;
 
 	if (size == 0)
 		return OK;
@@ -1195,14 +1201,14 @@ static abort_t uniquify_symbols(struct ksplice_pack *pack)
 	if (sym_arr == NULL)
 		return OUT_OF_MEMORY;
 
-	for (symp = sym_arr, sym = pack->primary_symbols;
-	     symp < sym_arr + size && sym < pack->primary_symbols_end;
+	for (symp = sym_arr, sym = change->primary_symbols;
+	     symp < sym_arr + size && sym < change->primary_symbols_end;
 	     sym++, symp++)
 		*symp = sym;
 
 	sort(sym_arr, size, sizeof(*sym_arr), compare_symbolp_labels, NULL);
 
-	for (r = pack->helper_relocs; r < pack->helper_relocs_end; r++) {
+	for (r = change->helper_relocs; r < change->helper_relocs_end; r++) {
 		symp = bsearch(&r->symbol, sym_arr, size, sizeof(*sym_arr),
 			       compare_symbolp_labels);
 		if (symp != NULL) {
@@ -1212,7 +1218,7 @@ static abort_t uniquify_symbols(struct ksplice_pack *pack)
 		}
 	}
 
-	for (s = pack->helper_sections; s < pack->helper_sections_end; s++) {
+	for (s = change->helper_sections; s < change->helper_sections_end; s++) {
 		symp = bsearch(&s->symbol, sym_arr, size, sizeof(*sym_arr),
 			       compare_symbolp_labels);
 		if (symp != NULL) {
@@ -1230,7 +1236,7 @@ static abort_t uniquify_symbols(struct ksplice_pack *pack)
  * Initialize the ksplice_symbol structures in the given array using
  * the kallsyms and exported symbol tables.
  */
-static abort_t init_symbol_array(struct ksplice_pack *pack,
+static abort_t init_symbol_array(struct ksplice_mod_change *change,
 				 struct ksplice_symbol *start,
 				 struct ksplice_symbol *end)
 {
@@ -1251,7 +1257,7 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 				continue;
 			ksym = find_symbol(name, NULL, NULL, true, false);
 			if (ksym == NULL) {
-				ksdebug(pack, "Could not find kernel_symbol "
+				ksdebug(change, "Could not find kernel_symbol "
 					"structure for %s\n", name);
 				continue;
 			}
@@ -1277,7 +1283,7 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 
 	sort(sym_arr, size, sizeof(*sym_arr), compare_symbolp_names, NULL);
 
-	lookup.pack = pack;
+	lookup.change = change;
 	lookup.arr = sym_arr;
 	lookup.size = size;
 	lookup.ret = OK;
@@ -1293,34 +1299,34 @@ static abort_t init_symbol_array(struct ksplice_pack *pack,
 	return ret;
 }
 
-/* Prepare the pack's ksplice_symbol structures for run-pre matching */
-static abort_t init_symbol_arrays(struct ksplice_pack *pack)
+/* Prepare the change's ksplice_symbol structures for run-pre matching */
+static abort_t init_symbol_arrays(struct ksplice_mod_change *change)
 {
 	abort_t ret;
 
-	ret = uniquify_symbols(pack);
+	ret = uniquify_symbols(change);
 	if (ret != OK)
 		return ret;
 
-	ret = init_symbol_array(pack, pack->helper_symbols,
-				pack->helper_symbols_end);
+	ret = init_symbol_array(change, change->helper_symbols,
+				change->helper_symbols_end);
 	if (ret != OK)
 		return ret;
 
-	ret = init_symbol_array(pack, pack->primary_symbols,
-				pack->primary_symbols_end);
+	ret = init_symbol_array(change, change->primary_symbols,
+				change->primary_symbols_end);
 	if (ret != OK)
 		return ret;
 
 	return OK;
 }
 
-static abort_t prepare_pack(struct ksplice_pack *pack)
+static abort_t prepare_change(struct ksplice_mod_change *change)
 {
 	abort_t ret;
 
-	ksdebug(pack, "Preparing and checking %s\n", pack->name);
-	ret = match_pack_sections(pack, false);
+	ksdebug(change, "Preparing and checking %s\n", change->name);
+	ret = match_change_sections(change, false);
 	if (ret == NO_MATCH) {
 		/* It is possible that by using relocations from .data sections
 		 * we can successfully run-pre match the rest of the sections.
@@ -1329,60 +1335,60 @@ static abort_t prepare_pack(struct ksplice_pack *pack)
 		 * the post code and then try to run-pre match the remaining
 		 * sections with the help of .data sections.
 		 */
-		ksdebug(pack, "Continuing without some sections; we might "
+		ksdebug(change, "Continuing without some sections; we might "
 			"find them later.\n");
-		ret = finalize_pack(pack);
+		ret = finalize_change(change);
 		if (ret != OK) {
-			ksdebug(pack, "Aborted.  Unable to continue without "
+			ksdebug(change, "Aborted.  Unable to continue without "
 				"the unmatched sections.\n");
 			return ret;
 		}
 
-		ksdebug(pack, "run-pre: Considering .data sections to find the "
-			"unmatched sections\n");
-		ret = match_pack_sections(pack, true);
+		ksdebug(change, "run-pre: Considering .data sections to find "
+			"the unmatched sections\n");
+		ret = match_change_sections(change, true);
 		if (ret != OK)
 			return ret;
 
-		ksdebug(pack, "run-pre: Found all previously unmatched "
+		ksdebug(change, "run-pre: Found all previously unmatched "
 			"sections\n");
 		return OK;
 	} else if (ret != OK) {
 		return ret;
 	}
 
-	return finalize_pack(pack);
+	return finalize_change(change);
 }
 
 /*
- * Finish preparing the pack for insertion into the kernel.
+ * Finish preparing the change for insertion into the kernel.
  * Afterwards, the replacement code should be ready to run and the
  * ksplice_patches should all be ready for trampoline insertion.
  */
-static abort_t finalize_pack(struct ksplice_pack *pack)
+static abort_t finalize_change(struct ksplice_mod_change *change)
 {
 	abort_t ret;
-	ret = apply_relocs(pack, pack->primary_relocs,
-			   pack->primary_relocs_end);
+	ret = apply_relocs(change, change->primary_relocs,
+			   change->primary_relocs_end);
 	if (ret != OK)
 		return ret;
 
-	ret = finalize_patches(pack);
+	ret = finalize_patches(change);
 	if (ret != OK)
 		return ret;
 
 	return OK;
 }
 
-static abort_t finalize_patches(struct ksplice_pack *pack)
+static abort_t finalize_patches(struct ksplice_mod_change *change)
 {
 	struct ksplice_patch *p;
 	struct safety_record *rec;
 	abort_t ret;
 
-	for (p = pack->patches; p < pack->patches_end; p++) {
+	for (p = change->patches; p < change->patches_end; p++) {
 		bool found = false;
-		list_for_each_entry(rec, &pack->safety_records, list) {
+		list_for_each_entry(rec, &change->safety_records, list) {
 			if (rec->addr <= p->oldaddr &&
 			    p->oldaddr < rec->addr + rec->size) {
 				found = true;
@@ -1390,25 +1396,26 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 			}
 		}
 		if (!found && p->type != KSPLICE_PATCH_EXPORT) {
-			const struct ksplice_reloc *r = patch_reloc(pack, p);
+			const struct ksplice_reloc *r = patch_reloc(change, p);
 			if (r == NULL) {
-				ksdebug(pack, "A patch with no ksplice_reloc at"
-					" its oldaddr has no safety record\n");
+				ksdebug(change, "A patch with no reloc at its "
+					"oldaddr has no safety record\n");
 				return NO_MATCH;
 			}
-			ksdebug(pack, "No safety record for patch with oldaddr "
-				"%s+%lx\n", r->symbol->label, r->target_addend);
+			ksdebug(change, "No safety record for patch with"
+				"oldaddr %s+%lx\n", r->symbol->label,
+				r->target_addend);
 			return NO_MATCH;
 		}
 
 		if (p->type == KSPLICE_PATCH_TEXT) {
-			ret = prepare_trampoline(pack, p);
+			ret = prepare_trampoline(change, p);
 			if (ret != OK)
 				return ret;
 		}
 
 		if (found && rec->addr + rec->size < p->oldaddr + p->size) {
-			ksdebug(pack, "Safety record %s is too short for "
+			ksdebug(change, "Safety record %s is too short for "
 				"patch\n", rec->label);
 			return UNEXPECTED;
 		}
@@ -1423,14 +1430,14 @@ static abort_t finalize_patches(struct ksplice_pack *pack)
 
 static abort_t map_trampoline_pages(struct update *update)
 {
-	struct ksplice_pack *pack;
-	list_for_each_entry(pack, &update->packs, list) {
+	struct ksplice_mod_change *change;
+	list_for_each_entry(change, &update->changes, list) {
 		struct ksplice_patch *p;
-		for (p = pack->patches; p < pack->patches_end; p++) {
+		for (p = change->patches; p < change->patches_end; p++) {
 			p->vaddr = map_writable((void *)p->oldaddr, p->size);
 			if (p->vaddr == NULL) {
-				ksdebug(pack, "Unable to map oldaddr read/write"
-					"\n");
+				ksdebug(change,
+					"Unable to map oldaddr read/write\n");
 				unmap_trampoline_pages(update);
 				return UNEXPECTED;
 			}
@@ -1441,10 +1448,10 @@ static abort_t map_trampoline_pages(struct update *update)
 
 static void unmap_trampoline_pages(struct update *update)
 {
-	struct ksplice_pack *pack;
-	list_for_each_entry(pack, &update->packs, list) {
+	struct ksplice_mod_change *change;
+	list_for_each_entry(change, &update->changes, list) {
 		struct ksplice_patch *p;
-		for (p = pack->patches; p < pack->patches_end; p++) {
+		for (p = change->patches; p < change->patches_end; p++) {
 			vunmap((void *)((unsigned long)p->vaddr & PAGE_MASK));
 			p->vaddr = NULL;
 		}
@@ -1505,48 +1512,48 @@ static void *map_writable(void *addr, size_t len)
  * latest version of the target function, since that's the code that
  * will run if we call addr.
  */
-static abort_t add_dependency_on_address(struct ksplice_pack *pack,
+static abort_t add_dependency_on_address(struct ksplice_mod_change *change,
 					 unsigned long addr)
 {
-	struct ksplice_pack *p;
+	struct ksplice_mod_change *c;
 	struct module *m =
-	    __module_text_address(follow_trampolines(pack, addr));
+	    __module_text_address(follow_trampolines(change, addr));
 	if (m == NULL)
 		return OK;
-	list_for_each_entry(p, &pack->update->packs, list) {
-		if (m == p->primary)
+	list_for_each_entry(c, &change->update->changes, list) {
+		if (m == c->primary)
 			return OK;
 	}
-	if (use_module(pack->primary, m) != 1)
+	if (use_module(change->primary, m) != 1)
 		return MODULE_BUSY;
 	return OK;
 }
 
-static abort_t apply_relocs(struct ksplice_pack *pack,
+static abort_t apply_relocs(struct ksplice_mod_change *change,
 			    const struct ksplice_reloc *relocs,
 			    const struct ksplice_reloc *relocs_end)
 {
 	const struct ksplice_reloc *r;
 	for (r = relocs; r < relocs_end; r++) {
-		abort_t ret = apply_reloc(pack, r);
+		abort_t ret = apply_reloc(change, r);
 		if (ret != OK)
 			return ret;
 	}
 	return OK;
 }
 
-static abort_t apply_reloc(struct ksplice_pack *pack,
+static abort_t apply_reloc(struct ksplice_mod_change *change,
 			   const struct ksplice_reloc *r)
 {
 	switch (r->howto->type) {
 	case KSPLICE_HOWTO_RELOC:
 	case KSPLICE_HOWTO_RELOC_PATCH:
-		return apply_howto_reloc(pack, r);
+		return apply_howto_reloc(change, r);
 	case KSPLICE_HOWTO_DATE:
 	case KSPLICE_HOWTO_TIME:
-		return apply_howto_date(pack, r);
+		return apply_howto_date(change, r);
 	default:
-		ksdebug(pack, "Unexpected howto type %d\n", r->howto->type);
+		ksdebug(change, "Unexpected howto type %d\n", r->howto->type);
 		return UNEXPECTED;
 	}
 }
@@ -1555,7 +1562,7 @@ static abort_t apply_reloc(struct ksplice_pack *pack,
  * Applies a relocation.  Aborts if the symbol referenced in it has
  * not been uniquely resolved.
  */
-static abort_t apply_howto_reloc(struct ksplice_pack *pack,
+static abort_t apply_howto_reloc(struct ksplice_mod_change *change,
 				 const struct ksplice_reloc *r)
 {
 	abort_t ret;
@@ -1563,20 +1570,20 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 	unsigned long sym_addr;
 	LIST_HEAD(vals);
 
-	canary_ret = contains_canary(pack, r->blank_addr, r->howto);
+	canary_ret = contains_canary(change, r->blank_addr, r->howto);
 	if (canary_ret < 0)
 		return UNEXPECTED;
 	if (canary_ret == 0) {
-		ksdebug(pack, "reloc: skipped %lx to %s+%lx (altinstr)\n",
+		ksdebug(change, "reloc: skipped %lx to %s+%lx (altinstr)\n",
 			r->blank_addr, r->symbol->label, r->target_addend);
 		return OK;
 	}
 
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped) {
-		ret = add_system_map_candidates(pack,
-						pack->primary_system_map,
-						pack->primary_system_map_end,
+		ret = add_system_map_candidates(change,
+						change->primary_system_map,
+						change->primary_system_map_end,
 						r->symbol->label, &vals);
 		if (ret != OK) {
 			release_vals(&vals);
@@ -1584,7 +1591,7 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 		}
 	}
 #endif /* KSPLICE_STANDALONE */
-	ret = lookup_symbol(pack, r->symbol, &vals);
+	ret = lookup_symbol(change, r->symbol, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
 		return ret;
@@ -1596,38 +1603,38 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 	if (!singular(&vals) || (r->symbol->vals != NULL &&
 				 r->howto->type == KSPLICE_HOWTO_RELOC_PATCH)) {
 		release_vals(&vals);
-		ksdebug(pack, "Failed to find %s for reloc\n",
+		ksdebug(change, "Failed to find %s for reloc\n",
 			r->symbol->label);
 		return FAILED_TO_FIND;
 	}
 	sym_addr = list_entry(vals.next, struct candidate_val, list)->val;
 	release_vals(&vals);
 
-	ret = write_reloc_value(pack, r, r->blank_addr,
+	ret = write_reloc_value(change, r, r->blank_addr,
 				r->howto->pcrel ? sym_addr - r->blank_addr :
 				sym_addr);
 	if (ret != OK)
 		return ret;
 
-	ksdebug(pack, "reloc: %lx to %s+%lx (S=%lx ", r->blank_addr,
+	ksdebug(change, "reloc: %lx to %s+%lx (S=%lx ", r->blank_addr,
 		r->symbol->label, r->target_addend, sym_addr);
 	switch (r->howto->size) {
 	case 1:
-		ksdebug(pack, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
+		ksdebug(change, "aft=%02x)\n", *(uint8_t *)r->blank_addr);
 		break;
 	case 2:
-		ksdebug(pack, "aft=%04x)\n", *(uint16_t *)r->blank_addr);
+		ksdebug(change, "aft=%04x)\n", *(uint16_t *)r->blank_addr);
 		break;
 	case 4:
-		ksdebug(pack, "aft=%08x)\n", *(uint32_t *)r->blank_addr);
+		ksdebug(change, "aft=%08x)\n", *(uint32_t *)r->blank_addr);
 		break;
 #if BITS_PER_LONG >= 64
 	case 8:
-		ksdebug(pack, "aft=%016llx)\n", *(uint64_t *)r->blank_addr);
+		ksdebug(change, "aft=%016llx)\n", *(uint64_t *)r->blank_addr);
 		break;
 #endif /* BITS_PER_LONG */
 	default:
-		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		ksdebug(change, "Aborted.  Invalid relocation size.\n");
 		return UNEXPECTED;
 	}
 #ifdef KSPLICE_STANDALONE
@@ -1639,11 +1646,11 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
 	 * Create labelvals so that we can verify our choices in the
 	 * second round of run-pre matching that considers data sections.
 	 */
-	ret = create_labelval(pack, r->symbol, sym_addr, VAL);
+	ret = create_labelval(change, r->symbol, sym_addr, VAL);
 	if (ret != OK)
 		return ret;
 
-	return add_dependency_on_address(pack, sym_addr);
+	return add_dependency_on_address(change, sym_addr);
 }
 
 /*
@@ -1651,11 +1658,12 @@ static abort_t apply_howto_reloc(struct ksplice_pack *pack,
  * in the kernel; we resolve them by simply copying in the date/time
  * obtained from run-pre matching the relevant compilation unit.
  */
-static abort_t apply_howto_date(struct ksplice_pack *pack,
+static abort_t apply_howto_date(struct ksplice_mod_change *change,
 				const struct ksplice_reloc *r)
 {
 	if (r->symbol->vals != NULL) {
-		ksdebug(pack, "Failed to find %s for date\n", r->symbol->label);
+		ksdebug(change, "Failed to find %s for date\n",
+			r->symbol->label);
 		return FAILED_TO_FIND;
 	}
 	memcpy((unsigned char *)r->blank_addr,
@@ -1667,7 +1675,7 @@ static abort_t apply_howto_date(struct ksplice_pack *pack,
  * Given a relocation and its run address, compute the address of the
  * symbol the relocation referenced, and store it in *valp.
  */
-static abort_t read_reloc_value(struct ksplice_pack *pack,
+static abort_t read_reloc_value(struct ksplice_mod_change *change,
 				const struct ksplice_reloc *r,
 				unsigned long addr, unsigned long *valp)
 {
@@ -1676,7 +1684,7 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 	const struct ksplice_reloc_howto *howto = r->howto;
 
 	if (howto->size <= 0 || howto->size > sizeof(long)) {
-		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		ksdebug(change, "Aborted.  Invalid relocation size.\n");
 		return UNEXPECTED;
 	}
 
@@ -1699,7 +1707,7 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
 		break;
 #endif /* BITS_PER_LONG */
 	default:
-		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		ksdebug(change, "Aborted.  Invalid relocation size.\n");
 		return UNEXPECTED;
 	}
 
@@ -1717,7 +1725,7 @@ static abort_t read_reloc_value(struct ksplice_pack *pack,
  * address of the symbol the relocation references, write the
  * relocation's final value into the storage unit.
  */
-static abort_t write_reloc_value(struct ksplice_pack *pack,
+static abort_t write_reloc_value(struct ksplice_mod_change *change,
 				 const struct ksplice_reloc *r,
 				 unsigned long addr, unsigned long sym_addr)
 {
@@ -1744,40 +1752,40 @@ static abort_t write_reloc_value(struct ksplice_pack *pack,
 		break;
 #endif /* BITS_PER_LONG */
 	default:
-		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		ksdebug(change, "Aborted.  Invalid relocation size.\n");
 		return UNEXPECTED;
 	}
 
-	if (read_reloc_value(pack, r, addr, &val) != OK || val != sym_addr) {
-		ksdebug(pack, "Aborted.  Relocation overflow.\n");
+	if (read_reloc_value(change, r, addr, &val) != OK || val != sym_addr) {
+		ksdebug(change, "Aborted.  Relocation overflow.\n");
 		return UNEXPECTED;
 	}
 
 	return OK;
 }
 
-static abort_t create_module_list_entry(struct ksplice_pack *pack,
+static abort_t create_module_list_entry(struct ksplice_mod_change *change,
 					bool to_be_applied)
 {
 	struct ksplice_module_list_entry *entry =
 	    kmalloc(sizeof(*entry), GFP_KERNEL);
 	if (entry == NULL)
 		return OUT_OF_MEMORY;
-	entry->primary_name = kstrdup(pack->primary->name, GFP_KERNEL);
+	entry->primary_name = kstrdup(change->primary->name, GFP_KERNEL);
 	if (entry->primary_name == NULL) {
 		kfree(entry);
 		return OUT_OF_MEMORY;
 	}
-	entry->target_name = kstrdup(pack->target_name, GFP_KERNEL);
+	entry->target_name = kstrdup(change->target_name, GFP_KERNEL);
 	if (entry->target_name == NULL) {
 		kfree(entry->primary_name);
 		kfree(entry);
 		return OUT_OF_MEMORY;
 	}
 	/* The update's kid is guaranteed to outlast the module_list_entry */
-	entry->kid = pack->update->kid;
+	entry->kid = change->update->kid;
 	entry->applied = to_be_applied;
-	list_add(&entry->update_list, &pack->update->ksplice_module_list);
+	list_add(&entry->update_list, &change->update->ksplice_module_list);
 	return OK;
 }
 
@@ -1803,8 +1811,8 @@ static void __attribute__((noreturn)) ksplice_deleted(void)
 #endif
 }
 
-/* Floodfill to run-pre match the sections within a pack. */
-static abort_t match_pack_sections(struct ksplice_pack *pack,
+/* Floodfill to run-pre match the sections within a change. */
+static abort_t match_change_sections(struct ksplice_mod_change *change,
 				   bool consider_data_sections)
 {
 	struct ksplice_section *sect;
@@ -1812,7 +1820,7 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 	int remaining = 0;
 	bool progress;
 
-	for (sect = pack->helper_sections; sect < pack->helper_sections_end;
+	for (sect = change->helper_sections; sect < change->helper_sections_end;
 	     sect++) {
 		if ((sect->flags & KSPLICE_SECTION_DATA) == 0 &&
 		    (sect->flags & KSPLICE_SECTION_STRING) == 0 &&
@@ -1822,15 +1830,15 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 
 	while (remaining > 0) {
 		progress = false;
-		for (sect = pack->helper_sections;
-		     sect < pack->helper_sections_end; sect++) {
+		for (sect = change->helper_sections;
+		     sect < change->helper_sections_end; sect++) {
 			if ((sect->flags & KSPLICE_SECTION_MATCHED) != 0)
 				continue;
 			if ((!consider_data_sections &&
 			     (sect->flags & KSPLICE_SECTION_DATA) != 0) ||
 			    (sect->flags & KSPLICE_SECTION_STRING) != 0)
 				continue;
-			ret = find_section(pack, sect);
+			ret = find_section(change, sect);
 			if (ret == OK) {
 				sect->flags |= KSPLICE_SECTION_MATCHED;
 				if ((sect->flags & KSPLICE_SECTION_DATA) == 0)
@@ -1844,19 +1852,19 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
 		if (progress)
 			continue;
 
-		for (sect = pack->helper_sections;
-		     sect < pack->helper_sections_end; sect++) {
+		for (sect = change->helper_sections;
+		     sect < change->helper_sections_end; sect++) {
 			if ((sect->flags & KSPLICE_SECTION_MATCHED) != 0 ||
 			    (sect->flags & KSPLICE_SECTION_STRING) != 0)
 				continue;
-			ksdebug(pack, "run-pre: could not match %s "
+			ksdebug(change, "run-pre: could not match %s "
 				"section %s\n",
 				(sect->flags & KSPLICE_SECTION_DATA) != 0 ?
 				"data" :
 				(sect->flags & KSPLICE_SECTION_RODATA) != 0 ?
 				"rodata" : "text", sect->symbol->label);
 		}
-		ksdebug(pack, "Aborted.  run-pre: could not match some "
+		ksdebug(change, "Aborted.  run-pre: could not match some "
 			"sections.\n");
 		return NO_MATCH;
 	}
@@ -1868,7 +1876,7 @@ static abort_t match_pack_sections(struct ksplice_pack *pack,
  * only if it finds precisely one address in the kernel matching the
  * section.
  */
-static abort_t find_section(struct ksplice_pack *pack,
+static abort_t find_section(struct ksplice_mod_change *change,
 			    struct ksplice_section *sect)
 {
 	int i;
@@ -1878,28 +1886,28 @@ static abort_t find_section(struct ksplice_pack *pack,
 	struct candidate_val *v, *n;
 
 #ifdef KSPLICE_STANDALONE
-	ret = add_system_map_candidates(pack, pack->helper_system_map,
-					pack->helper_system_map_end,
+	ret = add_system_map_candidates(change, change->helper_system_map,
+					change->helper_system_map_end,
 					sect->symbol->label, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
 		return ret;
 	}
 #endif /* KSPLICE_STANDALONE */
-	ret = lookup_symbol(pack, sect->symbol, &vals);
+	ret = lookup_symbol(change, sect->symbol, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
 		return ret;
 	}
 
-	ksdebug(pack, "run-pre: starting sect search for %s\n",
+	ksdebug(change, "run-pre: starting sect search for %s\n",
 		sect->symbol->label);
 
 	list_for_each_entry_safe(v, n, &vals, list) {
 		run_addr = v->val;
 
 		yield();
-		ret = try_addr(pack, sect, run_addr, NULL, RUN_PRE_INITIAL);
+		ret = try_addr(change, sect, run_addr, NULL, RUN_PRE_INITIAL);
 		if (ret == NO_MATCH) {
 			list_del(&v->list);
 			kfree(v);
@@ -1911,7 +1919,7 @@ static abort_t find_section(struct ksplice_pack *pack,
 
 #if defined(KSPLICE_STANDALONE) && !defined(CONFIG_KALLSYMS)
 	if (list_empty(&vals) && (sect->flags & KSPLICE_SECTION_DATA) == 0) {
-		ret = brute_search_all(pack, sect, &vals);
+		ret = brute_search_all(change, sect, &vals);
 		if (ret != OK) {
 			release_vals(&vals);
 			return ret;
@@ -1923,10 +1931,10 @@ static abort_t find_section(struct ksplice_pack *pack,
 		if (singular(&vals)) {
 			run_addr = list_entry(vals.next, struct candidate_val,
 					      list)->val;
-			ret = try_addr(pack, sect, run_addr, NULL,
+			ret = try_addr(change, sect, run_addr, NULL,
 				       RUN_PRE_INITIAL);
 			if (ret != OK) {
-				ksdebug(pack, "run-pre: Debug run failed for "
+				ksdebug(change, "run-pre: Debug run failed for "
 					"sect %s:\n", sect->symbol->label);
 				release_vals(&vals);
 				return ret;
@@ -1939,27 +1947,27 @@ static abort_t find_section(struct ksplice_pack *pack,
 		LIST_HEAD(safety_records);
 		run_addr = list_entry(vals.next, struct candidate_val,
 				      list)->val;
-		ret = try_addr(pack, sect, run_addr, &safety_records,
+		ret = try_addr(change, sect, run_addr, &safety_records,
 			       RUN_PRE_FINAL);
 		release_vals(&vals);
 		if (ret != OK) {
 			clear_list(&safety_records, struct safety_record, list);
-			ksdebug(pack, "run-pre: Final run failed for sect "
+			ksdebug(change, "run-pre: Final run failed for sect "
 				"%s:\n", sect->symbol->label);
 		} else {
-			list_splice(&safety_records, &pack->safety_records);
+			list_splice(&safety_records, &change->safety_records);
 		}
 		return ret;
 	} else if (!list_empty(&vals)) {
 		struct candidate_val *val;
-		ksdebug(pack, "run-pre: multiple candidates for sect %s:\n",
+		ksdebug(change, "run-pre: multiple candidates for sect %s:\n",
 			sect->symbol->label);
 		i = 0;
 		list_for_each_entry(val, &vals, list) {
 			i++;
-			ksdebug(pack, "%lx\n", val->val);
+			ksdebug(change, "%lx\n", val->val);
 			if (i > 5) {
-				ksdebug(pack, "...\n");
+				ksdebug(change, "...\n");
 				break;
 			}
 		}
@@ -1975,7 +1983,7 @@ static abort_t find_section(struct ksplice_pack *pack,
  * purpose is to manage debugging information for run-pre matching;
  * all the hard work is in run_pre_cmp.
  */
-static abort_t try_addr(struct ksplice_pack *pack,
+static abort_t try_addr(struct ksplice_mod_change *change,
 			struct ksplice_section *sect,
 			unsigned long run_addr,
 			struct list_head *safety_records,
@@ -1984,73 +1992,73 @@ static abort_t try_addr(struct ksplice_pack *pack,
 	abort_t ret;
 	const struct module *run_module = __module_address(run_addr);
 
-	if (run_module == pack->primary) {
-		ksdebug(pack, "run-pre: unexpected address %lx in primary "
+	if (run_module == change->primary) {
+		ksdebug(change, "run-pre: unexpected address %lx in primary "
 			"module %s for sect %s\n", run_addr, run_module->name,
 			sect->symbol->label);
 		return UNEXPECTED;
 	}
-	if (!patches_module(run_module, pack->target)) {
-		ksdebug(pack, "run-pre: ignoring address %lx in other module "
+	if (!patches_module(run_module, change->target)) {
+		ksdebug(change, "run-pre: ignoring address %lx in other module "
 			"%s for sect %s\n", run_addr, run_module == NULL ?
 			"vmlinux" : run_module->name, sect->symbol->label);
 		return NO_MATCH;
 	}
 
-	ret = create_labelval(pack, sect->symbol, run_addr, TEMP);
+	ret = create_labelval(change, sect->symbol, run_addr, TEMP);
 	if (ret != OK)
 		return ret;
 
 #ifdef CONFIG_FUNCTION_DATA_SECTIONS
-	ret = run_pre_cmp(pack, sect, run_addr, safety_records, mode);
+	ret = run_pre_cmp(change, sect, run_addr, safety_records, mode);
 #else /* !CONFIG_FUNCTION_DATA_SECTIONS */
 	if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
-		ret = arch_run_pre_cmp(pack, sect, run_addr, safety_records,
+		ret = arch_run_pre_cmp(change, sect, run_addr, safety_records,
 				       mode);
 	else
-		ret = run_pre_cmp(pack, sect, run_addr, safety_records, mode);
+		ret = run_pre_cmp(change, sect, run_addr, safety_records, mode);
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
 	if (ret == NO_MATCH && mode != RUN_PRE_FINAL) {
-		set_temp_labelvals(pack, NOVAL);
-		ksdebug(pack, "run-pre: %s sect %s does not match (r_a=%lx "
+		set_temp_labelvals(change, NOVAL);
+		ksdebug(change, "run-pre: %s sect %s does not match (r_a=%lx "
 			"p_a=%lx s=%lx)\n",
 			(sect->flags & KSPLICE_SECTION_RODATA) != 0 ? "rodata" :
 			(sect->flags & KSPLICE_SECTION_DATA) != 0 ? "data" :
 			"text", sect->symbol->label, run_addr, sect->address,
 			sect->size);
-		ksdebug(pack, "run-pre: ");
-		if (pack->update->debug >= 1) {
+		ksdebug(change, "run-pre: ");
+		if (change->update->debug >= 1) {
 #ifdef CONFIG_FUNCTION_DATA_SECTIONS
-			ret = run_pre_cmp(pack, sect, run_addr, safety_records,
-					  RUN_PRE_DEBUG);
+			ret = run_pre_cmp(change, sect, run_addr,
+					  safety_records, RUN_PRE_DEBUG);
 #else /* !CONFIG_FUNCTION_DATA_SECTIONS */
 			if ((sect->flags & KSPLICE_SECTION_TEXT) != 0)
-				ret = arch_run_pre_cmp(pack, sect, run_addr,
+				ret = arch_run_pre_cmp(change, sect, run_addr,
 						       safety_records,
 						       RUN_PRE_DEBUG);
 			else
-				ret = run_pre_cmp(pack, sect, run_addr,
+				ret = run_pre_cmp(change, sect, run_addr,
 						  safety_records,
 						  RUN_PRE_DEBUG);
 #endif /* CONFIG_FUNCTION_DATA_SECTIONS */
-			set_temp_labelvals(pack, NOVAL);
+			set_temp_labelvals(change, NOVAL);
 		}
-		ksdebug(pack, "\n");
+		ksdebug(change, "\n");
 		return ret;
 	} else if (ret != OK) {
-		set_temp_labelvals(pack, NOVAL);
+		set_temp_labelvals(change, NOVAL);
 		return ret;
 	}
 
 	if (mode != RUN_PRE_FINAL) {
-		set_temp_labelvals(pack, NOVAL);
-		ksdebug(pack, "run-pre: candidate for sect %s=%lx\n",
+		set_temp_labelvals(change, NOVAL);
+		ksdebug(change, "run-pre: candidate for sect %s=%lx\n",
 			sect->symbol->label, run_addr);
 		return OK;
 	}
 
-	set_temp_labelvals(pack, VAL);
-	ksdebug(pack, "run-pre: found sect %s=%lx\n", sect->symbol->label,
+	set_temp_labelvals(change, VAL);
+	ksdebug(change, "run-pre: found sect %s=%lx\n", sect->symbol->label,
 		run_addr);
 	return OK;
 }
@@ -2066,7 +2074,7 @@ static abort_t try_addr(struct ksplice_pack *pack,
  * The run_pre_mode is also used to determine what debugging
  * information to display.
  */
-static abort_t run_pre_cmp(struct ksplice_pack *pack,
+static abort_t run_pre_cmp(struct ksplice_mod_change *change,
 			   const struct ksplice_section *sect,
 			   unsigned long run_addr,
 			   struct list_head *safety_records,
@@ -2081,25 +2089,25 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 	pre_start = (const unsigned char *)sect->address;
 	run_start = (const unsigned char *)run_addr;
 
-	finger = init_reloc_search(pack, sect);
+	finger = init_reloc_search(change, sect);
 
 	pre = pre_start;
 	run = run_start;
 	while (pre < pre_start + sect->size) {
 		unsigned long offset = pre - pre_start;
-		ret = lookup_reloc(pack, &finger, (unsigned long)pre, &r);
+		ret = lookup_reloc(change, &finger, (unsigned long)pre, &r);
 		if (ret == OK) {
-			ret = handle_reloc(pack, sect, r, (unsigned long)run,
+			ret = handle_reloc(change, sect, r, (unsigned long)run,
 					   mode);
 			if (ret != OK) {
 				if (mode == RUN_PRE_INITIAL)
-					ksdebug(pack, "reloc in sect does not "
-						"match after %lx/%lx bytes\n",
-						offset, sect->size);
+					ksdebug(change, "reloc in sect does "
+						"not match after %lx/%lx "
+						"bytes\n", offset, sect->size);
 				return ret;
 			}
 			if (mode == RUN_PRE_DEBUG)
-				print_bytes(pack, run, r->howto->size, pre,
+				print_bytes(change, run, r->howto->size, pre,
 					    r->howto->size);
 			pre += r->howto->size;
 			run += r->howto->size;
@@ -2110,13 +2118,13 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 		}
 
 		if ((sect->flags & KSPLICE_SECTION_TEXT) != 0) {
-			ret = handle_paravirt(pack, (unsigned long)pre,
+			ret = handle_paravirt(change, (unsigned long)pre,
 					      (unsigned long)run, &matched);
 			if (ret != OK)
 				return ret;
 			if (matched != 0) {
 				if (mode == RUN_PRE_DEBUG)
-					print_bytes(pack, run, matched, pre,
+					print_bytes(change, run, matched, pre,
 						    matched);
 				pre += matched;
 				run += matched;
@@ -2126,7 +2134,7 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 
 		if (probe_kernel_read(&runval, (void *)run, 1) == -EFAULT) {
 			if (mode == RUN_PRE_INITIAL)
-				ksdebug(pack, "sect unmapped after %lx/%lx "
+				ksdebug(change, "sect unmapped after %lx/%lx "
 					"bytes\n", offset, sect->size);
 			return NO_MATCH;
 		}
@@ -2134,25 +2142,25 @@ static abort_t run_pre_cmp(struct ksplice_pack *pack,
 		if (runval != *pre &&
 		    (sect->flags & KSPLICE_SECTION_DATA) == 0) {
 			if (mode == RUN_PRE_INITIAL)
-				ksdebug(pack, "sect does not match after "
+				ksdebug(change, "sect does not match after "
 					"%lx/%lx bytes\n", offset, sect->size);
 			if (mode == RUN_PRE_DEBUG) {
-				print_bytes(pack, run, 1, pre, 1);
-				ksdebug(pack, "[p_o=%lx] ! ", offset);
-				print_bytes(pack, run + 1, 2, pre + 1, 2);
+				print_bytes(change, run, 1, pre, 1);
+				ksdebug(change, "[p_o=%lx] ! ", offset);
+				print_bytes(change, run + 1, 2, pre + 1, 2);
 			}
 			return NO_MATCH;
 		}
 		if (mode == RUN_PRE_DEBUG)
-			print_bytes(pack, run, 1, pre, 1);
+			print_bytes(change, run, 1, pre, 1);
 		pre++;
 		run++;
 	}
-	return create_safety_record(pack, sect, safety_records, run_addr,
+	return create_safety_record(change, sect, safety_records, run_addr,
 				    run - run_start);
 }
 
-static void print_bytes(struct ksplice_pack *pack,
+static void print_bytes(struct ksplice_mod_change *change,
 			const unsigned char *run, int runc,
 			const unsigned char *pre, int prec)
 {
@@ -2160,18 +2168,18 @@ static void print_bytes(struct ksplice_pack *pack,
 	int matched = min(runc, prec);
 	for (o = 0; o < matched; o++) {
 		if (run[o] == pre[o])
-			ksdebug(pack, "%02x ", run[o]);
+			ksdebug(change, "%02x ", run[o]);
 		else
-			ksdebug(pack, "%02x/%02x ", run[o], pre[o]);
+			ksdebug(change, "%02x/%02x ", run[o], pre[o]);
 	}
 	for (o = matched; o < runc; o++)
-		ksdebug(pack, "%02x/ ", run[o]);
+		ksdebug(change, "%02x/ ", run[o]);
 	for (o = matched; o < prec; o++)
-		ksdebug(pack, "/%02x ", pre[o]);
+		ksdebug(change, "/%02x ", pre[o]);
 }
 
 #if defined(KSPLICE_STANDALONE) && !defined(CONFIG_KALLSYMS)
-static abort_t brute_search(struct ksplice_pack *pack,
+static abort_t brute_search(struct ksplice_mod_change *change,
 			    struct ksplice_section *sect,
 			    const void *start, unsigned long len,
 			    struct list_head *vals)
@@ -2193,9 +2201,9 @@ static abort_t brute_search(struct ksplice_pack *pack,
 		if (run != pre)
 			continue;
 
-		ret = try_addr(pack, sect, addr, NULL, RUN_PRE_INITIAL);
+		ret = try_addr(change, sect, addr, NULL, RUN_PRE_INITIAL);
 		if (ret == OK) {
-			ret = add_candidate_val(pack, vals, addr);
+			ret = add_candidate_val(change, vals, addr);
 			if (ret != OK)
 				return ret;
 		} else if (ret != NO_MATCH) {
@@ -2206,7 +2214,7 @@ static abort_t brute_search(struct ksplice_pack *pack,
 	return OK;
 }
 
-static abort_t brute_search_all(struct ksplice_pack *pack,
+static abort_t brute_search_all(struct ksplice_mod_change *change,
 				struct ksplice_section *sect,
 				struct list_head *vals)
 {
@@ -2214,28 +2222,29 @@ static abort_t brute_search_all(struct ksplice_pack *pack,
 	abort_t ret = OK;
 	int saved_debug;
 
-	ksdebug(pack, "brute_search: searching for %s\n", sect->symbol->label);
-	saved_debug = pack->update->debug;
-	pack->update->debug = 0;
+	ksdebug(change, "brute_search: searching for %s\n",
+		sect->symbol->label);
+	saved_debug = change->update->debug;
+	change->update->debug = 0;
 
 	list_for_each_entry(m, &modules, list) {
-		if (!patches_module(m, pack->target) || m == pack->primary)
+		if (!patches_module(m, change->target) || m == change->primary)
 			continue;
-		ret = brute_search(pack, sect, m->module_core, m->core_size,
+		ret = brute_search(change, sect, m->module_core, m->core_size,
 				   vals);
 		if (ret != OK)
 			goto out;
-		ret = brute_search(pack, sect, m->module_init, m->init_size,
+		ret = brute_search(change, sect, m->module_init, m->init_size,
 				   vals);
 		if (ret != OK)
 			goto out;
 	}
 
-	ret = brute_search(pack, sect, (const void *)init_mm.start_code,
+	ret = brute_search(change, sect, (const void *)init_mm.start_code,
 			   init_mm.end_code - init_mm.start_code, vals);
 
 out:
-	pack->update->debug = saved_debug;
+	change->update->debug = saved_debug;
 	return ret;
 }
 #endif /* KSPLICE_STANDALONE && !CONFIG_KALLSYMS */
@@ -2273,13 +2282,14 @@ static const struct ksplice_reloc *find_reloc(const struct ksplice_reloc *start,
 }
 
 static const struct ksplice_reloc *
-init_reloc_search(struct ksplice_pack *pack, const struct ksplice_section *sect)
+init_reloc_search(struct ksplice_mod_change *change,
+		  const struct ksplice_section *sect)
 {
 	const struct ksplice_reloc *r;
-	r = find_reloc(pack->helper_relocs, pack->helper_relocs_end,
+	r = find_reloc(change->helper_relocs, change->helper_relocs_end,
 		       sect->address, sect->size);
 	if (r == NULL)
-		return pack->helper_relocs_end;
+		return change->helper_relocs_end;
 	return r;
 }
 
@@ -2292,7 +2302,7 @@ init_reloc_search(struct ksplice_pack *pack, const struct ksplice_section *sect)
  * been initialized as a pointer to the result of find_reloc (or
  * init_reloc_search).
  */
-static abort_t lookup_reloc(struct ksplice_pack *pack,
+static abort_t lookup_reloc(struct ksplice_mod_change *change,
 			    const struct ksplice_reloc **fingerp,
 			    unsigned long addr,
 			    const struct ksplice_reloc **relocp)
@@ -2300,12 +2310,12 @@ static abort_t lookup_reloc(struct ksplice_pack *pack,
 	const struct ksplice_reloc *r = *fingerp;
 	int canary_ret;
 
-	while (r < pack->helper_relocs_end &&
+	while (r < change->helper_relocs_end &&
 	       addr >= r->blank_addr + r->howto->size &&
 	       !(addr == r->blank_addr && r->howto->size == 0))
 		r++;
 	*fingerp = r;
-	if (r == pack->helper_relocs_end)
+	if (r == change->helper_relocs_end)
 		return NO_MATCH;
 	if (addr < r->blank_addr)
 		return NO_MATCH;
@@ -2313,39 +2323,39 @@ static abort_t lookup_reloc(struct ksplice_pack *pack,
 	if (r->howto->type != KSPLICE_HOWTO_RELOC)
 		return OK;
 
-	canary_ret = contains_canary(pack, r->blank_addr, r->howto);
+	canary_ret = contains_canary(change, r->blank_addr, r->howto);
 	if (canary_ret < 0)
 		return UNEXPECTED;
 	if (canary_ret == 0) {
-		ksdebug(pack, "run-pre: reloc skipped at p_a=%lx to %s+%lx "
+		ksdebug(change, "run-pre: reloc skipped at p_a=%lx to %s+%lx "
 			"(altinstr)\n", r->blank_addr, r->symbol->label,
 			r->target_addend);
 		return NO_MATCH;
 	}
 	if (addr != r->blank_addr) {
-		ksdebug(pack, "Invalid nonzero relocation offset\n");
+		ksdebug(change, "Invalid nonzero relocation offset\n");
 		return UNEXPECTED;
 	}
 	return OK;
 }
 
-static abort_t handle_reloc(struct ksplice_pack *pack,
+static abort_t handle_reloc(struct ksplice_mod_change *change,
 			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
 			    unsigned long run_addr, enum run_pre_mode mode)
 {
 	switch (r->howto->type) {
 	case KSPLICE_HOWTO_RELOC:
-		return handle_howto_reloc(pack, sect, r, run_addr, mode);
+		return handle_howto_reloc(change, sect, r, run_addr, mode);
 	case KSPLICE_HOWTO_DATE:
 	case KSPLICE_HOWTO_TIME:
-		return handle_howto_date(pack, sect, r, run_addr, mode);
+		return handle_howto_date(change, sect, r, run_addr, mode);
 	case KSPLICE_HOWTO_BUG:
-		return handle_bug(pack, r, run_addr);
+		return handle_bug(change, r, run_addr);
 	case KSPLICE_HOWTO_EXTABLE:
-		return handle_extable(pack, r, run_addr);
+		return handle_extable(change, r, run_addr);
 	default:
-		ksdebug(pack, "Unexpected howto type %d\n", r->howto->type);
+		ksdebug(change, "Unexpected howto type %d\n", r->howto->type);
 		return UNEXPECTED;
 	}
 }
@@ -2354,7 +2364,7 @@ static abort_t handle_reloc(struct ksplice_pack *pack,
  * For date/time relocations, we check that the sequence of bytes
  * matches the format of a date or time.
  */
-static abort_t handle_howto_date(struct ksplice_pack *pack,
+static abort_t handle_howto_date(struct ksplice_mod_change *change,
 				 const struct ksplice_section *sect,
 				 const struct ksplice_reloc *r,
 				 unsigned long run_addr, enum run_pre_mode mode)
@@ -2391,13 +2401,13 @@ static abort_t handle_howto_date(struct ksplice_pack *pack,
 		ret = UNEXPECTED;
 	}
 	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL)
-		ksdebug(pack, "%s string: \"%.*s\" does not match format\n",
+		ksdebug(change, "%s string: \"%.*s\" does not match format\n",
 			r->howto->type == KSPLICE_HOWTO_DATE ? "date" : "time",
 			r->howto->size, buf);
 
 	if (ret != OK)
 		goto out;
-	ret = create_labelval(pack, r->symbol, run_addr, TEMP);
+	ret = create_labelval(change, r->symbol, run_addr, TEMP);
 out:
 	kfree(buf);
 	return ret;
@@ -2408,18 +2418,18 @@ out:
  * during run-pre matching, giving an error if it conflicts with a
  * previously found value of that symbol
  */
-static abort_t handle_howto_reloc(struct ksplice_pack *pack,
+static abort_t handle_howto_reloc(struct ksplice_mod_change *change,
 				  const struct ksplice_section *sect,
 				  const struct ksplice_reloc *r,
 				  unsigned long run_addr,
 				  enum run_pre_mode mode)
 {
-	struct ksplice_section *sym_sect = symbol_section(pack, r->symbol);
+	struct ksplice_section *sym_sect = symbol_section(change, r->symbol);
 	unsigned long offset = r->target_addend;
 	unsigned long val;
 	abort_t ret;
 
-	ret = read_reloc_value(pack, r, run_addr, &val);
+	ret = read_reloc_value(change, r, run_addr, &val);
 	if (ret != OK)
 		return ret;
 	if (r->howto->pcrel)
@@ -2430,7 +2440,7 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 	if (sym_sect == NULL || sym_sect->match_map == NULL || offset == 0) {
 		;
 	} else if (offset < 0 || offset >= sym_sect->size) {
-		ksdebug(pack, "Out of range relocation: %s+%lx -> %s+%lx",
+		ksdebug(change, "Out of range relocation: %s+%lx -> %s+%lx",
 			sect->symbol->label, r->blank_addr - sect->address,
 			r->symbol->label, offset);
 		return NO_MATCH;
@@ -2441,7 +2451,7 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 		   r->symbol->value + offset) {
 		;
 	} else if (sect == sym_sect) {
-		ksdebug(pack, "Relocations to nonmatching locations within "
+		ksdebug(change, "Relocations to nonmatching locations within "
 			"section %s: %lx does not match %lx\n",
 			sect->symbol->label, offset,
 			(unsigned long)sect->match_map[offset] -
@@ -2449,21 +2459,21 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 		return NO_MATCH;
 	} else if ((sym_sect->flags & KSPLICE_SECTION_MATCHED) == 0) {
 		if (mode == RUN_PRE_INITIAL)
-			ksdebug(pack, "Delaying matching of %s due to reloc "
+			ksdebug(change, "Delaying matching of %s due to reloc "
 				"from to unmatching section: %s+%lx\n",
 				sect->symbol->label, r->symbol->label, offset);
 		return NO_MATCH;
 	} else if (sym_sect->match_map[offset] == NULL) {
 		if (mode == RUN_PRE_INITIAL)
-			ksdebug(pack, "Relocation not to instruction boundary: "
-				"%s+%lx -> %s+%lx", sect->symbol->label,
-				r->blank_addr - sect->address, r->symbol->label,
-				offset);
+			ksdebug(change, "Relocation not to instruction "
+				"boundary: %s+%lx -> %s+%lx",
+				sect->symbol->label, r->blank_addr -
+				sect->address, r->symbol->label, offset);
 		return NO_MATCH;
 	} else if ((unsigned long)sym_sect->match_map[offset] !=
 		   r->symbol->value + offset) {
 		if (mode == RUN_PRE_INITIAL)
-			ksdebug(pack, "Match map shift %s+%lx: %lx != %lx\n",
+			ksdebug(change, "Match map shift %s+%lx: %lx != %lx\n",
 				r->symbol->label, offset,
 				r->symbol->value + offset,
 				(unsigned long)sym_sect->match_map[offset]);
@@ -2473,12 +2483,12 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 #endif /* KSPLICE_STANDALONE */
 
 	if (mode == RUN_PRE_INITIAL)
-		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx to %s+%lx: "
+		ksdebug(change, "run-pre: reloc at r_a=%lx p_a=%lx to %s+%lx: "
 			"found %s = %lx\n", run_addr, r->blank_addr,
 			r->symbol->label, offset, r->symbol->label, val);
 
-	if (contains_canary(pack, run_addr, r->howto) != 0) {
-		ksdebug(pack, "Aborted.  Unexpected canary in run code at %lx"
+	if (contains_canary(change, run_addr, r->howto) != 0) {
+		ksdebug(change, "Aborted.  Unexpected canary in run code at %lx"
 			"\n", run_addr);
 		return UNEXPECTED;
 	}
@@ -2486,10 +2496,10 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 	if ((sect->flags & KSPLICE_SECTION_DATA) != 0 &&
 	    sect->symbol == r->symbol)
 		return OK;
-	ret = create_labelval(pack, r->symbol, val, TEMP);
+	ret = create_labelval(change, r->symbol, val, TEMP);
 	if (ret == NO_MATCH && mode == RUN_PRE_INITIAL)
-		ksdebug(pack, "run-pre: reloc at r_a=%lx p_a=%lx: labelval %s "
-			"= %lx does not match expected %lx\n", run_addr,
+		ksdebug(change, "run-pre: reloc at r_a=%lx p_a=%lx: labelval "
+			"%s = %lx does not match expected %lx\n", run_addr,
 			r->blank_addr, r->symbol->label, r->symbol->value, val);
 
 	if (ret != OK)
@@ -2497,18 +2507,18 @@ static abort_t handle_howto_reloc(struct ksplice_pack *pack,
 	if (sym_sect != NULL && (sym_sect->flags & KSPLICE_SECTION_MATCHED) == 0
 	    && (sym_sect->flags & KSPLICE_SECTION_STRING) != 0) {
 		if (mode == RUN_PRE_INITIAL)
-			ksdebug(pack, "Recursively comparing string section "
+			ksdebug(change, "Recursively comparing string section "
 				"%s\n", sym_sect->symbol->label);
 		else if (mode == RUN_PRE_DEBUG)
-			ksdebug(pack, "[str start] ");
-		ret = run_pre_cmp(pack, sym_sect, val, NULL, mode);
+			ksdebug(change, "[str start] ");
+		ret = run_pre_cmp(change, sym_sect, val, NULL, mode);
 		if (mode == RUN_PRE_DEBUG)
-			ksdebug(pack, "[str end] ");
+			ksdebug(change, "[str end] ");
 		if (ret == OK && mode == RUN_PRE_INITIAL)
-			ksdebug(pack, "Successfully matched string section %s"
+			ksdebug(change, "Successfully matched string section %s"
 				"\n", sym_sect->symbol->label);
 		else if (mode == RUN_PRE_INITIAL)
-			ksdebug(pack, "Failed to match string section %s\n",
+			ksdebug(change, "Failed to match string section %s\n",
 				sym_sect->symbol->label);
 	}
 	return ret;
@@ -2527,21 +2537,23 @@ static int compare_section_labels(const void *va, const void *vb)
 	return strcmp(a->symbol->label, b->symbol->label);
 }
 
-static struct ksplice_section *symbol_section(struct ksplice_pack *pack,
+static struct ksplice_section *symbol_section(struct ksplice_mod_change *change,
 					      const struct ksplice_symbol *sym)
 {
-	return bsearch(sym, pack->helper_sections, pack->helper_sections_end -
-		       pack->helper_sections, sizeof(struct ksplice_section),
+	return bsearch(sym, change->helper_sections,
+		       change->helper_sections_end - change->helper_sections,
+		       sizeof(struct ksplice_section),
 		       symbol_section_bsearch_compare);
 }
 
 /* Find the relocation for the oldaddr of a ksplice_patch */
-static const struct ksplice_reloc *patch_reloc(struct ksplice_pack *pack,
-					       const struct ksplice_patch *p)
+static const struct ksplice_reloc *
+patch_reloc(struct ksplice_mod_change *change,
+	    const struct ksplice_patch *p)
 {
 	unsigned long addr = (unsigned long)&p->oldaddr;
 	const struct ksplice_reloc *r =
-	    find_reloc(pack->primary_relocs, pack->primary_relocs_end, addr,
+	    find_reloc(change->primary_relocs, change->primary_relocs_end, addr,
 		       sizeof(addr));
 	if (r == NULL || r->blank_addr < addr ||
 	    r->blank_addr >= addr + sizeof(addr))
@@ -2553,7 +2565,7 @@ static const struct ksplice_reloc *patch_reloc(struct ksplice_pack *pack,
  * Populates vals with the possible values for ksym from the various
  * sources Ksplice uses to resolve symbols
  */
-static abort_t lookup_symbol(struct ksplice_pack *pack,
+static abort_t lookup_symbol(struct ksplice_mod_change *change,
 			     const struct ksplice_symbol *ksym,
 			     struct list_head *vals)
 {
@@ -2566,16 +2578,16 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 
 	if (ksym->vals == NULL) {
 		release_vals(vals);
-		ksdebug(pack, "using detected sym %s=%lx\n", ksym->label,
+		ksdebug(change, "using detected sym %s=%lx\n", ksym->label,
 			ksym->value);
-		return add_candidate_val(pack, vals, ksym->value);
+		return add_candidate_val(change, vals, ksym->value);
 	}
 
 #ifdef CONFIG_MODULE_UNLOAD
-	if (strcmp(ksym->label, "cleanup_module") == 0 && pack->target != NULL
-	    && pack->target->exit != NULL) {
-		ret = add_candidate_val(pack, vals,
-					(unsigned long)pack->target->exit);
+	if (strcmp(ksym->label, "cleanup_module") == 0 && change->target != NULL
+	    && change->target->exit != NULL) {
+		ret = add_candidate_val(change, vals,
+					(unsigned long)change->target->exit);
 		if (ret != OK)
 			return ret;
 	}
@@ -2584,12 +2596,12 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 	if (ksym->name != NULL) {
 		struct candidate_val *val;
 		list_for_each_entry(val, ksym->vals, list) {
-			ret = add_candidate_val(pack, vals, val->val);
+			ret = add_candidate_val(change, vals, val->val);
 			if (ret != OK)
 				return ret;
 		}
 
-		ret = new_export_lookup(pack, ksym->name, vals);
+		ret = new_export_lookup(change, ksym->name, vals);
 		if (ret != OK)
 			return ret;
 	}
@@ -2599,7 +2611,7 @@ static abort_t lookup_symbol(struct ksplice_pack *pack,
 
 #ifdef KSPLICE_STANDALONE
 static abort_t
-add_system_map_candidates(struct ksplice_pack *pack,
+add_system_map_candidates(struct ksplice_mod_change *change,
 			  const struct ksplice_system_map *start,
 			  const struct ksplice_system_map *end,
 			  const char *label, struct list_head *vals)
@@ -2621,9 +2633,10 @@ add_system_map_candidates(struct ksplice_pack *pack,
 	 * If we observe an offset that is a multiple of 0x100000, then we can
 	 * adjust the System.map address values accordingly and proceed.
 	 */
-	off = (unsigned long)printk - pack->map_printk;
+	off = (unsigned long)printk - change->map_printk;
 	if (off & 0xfffff) {
-		ksdebug(pack, "Aborted.  System.map does not match kernel.\n");
+		ksdebug(change,
+			"Aborted.  System.map does not match kernel.\n");
 		return BAD_SYSTEM_MAP;
 	}
 
@@ -2633,7 +2646,8 @@ add_system_map_candidates(struct ksplice_pack *pack,
 		return OK;
 
 	for (i = 0; i < smap->nr_candidates; i++) {
-		ret = add_candidate_val(pack, vals, smap->candidates[i] + off);
+		ret = add_candidate_val(change, vals,
+					smap->candidates[i] + off);
 		if (ret != OK)
 			return ret;
 	}
@@ -2651,18 +2665,18 @@ static int system_map_bsearch_compare(const void *key, const void *elt)
 /*
  * An update could one module to export a symbol and at the same time
  * change another module to use that symbol.  This violates the normal
- * situation where the packs can be handled independently.
+ * situation where the changes can be handled independently.
  *
  * new_export_lookup obtains symbol values from the changes to the
- * exported symbol table made by other packs.
+ * exported symbol table made by other changes.
  */
-static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
-				 struct list_head *vals)
+static abort_t new_export_lookup(struct ksplice_mod_change *ichange,
+				 const char *name, struct list_head *vals)
 {
-	struct ksplice_pack *pack;
+	struct ksplice_mod_change *change;
 	struct ksplice_patch *p;
-	list_for_each_entry(pack, &ipack->update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
+	list_for_each_entry(change, &ichange->update->changes, list) {
+		for (p = change->patches; p < change->patches_end; p++) {
 			const struct kernel_symbol *sym;
 			const struct ksplice_reloc *r;
 			if (p->type != KSPLICE_PATCH_EXPORT ||
@@ -2670,9 +2684,10 @@ static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
 				continue;
 
 			/* Check that the p->oldaddr reloc has been resolved. */
-			r = patch_reloc(pack, p);
+			r = patch_reloc(change, p);
 			if (r == NULL ||
-			    contains_canary(pack, r->blank_addr, r->howto) != 0)
+			    contains_canary(change, r->blank_addr,
+					    r->howto) != 0)
 				continue;
 			sym = (const struct kernel_symbol *)r->symbol->value;
 
@@ -2680,15 +2695,16 @@ static abort_t new_export_lookup(struct ksplice_pack *ipack, const char *name,
 			 * Check that the sym->value reloc has been resolved,
 			 * if there is a Ksplice relocation there.
 			 */
-			r = find_reloc(pack->primary_relocs,
-				       pack->primary_relocs_end,
+			r = find_reloc(change->primary_relocs,
+				       change->primary_relocs_end,
 				       (unsigned long)&sym->value,
 				       sizeof(&sym->value));
 			if (r != NULL &&
 			    r->blank_addr == (unsigned long)&sym->value &&
-			    contains_canary(pack, r->blank_addr, r->howto) != 0)
+			    contains_canary(change, r->blank_addr,
+					    r->howto) != 0)
 				continue;
-			return add_candidate_val(ipack, vals, sym->value);
+			return add_candidate_val(ichange, vals, sym->value);
 		}
 	}
 	return OK;
@@ -2703,15 +2719,15 @@ static abort_t apply_patches(struct update *update)
 {
 	int i;
 	abort_t ret;
-	struct ksplice_pack *pack;
+	struct ksplice_mod_change *change;
 
 	ret = map_trampoline_pages(update);
 	if (ret != OK)
 		return ret;
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = pack->pre_apply; f < pack->pre_apply_end; f++) {
+		for (f = change->pre_apply; f < change->pre_apply_end; f++) {
 			if ((*f)() != 0) {
 				ret = CALL_FAILED;
 				goto out;
@@ -2753,9 +2769,9 @@ out:
 	}
 
 	if (ret != OK) {
-		list_for_each_entry(pack, &update->packs, list) {
+		list_for_each_entry(change, &update->changes, list) {
 			const typeof(void (*)(void)) *f;
-			for (f = pack->fail_apply; f < pack->fail_apply_end;
+			for (f = change->fail_apply; f < change->fail_apply_end;
 			     f++)
 				(*f)();
 		}
@@ -2763,9 +2779,9 @@ out:
 		return ret;
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = pack->post_apply; f < pack->post_apply_end; f++)
+		for (f = change->post_apply; f < change->post_apply_end; f++)
 			(*f)();
 	}
 
@@ -2778,7 +2794,7 @@ static abort_t reverse_patches(struct update *update)
 {
 	int i;
 	abort_t ret;
-	struct ksplice_pack *pack;
+	struct ksplice_mod_change *change;
 
 	clear_debug_buf(update);
 	ret = init_debug_buf(update);
@@ -2791,9 +2807,9 @@ static abort_t reverse_patches(struct update *update)
 	if (ret != OK)
 		return ret;
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = pack->pre_reverse; f < pack->pre_reverse_end; f++) {
+		for (f = change->pre_reverse; f < change->pre_reverse_end; f++) {
 			if ((*f)() != 0) {
 				ret = CALL_FAILED;
 				goto out;
@@ -2836,24 +2852,25 @@ out:
 	}
 
 	if (ret != OK) {
-		list_for_each_entry(pack, &update->packs, list) {
+		list_for_each_entry(change, &update->changes, list) {
 			const typeof(void (*)(void)) *f;
-			for (f = pack->fail_reverse; f < pack->fail_reverse_end;
-			     f++)
+			for (f = change->fail_reverse;
+			     f < change->fail_reverse_end; f++)
 				(*f)();
 		}
 
 		return ret;
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = pack->post_reverse; f < pack->post_reverse_end; f++)
+		for (f = change->post_reverse; f < change->post_reverse_end;
+		     f++)
 			(*f)();
 	}
 
-	list_for_each_entry(pack, &update->packs, list)
-		clear_list(&pack->safety_records, struct safety_record, list);
+	list_for_each_entry(change, &update->changes, list)
+		clear_list(&change->safety_records, struct safety_record, list);
 
 	_ksdebug(update, "Atomic patch removal for %s complete\n", update->kid);
 	return OK;
@@ -2863,7 +2880,7 @@ out:
 static int __apply_patches(void *updateptr)
 {
 	struct update *update = updateptr;
-	struct ksplice_pack *pack;
+	struct ksplice_mod_change *change;
 	struct ksplice_module_list_entry *entry;
 	struct ksplice_patch *p;
 	abort_t ret;
@@ -2878,22 +2895,22 @@ static int __apply_patches(void *updateptr)
 	if (ret != OK)
 		return (__force int)ret;
 
-	list_for_each_entry(pack, &update->packs, list) {
-		if (try_module_get(pack->primary) != 1) {
-			struct ksplice_pack *pack1;
-			list_for_each_entry(pack1, &update->packs, list) {
-				if (pack1 == pack)
+	list_for_each_entry(change, &update->changes, list) {
+		if (try_module_get(change->primary) != 1) {
+			struct ksplice_mod_change *change1;
+			list_for_each_entry(change1, &update->changes, list) {
+				if (change1 == change)
 					break;
-				module_put(pack1->primary);
+				module_put(change1->primary);
 			}
 			module_put(THIS_MODULE);
 			return (__force int)UNEXPECTED;
 		}
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = pack->check_apply; f < pack->check_apply_end; f++)
+		for (f = change->check_apply; f < change->check_apply_end; f++)
 			if ((*f)() != 0)
 				return (__force int)CALL_FAILED;
 	}
@@ -2908,14 +2925,14 @@ static int __apply_patches(void *updateptr)
 	list_for_each_entry(entry, &update->ksplice_module_list, update_list)
 		list_add(&entry->list, &ksplice_modules);
 
-	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++)
+	list_for_each_entry(change, &update->changes, list) {
+		for (p = change->patches; p < change->patches_end; p++)
 			insert_trampoline(p);
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = pack->apply; f < pack->apply_end; f++)
+		for (f = change->apply; f < change->apply_end; f++)
 			(*f)();
 	}
 
@@ -2926,7 +2943,7 @@ static int __apply_patches(void *updateptr)
 static int __reverse_patches(void *updateptr)
 {
 	struct update *update = updateptr;
-	struct ksplice_pack *pack;
+	struct ksplice_mod_change *change;
 	struct ksplice_module_list_entry *entry;
 	const struct ksplice_patch *p;
 	abort_t ret;
@@ -2935,8 +2952,8 @@ static int __reverse_patches(void *updateptr)
 		return (__force int)OK;
 
 #ifdef CONFIG_MODULE_UNLOAD
-	list_for_each_entry(pack, &update->packs, list) {
-		if (module_refcount(pack->primary) != 1)
+	list_for_each_entry(change, &update->changes, list) {
+		if (module_refcount(change->primary) != 1)
 			return (__force int)MODULE_BUSY;
 	}
 #endif /* CONFIG_MODULE_UNLOAD */
@@ -2950,39 +2967,41 @@ static int __reverse_patches(void *updateptr)
 	if (ret != OK)
 		return (__force int)ret;
 
-	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++) {
-			ret = verify_trampoline(pack, p);
+	list_for_each_entry(change, &update->changes, list) {
+		for (p = change->patches; p < change->patches_end; p++) {
+			ret = verify_trampoline(change, p);
 			if (ret != OK)
 				return (__force int)ret;
 		}
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const typeof(int (*)(void)) *f;
-		for (f = pack->check_reverse; f < pack->check_reverse_end; f++)
+		for (f = change->check_reverse; f < change->check_reverse_end;
+		     f++) {
 			if ((*f)() != 0)
 				return (__force int)CALL_FAILED;
+		}
 	}
 
 	/* Commit point: the update reversal will succeed. */
 
 	update->stage = STAGE_REVERSED;
 
-	list_for_each_entry(pack, &update->packs, list)
-		module_put(pack->primary);
+	list_for_each_entry(change, &update->changes, list)
+		module_put(change->primary);
 
 	list_for_each_entry(entry, &update->ksplice_module_list, update_list)
 		list_del(&entry->list);
 
-	list_for_each_entry(pack, &update->packs, list) {
+	list_for_each_entry(change, &update->changes, list) {
 		const typeof(void (*)(void)) *f;
-		for (f = pack->reverse; f < pack->reverse_end; f++)
+		for (f = change->reverse; f < change->reverse_end; f++)
 			(*f)();
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
-		for (p = pack->patches; p < pack->patches_end; p++)
+	list_for_each_entry(change, &update->changes, list) {
+		for (p = change->patches; p < change->patches_end; p++)
 			remove_trampoline(p);
 	}
 
@@ -3087,7 +3106,7 @@ static abort_t check_address(struct update *update,
 {
 	abort_t status = OK, ret;
 	const struct safety_record *rec;
-	struct ksplice_pack *pack;
+	struct ksplice_mod_change *change;
 	struct conflict_addr *ca = NULL;
 
 	if (conf != NULL) {
@@ -3100,9 +3119,9 @@ static abort_t check_address(struct update *update,
 		list_add(&ca->list, &conf->stack);
 	}
 
-	list_for_each_entry(pack, &update->packs, list) {
-		unsigned long tramp_addr = follow_trampolines(pack, addr);
-		list_for_each_entry(rec, &pack->safety_records, list) {
+	list_for_each_entry(change, &update->changes, list) {
+		unsigned long tramp_addr = follow_trampolines(change, addr);
+		list_for_each_entry(rec, &change->safety_records, list) {
 			ret = check_record(ca, rec, tramp_addr);
 			if (ret != OK)
 				status = ret;
@@ -3181,11 +3200,11 @@ static void insert_trampoline(struct ksplice_patch *p)
 	set_fs(old_fs);
 }
 
-static abort_t verify_trampoline(struct ksplice_pack *pack,
+static abort_t verify_trampoline(struct ksplice_mod_change *change,
 				 const struct ksplice_patch *p)
 {
 	if (memcmp(p->vaddr, p->contents, p->size) != 0) {
-		ksdebug(pack, "Aborted.  Trampoline at %lx has been "
+		ksdebug(change, "Aborted.  Trampoline at %lx has been "
 			"overwritten.\n", p->oldaddr);
 		return CODE_BUSY;
 	}
@@ -3202,11 +3221,11 @@ static void remove_trampoline(const struct ksplice_patch *p)
 }
 
 /* Returns NO_MATCH if there's already a labelval with a different value */
-static abort_t create_labelval(struct ksplice_pack *pack,
+static abort_t create_labelval(struct ksplice_mod_change *change,
 			       struct ksplice_symbol *ksym,
 			       unsigned long val, int status)
 {
-	val = follow_trampolines(pack, val);
+	val = follow_trampolines(change, val);
 	if (ksym->vals == NULL)
 		return ksym->value == val ? OK : NO_MATCH;
 
@@ -3217,7 +3236,7 @@ static abort_t create_labelval(struct ksplice_pack *pack,
 			return OUT_OF_MEMORY;
 		lv->symbol = ksym;
 		lv->saved_vals = ksym->vals;
-		list_add(&lv->list, &pack->temp_labelvals);
+		list_add(&lv->list, &change->temp_labelvals);
 	}
 	ksym->vals = NULL;
 	return OK;
@@ -3227,7 +3246,7 @@ static abort_t create_labelval(struct ksplice_pack *pack,
  * Creates a new safety_record for a helper section based on its
  * ksplice_section and run-pre matching information.
  */
-static abort_t create_safety_record(struct ksplice_pack *pack,
+static abort_t create_safety_record(struct ksplice_mod_change *change,
 				    const struct ksplice_section *sect,
 				    struct list_head *record_list,
 				    unsigned long run_addr,
@@ -3239,12 +3258,12 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 	if (record_list == NULL)
 		return OK;
 
-	for (p = pack->patches; p < pack->patches_end; p++) {
-		const struct ksplice_reloc *r = patch_reloc(pack, p);
+	for (p = change->patches; p < change->patches_end; p++) {
+		const struct ksplice_reloc *r = patch_reloc(change, p);
 		if (strcmp(sect->symbol->label, r->symbol->label) == 0)
 			break;
 	}
-	if (p >= pack->patches_end)
+	if (p >= change->patches_end)
 		return OK;
 
 	rec = kmalloc(sizeof(*rec), GFP_KERNEL);
@@ -3266,7 +3285,7 @@ static abort_t create_safety_record(struct ksplice_pack *pack,
 	return OK;
 }
 
-static abort_t add_candidate_val(struct ksplice_pack *pack,
+static abort_t add_candidate_val(struct ksplice_mod_change *change,
 				 struct list_head *vals, unsigned long val)
 {
 	struct candidate_val *tmp, *new;
@@ -3275,7 +3294,7 @@ static abort_t add_candidate_val(struct ksplice_pack *pack,
  * Careful: follow trampolines before comparing values so that we do
  * not mistake the obsolete function for another copy of the function.
  */
-	val = follow_trampolines(pack, val);
+	val = follow_trampolines(change, val);
 
 	list_for_each_entry(tmp, vals, list) {
 		if (tmp->val == val)
@@ -3304,10 +3323,10 @@ static void release_vals(struct list_head *vals)
  * If status is NOVAL, restore the list of possible values to the
  * ksplice_symbol, so that it no longer has a known value.
  */
-static void set_temp_labelvals(struct ksplice_pack *pack, int status)
+static void set_temp_labelvals(struct ksplice_mod_change *change, int status)
 {
 	struct labelval *lv, *n;
-	list_for_each_entry_safe(lv, n, &pack->temp_labelvals, list) {
+	list_for_each_entry_safe(lv, n, &change->temp_labelvals, list) {
 		if (status == NOVAL) {
 			lv->symbol->vals = lv->saved_vals;
 		} else {
@@ -3320,7 +3339,8 @@ static void set_temp_labelvals(struct ksplice_pack *pack, int status)
 }
 
 /* Is there a Ksplice canary with given howto at blank_addr? */
-static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
+static int contains_canary(struct ksplice_mod_change *change,
+			   unsigned long blank_addr,
 			   const struct ksplice_reloc_howto *howto)
 {
 	switch (howto->size) {
@@ -3339,7 +3359,7 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
 		    (KSPLICE_CANARY & howto->dst_mask);
 #endif /* BITS_PER_LONG */
 	default:
-		ksdebug(pack, "Aborted.  Invalid relocation size.\n");
+		ksdebug(change, "Aborted.  Invalid relocation size.\n");
 		return -1;
 	}
 }
@@ -3349,7 +3369,7 @@ static int contains_canary(struct ksplice_pack *pack, unsigned long blank_addr,
  * to call the function at addr (i.e., follow the sequence of jumps
  * starting at addr)
  */
-static unsigned long follow_trampolines(struct ksplice_pack *pack,
+static unsigned long follow_trampolines(struct ksplice_mod_change *change,
 					unsigned long addr)
 {
 	unsigned long new_addr;
@@ -3361,10 +3381,10 @@ static unsigned long follow_trampolines(struct ksplice_pack *pack,
 			return addr;
 #endif /* KSPLICE_STANDALONE */
 		if (!__kernel_text_address(addr) ||
-		    trampoline_target(pack, addr, &new_addr) != OK)
+		    trampoline_target(change, addr, &new_addr) != OK)
 			return addr;
 		m = __module_text_address(new_addr);
-		if (m == NULL || m == pack->target ||
+		if (m == NULL || m == change->target ||
 		    !strstarts(m->name, "ksplice"))
 			return addr;
 		addr = new_addr;
@@ -4155,7 +4175,7 @@ MODULE_PARM_DESC(debug, "Debug level");
 
 extern struct ksplice_system_map ksplice_system_map[], ksplice_system_map_end[];
 
-static struct ksplice_pack bootstrap_pack = {
+static struct ksplice_mod_change bootstrap_mod_change = {
 	.name = "ksplice_" __stringify(KSPLICE_KID),
 	.kid = "init_" __stringify(KSPLICE_KID),
 	.target_name = NULL,
@@ -4170,20 +4190,20 @@ static struct ksplice_pack bootstrap_pack = {
 static int init_ksplice(void)
 {
 #ifdef KSPLICE_STANDALONE
-	struct ksplice_pack *pack = &bootstrap_pack;
-	pack->update = init_ksplice_update(pack->kid);
-	sort(pack->primary_system_map,
-	     pack->primary_system_map_end - pack->primary_system_map,
+	struct ksplice_mod_change *change = &bootstrap_mod_change;
+	change->update = init_ksplice_update(change->kid);
+	sort(change->primary_system_map,
+	     change->primary_system_map_end - change->primary_system_map,
 	     sizeof(struct ksplice_system_map), compare_system_map, NULL);
-	if (pack->update == NULL)
+	if (change->update == NULL)
 		return -ENOMEM;
-	add_to_update(pack, pack->update);
-	pack->update->debug = debug;
-	pack->update->abort_cause =
-	    apply_relocs(pack, ksplice_init_relocs, ksplice_init_relocs_end);
-	if (pack->update->abort_cause == OK)
+	add_to_update(change, change->update);
+	change->update->debug = debug;
+	change->update->abort_cause =
+	    apply_relocs(change, ksplice_init_relocs, ksplice_init_relocs_end);
+	if (change->update->abort_cause == OK)
 		bootstrapped = true;
-	cleanup_ksplice_update(bootstrap_pack.update);
+	cleanup_ksplice_update(bootstrap_mod_change.update);
 #else /* !KSPLICE_STANDALONE */
 	ksplice_kobj = kobject_create_and_add("ksplice", kernel_kobj);
 	if (ksplice_kobj == NULL)

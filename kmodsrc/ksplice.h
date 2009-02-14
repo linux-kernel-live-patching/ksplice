@@ -155,17 +155,17 @@ struct ksplice_system_map {
 #define KSPLICE_UNIQ(s) PASTE(s##_, KSPLICE_MID)
 #define KSPLICE_KID_UNIQ(s) PASTE(s##_, KSPLICE_KID)
 #ifdef KSPLICE_STANDALONE
-#define init_ksplice_pack KSPLICE_KID_UNIQ(init_ksplice_pack)
-#define cleanup_ksplice_pack KSPLICE_KID_UNIQ(cleanup_ksplice_pack)
+#define init_ksplice_mod_change KSPLICE_KID_UNIQ(init_ksplice_mod_change)
+#define cleanup_ksplice_mod_change KSPLICE_KID_UNIQ(cleanup_ksplice_mod_change)
 #endif
 
 /**
- * struct ksplice_module_list_entry - A record of a Ksplice pack's target
- * @target_name:	The name of the pack's target module
- * @primary_name:	The name of the pack's primary module
- * @applied:		Whether the pack was applied or not (this will be
- *			false for packs patching targets that are not loaded
- *			when the partial flag is set)
+ * struct ksplice_module_list_entry - A record of a ksplice_mod_change's target
+ * @target_name:	The name of the ksplice_mod_change's target module
+ * @primary_name:	The name of the ksplice_mod_change's primary module
+ * @applied:		Whether the ksplice_mod_change was applied or not (this
+ *			will be false for ksplice_mod_changes patching targets
+ *			that are not loaded when the partial flag is set)
  **/
 struct ksplice_module_list_entry {
 	const char *target_name;
@@ -181,11 +181,11 @@ struct ksplice_module_list_entry {
 extern struct list_head ksplice_modules;
 
 /**
- * struct ksplice_pack - Data for one module modified by a Ksplice update
- * @name:			The name of the primary module for the pack
- * @kid:			The Ksplice unique identifier for the pack
- * @target_name:		The name of the module modified by the pack
- * @primary:			The primary module associated with the pack
+ * struct ksplice_mod_change - Data for one module modified by a Ksplice update
+ * @name:			The name of the primary module for the change
+ * @kid:			The Ksplice unique identifier for the change
+ * @target_name:		The name of the module modified by the change
+ * @primary:			The primary module associated with the change
  * @primary_relocs:		The relocations for the primary module
  * @primary_relocs_end:		The end pointer for primary_relocs
  * @primary_sections:		The sections in the primary module
@@ -194,14 +194,14 @@ extern struct list_head ksplice_modules;
  * @helper_relocs_end:		The end pointer for helper_relocs array
  * @helper_sections:		The sections in the helper module
  * @helper_sections_end:	The end pointer for helper_sections array
- * @patches:			The function replacements in the pack
+ * @patches:			The function replacements in the change
  * @patches_end:		The end pointer for patches array
- * @update:			The atomic update the pack is part of
- * @target:			The module modified by the pack
+ * @update:			The atomic update the change is part of
+ * @target:			The module modified by the change
  * @safety_records:		The ranges of addresses that must not be on a
  *				kernel stack for the patch to apply safely
  **/
-struct ksplice_pack {
+struct ksplice_mod_change {
 	const char *name;
 	const char *kid;
 	const char *target_name;
@@ -243,8 +243,8 @@ struct ksplice_pack {
 };
 
 
-int init_ksplice_pack(struct ksplice_pack *pack);
+int init_ksplice_mod_change(struct ksplice_mod_change *change);
 
-void cleanup_ksplice_pack(struct ksplice_pack *pack);
+void cleanup_ksplice_mod_change(struct ksplice_mod_change *change);
 
 #endif /* __KERNEL__ */

@@ -40,8 +40,8 @@ static const struct ksplice_reloc trampoline_reloc = {
 	.howto = &trampoline_howto,
 };
 
-static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
-				 unsigned long *new_addr)
+static abort_t trampoline_target(struct ksplice_mod_change *change,
+				 unsigned long addr, unsigned long *new_addr)
 {
 	abort_t ret;
 	uint32_t word;
@@ -51,7 +51,7 @@ static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
 	if ((word & 0xff000000) != 0xea000000)
 		return NO_MATCH;
 
-	ret = read_reloc_value(pack, &trampoline_reloc, addr, new_addr);
+	ret = read_reloc_value(change, &trampoline_reloc, addr, new_addr);
 	if (ret != OK)
 		return ret;
 
@@ -59,17 +59,17 @@ static abort_t trampoline_target(struct ksplice_pack *pack, unsigned long addr,
 	return OK;
 }
 
-static abort_t prepare_trampoline(struct ksplice_pack *pack,
+static abort_t prepare_trampoline(struct ksplice_mod_change *change,
 				  struct ksplice_patch *p)
 {
 	p->size = 4;
 	*(uint32_t *)p->contents = 0xea000000;
-	return write_reloc_value(pack, &trampoline_reloc,
+	return write_reloc_value(change, &trampoline_reloc,
 				 (unsigned long)p->contents,
 				 p->repladdr - p->oldaddr);
 }
 
-static abort_t handle_paravirt(struct ksplice_pack *pack,
+static abort_t handle_paravirt(struct ksplice_mod_change *change,
 			       unsigned long pre_addr, unsigned long run_addr,
 			       int *matched)
 {

@@ -48,8 +48,8 @@ extern struct ksplice_system_map ksplice_system_map[],
     ksplice_system_map_end[];
 #endif /* KSPLICE_STANDALONE */
 
-#define pack KSPLICE_UNIQ(pack)
-struct ksplice_pack pack = {
+#define change KSPLICE_UNIQ(change)
+struct ksplice_mod_change change = {
 	.name = "ksplice_" __stringify(KSPLICE_MID),
 	.kid = __stringify(KSPLICE_KID),
 	.target_name = __stringify(KSPLICE_TARGET),
@@ -94,7 +94,7 @@ struct ksplice_pack pack = {
 	.primary_system_map_end = ksplice_system_map_end,
 #endif /* KSPLICE_STANDALONE */
 };
-EXPORT_SYMBOL_GPL(pack);
+EXPORT_SYMBOL_GPL(change);
 
 static int init_primary(void)
 {
@@ -103,7 +103,7 @@ static int init_primary(void)
 
 static void cleanup_primary(void)
 {
-	cleanup_ksplice_pack(&pack);
+	cleanup_ksplice_mod_change(&change);
 }
 
 module_init(init_primary);

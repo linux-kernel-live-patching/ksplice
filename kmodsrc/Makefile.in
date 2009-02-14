@@ -26,7 +26,7 @@ cmd_ksplice-collect = \
 	$(ksplice-script) finalize $< $<.final $* && \
 	$(LD) --script=$(obj)/ksplice.lds -r -o $@ $<.final
 
-ksplice-pack-cflags = $(KSPLICE_CFLAGS) \
+ksplice-mod-cflags = $(KSPLICE_CFLAGS) \
 	"-DKSPLICE_MID=$(KSPLICE_MID)" \
 	$(addprefix -DKSPLICE_TARGET=,$(target)) \
 	"-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\""
@@ -52,16 +52,16 @@ fake-ksplice.o = ksplice.o
 $(obj)/$(KSPLICE_CORE).o: fake-ksplice.o =
 endif
 
-define ksplice-pack-vars
+define ksplice-mod-vars
 obj-m += $(KSPLICE).o $(KSPLICE)-helper.o
 $(KSPLICE)-objs = $(ksplice-primary-objs)
 $(KSPLICE)-helper-objs = $(ksplice-helper-objs)
-CFLAGS_primary-$(target).o = $(ksplice-pack-cflags)
-CFLAGS_helper-$(target).o = $(ksplice-pack-cflags)
-CPPFLAGS_ksplice.lds = $(ksplice-pack-cflags) -P
+CFLAGS_primary-$(target).o = $(ksplice-mod-cflags)
+CFLAGS_helper-$(target).o = $(ksplice-mod-cflags)
+CPPFLAGS_ksplice.lds = $(ksplice-mod-cflags) -P
 endef
 
-$(foreach mod,$(KSPLICE_MODULES),$(eval $(ksplice-pack-vars)))
+$(foreach mod,$(KSPLICE_MODULES),$(eval $(ksplice-mod-vars)))
 
 ifneq ($(KSPLICE_MODULES),)
 $(foreach mod,$(KSPLICE_MODULES),$(obj)/primary-$(target).o): $(obj)/%.o: $(src)/primary.c FORCE
