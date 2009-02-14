@@ -181,19 +181,31 @@ struct ksplice_module_list_entry {
 extern struct list_head ksplice_modules;
 
 /**
+ * struct ksplice_code - Ksplice metadata for an object
+ * @relocs:		The Ksplice relocations for the object
+ * @symbols:		The Ksplice symbols for the object
+ * @sections:		The Ksplice sections for the object
+ **/
+struct ksplice_code {
+	struct ksplice_reloc *relocs, *relocs_end;
+	struct ksplice_section *sections, *sections_end;
+	struct ksplice_symbol *symbols, *symbols_end;
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+	struct paravirt_patch_site *parainstructions, *parainstructions_end;
+#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
+#ifdef KSPLICE_STANDALONE
+	struct ksplice_system_map *system_map, *system_map_end;
+#endif /* KSPLICE_STANDALONE */
+};
+
+/**
  * struct ksplice_mod_change - Data for one module modified by a Ksplice update
  * @name:			The name of the primary module for the change
  * @kid:			The Ksplice unique identifier for the change
  * @target_name:		The name of the module modified by the change
  * @primary:			The primary module associated with the change
- * @primary_relocs:		The relocations for the primary module
- * @primary_relocs_end:		The end pointer for primary_relocs
- * @primary_sections:		The sections in the primary module
- * @primary_sections_end:	The end pointer for primary_sections array
- * @helper_relocs:		The relocations for the helper module
- * @helper_relocs_end:		The end pointer for helper_relocs array
- * @helper_sections:		The sections in the helper module
- * @helper_sections_end:	The end pointer for helper_sections array
+ * @old_code:			The old code for run-pre matching
+ * @new_code:			The new code to switch to
  * @patches:			The function replacements in the change
  * @patches_end:		The end pointer for patches array
  * @update:			The atomic update the change is part of
@@ -209,12 +221,7 @@ struct ksplice_mod_change {
 	unsigned long map_printk;
 #endif /* KSPLICE_STANDALONE */
 	struct module *primary;
-	struct ksplice_reloc *primary_relocs, *primary_relocs_end;
-	const struct ksplice_section *primary_sections, *primary_sections_end;
-	struct ksplice_symbol *primary_symbols, *primary_symbols_end;
-	struct ksplice_reloc *helper_relocs, *helper_relocs_end;
-	struct ksplice_section *helper_sections, *helper_sections_end;
-	struct ksplice_symbol *helper_symbols, *helper_symbols_end;
+	struct ksplice_code old_code, new_code;
 	struct ksplice_patch *patches, *patches_end;
 	const typeof(int (*)(void)) *pre_apply, *pre_apply_end, *check_apply,
 	    *check_apply_end;
@@ -224,16 +231,6 @@ struct ksplice_mod_change {
 	    *check_reverse, *check_reverse_end;
 	const typeof(void (*)(void)) *reverse, *reverse_end, *post_reverse,
 	    *post_reverse_end, *fail_reverse, *fail_reverse_end;
-#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-	struct paravirt_patch_site
-	    *primary_parainstructions, *primary_parainstructions_end,
-	    *helper_parainstructions, *helper_parainstructions_end;
-#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
-#ifdef KSPLICE_STANDALONE
-	struct ksplice_system_map
-	    *primary_system_map, *primary_system_map_end,
-	    *helper_system_map, *helper_system_map_end;
-#endif /* KSPLICE_STANDALONE */
 /* private: */
 	struct update *update;
 	struct module *target;

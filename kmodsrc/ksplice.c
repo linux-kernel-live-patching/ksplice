@@ -763,27 +763,28 @@ int init_ksplice_mod_change(struct ksplice_mod_change *change)
 	INIT_LIST_HEAD(&change->temp_labelvals);
 	INIT_LIST_HEAD(&change->safety_records);
 
-	sort(change->helper_relocs,
-	     change->helper_relocs_end - change->helper_relocs,
-	     sizeof(*change->helper_relocs), compare_relocs, NULL);
-	sort(change->primary_relocs,
-	     change->primary_relocs_end - change->primary_relocs,
-	     sizeof(*change->primary_relocs), compare_relocs, NULL);
-	sort(change->helper_sections,
-	     change->helper_sections_end - change->helper_sections,
-	     sizeof(*change->helper_sections), compare_section_labels, NULL);
+	sort(change->old_code.relocs,
+	     change->old_code.relocs_end - change->old_code.relocs,
+	     sizeof(*change->old_code.relocs), compare_relocs, NULL);
+	sort(change->new_code.relocs,
+	     change->new_code.relocs_end - change->new_code.relocs,
+	     sizeof(*change->new_code.relocs), compare_relocs, NULL);
+	sort(change->old_code.sections,
+	     change->old_code.sections_end - change->old_code.sections,
+	     sizeof(*change->old_code.sections), compare_section_labels, NULL);
 #ifdef KSPLICE_STANDALONE
-	sort(change->primary_system_map,
-	     change->primary_system_map_end - change->primary_system_map,
-	     sizeof(*change->primary_system_map), compare_system_map, NULL);
-	sort(change->helper_system_map,
-	     change->helper_system_map_end - change->helper_system_map,
-	     sizeof(*change->helper_system_map), compare_system_map, NULL);
+	sort(change->new_code.system_map,
+	     change->new_code.system_map_end - change->new_code.system_map,
+	     sizeof(*change->new_code.system_map), compare_system_map, NULL);
+	sort(change->old_code.system_map,
+	     change->old_code.system_map_end - change->old_code.system_map,
+	     sizeof(*change->old_code.system_map), compare_system_map, NULL);
 #endif /* KSPLICE_STANDALONE */
 
 	for (p = change->patches; p < change->patches_end; p++)
 		p->vaddr = NULL;
-	for (s = change->helper_sections; s < change->helper_sections_end; s++)
+	for (s = change->old_code.sections; s < change->old_code.sections_end;
+	     s++)
 		s->match_map = NULL;
 	for (p = change->patches; p < change->patches_end; p++) {
 		const struct ksplice_reloc *r = patch_reloc(change, p);
@@ -1022,18 +1023,18 @@ static abort_t apply_update(struct update *update)
 
 #ifdef KSPLICE_NEED_PARAINSTRUCTIONS
 		if (change->target == NULL) {
-			apply_paravirt(change->primary_parainstructions,
-				       change->primary_parainstructions_end);
-			apply_paravirt(change->helper_parainstructions,
-				       change->helper_parainstructions_end);
+			apply_paravirt(change->new_code.parainstructions,
+				       change->new_code.parainstructions_end);
+			apply_paravirt(change->old_code.parainstructions,
+				       change->old_code.parainstructions_end);
 		}
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 	}
 
 	list_for_each_entry(change, &update->changes, list) {
 		const struct ksplice_section *sect;
-		for (sect = change->primary_sections;
-		     sect < change->primary_sections_end; sect++) {
+		for (sect = change->new_code.sections;
+		     sect < change->new_code.sections_end; sect++) {
 			struct safety_record *rec = kmalloc(sizeof(*rec),
 							    GFP_KERNEL);
 			if (rec == NULL) {
@@ -1065,8 +1066,8 @@ out:
 		if (update->stage == STAGE_PREPARING)
 			clear_list(&change->safety_records,
 				   struct safety_record, list);
-		for (s = change->helper_sections;
-		     s < change->helper_sections_end; s++) {
+		for (s = change->old_code.sections;
+		     s < change->old_code.sections_end; s++) {
 			if (s->match_map != NULL) {
 				vfree(s->match_map);
 				s->match_map = NULL;
@@ -1163,7 +1164,7 @@ static bool add_export_values(const struct symsearch *syms,
 static void cleanup_symbol_arrays(struct ksplice_mod_change *change)
 {
 	struct ksplice_symbol *sym;
-	for (sym = change->primary_symbols; sym < change->primary_symbols_end;
+	for (sym = change->new_code.symbols; sym < change->new_code.symbols_end;
 	     sym++) {
 		if (sym->vals != NULL) {
 			clear_list(sym->vals, struct candidate_val, list);
@@ -1171,7 +1172,7 @@ static void cleanup_symbol_arrays(struct ksplice_mod_change *change)
 			sym->vals = NULL;
 		}
 	}
-	for (sym = change->helper_symbols; sym < change->helper_symbols_end;
+	for (sym = change->old_code.symbols; sym < change->old_code.symbols_end;
 	     sym++) {
 		if (sym->vals != NULL) {
 			clear_list(sym->vals, struct candidate_val, list);
@@ -1192,7 +1193,7 @@ static abort_t uniquify_symbols(struct ksplice_mod_change *change)
 	struct ksplice_reloc *r;
 	struct ksplice_section *s;
 	struct ksplice_symbol *sym, **sym_arr, **symp;
-	size_t size = change->primary_symbols_end - change->primary_symbols;
+	size_t size = change->new_code.symbols_end - change->new_code.symbols;
 
 	if (size == 0)
 		return OK;
@@ -1201,14 +1202,15 @@ static abort_t uniquify_symbols(struct ksplice_mod_change *change)
 	if (sym_arr == NULL)
 		return OUT_OF_MEMORY;
 
-	for (symp = sym_arr, sym = change->primary_symbols;
-	     symp < sym_arr + size && sym < change->primary_symbols_end;
+	for (symp = sym_arr, sym = change->new_code.symbols;
+	     symp < sym_arr + size && sym < change->new_code.symbols_end;
 	     sym++, symp++)
 		*symp = sym;
 
 	sort(sym_arr, size, sizeof(*sym_arr), compare_symbolp_labels, NULL);
 
-	for (r = change->helper_relocs; r < change->helper_relocs_end; r++) {
+	for (r = change->old_code.relocs; r < change->old_code.relocs_end;
+	     r++) {
 		symp = bsearch(&r->symbol, sym_arr, size, sizeof(*sym_arr),
 			       compare_symbolp_labels);
 		if (symp != NULL) {
@@ -1218,7 +1220,8 @@ static abort_t uniquify_symbols(struct ksplice_mod_change *change)
 		}
 	}
 
-	for (s = change->helper_sections; s < change->helper_sections_end; s++) {
+	for (s = change->old_code.sections; s < change->old_code.sections_end;
+	     s++) {
 		symp = bsearch(&s->symbol, sym_arr, size, sizeof(*sym_arr),
 			       compare_symbolp_labels);
 		if (symp != NULL) {
@@ -1308,13 +1311,13 @@ static abort_t init_symbol_arrays(struct ksplice_mod_change *change)
 	if (ret != OK)
 		return ret;
 
-	ret = init_symbol_array(change, change->helper_symbols,
-				change->helper_symbols_end);
+	ret = init_symbol_array(change, change->old_code.symbols,
+				change->old_code.symbols_end);
 	if (ret != OK)
 		return ret;
 
-	ret = init_symbol_array(change, change->primary_symbols,
-				change->primary_symbols_end);
+	ret = init_symbol_array(change, change->new_code.symbols,
+				change->new_code.symbols_end);
 	if (ret != OK)
 		return ret;
 
@@ -1368,8 +1371,8 @@ static abort_t prepare_change(struct ksplice_mod_change *change)
 static abort_t finalize_change(struct ksplice_mod_change *change)
 {
 	abort_t ret;
-	ret = apply_relocs(change, change->primary_relocs,
-			   change->primary_relocs_end);
+	ret = apply_relocs(change, change->new_code.relocs,
+			   change->new_code.relocs_end);
 	if (ret != OK)
 		return ret;
 
@@ -1582,8 +1585,8 @@ static abort_t apply_howto_reloc(struct ksplice_mod_change *change,
 #ifdef KSPLICE_STANDALONE
 	if (!bootstrapped) {
 		ret = add_system_map_candidates(change,
-						change->primary_system_map,
-						change->primary_system_map_end,
+						change->new_code.system_map,
+						change->new_code.system_map_end,
 						r->symbol->label, &vals);
 		if (ret != OK) {
 			release_vals(&vals);
@@ -1820,8 +1823,8 @@ static abort_t match_change_sections(struct ksplice_mod_change *change,
 	int remaining = 0;
 	bool progress;
 
-	for (sect = change->helper_sections; sect < change->helper_sections_end;
-	     sect++) {
+	for (sect = change->old_code.sections;
+	     sect < change->old_code.sections_end; sect++) {
 		if ((sect->flags & KSPLICE_SECTION_DATA) == 0 &&
 		    (sect->flags & KSPLICE_SECTION_STRING) == 0 &&
 		    (sect->flags & KSPLICE_SECTION_MATCHED) == 0)
@@ -1830,8 +1833,8 @@ static abort_t match_change_sections(struct ksplice_mod_change *change,
 
 	while (remaining > 0) {
 		progress = false;
-		for (sect = change->helper_sections;
-		     sect < change->helper_sections_end; sect++) {
+		for (sect = change->old_code.sections;
+		     sect < change->old_code.sections_end; sect++) {
 			if ((sect->flags & KSPLICE_SECTION_MATCHED) != 0)
 				continue;
 			if ((!consider_data_sections &&
@@ -1852,8 +1855,8 @@ static abort_t match_change_sections(struct ksplice_mod_change *change,
 		if (progress)
 			continue;
 
-		for (sect = change->helper_sections;
-		     sect < change->helper_sections_end; sect++) {
+		for (sect = change->old_code.sections;
+		     sect < change->old_code.sections_end; sect++) {
 			if ((sect->flags & KSPLICE_SECTION_MATCHED) != 0 ||
 			    (sect->flags & KSPLICE_SECTION_STRING) != 0)
 				continue;
@@ -1886,8 +1889,8 @@ static abort_t find_section(struct ksplice_mod_change *change,
 	struct candidate_val *v, *n;
 
 #ifdef KSPLICE_STANDALONE
-	ret = add_system_map_candidates(change, change->helper_system_map,
-					change->helper_system_map_end,
+	ret = add_system_map_candidates(change, change->old_code.system_map,
+					change->old_code.system_map_end,
 					sect->symbol->label, &vals);
 	if (ret != OK) {
 		release_vals(&vals);
@@ -2286,16 +2289,16 @@ init_reloc_search(struct ksplice_mod_change *change,
 		  const struct ksplice_section *sect)
 {
 	const struct ksplice_reloc *r;
-	r = find_reloc(change->helper_relocs, change->helper_relocs_end,
+	r = find_reloc(change->old_code.relocs, change->old_code.relocs_end,
 		       sect->address, sect->size);
 	if (r == NULL)
-		return change->helper_relocs_end;
+		return change->old_code.relocs_end;
 	return r;
 }
 
 /*
  * lookup_reloc implements an amortized O(1) lookup for the next
- * helper relocation.  It must be called with a strictly increasing
+ * old_code relocation.  It must be called with a strictly increasing
  * sequence of addresses.
  *
  * The fingerp is private data for lookup_reloc, and needs to have
@@ -2310,12 +2313,12 @@ static abort_t lookup_reloc(struct ksplice_mod_change *change,
 	const struct ksplice_reloc *r = *fingerp;
 	int canary_ret;
 
-	while (r < change->helper_relocs_end &&
+	while (r < change->old_code.relocs_end &&
 	       addr >= r->blank_addr + r->howto->size &&
 	       !(addr == r->blank_addr && r->howto->size == 0))
 		r++;
 	*fingerp = r;
-	if (r == change->helper_relocs_end)
+	if (r == change->old_code.relocs_end)
 		return NO_MATCH;
 	if (addr < r->blank_addr)
 		return NO_MATCH;
@@ -2540,8 +2543,9 @@ static int compare_section_labels(const void *va, const void *vb)
 static struct ksplice_section *symbol_section(struct ksplice_mod_change *change,
 					      const struct ksplice_symbol *sym)
 {
-	return bsearch(sym, change->helper_sections,
-		       change->helper_sections_end - change->helper_sections,
+	return bsearch(sym, change->old_code.sections,
+		       change->old_code.sections_end -
+		       change->old_code.sections,
 		       sizeof(struct ksplice_section),
 		       symbol_section_bsearch_compare);
 }
@@ -2553,8 +2557,8 @@ patch_reloc(struct ksplice_mod_change *change,
 {
 	unsigned long addr = (unsigned long)&p->oldaddr;
 	const struct ksplice_reloc *r =
-	    find_reloc(change->primary_relocs, change->primary_relocs_end, addr,
-		       sizeof(addr));
+	    find_reloc(change->new_code.relocs, change->new_code.relocs_end,
+		       addr, sizeof(addr));
 	if (r == NULL || r->blank_addr < addr ||
 	    r->blank_addr >= addr + sizeof(addr))
 		return NULL;
@@ -2695,8 +2699,8 @@ static abort_t new_export_lookup(struct ksplice_mod_change *ichange,
 			 * Check that the sym->value reloc has been resolved,
 			 * if there is a Ksplice relocation there.
 			 */
-			r = find_reloc(change->primary_relocs,
-				       change->primary_relocs_end,
+			r = find_reloc(change->new_code.relocs,
+				       change->new_code.relocs_end,
 				       (unsigned long)&sym->value,
 				       sizeof(&sym->value));
 			if (r != NULL &&
@@ -3243,7 +3247,7 @@ static abort_t create_labelval(struct ksplice_mod_change *change,
 }
 
 /*
- * Creates a new safety_record for a helper section based on its
+ * Creates a new safety_record for a old_code section based on its
  * ksplice_section and run-pre matching information.
  */
 static abort_t create_safety_record(struct ksplice_mod_change *change,
@@ -4182,8 +4186,8 @@ static struct ksplice_mod_change bootstrap_mod_change = {
 	.target = NULL,
 	.map_printk = MAP_PRINTK,
 	.primary = THIS_MODULE,
-	.primary_system_map = ksplice_system_map,
-	.primary_system_map_end = ksplice_system_map_end,
+	.new_code.system_map = ksplice_system_map,
+	.new_code.system_map_end = ksplice_system_map_end,
 };
 #endif /* KSPLICE_STANDALONE */
 
@@ -4192,8 +4196,8 @@ static int init_ksplice(void)
 #ifdef KSPLICE_STANDALONE
 	struct ksplice_mod_change *change = &bootstrap_mod_change;
 	change->update = init_ksplice_update(change->kid);
-	sort(change->primary_system_map,
-	     change->primary_system_map_end - change->primary_system_map,
+	sort(change->new_code.system_map,
+	     change->new_code.system_map_end - change->new_code.system_map,
 	     sizeof(struct ksplice_system_map), compare_system_map, NULL);
 	if (change->update == NULL)
 		return -ENOMEM;

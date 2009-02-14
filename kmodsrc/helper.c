@@ -36,24 +36,26 @@ extern struct ksplice_system_map ksplice_system_map[],
 #define change KSPLICE_UNIQ(change)
 extern struct ksplice_mod_change change;
 
-#define PTR(p) ({ static const volatile typeof(&*p) p##_ptr = p; p##_ptr; })
+static struct ksplice_code old_code = {
+	.relocs = ksplice_relocs,
+	.relocs_end = ksplice_relocs_end,
+	.sections = ksplice_sections,
+	.sections_end = ksplice_sections_end,
+	.symbols = ksplice_symbols,
+	.symbols_end = ksplice_symbols_end,
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+	.parainstructions = parainstructions,
+	.parainstructions_end = parainstructions_end,
+#endif
+#ifdef KSPLICE_STANDALONE
+	.system_map = ksplice_system_map,
+	.system_map_end = ksplice_system_map_end,
+#endif /* KSPLICE_STANDALONE */
+};
 
 static int init_helper(void)
 {
-	change.helper_relocs = PTR(ksplice_relocs);
-	change.helper_relocs_end = PTR(ksplice_relocs_end);
-	change.helper_sections = PTR(ksplice_sections);
-	change.helper_sections_end = PTR(ksplice_sections_end);
-	change.helper_symbols = PTR(ksplice_symbols);
-	change.helper_symbols_end = PTR(ksplice_symbols_end);
-#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-	change.helper_parainstructions = PTR(parainstructions);
-	change.helper_parainstructions_end = PTR(parainstructions_end);
-#endif
-#ifdef KSPLICE_STANDALONE
-	change.helper_system_map = PTR(ksplice_system_map);
-	change.helper_system_map_end = PTR(ksplice_system_map_end);
-#endif /* KSPLICE_STANDALONE */
+	change.old_code = old_code;
 	return init_ksplice_mod_change(&change);
 }
 

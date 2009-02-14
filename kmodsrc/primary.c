@@ -22,7 +22,7 @@
 #endif
 
 extern struct ksplice_reloc ksplice_relocs[], ksplice_relocs_end[];
-extern const struct ksplice_section ksplice_sections[], ksplice_sections_end[];
+extern struct ksplice_section ksplice_sections[], ksplice_sections_end[];
 extern struct ksplice_symbol ksplice_symbols[], ksplice_symbols_end[];
 extern struct ksplice_patch ksplice_patches[], ksplice_patches_end[];
 extern const typeof(int (*)(void)) ksplice_call_pre_apply[],
@@ -57,12 +57,22 @@ struct ksplice_mod_change change = {
 	.map_printk = MAP_PRINTK,
 #endif /* KSPLICE_STANDALONE */
 	.primary = THIS_MODULE,
-	.primary_relocs = ksplice_relocs,
-	.primary_relocs_end = ksplice_relocs_end,
-	.primary_sections = ksplice_sections,
-	.primary_sections_end = ksplice_sections_end,
-	.primary_symbols = ksplice_symbols,
-	.primary_symbols_end = ksplice_symbols_end,
+	.new_code = {
+		.relocs = ksplice_relocs,
+		.relocs_end = ksplice_relocs_end,
+		.sections = ksplice_sections,
+		.sections_end = ksplice_sections_end,
+		.symbols = ksplice_symbols,
+		.symbols_end = ksplice_symbols_end,
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+		.parainstructions = parainstructions,
+		.parainstructions_end = parainstructions_end,
+#endif
+#ifdef KSPLICE_STANDALONE
+		.system_map = ksplice_system_map,
+		.system_map_end = ksplice_system_map_end,
+#endif /* KSPLICE_STANDALONE */
+	},
 	.patches = ksplice_patches,
 	.patches_end = ksplice_patches_end,
 	.pre_apply = ksplice_call_pre_apply,
@@ -85,14 +95,6 @@ struct ksplice_mod_change change = {
 	.post_reverse_end = ksplice_call_post_reverse_end,
 	.fail_reverse = ksplice_call_fail_reverse,
 	.fail_reverse_end = ksplice_call_fail_reverse_end,
-#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
-	.primary_parainstructions = parainstructions,
-	.primary_parainstructions_end = parainstructions_end,
-#endif
-#ifdef KSPLICE_STANDALONE
-	.primary_system_map = ksplice_system_map,
-	.primary_system_map_end = ksplice_system_map_end,
-#endif /* KSPLICE_STANDALONE */
 };
 EXPORT_SYMBOL_GPL(change);
 
