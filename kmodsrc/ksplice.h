@@ -161,15 +161,15 @@ struct ksplice_system_map {
 
 /**
  * struct ksplice_module_list_entry - A record of a ksplice_mod_change's target
- * @target_name:	The name of the ksplice_mod_change's target module
- * @primary_name:	The name of the ksplice_mod_change's primary module
+ * @target_mod_name:	The name of the ksplice_mod_change's target module
+ * @new_code_mod_name:	The name of the ksplice_mod_change's new_code module
  * @applied:		Whether the ksplice_mod_change was applied or not (this
  *			will be false for ksplice_mod_changes patching targets
  *			that are not loaded when the partial flag is set)
  **/
 struct ksplice_module_list_entry {
-	const char *target_name;
-	const char *primary_name;
+	const char *target_mod_name;
+	const char *new_code_mod_name;
 	const char *kid;
 	bool applied;
 /* private: */

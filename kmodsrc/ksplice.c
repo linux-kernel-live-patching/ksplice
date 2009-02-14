@@ -1774,14 +1774,14 @@ static abort_t create_module_list_entry(struct ksplice_mod_change *change,
 	    kmalloc(sizeof(*entry), GFP_KERNEL);
 	if (entry == NULL)
 		return OUT_OF_MEMORY;
-	entry->primary_name = kstrdup(change->primary->name, GFP_KERNEL);
-	if (entry->primary_name == NULL) {
+	entry->new_code_mod_name = kstrdup(change->primary->name, GFP_KERNEL);
+	if (entry->new_code_mod_name == NULL) {
 		kfree(entry);
 		return OUT_OF_MEMORY;
 	}
-	entry->target_name = kstrdup(change->target_name, GFP_KERNEL);
-	if (entry->target_name == NULL) {
-		kfree(entry->primary_name);
+	entry->target_mod_name = kstrdup(change->target_name, GFP_KERNEL);
+	if (entry->target_mod_name == NULL) {
+		kfree(entry->new_code_mod_name);
 		kfree(entry);
 		return OUT_OF_MEMORY;
 	}
@@ -1796,8 +1796,8 @@ static void cleanup_module_list_entries(struct update *update)
 {
 	struct ksplice_module_list_entry *entry;
 	list_for_each_entry(entry, &update->ksplice_module_list, update_list) {
-		kfree(entry->target_name);
-		kfree(entry->primary_name);
+		kfree(entry->target_mod_name);
+		kfree(entry->new_code_mod_name);
 	}
 	clear_list(&update->ksplice_module_list,
 		   struct ksplice_module_list_entry, update_list);
@@ -2963,7 +2963,8 @@ static int __reverse_patches(void *updateptr)
 #endif /* CONFIG_MODULE_UNLOAD */
 
 	list_for_each_entry(entry, &update->ksplice_module_list, update_list) {
-		if (!entry->applied && find_module(entry->target_name) != NULL)
+		if (!entry->applied &&
+		    find_module(entry->target_mod_name) != NULL)
 			return COLD_UPDATE_LOADED;
 	}
 
@@ -3415,8 +3416,8 @@ static bool patches_module(const struct module *a, const struct module *b)
 	if (a == b)
 		return true;
 	list_for_each_entry(entry, &ksplice_modules, list) {
-		if (strcmp(entry->target_name, b->name) == 0 &&
-		    strcmp(entry->primary_name, a->name) == 0)
+		if (strcmp(entry->target_mod_name, b->name) == 0 &&
+		    strcmp(entry->new_code_mod_name, a->name) == 0)
 			return true;
 	}
 	return false;
