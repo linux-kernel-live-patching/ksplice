@@ -30,8 +30,8 @@ cmd_ksplice-cow = cp -a $@ $@.KSPLICE_pre
 quiet_cmd_ksplice-mod = MOD     $(@:$(KSPLICE_KMODSRC)/%.mod.KSPLICE=%)
 cmd_ksplice-mod = echo $(<:.o.KSPLICE=) > $@; cp -a $< $(<:.KSPLICE=.KSPLICE_new_code) $(<:.KSPLICE=.KSPLICE_old_code) $(KSPLICE_KMODSRC)/
 rule_ksplice-mod = if [ -s $< ]; then $(echo-cmd) $(cmd_$(1)); fi
-quiet_cmd_ksplice-helper = HELPER  $(@:.KSPLICE_old_code=)
-cmd_ksplice-helper = $(ksplice-script) helper $@
+quiet_cmd_ksplice-old-code = OLDCODE $(@:.KSPLICE_old_code=)
+cmd_ksplice-old-code = $(ksplice-script) old_code $@
 quiet_cmd_ksplice-freeze = FREEZE  $(@:_ksplice-revert_%.KSPLICE_pre=%)
 cmd_ksplice-freeze = rm -f $(@:_ksplice-revert_%=%)
 quiet_cmd_ksplice-revert = REVERT  $(@:_ksplice-revert_%.KSPLICE_pre=%)
@@ -227,7 +227,7 @@ endif
 .SECONDARY: $(obj)/%.o.KSPLICE
 
 $(obj)/%.o.KSPLICE_old_code: $(obj)/%.o.KSPLICE
-	$(call cmd,ksplice-helper)
+	$(call cmd,ksplice-old-code)
 
 ifeq ($(KSPLICE_MODE),diff)
 

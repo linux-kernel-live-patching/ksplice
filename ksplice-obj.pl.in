@@ -63,7 +63,7 @@ sub do_diff {
 	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_old_code", "keep-old-code");
 }
 
-sub do_helper {
+sub do_old_code {
 	my ($out) = @_;
 	my ($obj) = $out =~ /^(.*)\.KSPLICE_old_code$/ or die;
 	my $obj_pre = "$obj.KSPLICE_pre";
@@ -84,26 +84,26 @@ sub link_objs {
 
 sub do_combine {
 	my ($out, @ins) = @_;
-	my @primaries;
-	my @helpers;
+	my @new_code_objs;
+	my @old_code_objs;
 	foreach my $in (@ins) {
 		if (my ($obj) = $in =~ /^(.*)\.KSPLICE$/) {
 			next if (!-s $in);
-			push @primaries, "$obj.KSPLICE_new_code";
-			push @helpers, "$obj.KSPLICE_old_code";
+			push @new_code_objs, "$obj.KSPLICE_new_code";
+			push @old_code_objs, "$obj.KSPLICE_old_code";
 		} elsif (($obj) = $in =~ /^(.*)\.KSPLICE_old_code$/) {
-			push @helpers, "$obj.KSPLICE_old_code"
-			    unless (@helpers && $helpers[$#helpers] eq "$obj.KSPLICE_old_code");
+			push @old_code_objs, "$obj.KSPLICE_old_code"
+			    unless (@old_code_objs && $old_code_objs[$#old_code_objs] eq "$obj.KSPLICE_old_code");
 		} else {
 			die;
 		}
 	}
 
-	return empty_diff($out) unless (@helpers);
+	return empty_diff($out) unless (@old_code_objs);
 
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
-	link_objs("$obj.KSPLICE_new_code", @primaries);
-	link_objs("$obj.KSPLICE_old_code", @helpers);
+	link_objs("$obj.KSPLICE_new_code", @new_code_objs);
+	link_objs("$obj.KSPLICE_old_code", @old_code_objs);
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
@@ -135,7 +135,7 @@ sub do_system_map_lookup {
 my %handlers = (
 	'snap' => \&do_snap,
 	'diff' => \&do_diff,
-	'helper' => \&do_helper,
+	'old_code' => \&do_old_code,
 	'combine' => \&do_combine,
 	'finalize' => \&do_finalize,
 	'rmsyms' => \&do_rmsyms,
