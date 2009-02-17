@@ -12,7 +12,7 @@ PHONY :=
 __ksplice:
 
 ksplice-extra = $(filter $(KSPLICE_EXTRA_MATCH),$(lib-y) $(real-objs-m) $(real-objs-y))
-ksplice-objs = $(foreach o,$(1),$(o:=.KSPLICE) $(addsuffix .KSPLICE_helper,$(filter $(ksplice-extra),$(o))))
+ksplice-objs = $(foreach o,$(1),$(o:=.KSPLICE) $(addsuffix .KSPLICE_old_code,$(filter $(ksplice-extra),$(o))))
 
 escsq ?= $(subst ','\'',$(1))
 echo-cmd ?= $(if $($(quiet)cmd_$(1)),echo '  $(call escsq,$($(quiet)cmd_$(1)))';)
@@ -28,9 +28,9 @@ cmd_ksplice-ignore = touch $@
 quiet_cmd_ksplice-cow = COW     $@
 cmd_ksplice-cow = cp -a $@ $@.KSPLICE_pre
 quiet_cmd_ksplice-mod = MOD     $(@:$(KSPLICE_KMODSRC)/%.mod.KSPLICE=%)
-cmd_ksplice-mod = echo $(<:.o.KSPLICE=) > $@; cp -a $< $(<:.KSPLICE=.KSPLICE_primary) $(<:.KSPLICE=.KSPLICE_helper) $(KSPLICE_KMODSRC)/
+cmd_ksplice-mod = echo $(<:.o.KSPLICE=) > $@; cp -a $< $(<:.KSPLICE=.KSPLICE_new_code) $(<:.KSPLICE=.KSPLICE_old_code) $(KSPLICE_KMODSRC)/
 rule_ksplice-mod = if [ -s $< ]; then $(echo-cmd) $(cmd_$(1)); fi
-quiet_cmd_ksplice-helper = HELPER  $(@:.KSPLICE_helper=)
+quiet_cmd_ksplice-helper = HELPER  $(@:.KSPLICE_old_code=)
 cmd_ksplice-helper = $(ksplice-script) helper $@
 quiet_cmd_ksplice-freeze = FREEZE  $(@:_ksplice-revert_%.KSPLICE_pre=%)
 cmd_ksplice-freeze = rm -f $(@:_ksplice-revert_%=%)
@@ -205,7 +205,7 @@ PHONY += $(ksplice-revert-snap-deps)
 $(ksplice-revert-snap-deps): $(ksplice-revert-snap-files:%.KSPLICE=_ksplice-revert_%.KSPLICE_pre) FORCE
 	$(call cmd,ksplice-revert-snap)
 
-ksplice-clean-files := $(filter-out $(ksplice-revert-snap-files:.KSPLICE_pre=.KSPLICE_primary) $(ksplice-revert-snap-files:.KSPLICE_pre=.KSPLICE_helper),$(wildcard $(obj)/*.KSPLICE_primary $(obj)/*.KSPLICE_helper))
+ksplice-clean-files := $(filter-out $(ksplice-revert-snap-files:.KSPLICE_pre=.KSPLICE_new_code) $(ksplice-revert-snap-files:.KSPLICE_pre=.KSPLICE_old_code),$(wildcard $(obj)/*.KSPLICE_new_code $(obj)/*.KSPLICE_old_code))
 ksplice-clean-deps = $(ksplice-clean-files:%=_ksplice-clean_%)
 ksplice-deps += $(ksplice-clean-deps)
 PHONY += $(ksplice-clean-deps)
@@ -226,7 +226,7 @@ ksplice-deps += $(ksplice-modnames:%=$(obj)/%.o.KSPLICE)
 endif
 .SECONDARY: $(obj)/%.o.KSPLICE
 
-$(obj)/%.o.KSPLICE_helper: $(obj)/%.o.KSPLICE
+$(obj)/%.o.KSPLICE_old_code: $(obj)/%.o.KSPLICE
 	$(call cmd,ksplice-helper)
 
 ifeq ($(KSPLICE_MODE),diff)

@@ -70,9 +70,9 @@ $(foreach mod,$(KSPLICE_MODULES),$(obj)/helper-$(target).o): $(obj)/%.o: $(src)/
 	$(call if_changed_rule,cc_o_c)
 endif
 
-$(obj)/collect-primary-%.o: $(obj)/%.o.KSPLICE_primary $(obj)/ksplice.lds FORCE
+$(obj)/collect-primary-%.o: $(obj)/%.o.KSPLICE_new_code $(obj)/ksplice.lds FORCE
 	$(call if_changed,ksplice-collect)
-$(obj)/collect-helper-%.o: $(obj)/%.o.KSPLICE_helper $(obj)/ksplice.lds FORCE
+$(obj)/collect-helper-%.o: $(obj)/%.o.KSPLICE_old_code $(obj)/ksplice.lds FORCE
 	$(call if_changed,ksplice-collect)
 
 ifeq ($(quiet_cmd_cpp_lds_S),)

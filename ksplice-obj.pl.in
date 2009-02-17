@@ -26,8 +26,8 @@ $Verbose::level = $ENV{KSPLICE_VERBOSE} if (defined $ENV{KSPLICE_VERBOSE});
 sub empty_diff {
 	my ($out) = @_;
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
-	unlink "$obj.KSPLICE_primary" if (-e "$obj.KSPLICE_primary");
-	unlink "$obj.KSPLICE_helper" if (-e "$obj.KSPLICE_helper");
+	unlink "$obj.KSPLICE_new_code" if (-e "$obj.KSPLICE_new_code");
+	unlink "$obj.KSPLICE_old_code" if (-e "$obj.KSPLICE_old_code");
 	open OUT, '>', "$out.tmp";
 	close OUT;
 	rename "$out.tmp", $out;
@@ -52,23 +52,23 @@ sub do_diff {
 		return empty_diff($out);
 	}
 
-	runval("$libexecdir/ksplice-objmanip", $obj, "$obj.KSPLICE_primary", "keep-new-code", "$obj.KSPLICE_pre", $ENV{KSPLICE_KID});
-	return empty_diff($out) if (!-e "$obj.KSPLICE_primary");
+	runval("$libexecdir/ksplice-objmanip", $obj, "$obj.KSPLICE_new_code", "keep-new-code", "$obj.KSPLICE_pre", $ENV{KSPLICE_KID});
+	return empty_diff($out) if (!-e "$obj.KSPLICE_new_code");
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
 	close OUT;
 	rename "$out.tmp", $out;
 
-	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_helper", "keep-old-code");
+	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_old_code", "keep-old-code");
 }
 
 sub do_helper {
 	my ($out) = @_;
-	my ($obj) = $out =~ /^(.*)\.KSPLICE_helper$/ or die;
+	my ($obj) = $out =~ /^(.*)\.KSPLICE_old_code$/ or die;
 	my $obj_pre = "$obj.KSPLICE_pre";
 	-e $obj_pre or $obj_pre = $obj;
-	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_helper", "keep-old-code");
+	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_old_code", "keep-old-code");
 }
 
 sub link_objs {
@@ -89,11 +89,11 @@ sub do_combine {
 	foreach my $in (@ins) {
 		if (my ($obj) = $in =~ /^(.*)\.KSPLICE$/) {
 			next if (!-s $in);
-			push @primaries, "$obj.KSPLICE_primary";
-			push @helpers, "$obj.KSPLICE_helper";
-		} elsif (($obj) = $in =~ /^(.*)\.KSPLICE_helper$/) {
-			push @helpers, "$obj.KSPLICE_helper"
-			    unless (@helpers && $helpers[$#helpers] eq "$obj.KSPLICE_helper");
+			push @primaries, "$obj.KSPLICE_new_code";
+			push @helpers, "$obj.KSPLICE_old_code";
+		} elsif (($obj) = $in =~ /^(.*)\.KSPLICE_old_code$/) {
+			push @helpers, "$obj.KSPLICE_old_code"
+			    unless (@helpers && $helpers[$#helpers] eq "$obj.KSPLICE_old_code");
 		} else {
 			die;
 		}
@@ -102,8 +102,8 @@ sub do_combine {
 	return empty_diff($out) unless (@helpers);
 
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
-	link_objs("$obj.KSPLICE_primary", @primaries);
-	link_objs("$obj.KSPLICE_helper", @helpers);
+	link_objs("$obj.KSPLICE_new_code", @primaries);
+	link_objs("$obj.KSPLICE_old_code", @helpers);
 
 	open OUT, '>', "$out.tmp";
 	print OUT "1\n";
