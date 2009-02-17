@@ -53,9 +53,9 @@ $(obj)/$(KSPLICE_CORE).o: fake-ksplice.o =
 endif
 
 define ksplice-mod-vars
-obj-m += $(KSPLICE).o $(KSPLICE)-helper.o
-$(KSPLICE)-objs = $(ksplice-new-code-objs)
-$(KSPLICE)-helper-objs = $(ksplice-old-code-objs)
+obj-m += $(KSPLICE)-new.o $(KSPLICE)-old.o
+$(KSPLICE)-new-objs = $(ksplice-new-code-objs)
+$(KSPLICE)-old-objs = $(ksplice-old-code-objs)
 CFLAGS_new-code-$(target).o = $(ksplice-mod-cflags)
 CFLAGS_old-code-$(target).o = $(ksplice-mod-cflags)
 CPPFLAGS_ksplice.lds = $(ksplice-mod-cflags) -P

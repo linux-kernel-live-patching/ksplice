@@ -1184,10 +1184,10 @@ static void cleanup_symbol_arrays(struct ksplice_mod_change *change)
 }
 
 /*
- * The primary and helper modules each have their own independent
+ * The new_code and old_code modules each have their own independent
  * ksplice_symbol structures.  uniquify_symbols unifies these separate
  * pieces of kernel symbol information by replacing all references to
- * the helper copy of symbols with references to the primary copy.
+ * the old_code copy of symbols with references to the new_code copy.
  */
 static abort_t uniquify_symbols(struct ksplice_mod_change *change)
 {
@@ -1509,8 +1509,8 @@ static void *map_writable(void *addr, size_t len)
 }
 
 /*
- * Ksplice adds a dependency on any symbol address used to resolve relocations
- * in the primary module.
+ * Ksplice adds a dependency on any symbol address used to resolve
+ * relocations in the new_code module.
  *
  * Be careful to follow_trampolines so that we always depend on the
  * latest version of the target function, since that's the code that
@@ -1998,7 +1998,7 @@ static abort_t try_addr(struct ksplice_mod_change *change,
 	const struct module *run_module = __module_address(run_addr);
 
 	if (run_module == change->new_code_mod) {
-		ksdebug(change, "run-pre: unexpected address %lx in primary "
+		ksdebug(change, "run-pre: unexpected address %lx in new_code "
 			"module %s for sect %s\n", run_addr, run_module->name,
 			sect->symbol->label);
 		return UNEXPECTED;
@@ -3278,7 +3278,7 @@ static abort_t create_safety_record(struct ksplice_mod_change *change,
 	if (rec == NULL)
 		return OUT_OF_MEMORY;
 	/*
-	 * The helper might be unloaded when checking reversing
+	 * The old_code might be unloaded when checking reversing
 	 * patches, so we need to kstrdup the label here.
 	 */
 	rec->label = kstrdup(sect->symbol->label, GFP_KERNEL);
@@ -3404,6 +3404,7 @@ static bool patches_module(const struct module *a, const struct module *b)
 {
 #ifdef KSPLICE_NO_KERNEL_SUPPORT
 	const char *name;
+	const char *modname = b == NULL ? "vmlinux" : b->name;
 	if (a == b)
 		return true;
 	if (a == NULL || !strstarts(a->name, "ksplice_"))
@@ -3413,7 +3414,8 @@ static bool patches_module(const struct module *a, const struct module *b)
 	if (name[0] != '_')
 		return false;
 	name++;
-	return strcmp(name, b == NULL ? "vmlinux" : b->name) == 0;
+	return strstarts(name, modname) &&
+	    strcmp(name + strlen(modname), "_new") == 0;
 #else /* !KSPLICE_NO_KERNEL_SUPPORT */
 	struct ksplice_module_list_entry *entry;
 	if (a == b)

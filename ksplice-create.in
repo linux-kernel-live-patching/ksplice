@@ -301,10 +301,10 @@ foreach my $mod (@modules) {
 	(my $target = $mod) =~ s/-/_/g;
 	my $mid = "${kid}_$target";
 	my $module = "ksplice-$mid";
-	rename("$tmpdir/ksplice-modules/extra/$module.ko", "$ksplice/$module.ko");
-	print CONTENTS "primary $target ksplice_$mid $module.ko\n";
-	rename("$tmpdir/ksplice-modules/extra/$module-helper.ko", "$ksplice/$module-helper.ko");
-	print CONTENTS "helper $target ksplice_$mid $module-helper.ko\n";
+	rename("$tmpdir/ksplice-modules/extra/$module-new.ko", "$ksplice/$module-new.ko");
+	print CONTENTS "new_code $target ksplice_$mid $module-new.ko\n";
+	rename("$tmpdir/ksplice-modules/extra/$module-old.ko", "$ksplice/$module-old.ko");
+	print CONTENTS "old_code $target ksplice_$mid $module-old.ko\n";
 }
 if ($standalone) {
 	rename("$tmpdir/ksplice-modules/extra/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko");

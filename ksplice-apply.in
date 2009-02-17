@@ -79,11 +79,11 @@ if (defined $core) {
 	}
 }
 
-my @helpers = ();
-foreach my $helper (glob('ksplice-*-helper.ko')) {
-	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
-	die unless(-e $primary && -e $helper);
-	(my $target = $primary) =~ s/^ksplice-[^_]+_(.*)\.ko/$1/;
+my @old_code_mod_files = ();
+foreach my $old_code_mod_file (glob('ksplice-*-old.ko')) {
+	(my $new_code_mod_file = $old_code_mod_file) =~ s/-old\.ko$/-new.ko/;
+	die unless(-e $new_code_mod_file && -e $old_code_mod_file);
+	(my $target = $new_code_mod_file) =~ s/^ksplice-[^_]+_(.*)-new\.ko/$1/;
 	if ($target ne 'vmlinux' && runstr("lsmod") !~ m/^${target}\s/m) {
 		if (!$partial) {
 			cleanup_modules();
@@ -91,17 +91,17 @@ foreach my $helper (glob('ksplice-*-helper.ko')) {
 			die "Module $target to be patched not loaded";
 		}
 	}
-	push @helpers, $helper;
+	push @old_code_mod_files, $old_code_mod_file;
 }
-foreach my $helper (@helpers) {
-	(my $primary = $helper) =~ s/\-helper\.ko$/.ko/;
-	if(!load_module($primary)) {
-		die "Error loading primary module $primary";
+foreach my $old_code_mod_file (@old_code_mod_files) {
+	(my $new_code_mod_file = $old_code_mod_file) =~ s/-old\.ko$/-new.ko/;
+	if(!load_module($new_code_mod_file)) {
+		die "Error loading new code module $new_code_mod_file";
 	}
-	if(!load_module($helper)) {
+	if(!load_module($old_code_mod_file)) {
 		my $debugfile = get_debug_output("init_$kid", $debug);
-		print STDERR "Error loading helper module $helper\n";
-		(my $module = $primary) =~ s/-/_/g;
+		print STDERR "Error loading old code module $old_code_mod_file\n";
+		(my $module = $new_code_mod_file) =~ s/-/_/g;
 		$module =~ s/\.ko//;
 		cleanup_modules();
 		if($debugon && defined $debugfile) {
@@ -134,12 +134,12 @@ mkpath("/var/run/ksplice/updates/$kid");
 copy("patch", "/var/run/ksplice/updates/$kid/patch") if (-e "patch");
 copy("description", "/var/run/ksplice/updates/$kid/description") if (-e "description");
 if (!$nounload) {
-	foreach my $helper (@helpers) {
-		$helper =~ s/-/_/g;
-		$helper =~ s/\.ko$//;
-		(my $primary = $helper) =~ s/_helper$//;
-		runval('rmmod', $helper);
-		runval('rmmod', $primary) if ($partial && refcount($primary) == 0);
+	foreach my $old_code_mod_file (@old_code_mod_files) {
+		(my $old_code_mod = $old_code_mod_file) =~ s/-/_/g;
+		$old_code_mod =~ s/\.ko$//;
+		(my $new_code_mod = $old_code_mod) =~ s/-old$/-new/;
+		runval('rmmod', $old_code_mod);
+		runval('rmmod', $new_code_mod) if ($partial && refcount($new_code_mod) == 0);
 	}
 }
 print "Done!\n";
