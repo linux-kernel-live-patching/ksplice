@@ -52,7 +52,7 @@ sub do_diff {
 		return empty_diff($out);
 	}
 
-	runval("$libexecdir/ksplice-objmanip", $obj, "$obj.KSPLICE_primary", "keep-primary", "$obj.KSPLICE_pre", $ENV{KSPLICE_KID});
+	runval("$libexecdir/ksplice-objmanip", $obj, "$obj.KSPLICE_primary", "keep-new-code", "$obj.KSPLICE_pre", $ENV{KSPLICE_KID});
 	return empty_diff($out) if (!-e "$obj.KSPLICE_primary");
 
 	open OUT, '>', "$out.tmp";
@@ -60,7 +60,7 @@ sub do_diff {
 	close OUT;
 	rename "$out.tmp", $out;
 
-	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_helper", "keep-helper");
+	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_helper", "keep-old-code");
 }
 
 sub do_helper {
@@ -68,7 +68,7 @@ sub do_helper {
 	my ($obj) = $out =~ /^(.*)\.KSPLICE_helper$/ or die;
 	my $obj_pre = "$obj.KSPLICE_pre";
 	-e $obj_pre or $obj_pre = $obj;
-	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_helper", "keep-helper");
+	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_helper", "keep-old-code");
 }
 
 sub link_objs {

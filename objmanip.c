@@ -21,12 +21,12 @@
 /* objmanip performs various object file manipulations for Ksplice.  Its first
  * two arguments are always an input object file and an output object file.
  *
- * - keep-primary: "objmanip <post.o> <out.o> keep-primary <pre.o> <kid>"
+ * - keep-new-code: "objmanip <post.o> <out.o> keep-new-code <pre.o> <kid>"
  *
  * This mode prepares the object file to be installed as a ksplice update.  The
  * kid argument is the ksplice id string for the ksplice update being built.
  *
- * - keep-helper: "objmanip <pre.o> <out.o> keep-helper"
+ * - keep-old-code: "objmanip <pre.o> <out.o> keep-old-code"
  *
  * This mode prepares the object file to be used for run-pre matching.  This
  * involves replacing all ELF relocations with ksplice relocations and
@@ -77,8 +77,8 @@ DEFINE_HASH_TYPE(bool, bool_hash, bool_hash_init, bool_hash_free,
 DEFINE_HASH_TYPE(unsigned long, ulong_hash, ulong_hash_init,
 		 ulong_hash_free, ulong_hash_lookup, ulong_init);
 
-void do_keep_primary(struct superbfd *isbfd, const char *pre);
-void do_keep_helper(struct superbfd *isbfd);
+void do_keep_new_code(struct superbfd *isbfd, const char *pre);
+void do_keep_old_code(struct superbfd *isbfd);
 void do_finalize(struct superbfd *isbfd);
 void do_rmsyms(struct superbfd *isbfd);
 
@@ -389,11 +389,11 @@ int main(int argc, char *argv[])
 	if (mode("finalize"))
 		finalize_target = argv[4];
 	init_objmanip_superbfd(isbfd);
-	if (mode("keep-primary")) {
+	if (mode("keep-new-code")) {
 		kid = argv[5];
-		do_keep_primary(isbfd, argv[4]);
-	} else if (mode("keep-helper")) {
-		do_keep_helper(isbfd);
+		do_keep_new_code(isbfd, argv[4]);
+	} else if (mode("keep-old-code")) {
+		do_keep_old_code(isbfd);
 	} else if (mode("finalize")) {
 		do_finalize(isbfd);
 	} else if (mode("rmsyms")) {
@@ -413,7 +413,7 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-void do_keep_primary(struct superbfd *isbfd, const char *pre)
+void do_keep_new_code(struct superbfd *isbfd, const char *pre)
 {
 	struct bfd *prebfd = bfd_openr(pre, NULL);
 	assert(prebfd != NULL);
@@ -533,7 +533,7 @@ void do_keep_primary(struct superbfd *isbfd, const char *pre)
 	remove_unkept_spans(isbfd);
 }
 
-void do_keep_helper(struct superbfd *isbfd)
+void do_keep_old_code(struct superbfd *isbfd)
 {
 	asection *sect;
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
@@ -1261,7 +1261,7 @@ void rm_some_relocs(struct supersect *ss)
 		if (mode("keep"))
 			rm_reloc = true;
 
-		if (mode("keep-primary")) {
+		if (mode("keep-new-code")) {
 			if (bfd_is_const_section(sym_ptr->section)) {
 				rm_reloc = false;
 			} else {
@@ -1747,7 +1747,7 @@ static void write_ksplice_section(struct span *span)
 	asymbol *sym = span->symbol == NULL ? ss->symbol : span->symbol;
 
 	write_ksplice_symbol(ksect_ss, &ksect->symbol, sym, span,
-			     mode("keep-primary") ? "(post)" : "");
+			     mode("keep-new-code") ? "(post)" : "");
 	ksect->size = span->size;
 	ksect->flags = 0;
 
@@ -1950,7 +1950,7 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 		if (s->crc_sect != NULL) {
 			struct span *crc_span = get_crc_span(span, s);
 			assert(crc_span != NULL);
-			if (span->keep && mode("keep-primary"))
+			if (span->keep && mode("keep-new-code"))
 				keep_span(crc_span);
 		}
 	}
@@ -2319,7 +2319,7 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		}
 
 		if (mode("keep") && (sym->flags & BSF_GLOBAL) != 0 &&
-		    !(mode("keep-primary") && sym_span != NULL &&
+		    !(mode("keep-new-code") && sym_span != NULL &&
 		      sym_span->new))
 			sym->flags = (sym->flags & ~BSF_GLOBAL) | BSF_LOCAL;
 
@@ -2339,7 +2339,7 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		if (deleted_table_section_symbol(ibfd, sym))
 			keep = false;
 
-		if (mode("keep-helper") && sym_ss != NULL &&
+		if (mode("keep-old-code") && sym_ss != NULL &&
 		    sym_ss->type == SS_TYPE_EXPORT)
 			keep = false;
 
@@ -2521,7 +2521,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    strstarts(ss->name, ".spinlock.text") ||
 	    strstarts(ss->name, ".kprobes.text") ||
 	    strstarts(ss->name, ".sched.text") ||
-	    (mode("keep-helper") && strstarts(ss->name, ".fixup")))
+	    (mode("keep-old-code") && strstarts(ss->name, ".fixup")))
 		return SS_TYPE_TEXT;
 
 	int n = -1;
@@ -2540,7 +2540,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    strstarts(ss->name, ".ref.rodata") ||
 	    strstarts(ss->name, "__markers_strings") ||
 	    strstarts(ss->name, "__bug_table") ||
-	    (mode("keep-helper") && strstarts(ss->name, "__ex_table")))
+	    (mode("keep-old-code") && strstarts(ss->name, "__ex_table")))
 		return SS_TYPE_RODATA;
 
 	if (strstarts(ss->name, ".bss"))
