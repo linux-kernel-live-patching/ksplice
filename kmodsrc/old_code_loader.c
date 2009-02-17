@@ -52,22 +52,22 @@ static struct ksplice_code old_code = {
 #endif /* KSPLICE_STANDALONE */
 };
 
-static int init_helper(void)
+static int init_old_code(void)
 {
 	change.old_code = old_code;
 	return init_ksplice_mod_change(&change);
 }
 
-static void cleanup_helper(void)
+static void cleanup_old_code(void)
 {
 	cleanup_ksplice_mod_change(&change);
 }
 
-module_init(init_helper);
-module_exit(cleanup_helper);
+module_init(init_old_code);
+module_exit(cleanup_old_code);
 
 MODULE_AUTHOR("Ksplice, Inc.");
-MODULE_DESCRIPTION("Ksplice rebootless update helper module");
+MODULE_DESCRIPTION("Ksplice rebootless update old code module");
 #ifdef KSPLICE_VERSION
 MODULE_VERSION(KSPLICE_VERSION);
 #endif

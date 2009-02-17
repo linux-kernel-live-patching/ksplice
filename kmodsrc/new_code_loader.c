@@ -97,21 +97,21 @@ struct ksplice_mod_change change = {
 };
 EXPORT_SYMBOL_GPL(change);
 
-static int init_primary(void)
+static int init_new_code(void)
 {
 	return 0;
 }
 
-static void cleanup_primary(void)
+static void cleanup_new_code(void)
 {
 	cleanup_ksplice_mod_change(&change);
 }
 
-module_init(init_primary);
-module_exit(cleanup_primary);
+module_init(init_new_code);
+module_exit(cleanup_new_code);
 
 MODULE_AUTHOR("Ksplice, Inc.");
-MODULE_DESCRIPTION("Ksplice rebootless update primary module");
+MODULE_DESCRIPTION("Ksplice rebootless update new code module");
 #ifdef KSPLICE_VERSION
 MODULE_VERSION(KSPLICE_VERSION);
 #endif
