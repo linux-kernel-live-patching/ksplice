@@ -31,8 +31,8 @@ ksplice-mod-cflags = $(KSPLICE_CFLAGS) \
 	$(addprefix -DKSPLICE_TARGET=,$(target)) \
 	"-DKSPLICE_VERSION=\"$(KSPLICE_VERSION)\""
 
-ksplice-primary-objs = primary-$(target).o collect-primary-$(mod).o
-ksplice-helper-objs = helper-$(target).o collect-helper-$(mod).o
+ksplice-new-code-objs = new-code-$(target).o collect-new-code-$(mod).o
+ksplice-old-code-objs = old-code-$(target).o collect-old-code-$(mod).o
 
 ifneq ($(KSPLICE_STANDALONE),)
 ifeq ($(KSPLICE_SKIP_CORE),)
@@ -54,25 +54,25 @@ endif
 
 define ksplice-mod-vars
 obj-m += $(KSPLICE).o $(KSPLICE)-helper.o
-$(KSPLICE)-objs = $(ksplice-primary-objs)
-$(KSPLICE)-helper-objs = $(ksplice-helper-objs)
-CFLAGS_primary-$(target).o = $(ksplice-mod-cflags)
-CFLAGS_helper-$(target).o = $(ksplice-mod-cflags)
+$(KSPLICE)-objs = $(ksplice-new-code-objs)
+$(KSPLICE)-helper-objs = $(ksplice-old-code-objs)
+CFLAGS_new-code-$(target).o = $(ksplice-mod-cflags)
+CFLAGS_old-code-$(target).o = $(ksplice-mod-cflags)
 CPPFLAGS_ksplice.lds = $(ksplice-mod-cflags) -P
 endef
 
 $(foreach mod,$(KSPLICE_MODULES),$(eval $(ksplice-mod-vars)))
 
 ifneq ($(KSPLICE_MODULES),)
-$(foreach mod,$(KSPLICE_MODULES),$(obj)/primary-$(target).o): $(obj)/%.o: $(src)/new_code_loader.c FORCE
+$(foreach mod,$(KSPLICE_MODULES),$(obj)/new-code-$(target).o): $(obj)/%.o: $(src)/new_code_loader.c FORCE
 	$(call if_changed_rule,cc_o_c)
-$(foreach mod,$(KSPLICE_MODULES),$(obj)/helper-$(target).o): $(obj)/%.o: $(src)/old_code_loader.c FORCE
+$(foreach mod,$(KSPLICE_MODULES),$(obj)/old-code-$(target).o): $(obj)/%.o: $(src)/old_code_loader.c FORCE
 	$(call if_changed_rule,cc_o_c)
 endif
 
-$(obj)/collect-primary-%.o: $(obj)/%.o.KSPLICE_new_code $(obj)/ksplice.lds FORCE
+$(obj)/collect-new-code-%.o: $(obj)/%.o.KSPLICE_new_code $(obj)/ksplice.lds FORCE
 	$(call if_changed,ksplice-collect)
-$(obj)/collect-helper-%.o: $(obj)/%.o.KSPLICE_old_code $(obj)/ksplice.lds FORCE
+$(obj)/collect-old-code-%.o: $(obj)/%.o.KSPLICE_old_code $(obj)/ksplice.lds FORCE
 	$(call if_changed,ksplice-collect)
 
 ifeq ($(quiet_cmd_cpp_lds_S),)
