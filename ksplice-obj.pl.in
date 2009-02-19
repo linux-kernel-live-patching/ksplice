@@ -44,11 +44,11 @@ sub do_snap {
 sub do_diff {
 	my ($out) = @_;
 	my ($obj) = $out =~ /^(.*)\.KSPLICE$/ or die;
-	my $obj_old = "$obj.KSPLICE_pre";
+	my $obj_pre = "$obj.KSPLICE_pre";
 	die if (!-e $obj);
-	die "Patch creates new object $obj" if (!-e $obj_old);
-	if (system('cmp', '-s', '--', $obj_old, $obj) == 0) {
-		unlink $obj_old;
+	die "Patch creates new object $obj" if (!-e $obj_pre);
+	if (system('cmp', '-s', '--', $obj_pre, $obj) == 0) {
+		unlink $obj_pre;
 		return empty_diff($out);
 	}
 
@@ -60,15 +60,15 @@ sub do_diff {
 	close OUT;
 	rename "$out.tmp", $out;
 
-	runval("$libexecdir/ksplice-objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
+	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_helper", "keep-helper");
 }
 
 sub do_helper {
 	my ($out) = @_;
 	my ($obj) = $out =~ /^(.*)\.KSPLICE_helper$/ or die;
-	my $obj_old = "$obj.KSPLICE_pre";
-	-e $obj_old or $obj_old = $obj;
-	runval("$libexecdir/ksplice-objmanip", $obj_old, "$obj.KSPLICE_helper", "keep-helper");
+	my $obj_pre = "$obj.KSPLICE_pre";
+	-e $obj_pre or $obj_pre = $obj;
+	runval("$libexecdir/ksplice-objmanip", $obj_pre, "$obj.KSPLICE_helper", "keep-helper");
 }
 
 sub link_objs {
