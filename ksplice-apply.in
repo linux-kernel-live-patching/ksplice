@@ -101,8 +101,6 @@ foreach my $old_code_mod_file (@old_code_mod_files) {
 	if(!load_module($old_code_mod_file)) {
 		my $debugfile = get_debug_output("init_$kid", $debug);
 		print STDERR "Error loading old code module $old_code_mod_file\n";
-		(my $module = $new_code_mod_file) =~ s/-/_/g;
-		$module =~ s/\.ko//;
 		cleanup_modules();
 		if($debugon && defined $debugfile) {
 			print("Debugging output saved to $debugfile\n");
@@ -135,8 +133,7 @@ copy("patch", "/var/run/ksplice/updates/$kid/patch") if (-e "patch");
 copy("description", "/var/run/ksplice/updates/$kid/description") if (-e "description");
 if (!$nounload) {
 	foreach my $old_code_mod_file (@old_code_mod_files) {
-		(my $old_code_mod = $old_code_mod_file) =~ s/-/_/g;
-		$old_code_mod =~ s/\.ko$//;
+		(my $old_code_mod = $old_code_mod_file) =~ s/\.ko$//;
 		(my $new_code_mod = $old_code_mod) =~ s/-old$/-new/;
 		runval('rmmod', $old_code_mod);
 		runval('rmmod', $new_code_mod) if ($partial && refcount($new_code_mod) == 0);
@@ -154,13 +151,13 @@ sub load_module {
 		return 0;
 	}
 	$module =~ s/\.ko//;
-	$module =~ s/-/_/g;
 	push @modules_loaded, $module;
 	return 1;
 }
 
 sub refcount {
 	my ($module) = @_;
+	$module =~ s/-/_/g;
 	foreach(split(/\n/, runstr("lsmod"))) {
 		if (m/^(\S+)\s+[0-9]+\s+([0-9])+\s/) {
 			return $2 if ($1 eq $module);
