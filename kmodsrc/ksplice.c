@@ -1161,7 +1161,8 @@ static abort_t add_matching_values(struct ksplice_lookup *lookup,
 		struct ksplice_symbol *sym = *symp;
 		if (sym->name == NULL || strcmp(sym_name, sym->name) != 0)
 			break;
-		ret = add_candidate_val(lookup->change, sym->vals, sym_val);
+		ret = add_candidate_val(lookup->change,
+					sym->candidate_vals, sym_val);
 		if (ret != OK)
 			return ret;
 	}
@@ -1201,18 +1202,20 @@ static void cleanup_symbol_arrays(struct ksplice_mod_change *change)
 	struct ksplice_symbol *sym;
 	for (sym = change->new_code.symbols; sym < change->new_code.symbols_end;
 	     sym++) {
-		if (sym->vals != NULL) {
-			clear_list(sym->vals, struct candidate_val, list);
-			kfree(sym->vals);
-			sym->vals = NULL;
+		if (sym->candidate_vals != NULL) {
+			clear_list(sym->candidate_vals, struct candidate_val,
+				   list);
+			kfree(sym->candidate_vals);
+			sym->candidate_vals = NULL;
 		}
 	}
 	for (sym = change->old_code.symbols; sym < change->old_code.symbols_end;
 	     sym++) {
-		if (sym->vals != NULL) {
-			clear_list(sym->vals, struct candidate_val, list);
-			kfree(sym->vals);
-			sym->vals = NULL;
+		if (sym->candidate_vals != NULL) {
+			clear_list(sym->candidate_vals, struct candidate_val,
+				   list);
+			kfree(sym->candidate_vals);
+			sym->candidate_vals = NULL;
 		}
 	}
 }
@@ -1300,14 +1303,15 @@ static abort_t init_symbol_array(struct ksplice_mod_change *change,
 				continue;
 			}
 			sym->value = (unsigned long)ksym;
-			sym->vals = NULL;
+			sym->candidate_vals = NULL;
 			continue;
 		}
 
-		sym->vals = kmalloc(sizeof(*sym->vals), GFP_KERNEL);
-		if (sym->vals == NULL)
+		sym->candidate_vals = kmalloc(sizeof(*sym->candidate_vals),
+					      GFP_KERNEL);
+		if (sym->candidate_vals == NULL)
 			return OUT_OF_MEMORY;
-		INIT_LIST_HEAD(sym->vals);
+		INIT_LIST_HEAD(sym->candidate_vals);
 		sym->value = 0;
 	}
 
@@ -1639,7 +1643,7 @@ static abort_t apply_howto_reloc(struct ksplice_mod_change *change,
 	 * Relocations for the oldaddr fields of patches must have
 	 * been resolved via run-pre matching.
 	 */
-	if (!singular(&vals) || (r->symbol->vals != NULL &&
+	if (!singular(&vals) || (r->symbol->candidate_vals != NULL &&
 				 r->howto->type == KSPLICE_HOWTO_RELOC_PATCH)) {
 		release_vals(&vals);
 		ksdebug(change, "Failed to find %s for reloc\n",
@@ -1700,7 +1704,7 @@ static abort_t apply_howto_reloc(struct ksplice_mod_change *change,
 static abort_t apply_howto_date(struct ksplice_mod_change *change,
 				const struct ksplice_reloc *r)
 {
-	if (r->symbol->vals != NULL) {
+	if (r->symbol->candidate_vals != NULL) {
 		ksdebug(change, "Failed to find %s for date\n",
 			r->symbol->label);
 		return FAILED_TO_FIND;
@@ -2618,7 +2622,7 @@ static abort_t lookup_symbol(struct ksplice_mod_change *change,
 		return OK;
 #endif /* KSPLICE_STANDALONE */
 
-	if (ksym->vals == NULL) {
+	if (ksym->candidate_vals == NULL) {
 		release_vals(vals);
 		ksdebug(change, "using detected sym %s=%lx\n", ksym->label,
 			ksym->value);
@@ -2637,7 +2641,7 @@ static abort_t lookup_symbol(struct ksplice_mod_change *change,
 
 	if (ksym->name != NULL) {
 		struct candidate_val *val;
-		list_for_each_entry(val, ksym->vals, list) {
+		list_for_each_entry(val, ksym->candidate_vals, list) {
 			ret = add_candidate_val(change, vals, val->val);
 			if (ret != OK)
 				return ret;
@@ -3191,7 +3195,7 @@ static abort_t create_labelval(struct ksplice_mod_change *change,
 			       unsigned long val, int status)
 {
 	val = follow_trampolines(change, val);
-	if (ksym->vals == NULL)
+	if (ksym->candidate_vals == NULL)
 		return ksym->value == val ? OK : NO_MATCH;
 
 	ksym->value = val;
@@ -3200,10 +3204,10 @@ static abort_t create_labelval(struct ksplice_mod_change *change,
 		if (lv == NULL)
 			return OUT_OF_MEMORY;
 		lv->symbol = ksym;
-		lv->saved_vals = ksym->vals;
+		lv->saved_vals = ksym->candidate_vals;
 		list_add(&lv->list, &change->temp_labelvals);
 	}
-	ksym->vals = NULL;
+	ksym->candidate_vals = NULL;
 	return OK;
 }
 
@@ -3293,7 +3297,7 @@ static void set_temp_labelvals(struct ksplice_mod_change *change, int status)
 	struct labelval *lv, *n;
 	list_for_each_entry_safe(lv, n, &change->temp_labelvals, list) {
 		if (status == NOVAL) {
-			lv->symbol->vals = lv->saved_vals;
+			lv->symbol->candidate_vals = lv->saved_vals;
 		} else {
 			release_vals(lv->saved_vals);
 			kfree(lv->saved_vals);

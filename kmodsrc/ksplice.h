@@ -2,16 +2,16 @@
 
 /**
  * struct ksplice_symbol - Ksplice's analogue of an ELF symbol
- * @name:	The ELF name of the symbol
- * @label:	A unique Ksplice name for the symbol
- * @vals:	A linked list of possible values for the symbol, or NULL
- * @value:	The value of the symbol (valid when vals is NULL)
+ * @name:		The ELF name of the symbol
+ * @label:		A unique Ksplice name for the symbol
+ * @candidate_vals:	A linked list of possible values for the symbol, or NULL
+ * @value:		The value of the symbol (valid when vals is NULL)
  **/
 struct ksplice_symbol {
 	const char *name;
 	const char *label;
 /* private: */
-	struct list_head *vals;
+	struct list_head *candidate_vals;
 	unsigned long value;
 };
 
