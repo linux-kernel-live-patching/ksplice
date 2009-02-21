@@ -846,8 +846,13 @@ out:
 EXPORT_SYMBOL_GPL(init_ksplice_mod_change);
 
 /**
- * cleanup_ksplice_mod_change() - Cleans up a change
+ * cleanup_ksplice_mod_change() - Cleans up a change if appropriate
  * @change:	The change to be cleaned up
+ *
+ * cleanup_ksplice_mod_change is currently called twice for each
+ * Ksplice update; once when the old_code module is unloaded, and once
+ * when the new_code module is unloaded.  The extra call is used to
+ * avoid leaks if you unload the old_code without applying the update.
  */
 void cleanup_ksplice_mod_change(struct ksplice_mod_change *change)
 {
