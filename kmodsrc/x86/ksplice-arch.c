@@ -669,44 +669,6 @@ static abort_t prepare_trampoline(struct ksplice_mod_change *change,
 				 p->repladdr - (p->oldaddr + 1));
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
-static abort_t handle_bug(struct ksplice_mod_change *change,
-			  const struct ksplice_reloc *r, unsigned long run_addr)
-{
-	const struct bug_entry *run_bug = find_bug(run_addr);
-	struct ksplice_section *bug_sect = symbol_section(change, r->symbol);
-	if (run_bug == NULL)
-		return NO_MATCH;
-	if (bug_sect == NULL)
-		return UNEXPECTED;
-	return create_labelval(change, bug_sect->symbol, (unsigned long)run_bug,
-			       TEMP);
-}
-#else /* LINUX_VERSION_CODE < */
-/* 7664c5a1da4711bb6383117f51b94c8dc8f3f1cd was after 2.6.19 */
-static abort_t handle_bug(struct ksplice_mod_change *change,
-			  const struct ksplice_reloc *r, unsigned long run_addr)
-{
-	/* There should be no bug_table, so just return NO_MATCH */
-	return NO_MATCH;
-}
-#endif /* LINUX_VERSION_CODE */
-
-static abort_t handle_extable(struct ksplice_mod_change *change,
-			      const struct ksplice_reloc *r,
-			      unsigned long run_addr)
-{
-	const struct exception_table_entry *run_ent =
-	    search_exception_tables(run_addr);
-	struct ksplice_section *ex_sect = symbol_section(change, r->symbol);
-	if (run_ent == NULL)
-		return NO_MATCH;
-	if (ex_sect == NULL)
-		return UNEXPECTED;
-	return create_labelval(change, ex_sect->symbol, (unsigned long)run_ent,
-			       TEMP);
-}
-
 static abort_t handle_paravirt(struct ksplice_mod_change *change,
 			       unsigned long pre_addr, unsigned long run_addr,
 			       int *matched)

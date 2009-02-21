@@ -581,6 +581,18 @@ static abort_t handle_howto_reloc(struct ksplice_mod_change *change,
 				  const struct ksplice_reloc *r,
 				  unsigned long run_addr,
 				  enum run_pre_mode mode);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+#ifdef CONFIG_BUG
+static abort_t handle_bug(struct ksplice_mod_change *change,
+			  const struct ksplice_reloc *r,
+			  unsigned long run_addr);
+#endif /* CONFIG_BUG */
+#else /* LINUX_VERSION_CODE < */
+/* 7664c5a1da4711bb6383117f51b94c8dc8f3f1cd was after 2.6.19 */
+#endif /* LINUX_VERSION_CODE */
+static abort_t handle_extable(struct ksplice_mod_change *change,
+			      const struct ksplice_reloc *r,
+			      unsigned long run_addr);
 static struct ksplice_section *symbol_section(struct ksplice_mod_change *change,
 					      const struct ksplice_symbol *sym);
 static int compare_section_labels(const void *va, const void *vb);
@@ -719,14 +731,6 @@ static abort_t trampoline_target(struct ksplice_mod_change *change,
 static abort_t handle_paravirt(struct ksplice_mod_change *change,
 			       unsigned long pre, unsigned long run,
 			       int *matched);
-/* Called for relocations of type KSPLICE_HOWTO_BUG */
-static abort_t handle_bug(struct ksplice_mod_change *change,
-			  const struct ksplice_reloc *r,
-			  unsigned long run_addr);
-/* Called for relocations of type KSPLICE_HOWTO_EXTABLE */
-static abort_t handle_extable(struct ksplice_mod_change *change,
-			      const struct ksplice_reloc *r,
-			      unsigned long run_addr);
 /* Is address p on the stack of the given thread? */
 static bool valid_stack_ptr(const struct thread_info *tinfo, const void *p);
 
@@ -2395,8 +2399,14 @@ static abort_t handle_reloc(struct ksplice_mod_change *change,
 	case KSPLICE_HOWTO_DATE:
 	case KSPLICE_HOWTO_TIME:
 		return handle_howto_date(change, sect, r, run_addr, mode);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+#ifdef CONFIG_BUG
 	case KSPLICE_HOWTO_BUG:
 		return handle_bug(change, r, run_addr);
+#endif /* CONFIG_BUG */
+#else /* LINUX_VERSION_CODE < */
+/* 7664c5a1da4711bb6383117f51b94c8dc8f3f1cd was after 2.6.19 */
+#endif /* LINUX_VERSION_CODE */
 	case KSPLICE_HOWTO_EXTABLE:
 		return handle_extable(change, r, run_addr);
 	default:
@@ -2567,6 +2577,36 @@ static abort_t handle_howto_reloc(struct ksplice_mod_change *change,
 				sym_sect->symbol->label);
 	}
 	return ret;
+}
+
+#ifdef CONFIG_GENERIC_BUG
+static abort_t handle_bug(struct ksplice_mod_change *change,
+			  const struct ksplice_reloc *r, unsigned long run_addr)
+{
+	const struct bug_entry *run_bug = find_bug(run_addr);
+	struct ksplice_section *bug_sect = symbol_section(change, r->symbol);
+	if (run_bug == NULL)
+		return NO_MATCH;
+	if (bug_sect == NULL)
+		return UNEXPECTED;
+	return create_labelval(change, bug_sect->symbol, (unsigned long)run_bug,
+			       TEMP);
+}
+#endif /* CONFIG_GENERIC_BUG */
+
+static abort_t handle_extable(struct ksplice_mod_change *change,
+			      const struct ksplice_reloc *r,
+			      unsigned long run_addr)
+{
+	const struct exception_table_entry *run_ent =
+	    search_exception_tables(run_addr);
+	struct ksplice_section *ex_sect = symbol_section(change, r->symbol);
+	if (run_ent == NULL)
+		return NO_MATCH;
+	if (ex_sect == NULL)
+		return UNEXPECTED;
+	return create_labelval(change, ex_sect->symbol, (unsigned long)run_ent,
+			       TEMP);
 }
 
 static int symbol_section_bsearch_compare(const void *a, const void *b)
