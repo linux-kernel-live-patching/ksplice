@@ -2548,7 +2548,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 
 	/* Ignore .data.percpu sections */
 	if (strstarts(ss->name, ".data.percpu") ||
-	    strstarts(ss->name, ".kernel.data.percpu"))
+	    strstarts(ss->name, ".kernel.data.percpu") ||
+	    strstarts(ss->name, ".data..percpu"))
 		return SS_TYPE_IGNORED;
 	if (strstarts(ss->name, ".data") ||
 	    strstarts(ss->name, ".kernel.data") ||
