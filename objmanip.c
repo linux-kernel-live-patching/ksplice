@@ -1261,12 +1261,21 @@ void rm_some_relocs(struct supersect *ss)
 		if (mode("keep"))
 			rm_reloc = true;
 
-		if (mode("keep-primary") &&
-		    (bfd_is_const_section(sym_ptr->section) ||
-		     reloc_target_span(ss, *relocp)->new))
-			rm_reloc = false;
-
 		if (mode("keep-primary")) {
+			if (bfd_is_const_section(sym_ptr->section)) {
+				rm_reloc = false;
+			} else {
+				bfd_vma offset = get_reloc_offset(ss, *relocp,
+								  true);
+				struct span *target_span =
+				    reloc_target_span(ss, *relocp);
+				if (target_span->new ||
+				    (target_span->ss->type == SS_TYPE_TEXT &&
+				     sym_ptr->value + offset !=
+				     target_span->start))
+					rm_reloc = false;
+			}
+
 			const struct table_section *ts =
 			    get_table_section(ss->name);
 			if (ts != NULL && ts->has_addr &&
