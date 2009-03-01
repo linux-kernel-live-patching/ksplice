@@ -2524,6 +2524,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    strstarts(ss->name, ".spinlock.text") ||
 	    strstarts(ss->name, ".kprobes.text") ||
 	    strstarts(ss->name, ".sched.text") ||
+	    strstarts(ss->name, ".entry.text") ||	/* OpenVZ */
 	    (mode("keep-old-code") && strstarts(ss->name, ".fixup")))
 		return SS_TYPE_TEXT;
 
