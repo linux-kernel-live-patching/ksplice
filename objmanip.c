@@ -371,6 +371,9 @@ int main(int argc, char *argv[])
 	assert(ibfd);
 
 	char **matching;
+	if (bfd_check_format_matches(ibfd, bfd_archive, &matching) &&
+	    bfd_openr_next_archived_file(ibfd, NULL) == NULL)
+		return 66; /* empty archive */
 	assert(bfd_check_format_matches(ibfd, bfd_object, &matching));
 
 	const char *output_target = bfd_get_target(ibfd);

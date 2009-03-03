@@ -113,7 +113,13 @@ sub do_combine {
 
 sub do_finalize {
 	my ($in, $out, $target) = @_;
-	runval("$libexecdir/ksplice-objmanip", $in, $out, "finalize", $target);
+	my $ret = runval_raw("$libexecdir/ksplice-objmanip", $in, $out, "finalize", $target);
+	if ($ret == 0) {
+	} elsif ($ret >> 8 == 66) {
+		runval(shellwords($ENV{AR}), "rcs", $out);
+	} else {
+		child_error();
+	}
 }
 
 sub do_rmsyms {
