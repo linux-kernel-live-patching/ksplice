@@ -127,7 +127,7 @@ sub runval_outfile {
 
 sub unpack_update {
 	my ($file) = @_;
-	runval("tar", "zxf", $file);
+	runval("tar", "--force-local", "-zxf", $file);
 	my ($ksplice) = glob('*/');
 	chop($ksplice); # remove the trailing slash
 	return $ksplice;
