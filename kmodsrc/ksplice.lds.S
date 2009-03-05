@@ -11,7 +11,7 @@
     section##_end = .; \
   }
 SECTIONS {
-  .text : { *(.text .text.* .exit.text) }
+  .text : { *(.text .text.* .exit.text .sched.text) }
   PTR_KEEP_SQUASH(ksplice_relocs)
   PTR_KEEP_SQUASH(ksplice_sections)
   PTR_KEEP_SQUASH(ksplice_patches)
