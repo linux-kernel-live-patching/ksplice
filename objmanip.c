@@ -2238,6 +2238,15 @@ void write_section(bfd *obfd, asection *osection, void *arg)
 			    error_message);
 			DIE;
 		}
+		if (mode("finalize")) {
+			/* Check that all our sections will be allocated */
+			asymbol *sym = *((*relocp)->sym_ptr_ptr);
+			if (!bfd_is_const_section(sym->section)) {
+				struct supersect *sym_ss =
+				    fetch_supersect(ss->parent, sym->section);
+				assert((sym_ss->flags & SEC_ALLOC) != 0);
+			}
+		}
 	}
 	memcpy(vec_grow(&ss->relocs, ss->new_relocs.size), ss->new_relocs.data,
 	       ss->new_relocs.size * sizeof(*ss->new_relocs.data));
