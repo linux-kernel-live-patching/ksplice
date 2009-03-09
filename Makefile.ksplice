@@ -11,7 +11,7 @@ PHONY :=
 
 __ksplice:
 
-ksplice-extra = $(filter $(KSPLICE_EXTRA_MATCH),$(lib-y) $(real-objs-m) $(real-objs-y))
+ksplice-extra = $(filter-out $(KSPLICE_EXCLUDE_MATCH),$(filter $(KSPLICE_EXTRA_MATCH),$(lib-y) $(real-objs-m) $(real-objs-y)))
 ksplice-objs = $(foreach o,$(1),$(o:=.KSPLICE) $(addsuffix .KSPLICE_old_code,$(filter $(ksplice-extra),$(o))))
 
 escsq ?= $(subst ','\'',$(1))

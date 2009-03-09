@@ -27,6 +27,7 @@ my $series = 0;
 my $build_modules = 0;
 my @only_targets;
 my @extra_match;
+my @exclude_match;
 my $standalone;
 my ($prebuild, $skip_prebuild) = (0, 0);
 my @patch_opt = "-p1";
@@ -41,6 +42,7 @@ GetOptions(@common_options,
 	"build-modules!" => \$build_modules,
 	"only-targets=s" => \@only_targets,
 	"extra-match=s" => \@extra_match,
+	"exclude-match=s" => \@exclude_match,
 	"standalone!" => \$standalone,
 	"skip-prebuild" => \$skip_prebuild,
 	"jobs|j:i" => \$jobs,
@@ -239,6 +241,7 @@ if (defined $git) {
 
 my @diff_flags = ("KSPLICE_MODE=diff");
 push @diff_flags, "KSPLICE_EXTRA_MATCH=@extra_match" if (@extra_match);
+push @diff_flags, "KSPLICE_EXCLUDE_MATCH=@exclude_match" if (@exclude_match);
 push @diff_flags, "KSPLICE_ONLY_TARGETS=@only_targets" if (@only_targets);
 if(runval_raw(@make_ksplice, @diff_flags) != 0) {
 	revert_orig() if(defined($diffext));
