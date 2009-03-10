@@ -1,3 +1,10 @@
+2009-03-10 : 0.9.7
+ - Fixed a bug where Ksplice relocations were sometimes written pointing
+   to the middle of patched sections
+ - Fixed a Makefile bug where the Ksplice core module was compiled twice
+ - Renamed or reorganized several data structures in the Ksplice kernel code
+ - Changed the Ksplice module names from primary/helper to old_code/new_code
+
 2009-01-21 : 0.9.6
  - Fixed a Makefile bug that prevented the initial prebuild from succeeding
  - Documented the ksplice-create --series, --git, and --build-modules options
