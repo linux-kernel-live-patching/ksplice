@@ -92,7 +92,6 @@ struct ksplice_section {
 
 enum ksplice_patch_type {
 	KSPLICE_PATCH_TEXT,
-	KSPLICE_PATCH_BUGLINE,
 	KSPLICE_PATCH_DATA,
 	KSPLICE_PATCH_EXPORT,
 };

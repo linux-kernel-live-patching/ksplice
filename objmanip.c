@@ -3262,20 +3262,32 @@ static void write_bugline_patches(struct superbfd *sbfd)
 		assert(reloc != NULL);
 		asymbol *sym = *reloc->sym_ptr_ptr;
 		assert(!bfd_is_const_section(sym->section));
-
 		struct supersect *kpatch_ss =
 		    make_section(sbfd, ".ksplice_patches%s",
 				 sym->section->name);
-		struct ksplice_patch *kpatch =
-		    sect_grow(kpatch_ss, 1, struct ksplice_patch);
-		write_ksplice_patch_reloc
-		    (kpatch_ss, sym->section->name, &kpatch->oldaddr,
-		     sizeof(kpatch->oldaddr), span->label, ts->other_offset);
 
-		unsigned short *line =
-		    write_patch_storage(kpatch_ss, kpatch, sizeof(*line), NULL);
-		*line = *(unsigned short *)(entry + ts->other_offset);
-		kpatch->type = KSPLICE_PATCH_BUGLINE;
+		bfd_vma offset, start = 0;
+		for (offset = 0; offset <= span->size; offset++) {
+			if (offset != span->size &&
+			    !part_of_reloc(ss, span->start + offset))
+				continue;
+			if (start == offset) {
+				start++;
+				continue;
+			}
+			/* an interval of non-relocations just passed */
+			struct ksplice_patch *kpatch =
+			    sect_grow(kpatch_ss, 1, struct ksplice_patch);
+			write_ksplice_patch_reloc
+			    (kpatch_ss, sym->section->name, &kpatch->oldaddr,
+			     sizeof(kpatch->oldaddr), span->label, start);
+
+			char *data = write_patch_storage(kpatch_ss, kpatch,
+							 offset - start, NULL);
+			memcpy(data, entry + start, offset - start);
+			kpatch->type = KSPLICE_PATCH_DATA;
+			start = offset + 1;
+		}
 	}
 }
 
