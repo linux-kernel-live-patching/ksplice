@@ -1051,7 +1051,7 @@ static bool part_of_reloc(struct supersect *ss, unsigned long addr)
 	     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 		arelent *reloc = *relocp;
 		if (addr >= reloc->address &&
-		    addr < reloc->address + reloc->howto->size)
+		    addr < reloc->address + bfd_get_reloc_size(reloc->howto))
 			return true;
 	}
 	return false;
