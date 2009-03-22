@@ -3114,10 +3114,7 @@ static struct span *span_offset_target_span(struct span *span, int offset)
 	arelent *reloc = find_reloc(span->ss, entry + offset);
 	if (reloc == NULL)
 		return NULL;
-	struct span *sym_span = reloc_target_span(span->ss, reloc);
-	if (sym_span == NULL)
-		return NULL;
-	return sym_span;
+	return reloc_target_span(span->ss, reloc);
 }
 
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc)
