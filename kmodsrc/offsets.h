@@ -4,8 +4,10 @@ struct table_section {
 	int entry_contents_size;
 	int entry_align;
 	int has_addr;
+	int relative_addr;
 	int addr_offset;
 	const char *other_sect;
+	int relative_other;
 	int other_offset;
 	const char *crc_sect;
 	int crc_size;

@@ -3141,8 +3141,20 @@ struct span *reloc_target_span(struct supersect *ss, arelent *reloc)
 static bfd_vma reloc_target_offset(struct supersect *ss, arelent *reloc)
 {
 	bfd_vma offset = reloc_offset(ss, reloc);
-	if (reloc->howto->pc_relative)
-		offset += bfd_get_reloc_size(reloc->howto);
+	if (reloc->howto->pc_relative) {
+		if ((ss->flags & SEC_CODE) != 0)
+			return offset + bfd_get_reloc_size(reloc->howto);
+
+		const struct table_section *ts = get_table_section(ss->name);
+		if (ts != NULL && ts->relative_addr &&
+		    reloc->address % ts->entry_size == ts->addr_offset)
+			return offset - ts->addr_offset;
+		if (ts != NULL && ts->relative_other &&
+		    reloc->address % ts->entry_size == ts->other_offset)
+			return offset - ts->other_offset;
+
+		DIE;
+	}
 	return offset;
 }
 

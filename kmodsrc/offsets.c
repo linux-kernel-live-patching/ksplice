@@ -86,7 +86,14 @@ const struct table_section table_sections[]
 		.entry_contents_size = FIELD_ENDOF(struct bug_entry, flags),
 		.entry_align = __alignof__(struct bug_entry),
 		.has_addr = 1,
+#ifdef CONFIG_GENERIC_BUG_RELATIVE_POINTERS
+		.relative_addr = 1,
+		.addr_offset = offsetof(struct bug_entry, bug_addr_disp),
+		.relative_other = 1,
+		.other_offset = offsetof(struct bug_entry, file_disp),
+#else
 		.addr_offset = offsetof(struct bug_entry, bug_addr),
+#endif
 	},
 #else /* !CONFIG_GENERIC_BUG || LINUX_VERSION_CODE < */
 /* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
