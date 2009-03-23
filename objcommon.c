@@ -233,7 +233,7 @@ bfd_vma addr_offset(struct supersect *ss, const void *addr)
 	return (void *)addr - ss->contents.data;
 }
 
-bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, bool adjust_pc)
+bfd_vma reloc_offset(struct supersect *ss, arelent *reloc)
 {
 	int size = bfd_get_reloc_size(reloc->howto);
 
@@ -259,8 +259,6 @@ bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, bool adjust_pc)
 	if (reloc->howto->pc_relative) {
 		if (!reloc->howto->pcrel_offset)
 			add += reloc->address;
-		if (adjust_pc)
-			add += size;
 	}
 	return x + add;
 }
@@ -291,7 +289,7 @@ bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
 		fprintf(stderr, "warning: unexpected "
 			"non-absolute relocation at %s+%lx\n",
 			ss->name, (unsigned long)addr_offset(ss, addr));
-	return get_reloc_offset(ss, reloc, false);
+	return reloc_offset(ss, reloc);
 }
 
 const void *read_pointer(struct supersect *ss, void *const *addr,

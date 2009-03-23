@@ -255,7 +255,7 @@ void sect_do_copy(struct supersect *dest_ss, void *dest,
 	 strcmp(&str[strlen(str) - strlen(suffix)], suffix) == 0)
 
 bfd_vma addr_offset(struct supersect *ss, const void *addr);
-bfd_vma get_reloc_offset(struct supersect *ss, arelent *reloc, bool adjust_pc);
+bfd_vma reloc_offset(struct supersect *ss, arelent *reloc);
 arelent *find_reloc(struct supersect *ss, const void *addr);
 bfd_vma read_reloc(struct supersect *ss, const void *addr, size_t size,
 		   asymbol **symp);

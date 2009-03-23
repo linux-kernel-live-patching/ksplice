@@ -101,6 +101,7 @@ static void initialize_table_section_spans(struct superbfd *sbfd);
 static void initialize_ksplice_call_spans(struct supersect *ss);
 struct span *reloc_target_span(struct supersect *ss, arelent *reloc);
 static struct span *span_offset_target_span(struct span *span, int offset);
+static bfd_vma reloc_target_offset(struct supersect *ss, arelent *reloc);
 struct span *find_span(struct supersect *ss, bfd_size_type address);
 void remove_unkept_spans(struct superbfd *sbfd);
 void compute_span_shifts(struct superbfd *sbfd);
@@ -868,7 +869,7 @@ static void handle_nonzero_offset_relocs(struct supersect *ss)
 		asymbol *sym = *reloc->sym_ptr_ptr;
 		if (bfd_is_const_section(sym->section))
 			continue;
-		bfd_vma offset = get_reloc_offset(ss, reloc, true);
+		bfd_vma offset = reloc_target_offset(ss, reloc);
 		target_span = reloc_target_span(ss, reloc);
 		if (sym->value + offset == target_span->start)
 			continue;
@@ -1110,8 +1111,8 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 	asection *old_sect = old_sym->section;
 	asection *new_sect = new_sym->section;
 
-	bfd_vma old_offset = get_reloc_offset(old_src_ss, old_reloc, true);
-	bfd_vma new_offset = get_reloc_offset(new_src_ss, new_reloc, true);
+	bfd_vma old_offset = reloc_target_offset(old_src_ss, old_reloc);
+	bfd_vma new_offset = reloc_target_offset(new_src_ss, new_reloc);
 
 	if (bfd_is_und_section(old_sect) || bfd_is_und_section(new_sect)) {
 		if (!bfd_is_und_section(new_sect) && old_offset != 0 &&
@@ -1268,8 +1269,7 @@ void rm_some_relocs(struct supersect *ss)
 			if (bfd_is_const_section(sym_ptr->section)) {
 				rm_reloc = false;
 			} else {
-				bfd_vma offset = get_reloc_offset(ss, *relocp,
-								  true);
+				bfd_vma offset = reloc_target_offset(ss, *relocp);
 				struct span *target_span =
 				    reloc_target_span(ss, *relocp);
 				if (target_span->new ||
@@ -1503,8 +1503,8 @@ void write_ksplice_symbol(struct supersect *ss,
 void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 {
 	asymbol *sym_ptr = *orig_reloc->sym_ptr_ptr;
-	bfd_vma reloc_addend = get_reloc_offset(ss, orig_reloc, false);
-	bfd_vma target_addend = get_reloc_offset(ss, orig_reloc, true);
+	bfd_vma reloc_addend = reloc_offset(ss, orig_reloc);
+	bfd_vma target_addend = reloc_target_offset(ss, orig_reloc);
 	unsigned long *repladdr = ss->contents.data + orig_reloc->address;
 
 	if (mode("finalize") && strstarts(ss->name, ".ksplice_patches")) {
@@ -1682,7 +1682,7 @@ static void write_table_relocs(struct superbfd *sbfd, const char *sectname,
 		asymbol *sym = *reloc->sym_ptr_ptr;
 		assert(!bfd_is_const_section(sym->section));
 		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
-		unsigned long addr = get_reloc_offset(ss, reloc, true) +
+		unsigned long addr = reloc_target_offset(ss, reloc) +
 		    sym->value;
 		write_ksplice_table_reloc(sym_ss, addr, span->label, type);
 	}
@@ -2748,7 +2748,7 @@ static void init_callers(struct superbfd *sbfd)
 		     relocp < ss->relocs.data + ss->relocs.size; relocp++) {
 			asymbol *sym = *(*relocp)->sym_ptr_ptr;
 			unsigned long val =
-			    sym->value + get_reloc_offset(ss, *relocp, true);
+			    sym->value + reloc_target_offset(ss, *relocp);
 			char *key = strprintf("%s+%lx", sym->section->name,
 					      val);
 			const char **ret = string_hash_lookup(&sbfd->callers,
@@ -3012,7 +3012,7 @@ static void initialize_table_spans(struct superbfd *sbfd,
 			struct span *target_span = reloc_target_span(ss, reloc);
 			assert(target_span);
 			asymbol *sym = *reloc->sym_ptr_ptr;
-			unsigned long val = get_reloc_offset(ss, reloc, true) +
+			unsigned long val = reloc_target_offset(ss, reloc) +
 			    sym->value - (target_span->start +
 					  target_span->shift);
 			char *label = strprintf("%s<target:%s+%lx>", ss->name,
@@ -3126,7 +3126,7 @@ struct span *reloc_target_span(struct supersect *ss, arelent *reloc)
 	if (bfd_is_const_section(sym_ptr->section))
 		return NULL;
 
-	bfd_vma addend = get_reloc_offset(ss, reloc, true) + sym_ptr->value;
+	bfd_vma addend = reloc_target_offset(ss, reloc) + sym_ptr->value;
 	struct supersect *sym_ss =
 	    fetch_supersect(ss->parent, sym_ptr->section);
 	struct span *span, *target_span = sym_ss->spans.data;
@@ -3136,6 +3136,14 @@ struct span *reloc_target_span(struct supersect *ss, arelent *reloc)
 			target_span = span;
 	}
 	return target_span;
+}
+
+static bfd_vma reloc_target_offset(struct supersect *ss, arelent *reloc)
+{
+	bfd_vma offset = reloc_offset(ss, reloc);
+	if (reloc->howto->pc_relative)
+		offset += bfd_get_reloc_size(reloc->howto);
+	return offset;
 }
 
 struct span *find_span(struct supersect *ss, bfd_size_type address)
@@ -3207,8 +3215,7 @@ void remove_unkept_spans(struct superbfd *sbfd)
 			if (span != NULL && span->keep) {
 				arelent *new_reloc = malloc(sizeof(*new_reloc));
 				*new_reloc = *reloc;
-				new_reloc->addend =
-				    get_reloc_offset(ss, reloc, false);
+				new_reloc->addend = reloc_offset(ss, reloc);
 				new_reloc->addend += span->shift;
 				*vec_grow(&ss->new_relocs, 1) = new_reloc;
 			}
