@@ -1128,13 +1128,13 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 	}
 
 	if (bfd_is_abs_section(old_sect) && bfd_is_abs_section(new_sect)) {
-		if (old_offset + old_sym->value == new_offset + new_sym->value)
+		if (old_sym->value + old_offset == new_sym->value + new_offset)
 			return true;
 		debug1(newsbfd, "Differing relocations from %s/%s to ABS "
 		       "section: %lx/%lx\n", old_addr_span->label,
 		       new_addr_span->label,
-		       (unsigned long)(old_offset + old_sym->value),
-		       (unsigned long)(new_offset + new_sym->value));
+		       (unsigned long)(old_sym->value + old_offset),
+		       (unsigned long)(new_sym->value + new_offset));
 		return false;
 	}
 
@@ -1682,8 +1682,8 @@ static void write_table_relocs(struct superbfd *sbfd, const char *sectname,
 		asymbol *sym = *reloc->sym_ptr_ptr;
 		assert(!bfd_is_const_section(sym->section));
 		struct supersect *sym_ss = fetch_supersect(sbfd, sym->section);
-		unsigned long addr = reloc_target_offset(ss, reloc) +
-		    sym->value;
+		unsigned long addr = sym->value +
+		    reloc_target_offset(ss, reloc);
 		write_ksplice_table_reloc(sym_ss, addr, span->label, type);
 	}
 }
@@ -3012,9 +3012,9 @@ static void initialize_table_spans(struct superbfd *sbfd,
 			struct span *target_span = reloc_target_span(ss, reloc);
 			assert(target_span);
 			asymbol *sym = *reloc->sym_ptr_ptr;
-			unsigned long val = reloc_target_offset(ss, reloc) +
-			    sym->value - (target_span->start +
-					  target_span->shift);
+			unsigned long val = sym->value +
+			    reloc_target_offset(ss, reloc) -
+			    (target_span->start + target_span->shift);
 			char *label = strprintf("%s<target:%s+%lx>", ss->name,
 						target_span->label, val);
 			change_initial_label(span, label);
@@ -3123,7 +3123,7 @@ struct span *reloc_target_span(struct supersect *ss, arelent *reloc)
 	if (bfd_is_const_section(sym_ptr->section))
 		return NULL;
 
-	bfd_vma addend = reloc_target_offset(ss, reloc) + sym_ptr->value;
+	bfd_vma addend = sym_ptr->value + reloc_target_offset(ss, reloc);
 	struct supersect *sym_ss =
 	    fetch_supersect(ss->parent, sym_ptr->section);
 	struct span *span, *target_span = sym_ss->spans.data;
