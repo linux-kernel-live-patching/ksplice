@@ -3141,6 +3141,9 @@ struct span *find_span(struct supersect *ss, bfd_size_type address)
 	/* Deal with empty BSS sections */
 	if (ss->contents.size == 0 && ss->spans.size > 0)
 		return ss->spans.data;
+	/* Deal with section end pointers */
+	if (address == ss->contents.size && ss->spans.size == 1)
+		return ss->spans.data;
 	return NULL;
 }
 
