@@ -1464,7 +1464,7 @@ static abort_t finalize_patches(struct ksplice_mod_change *change)
 					"oldaddr has no safety record\n");
 				return NO_MATCH;
 			}
-			ksdebug(change, "No safety record for patch with"
+			ksdebug(change, "No safety record for patch with "
 				"oldaddr %s+%lx\n", r->symbol->label,
 				r->target_addend);
 			return NO_MATCH;
