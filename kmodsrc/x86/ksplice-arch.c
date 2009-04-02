@@ -42,6 +42,26 @@ extern ftrace_func_t ftrace_trace_function;
 
 #define N_BITS(n) ((n) < sizeof(long) * 8 ? ~(~0L << (n)) : ~0L)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+/* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
+#if defined(_I386_BUG_H) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11) || \
+			     defined(CONFIG_DEBUG_BUGVERBOSE)) && \
+    !defined(do_each_thread_ve) /* OpenVZ */
+/* 38326f786cf4529a86b1ccde3aa17f4fa7e8472a was after 2.6.10 */
+		/* ud2 means BUG().  On old i386 kernels, it is followed
+		   by 2 bytes and then a 4-byte relocation; and is not
+		   disassembler-friendly. */
+		struct bug_frame {
+			unsigned char ud2[2];
+			unsigned short line;
+			char *filename;
+		} __attribute__((packed));
+#define KSPLICE_USE_BUG_FRAME
+#elif defined(__ASM_X8664_BUG_H)
+#define KSPLICE_USE_BUG_FRAME
+#endif
+#endif /* LINUX_VERSION_CODE */
+
 static abort_t compare_instructions(struct ksplice_mod_change *change,
 				    struct ksplice_section *sect,
 				    const struct ksplice_reloc **fingerp,
@@ -207,20 +227,18 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 		run_nop = true;
 		pre_nop = true;
 
-#ifndef do_each_thread_ve		/* OpenVZ */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && \
-    defined(_I386_BUG_H) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11) || \
-			     defined(CONFIG_DEBUG_BUGVERBOSE))
+    defined(KSPLICE_USE_BUG_FRAME)
 /* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
-/* 38326f786cf4529a86b1ccde3aa17f4fa7e8472a was after 2.6.10 */
 		if (run_ud.mnemonic == pre_ud.mnemonic &&
 		    run_ud.mnemonic == UD_Iud2) {
+			const struct bug_frame
+			    *pre_bug = (const struct bug_frame *)pre,
+			    *run_bug = (const struct bug_frame *)run;
 			const struct ksplice_reloc *r;
-			/* ud2 means BUG().  On old i386 kernels, it is followed
-			   by 2 bytes and then a 4-byte relocation; and is not
-			   disassembler-friendly. */
 			ret = lookup_reloc(change, &finger,
-					   (unsigned long)(pre + 4), &r);
+					   (unsigned long)&pre_bug->filename,
+					   &r);
 			if (ret == NO_MATCH) {
 				if (mode == RUN_PRE_INITIAL)
 					ksdebug(change, "Unrecognized ud2\n");
@@ -229,23 +247,30 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 			if (ret != OK)
 				goto out;
 			ret = handle_reloc(change, sect, r,
-					   (unsigned long)(run + 4), mode);
+					   (unsigned long)&run_bug->filename,
+					   mode);
 			if (ret != OK)
 				goto out;
 			/* If there's a relocation, then it's a BUG? */
 			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(change, "[BUG?: ");
-				print_bytes(change, run + 2, 6, pre + 2, 6);
+				print_bytes(change,
+					    run + sizeof(run_bug->ud2),
+					    sizeof(*run_bug),
+					    pre + sizeof(pre_bug->ud2),
+					    sizeof(*pre_bug));
 				ksdebug(change, "] ");
 			}
-			pre += 8;
-			run += 8;
-			ud_input_skip(&run_ud, 6);
-			ud_input_skip(&pre_ud, 6);
+			pre += sizeof(*pre_bug);
+			run += sizeof(*run_bug);
+			ud_input_skip(&run_ud,
+				      sizeof(*run_bug) - sizeof(run_bug->ud2));
+			ud_input_skip(&pre_ud,
+				      sizeof(*pre_bug) - sizeof(pre_bug->ud2));
 			continue;
 		}
-#endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
-#endif /* do_each_thread_ve */
+#endif /* LINUX_VERSION_CODE && KSPLICE_USE_BUG_FRAME */
+
 #ifdef CONFIG_XEN
 		if (run_ud.mnemonic == pre_ud.mnemonic &&
 		    run_ud.mnemonic == UD_Iud2) {
