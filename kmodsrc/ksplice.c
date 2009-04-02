@@ -342,8 +342,9 @@ void sort(void *base, size_t num, size_t size,
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,13)
 /* Old kernels do not have kstrdup
- * 543537bd922692bc978e2e356fcd8bfc9c2ee7d5 was 2.6.13-rc4
+ * 543537bd922692bc978e2e356fcd8bfc9c2ee7d5 was after 2.6.12
  */
+#define kstrdup ksplice_kstrdup
 static char *kstrdup(const char *s, typeof(GFP_KERNEL) gfp)
 {
 	size_t len;
