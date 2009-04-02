@@ -444,7 +444,7 @@ static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
 
 #ifdef KSPLICE_STANDALONE
 
-#ifdef VZVERSION		/* OpenVZ kernels define this */
+#ifdef do_each_thread_ve		/* OpenVZ kernels define this */
 #define do_each_thread do_each_thread_all
 #define while_each_thread while_each_thread_all
 #endif

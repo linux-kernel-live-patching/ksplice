@@ -207,7 +207,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 		run_nop = true;
 		pre_nop = true;
 
-#ifndef VZVERSION		/* OpenVZ */
+#ifndef do_each_thread_ve		/* OpenVZ */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && \
     defined(_I386_BUG_H) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11) || \
 			     defined(CONFIG_DEBUG_BUGVERBOSE))
@@ -245,7 +245,7 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 			continue;
 		}
 #endif /* LINUX_VERSION_CODE && _I386_BUG_H && CONFIG_DEBUG_BUGVERBOSE */
-#endif /* VZVERSION */
+#endif /* do_each_thread_ve */
 #ifdef CONFIG_XEN
 		if (run_ud.mnemonic == pre_ud.mnemonic &&
 		    run_ud.mnemonic == UD_Iud2) {
@@ -332,10 +332,10 @@ static abort_t compare_instructions(struct ksplice_mod_change *change,
 /* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
 #else /* !CONFIG_X86_64 || LINUX_VERSION_CODE >= */
 	} else if (run_ud->mnemonic == UD_Iud2) {
-#ifndef VZVERSION		/* OpenVZ */
+#ifndef do_each_thread_ve		/* OpenVZ */
 		ksdebug(change, "Unexpected ud2\n");
 		return NO_MATCH;
-#endif /* VZVERSION */
+#endif /* do_each_thread_ve */
 #endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
 	}
 	for (i = 0; i < ARRAY_SIZE(run_ud->operand); i++) {
