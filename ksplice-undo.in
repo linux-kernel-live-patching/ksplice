@@ -20,7 +20,7 @@ use strict;
 use warnings;
 use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
-use Time::HiRes qw(usleep);
+my $have_usleep = eval { require Time::HiRes };
 
 my $debug;
 my $debugon = 0;
@@ -64,10 +64,14 @@ foreach my $module (glob("${update}_*")) {
 }
 if ($failed == 0) {
 	set_stage($kid, "cleanup");
-	my $count = 0;
-	while (update_loaded($kid) && $count < 5) {
-		usleep(100000);
-		$count++;
+	if ($have_usleep) {
+		my $count = 0;
+		while (update_loaded($kid) && $count < 5) {
+			Time::HiRes::usleep(100000);
+			$count++;
+		}
+	} else {
+		sleep(1) if (!update_loaded($kid));
 	}
 }
 if ($failed == 0 && -e "/sys/module/$update") {
