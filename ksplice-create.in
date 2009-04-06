@@ -25,6 +25,7 @@ my ($patchfile, $diffext, $git, $orig_config_dir, $jobs, $kid);
 my $description;
 my $series = 0;
 my $build_modules = 0;
+my $ksplice_short_name_hack = 0;
 my @only_targets;
 my @extra_match;
 my @exclude_match;
@@ -44,6 +45,7 @@ GetOptions(@common_options,
 	"extra-match=s" => \@extra_match,
 	"exclude-match=s" => \@exclude_match,
 	"standalone!" => \$standalone,
+	"short-name-hack!" => \$ksplice_short_name_hack,
 	"skip-prebuild" => \$skip_prebuild,
 	"jobs|j:i" => \$jobs,
 	"config=s" => \$orig_config_dir,
@@ -215,6 +217,7 @@ if (!defined($standalone)) {
 	$standalone = (!-e "$linuxtree/.config" || runval_raw(qw(grep -q ^CONFIG_KSPLICE=[ym]$), "$linuxtree/.config") != 0);
 }
 push(@make_kmodsrc, "KSPLICE_STANDALONE=1") if ($standalone);
+push(@make_kmodsrc, "KSPLICE_SHORT_NAME_HACK=1") if ($ksplice_short_name_hack);
 
 my @make_kmodsrc_install = (@make_kmodsrc, qw(modules_install --old-file=_modinst_post --old-file=_emodinst_post), "MAKE=make --old-file=_modinst_post --old-file=_emodinst_post", "INSTALL_MOD_STRIP=1", "MODLIB=$tmpdir/ksplice-modules");
 
@@ -304,9 +307,15 @@ foreach my $mod (@modules) {
 	(my $target = $mod) =~ s/-/_/g;
 	my $mid = "${kid}_$target";
 	my $module = "ksplice-$mid";
-	rename("$tmpdir/ksplice-modules/extra/$module-new.ko", "$ksplice/$module-new.ko");
-	rename("$tmpdir/ksplice-modules/extra/$module-old.ko", "$ksplice/$module-old.ko");
-	print CONTENTS "change $target ksplice_${mid}_new $module-new.ko ksplice_${mid}_old $module-old.ko\n";
+	unless($ksplice_short_name_hack) {
+		rename("$tmpdir/ksplice-modules/extra/$module-new.ko", "$ksplice/$module-new.ko");
+		rename("$tmpdir/ksplice-modules/extra/$module-old.ko", "$ksplice/$module-old.ko");
+		print CONTENTS "change $target ksplice_${mid}_new $module-new.ko ksplice_${mid}_old $module-old.ko\n";
+	} else {
+		rename("$tmpdir/ksplice-modules/extra/$module-n.ko", "$ksplice/$module-n.ko");
+		rename("$tmpdir/ksplice-modules/extra/$module-o.ko", "$ksplice/$module-o.ko");
+		print CONTENTS "change $target ksplice_${mid}_n $module-n.ko ksplice_${mid}_o $module-o.ko\n";
+	}
 }
 if ($standalone) {
 	rename("$tmpdir/ksplice-modules/extra/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko");

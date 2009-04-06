@@ -3538,7 +3538,13 @@ static bool patches_module(const struct module *a, const struct module *b)
 		return false;
 	name++;
 	return strstarts(name, modname) &&
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 	    strcmp(name + strlen(modname), "_new") == 0;
+#else /* LINUX_VERSION_CODE < */
+/* 0e8a2de644a93132594f66222a9d48405674eacd was after 2.6.9 */
+	    (strcmp(name + strlen(modname), "_n") == 0
+	     || strcmp(name + strlen(modname), "_new") == 0);
+#endif /* LINUX_VERSION_CODE */
 #else /* !KSPLICE_NO_KERNEL_SUPPORT */
 	struct ksplice_module_list_entry *entry;
 	if (a == b)
