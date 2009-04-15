@@ -1386,7 +1386,8 @@ static abort_t init_symbol_arrays(struct ksplice_mod_change *change)
 	return OK;
 }
 
-static abort_t prepare_change(struct ksplice_mod_change *change)
+/* noinline to prevent garbage on the stack from confusing check_stack */
+static noinline abort_t prepare_change(struct ksplice_mod_change *change)
 {
 	abort_t ret;
 
