@@ -1364,8 +1364,12 @@ static abort_t init_symbol_array(struct ksplice_mod_change *change,
 	return ret;
 }
 
-/* Prepare the change's ksplice_symbol structures for run-pre matching */
-static abort_t init_symbol_arrays(struct ksplice_mod_change *change)
+/*
+ * Prepare the change's ksplice_symbol structures for run-pre matching
+ *
+ * noinline to prevent garbage on the stack from confusing check_stack
+ */
+static noinline abort_t init_symbol_arrays(struct ksplice_mod_change *change)
 {
 	abort_t ret;
 
