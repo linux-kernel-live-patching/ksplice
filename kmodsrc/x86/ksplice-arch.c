@@ -83,7 +83,7 @@ static uint8_t ud_operand_len(struct ud_operand *operand);
 static uint8_t ud_prefix_len(struct ud *ud);
 static long ud_operand_lval(struct ud_operand *operand);
 static int next_run_byte(struct ud *ud);
-static bool is_nop(struct ud *ud);
+static bool is_nop(struct ud *ud, const unsigned char *addr);
 static bool is_unconditional_jump(struct ud *ud);
 static bool is_mcount_call(struct ud *ud, const unsigned char *addr);
 static void initialize_ksplice_ud(struct ud *ud);
@@ -142,8 +142,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 			ret = NO_MATCH;
 			goto out;
 		}
-		pre_nop = is_nop(&pre_ud) || is_mcount_call(&pre_ud, pre);
-		run_nop = is_nop(&run_ud) || is_mcount_call(&run_ud, run);
+		pre_nop = is_nop(&pre_ud, pre) || is_mcount_call(&pre_ud, pre);
+		run_nop = is_nop(&run_ud, run) || is_mcount_call(&run_ud, run);
 		if (pre_nop && !run_nop) {
 			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(change, "| nop: ");
@@ -553,7 +553,7 @@ static bool is_mcount_call(struct ud *ud, const unsigned char *addr)
 }
 #endif /* CONFIG_FTRACE */
 
-static bool is_nop(struct ud *ud)
+static bool is_nop(struct ud *ud, const unsigned char *addr)
 {
 	switch (ud->mnemonic) {
 	case UD_Inop:
@@ -578,6 +578,33 @@ static bool is_nop(struct ud *ud)
 		      ud->operand[1].scale == 0)) &&
 		    ud_operand_lval(&ud->operand[1]) == 0 &&
 		    ud->operand[2].type == UD_NONE;
+	case UD_Ijmp:
+		/* jmp +N followed by N 0x90s is a NOP */
+		if (ud->operand[0].type == UD_OP_JIMM &&
+		    ud->operand[1].type == UD_NONE &&
+		    ud->operand[2].type == UD_NONE &&
+		    ud_operand_len(&ud->operand[0]) == 1) {
+			struct ud temp_ud;
+			int len = ud_operand_lval(&ud->operand[0]);
+			int i;
+
+			if (len < 0 || len > 13)
+				return false;
+
+			initialize_ksplice_ud(&temp_ud);
+			ud_set_input_hook(&temp_ud, next_run_byte);
+			ud_set_user_opaque_data(&temp_ud,
+						(unsigned char *)addr +
+						ud_insn_len(ud));
+
+			for (i = 0; i < len; i++) {
+				if (ud_disassemble(&temp_ud) == 0)
+					return false;
+				if (temp_ud.mnemonic != UD_Inop)
+					return false;
+			}
+			return true;
+		}
 	default:
 		return false;
 	}
