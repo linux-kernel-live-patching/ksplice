@@ -190,7 +190,9 @@ sub get_debug_output {
 	if (runval_raw("grep", "-qFx", "nodev\tdebugfs", "/proc/filesystems") == 0) {
 		my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX', TMPDIR => 1);
 		runval(qw(mount -t debugfs debugfs), $debugfsdir);
-		copy("$debugfsdir/$update", "$debugfs_out");
+		if (-e "$debugfsdir/$update") {
+			copy("$debugfsdir/$update", $debugfs_out);
+		}
 		runval(qw(umount), $debugfsdir);
 		rmdir($debugfsdir);
 		return $debugfs_out;
