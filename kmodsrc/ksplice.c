@@ -58,10 +58,19 @@
 #include <asm/alternative.h>
 #endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
 
-#if defined(KSPLICE_STANDALONE) && \
-    !defined(CONFIG_KSPLICE) && !defined(CONFIG_KSPLICE_MODULE)
+#ifdef KSPLICE_STANDALONE
+#if !defined(CONFIG_KSPLICE) && !defined(CONFIG_KSPLICE_MODULE)
 #define KSPLICE_NO_KERNEL_SUPPORT 1
-#endif /* KSPLICE_STANDALONE && !CONFIG_KSPLICE && !CONFIG_KSPLICE_MODULE */
+#endif /* !CONFIG_KSPLICE && !CONFIG_KSPLICE_MODULE */
+
+#ifndef __used
+#define __used __attribute_used__
+#endif
+
+#define EXTRACT_SYMBOL(sym)						\
+	static const typeof(&sym) PASTE(__ksplice_extract_, __LINE__)	\
+	    __used __attribute__((section(".ksplice_extract"))) = &sym
+#endif /* KSPLICE_STANDALONE */
 
 enum stage {
 	STAGE_PREPARING,	/* the update is not yet applied */

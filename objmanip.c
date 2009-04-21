@@ -238,6 +238,7 @@ int verbose = 0;
 	} while (0)
 
 struct str_vec delsects, rmsyms;
+struct asymbolp_vec extract_syms;
 bool changed;
 
 struct ksplice_config *config;
@@ -637,6 +638,24 @@ void do_finalize(struct superbfd *isbfd)
 
 void do_rmsyms(struct superbfd *isbfd)
 {
+	asection *extract_sect = bfd_get_section_by_name(isbfd->abfd,
+							 ".ksplice_extract");
+	if (extract_sect != NULL) {
+		struct supersect *extract_ss = fetch_supersect(isbfd,
+							       extract_sect);
+		arelent **relocp;
+		for (relocp = extract_ss->relocs.data;
+		     relocp < extract_ss->relocs.data + extract_ss->relocs.size;
+		     relocp++) {
+			asymbol *sym = *(*relocp)->sym_ptr_ptr;
+			if (bfd_is_und_section(sym->section)) {
+				debug1(isbfd, "extracting symbol %s\n",
+				       sym->name);
+				*vec_grow(&extract_syms, 1) = sym;
+			}
+		}
+	}
+
 	read_str_set(&rmsyms);
 	rm_relocs(isbfd);
 }
@@ -1258,9 +1277,19 @@ void rm_some_relocs(struct supersect *ss)
 		bool rm_reloc = false;
 		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
 
-		if (mode("rmsyms") && str_in_set(sym_ptr->name, &rmsyms) &&
-		    bfd_is_und_section(sym_ptr->section))
-			rm_reloc = true;
+		if (mode("rmsyms") && bfd_is_und_section(sym_ptr->section)) {
+			if (str_in_set(sym_ptr->name, &rmsyms))
+				rm_reloc = true;
+			asymbol **esymp;
+			for (esymp = extract_syms.data;
+			     esymp < extract_syms.data + extract_syms.size;
+			     esymp++) {
+				if (sym_ptr == *esymp) {
+					rm_reloc = true;
+					break;
+				}
+			}
+		}
 
 		if (mode("keep"))
 			rm_reloc = true;
@@ -2451,6 +2480,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_EXIT;
 	if (strstarts(ss->name, ".ksplice_call"))
 		return SS_TYPE_KSPLICE_CALL;
+	if (strstarts(ss->name, ".ksplice_extract"))
+		return SS_TYPE_KSPLICE_EXTRACT;
 	if (strstarts(ss->name, ".ksplice_options"))
 		return SS_TYPE_SPECIAL;
 	if (strstarts(ss->name, ".ksplice"))
