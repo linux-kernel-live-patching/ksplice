@@ -6,7 +6,7 @@ use File::Copy;
 use File::Path;
 use File::Spec::Functions qw(tmpdir);
 use File::Temp qw(tempfile tempdir);
-use Fatal qw(:void copy rename move chdir mkdir unlink rmtree);
+use Fatal qw(:void copy rename move chdir mkdir rmdir unlink rmtree);
 use IPC::Open2;
 use IPC::Open3;
 use Pod::Usage;
@@ -187,12 +187,12 @@ sub get_debug_output {
 	if (!$debugfs_out) {
 		(undef, $debugfs_out) = tempfile('ksplice-debug-XXXXXX', DIR => tmpdir());
 	}
-	my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX',
-				 TMPDIR => 1, CLEANUP => 1);
 	if (runval_raw("grep", "-qFx", "nodev\tdebugfs", "/proc/filesystems") == 0) {
+		my $debugfsdir = tempdir('ksplice-debugfs-XXXXXX', TMPDIR => 1);
 		runval(qw(mount -t debugfs debugfs), $debugfsdir);
 		copy("$debugfsdir/$update", "$debugfs_out");
 		runval(qw(umount), $debugfsdir);
+		rmdir($debugfsdir);
 		return $debugfs_out;
 	} elsif ($? >> 8 == 1) {
 		return ();
