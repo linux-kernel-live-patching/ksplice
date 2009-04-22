@@ -237,7 +237,7 @@ int verbose = 0;
 			## __VA_ARGS__);				\
 	} while (0)
 
-struct str_vec delsects, rmsyms;
+struct str_vec delsects;
 struct asymbolp_vec extract_syms;
 bool changed;
 
@@ -656,7 +656,6 @@ void do_rmsyms(struct superbfd *isbfd)
 		}
 	}
 
-	read_str_set(&rmsyms);
 	rm_relocs(isbfd);
 }
 
@@ -1278,8 +1277,6 @@ void rm_some_relocs(struct supersect *ss)
 		asymbol *sym_ptr = *(*relocp)->sym_ptr_ptr;
 
 		if (mode("rmsyms") && bfd_is_und_section(sym_ptr->section)) {
-			if (str_in_set(sym_ptr->name, &rmsyms))
-				rm_reloc = true;
 			asymbol **esymp;
 			for (esymp = extract_syms.data;
 			     esymp < extract_syms.data + extract_syms.size;

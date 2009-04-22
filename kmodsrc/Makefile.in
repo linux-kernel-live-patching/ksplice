@@ -94,11 +94,9 @@ endif
 ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
 
-RMSYMS =
-
 quiet_cmd_ksplice-rmsyms = RMSYMS  $@
 cmd_ksplice-rmsyms = \
-	$(ksplice-script) rmsyms $< $<.rmsyms $(RMSYMS) && \
+	$(ksplice-script) rmsyms $< $<.rmsyms && \
 	$(LD) -r -o $@ $<.rmsyms $(src)/ksplice-rmsyms.lds
 $(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o $(obj)/offsets.o FORCE
 	$(call if_changed,ksplice-rmsyms)

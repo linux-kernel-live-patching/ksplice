@@ -123,8 +123,8 @@ sub do_finalize {
 }
 
 sub do_rmsyms {
-	my ($in, $out, @rmsyms) = @_;
-	runval_in("@rmsyms\n", "$libexecdir/ksplice-objmanip", $in, $out, "rmsyms");
+	my ($in, $out) = @_;
+	runval("$libexecdir/ksplice-objmanip", $in, $out, "rmsyms");
 }
 
 sub do_system_map_lookup {
