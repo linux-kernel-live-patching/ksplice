@@ -94,8 +94,7 @@ endif
 ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
 
-RMSYMS = \
-	ftrace_trace_function
+RMSYMS =
 
 quiet_cmd_ksplice-rmsyms = RMSYMS  $@
 cmd_ksplice-rmsyms = \

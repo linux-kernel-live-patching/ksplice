@@ -39,6 +39,7 @@ EXTRACT_SYMBOL(thread_return);
 #include <linux/ftrace.h>
 
 extern ftrace_func_t ftrace_trace_function;
+EXTRACT_SYMBOL(ftrace_trace_function);
 #endif /* CONFIG_FTRACE */
 
 #define N_BITS(n) ((n) < sizeof(long) * 8 ? ~(~0L << (n)) : ~0L)
