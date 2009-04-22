@@ -1543,6 +1543,11 @@ static void unmap_trampoline_pages(struct update *update)
 	}
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22) && defined(CONFIG_X86_64)
+/* e3ebadd95cb621e2c7436f3d3646447ac9d5c16d was after 2.6.21 */
+#define phys_base ({EXTRACT_SYMBOL(phys_base); phys_base;})
+#endif /* LINUX_VERSION_CODE && CONFIG_X86_64 */
+
 /*
  * map_writable creates a shadow page mapping of the range
  * [addr, addr + len) so that we can write to code mapped read-only.
@@ -1568,7 +1573,10 @@ static void *map_writable(void *addr, size_t len)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22) || !defined(CONFIG_X86_64)
 			pages[i] = virt_to_page(page_addr);
 #else /* LINUX_VERSION_CODE < && CONFIG_X86_64 */
-/* e3ebadd95cb621e2c7436f3d3646447ac9d5c16d was after 2.6.21 */
+/* e3ebadd95cb621e2c7436f3d3646447ac9d5c16d was after 2.6.21
+ * This works around a broken virt_to_page() from the RHEL 5 backport
+ * of x86-64 relocatable kernel support.
+ */
 			pages[i] =
 			    pfn_to_page(__pa_symbol(page_addr) >> PAGE_SHIFT);
 #endif /* LINUX_VERSION_CODE || !CONFIG_X86_64 */
