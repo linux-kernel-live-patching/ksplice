@@ -2630,6 +2630,10 @@ static abort_t handle_bug(struct ksplice_mod_change *change,
 }
 #endif /* CONFIG_GENERIC_BUG */
 
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+EXTRACT_SYMBOL(search_exception_tables);
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
+
 static abort_t handle_extable(struct ksplice_mod_change *change,
 			      const struct ksplice_reloc *r,
 			      unsigned long run_addr)
