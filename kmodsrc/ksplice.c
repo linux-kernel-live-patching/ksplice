@@ -686,7 +686,10 @@ static int contains_canary(struct ksplice_mod_change *change,
 static unsigned long follow_trampolines(struct ksplice_mod_change *change,
 					unsigned long addr);
 static bool patches_module(const struct module *a, const struct module *b);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+/* 66f92cf9d415e96a5bdd6c64de8dd8418595d2fc was after 2.6.29 */
 static bool strstarts(const char *str, const char *prefix);
+#endif /* LINUX_VERSION_CODE */
 static bool singular(struct list_head *list);
 static void *bsearch(const void *key, const void *base, size_t n,
 		     size_t size, int (*cmp)(const void *key, const void *elt));
@@ -3447,12 +3450,13 @@ static bool patches_module(const struct module *a, const struct module *b)
 #endif /* KSPLICE_NO_KERNEL_SUPPORT */
 }
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+/* 66f92cf9d415e96a5bdd6c64de8dd8418595d2fc was after 2.6.29 */
 static bool strstarts(const char *str, const char *prefix)
 {
 	return strncmp(str, prefix, strlen(prefix)) == 0;
 }
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
+#endif /* LINUX_VERSION_CODE */
 
 static bool singular(struct list_head *list)
 {
