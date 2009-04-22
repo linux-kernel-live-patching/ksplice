@@ -164,8 +164,6 @@ static void ss_mark_symbols_used_in_relocations(struct supersect *ss);
 void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 		    struct asymbolp_vec *isyms);
 static bool deleted_table_section_symbol(bfd *abfd, asymbol *sym);
-void read_str_set(struct str_vec *strs);
-bool str_in_set(const char *str, const struct str_vec *strs);
 struct supersect *__attribute((format(printf, 2, 3)))
 make_section(struct superbfd *sbfd, const char *fmt, ...);
 void __attribute__((format(printf, 3, 4)))
@@ -2386,32 +2384,6 @@ void filter_symbols(bfd *ibfd, bfd *obfd, struct asymbolp_vec *osyms,
 			*vec_grow(osyms, 1) = sym;
 		}
 	}
-}
-
-void read_str_set(struct str_vec *strs)
-{
-	char *buf = NULL;
-	size_t n = 0;
-	assert(getline(&buf, &n, stdin) >= 0);
-	vec_init(strs);
-	char *saveptr;
-	while (1) {
-		char *str = strtok_r(buf, " \n", &saveptr);
-		buf = NULL;
-		if (str == NULL)
-			break;
-		*vec_grow(strs, 1) = str;
-	}
-}
-
-bool str_in_set(const char *str, const struct str_vec *strs)
-{
-	const char **strp;
-	for (strp = strs->data; strp < strs->data + strs->size; strp++) {
-		if (strcmp(str, *strp) == 0)
-			return true;
-	}
-	return false;
 }
 
 static bool is_table_section(const char *name, bool consider_other,
