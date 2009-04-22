@@ -24,6 +24,7 @@
  * Instead, we need to prevent Ksplice from patching thread_return.
  */
 extern const char thread_return[];
+EXTRACT_SYMBOL(thread_return);
 #define KSPLICE_IP(x) ((unsigned long)thread_return)
 #define KSPLICE_SP(x) ((x)->thread.rsp)
 #else /* Old x86 32-bit */

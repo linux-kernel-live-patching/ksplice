@@ -95,7 +95,6 @@ ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
 
 RMSYMS = \
-	thread_return \
 	bust_spinlocks \
 	task_curr \
 	__kernel_text_address \
