@@ -195,7 +195,8 @@ struct ksplice_lookup {
 	abort_t ret;
 };
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+/* c6b37801911d7f4663c99cad8aa230bc934cea82 was after 2.6.29 */
 struct symsearch {
 	const struct kernel_symbol *start, *stop;
 	const unsigned long *crcs;
@@ -206,7 +207,7 @@ struct symsearch {
 	} licence;
 	bool unused;
 };
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
+#endif /* LINUX_VERSION_CODE */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
 /* c33fa9f5609e918824446ef9a75319d4a802f1f4 was after 2.6.25 */
@@ -456,7 +457,10 @@ static bool bootstrapped = false;
 extern const struct ksplice_reloc ksplice_init_relocs[],
     ksplice_init_relocs_end[];
 
-/* Obtained via System.map */
+#endif /* KSPLICE_STANDALONE */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+/* c6b37801911d7f4663c99cad8aa230bc934cea82 was after 2.6.29 */
 extern struct list_head modules;
 extern struct mutex module_mutex;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18) && defined(CONFIG_UNUSED_SYMBOLS)
@@ -486,8 +490,7 @@ extern const struct kernel_symbol __start___ksymtab_gpl_future[];
 extern const struct kernel_symbol __stop___ksymtab_gpl_future[];
 extern const unsigned long __start___kcrctab_gpl_future[];
 #endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
-
-#endif /* KSPLICE_STANDALONE */
+#endif /* LINUX_VERSION_CODE */
 
 static struct update *init_ksplice_update(const char *kid);
 static void cleanup_ksplice_update(struct update *update);
@@ -712,8 +715,8 @@ static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 					  void *data);
 #endif /* LINUX_VERSION_CODE && CONFIG_KALLSYMS */
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
-/* Functions defined here that will be exported in later kernels */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+/* c6b37801911d7f4663c99cad8aa230bc934cea82 was after 2.6.29 */
 static struct module *find_module(const char *name);
 static int use_module(struct module *a, struct module *b);
 static const struct kernel_symbol *find_symbol(const char *name,
@@ -725,7 +728,7 @@ static bool each_symbol(bool (*fn)(const struct symsearch *arr,
 				   unsigned int symnum, void *data),
 			void *data);
 static struct module *__module_address(unsigned long addr);
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
+#endif /* LINUX_VERSION_CODE */
 
 /* Architecture-specific functions defined in arch/ARCH/kernel/ksplice-arch.c */
 
@@ -2275,6 +2278,8 @@ static abort_t brute_search(struct ksplice_mod_change *change,
 	return OK;
 }
 
+extern struct list_head modules;
+
 static abort_t brute_search_all(struct ksplice_mod_change *change,
 				struct ksplice_section *sect,
 				struct list_head *vals)
@@ -3719,7 +3724,8 @@ static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 }
 #endif /* LINUX_VERSION_CODE && CONFIG_KALLSYMS */
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+/* c6b37801911d7f4663c99cad8aa230bc934cea82 was after 2.6.29 */
 static struct module *find_module(const char *name)
 {
 	struct module *mod;
@@ -3985,7 +3991,7 @@ static struct module *__module_address(unsigned long addr)
 			return mod;
 	return NULL;
 }
-#endif /* KSPLICE_NO_KERNEL_SUPPORT */
+#endif /* LINUX_VERSION_CODE */
 
 struct update_attribute {
 	struct attribute attr;
