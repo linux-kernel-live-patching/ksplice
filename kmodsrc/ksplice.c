@@ -452,11 +452,6 @@ static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
 
 static bool bootstrapped = false;
 
-#ifdef CONFIG_KALLSYMS
-extern unsigned long kallsyms_addresses[], kallsyms_num_syms;
-extern u8 kallsyms_names[];
-#endif /* CONFIG_KALLSYMS */
-
 /* defined by ksplice-create */
 extern const struct ksplice_reloc ksplice_init_relocs[],
     ksplice_init_relocs_end[];
@@ -703,9 +698,8 @@ _ksdebug(struct update *update, const char *fmt, ...);
 #define ksdebug(change, fmt, ...) \
 	_ksdebug(change->update, fmt, ## __VA_ARGS__)
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
-/* Functions defined here that will be exported in later kernels */
-#ifdef CONFIG_KALLSYMS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30) && defined(CONFIG_KALLSYMS)
+/* 75a66614db21007bcc8c37f9c5d5b922981387b9 was after 2.6.29 */
 static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 					     struct module *, unsigned long),
 				   void *data);
@@ -716,7 +710,10 @@ static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 						    struct module *,
 						    unsigned long),
 					  void *data);
-#endif /* CONFIG_KALLSYMS */
+#endif /* LINUX_VERSION_CODE && CONFIG_KALLSYMS */
+
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+/* Functions defined here that will be exported in later kernels */
 static struct module *find_module(const char *name);
 static int use_module(struct module *a, struct module *b);
 static const struct kernel_symbol *find_symbol(const char *name,
@@ -3620,8 +3617,12 @@ static int _ksdebug(struct update *update, const char *fmt, ...)
 }
 #endif /* CONFIG_DEBUG_FS */
 
-#ifdef KSPLICE_NO_KERNEL_SUPPORT
-#ifdef CONFIG_KALLSYMS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30) && defined(CONFIG_KALLSYMS)
+/* 75a66614db21007bcc8c37f9c5d5b922981387b9 was after 2.6.29 */
+extern unsigned long kallsyms_addresses[];
+extern unsigned long kallsyms_num_syms;
+extern u8 kallsyms_names[];
+
 static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 					     struct module *, unsigned long),
 				   void *data)
@@ -3633,9 +3634,6 @@ static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 #endif /* LINUX_VERSION_CODE */
 	int ret;
 
-/*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
- *  2.6.10 was the first release after this commit
- */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 	for (i = 0, off = 0; i < kallsyms_num_syms; i++) {
 		off = kallsyms_expand_symbol(off, namebuf);
@@ -3644,6 +3642,7 @@ static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 			return ret;
 	}
 #else /* LINUX_VERSION_CODE < */
+/* 5648d78927ca65e74aadc88a2b1d6431e55e78ec was after 2.6.9 */
 	char *knames;
 
 	for (i = 0, knames = kallsyms_names; i < kallsyms_num_syms; i++) {
@@ -3661,9 +3660,6 @@ static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 	return module_kallsyms_on_each_symbol(fn, data);
 }
 
-/*  kallsyms compression was added by 5648d78927ca65e74aadc88a2b1d6431e55e78ec
- *  2.6.10 was the first release after this commit
- */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 extern u8 kallsyms_token_table[];
 extern u16 kallsyms_token_index[];
@@ -3698,6 +3694,8 @@ static unsigned int kallsyms_expand_symbol(unsigned int off, char *result)
 
 	return off;
 }
+#else /* LINUX_VERSION_CODE < */
+/* 5648d78927ca65e74aadc88a2b1d6431e55e78ec was after 2.6.9 */
 #endif /* LINUX_VERSION_CODE */
 
 static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
@@ -3719,8 +3717,9 @@ static int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 	}
 	return 0;
 }
-#endif /* CONFIG_KALLSYMS */
+#endif /* LINUX_VERSION_CODE && CONFIG_KALLSYMS */
 
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
 static struct module *find_module(const char *name)
 {
 	struct module *mod;
