@@ -3101,6 +3101,10 @@ out:
 	return status;
 }
 
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+EXTRACT_SYMBOL(task_curr);
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
+
 static abort_t check_task(struct update *update,
 			  const struct task_struct *t, bool rerun)
 {
