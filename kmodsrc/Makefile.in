@@ -102,7 +102,6 @@ RMSYMS = \
 	kallsyms_names \
 	kallsyms_token_table \
 	kallsyms_token_index \
-	__module_text_address \
 	__start___ksymtab \
 	__stop___ksymtab \
 	__start___ksymtab_gpl \

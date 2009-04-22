@@ -1589,6 +1589,11 @@ static void *map_writable(void *addr, size_t len)
 	return vaddr + offset_in_page(addr);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+/* c6b37801911d7f4663c99cad8aa230bc934cea82 was after 2.6.29 */
+EXTRACT_SYMBOL(__module_text_address);
+#endif /* LINUX_VERSION_CODE */
+
 /*
  * Ksplice adds a dependency on any symbol address used to resolve
  * relocations in the new_code module.
