@@ -3421,6 +3421,10 @@ static int contains_canary(struct ksplice_mod_change *change,
 	}
 }
 
+#ifdef KSPLICE_NO_KERNEL_SUPPORT
+EXTRACT_SYMBOL(__kernel_text_address);
+#endif /* KSPLICE_NO_KERNEL_SUPPORT */
+
 /*
  * Compute the address of the code you would actually run if you were
  * to call the function at addr (i.e., follow the sequence of jumps
