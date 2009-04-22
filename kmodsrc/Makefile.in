@@ -95,7 +95,6 @@ ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
 
 RMSYMS = \
-	tasklist_lock \
 	stop_machine_run \
 	module_mutex \
 	modules \

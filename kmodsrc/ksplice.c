@@ -3061,6 +3061,11 @@ static int __reverse_patches(void *updateptr)
 	return (__force int)OK;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11)
+/* 5d4564e68210e4b1edb3f013bc3e59982bb35737 was after 2.6.10 */
+EXTRACT_SYMBOL(tasklist_lock);
+#endif /* LINUX_VERSION_CODE */
+
 /*
  * Check whether any thread's instruction pointer or any address of
  * its stack is contained in one of the safety_records associated with
