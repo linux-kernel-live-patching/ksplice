@@ -2307,6 +2307,10 @@ static abort_t brute_search(struct ksplice_mod_change *change,
 
 extern struct list_head modules;
 EXTRACT_SYMBOL(modules);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+/* 3abf024d2abb79614d8c4cb25a70d5596f77d0ad was after 2.6.24 */
+EXTRACT_SYMBOL(init_mm);
+#endif /* LINUX_VERSION_CODE */
 
 static abort_t brute_search_all(struct ksplice_mod_change *change,
 				struct ksplice_section *sect,
