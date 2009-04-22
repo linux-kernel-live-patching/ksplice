@@ -2836,6 +2836,10 @@ static abort_t new_export_lookup(struct ksplice_mod_change *ichange,
 	return OK;
 }
 
+#ifdef KSPLICE_STANDALONE
+EXTRACT_SYMBOL(bust_spinlocks);
+#endif /* KSPLICE_STANDALONE */
+
 /*
  * When patch_action is called, the update should be fully prepared.
  * patch_action will try to actually insert or remove trampolines for
