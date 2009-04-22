@@ -95,28 +95,6 @@ ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
 
 RMSYMS = \
-	kallsyms_addresses \
-	kallsyms_num_syms \
-	kallsyms_names \
-	kallsyms_token_table \
-	kallsyms_token_index \
-	__start___ksymtab \
-	__stop___ksymtab \
-	__start___ksymtab_gpl \
-	__stop___ksymtab_gpl \
-	__start___ksymtab_gpl_future \
-	__stop___ksymtab_gpl_future \
-	__start___ksymtab_unused \
-	__stop___ksymtab_unused \
-	__start___ksymtab_unused_gpl \
-	__stop___ksymtab_unused_gpl \
-	__start___ksymtab_gpl_future \
-	__stop___ksymtab_gpl_future \
-	__start___kcrctab \
-	__start___kcrctab_gpl \
-	__start___kcrctab_gpl_future \
-	__start___kcrctab_unused \
-	__start___kcrctab_unused_gpl \
 	ftrace_trace_function
 
 quiet_cmd_ksplice-rmsyms = RMSYMS  $@

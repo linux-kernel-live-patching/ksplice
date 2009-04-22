@@ -482,23 +482,38 @@ EXTRACT_SYMBOL(module_mutex);
 #define KSPLICE_KSYMTAB_FUTURE_SUPPORT 1
 #endif /* LINUX_VERSION_CODE */
 extern const struct kernel_symbol __start___ksymtab[];
+EXTRACT_SYMBOL(__start___ksymtab);
 extern const struct kernel_symbol __stop___ksymtab[];
+EXTRACT_SYMBOL(__stop___ksymtab);
 extern const unsigned long __start___kcrctab[];
+EXTRACT_SYMBOL(__start___kcrctab);
 extern const struct kernel_symbol __start___ksymtab_gpl[];
+EXTRACT_SYMBOL(__start___ksymtab_gpl);
 extern const struct kernel_symbol __stop___ksymtab_gpl[];
+EXTRACT_SYMBOL(__stop___ksymtab_gpl);
 extern const unsigned long __start___kcrctab_gpl[];
+EXTRACT_SYMBOL(__start___kcrctab_gpl);
 #ifdef KSPLICE_KSYMTAB_UNUSED_SUPPORT
 extern const struct kernel_symbol __start___ksymtab_unused[];
+EXTRACT_SYMBOL(__start___ksymtab_unused);
 extern const struct kernel_symbol __stop___ksymtab_unused[];
+EXTRACT_SYMBOL(__stop___ksymtab_unused);
 extern const unsigned long __start___kcrctab_unused[];
+EXTRACT_SYMBOL(__start___kcrctab_unused);
 extern const struct kernel_symbol __start___ksymtab_unused_gpl[];
+EXTRACT_SYMBOL(__start___ksymtab_unused_gpl);
 extern const struct kernel_symbol __stop___ksymtab_unused_gpl[];
+EXTRACT_SYMBOL(__stop___ksymtab_unused_gpl);
 extern const unsigned long __start___kcrctab_unused_gpl[];
+EXTRACT_SYMBOL(__start___kcrctab_unused_gpl);
 #endif /* KSPLICE_KSYMTAB_UNUSED_SUPPORT */
 #ifdef KSPLICE_KSYMTAB_FUTURE_SUPPORT
 extern const struct kernel_symbol __start___ksymtab_gpl_future[];
+EXTRACT_SYMBOL(__start___ksymtab_gpl_future);
 extern const struct kernel_symbol __stop___ksymtab_gpl_future[];
+EXTRACT_SYMBOL(__stop___ksymtab_gpl_future);
 extern const unsigned long __start___kcrctab_gpl_future[];
+EXTRACT_SYMBOL(__start___kcrctab_gpl_future);
 #endif /* KSPLICE_KSYMTAB_FUTURE_SUPPORT */
 #endif /* LINUX_VERSION_CODE */
 
@@ -3690,8 +3705,11 @@ static int _ksdebug(struct update *update, const char *fmt, ...)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30) && defined(CONFIG_KALLSYMS)
 /* 75a66614db21007bcc8c37f9c5d5b922981387b9 was after 2.6.29 */
 extern unsigned long kallsyms_addresses[];
+EXTRACT_SYMBOL(kallsyms_addresses);
 extern unsigned long kallsyms_num_syms;
+EXTRACT_SYMBOL(kallsyms_num_syms);
 extern u8 kallsyms_names[];
+EXTRACT_SYMBOL(kallsyms_names);
 
 static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 					     struct module *, unsigned long),
@@ -3732,7 +3750,9 @@ static int kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 extern u8 kallsyms_token_table[];
+EXTRACT_SYMBOL(kallsyms_token_table);
 extern u16 kallsyms_token_index[];
+EXTRACT_SYMBOL(kallsyms_token_index);
 
 static unsigned int kallsyms_expand_symbol(unsigned int off, char *result)
 {
