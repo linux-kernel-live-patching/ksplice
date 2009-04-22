@@ -1014,6 +1014,10 @@ static int ksplice_sysfs_init(struct update *update)
 	return 0;
 }
 
+#ifdef KSPLICE_NEED_PARAINSTRUCTIONS
+EXTRACT_SYMBOL(apply_paravirt);
+#endif /* KSPLICE_NEED_PARAINSTRUCTIONS */
+
 static abort_t apply_update(struct update *update)
 {
 	struct ksplice_mod_change *change, *n;
