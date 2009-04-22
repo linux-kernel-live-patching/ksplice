@@ -95,7 +95,6 @@ ifneq ($(KSPLICE_STANDALONE),)
 CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
 
 RMSYMS = \
-	modules \
 	init_mm \
 	phys_base \
 	kallsyms_addresses \

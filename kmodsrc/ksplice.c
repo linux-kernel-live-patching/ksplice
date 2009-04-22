@@ -470,6 +470,7 @@ extern const struct ksplice_reloc ksplice_init_relocs[],
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 /* c6b37801911d7f4663c99cad8aa230bc934cea82 was after 2.6.29 */
 extern struct list_head modules;
+EXTRACT_SYMBOL(modules);
 extern struct mutex module_mutex;
 EXTRACT_SYMBOL(module_mutex);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18) && defined(CONFIG_UNUSED_SYMBOLS)
@@ -2300,6 +2301,7 @@ static abort_t brute_search(struct ksplice_mod_change *change,
 }
 
 extern struct list_head modules;
+EXTRACT_SYMBOL(modules);
 
 static abort_t brute_search_all(struct ksplice_mod_change *change,
 				struct ksplice_section *sect,
