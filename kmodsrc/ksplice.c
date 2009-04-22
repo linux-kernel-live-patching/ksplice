@@ -442,6 +442,10 @@ static int strict_strtoul(const char *cp, unsigned int base, unsigned long *res)
 /* 9b1a4d38373a5581a4e01032a3ccdd94cd93477b was after 2.6.26 */
 /* Assume cpus == NULL. */
 #define stop_machine(fn, data, cpus) stop_machine_run(fn, data, NR_CPUS);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+/* ee527cd3a20c2aeaac17d939e5d011f7a76d69f5 was after 2.6.21 */
+EXTRACT_SYMBOL(stop_machine_run);
+#endif /* LINUX_VERSION_CODE */
 #endif /* LINUX_VERSION_CODE */
 
 #ifndef task_thread_info
