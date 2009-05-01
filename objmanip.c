@@ -90,6 +90,7 @@ static bool part_of_reloc(struct supersect *ss, unsigned long addr);
 static bool nonrelocs_equal(struct span *old_span, struct span *new_span);
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 					  struct superbfd *newsbfd);
+static void compute_entry_points(struct superbfd *sbfd);
 
 enum supersect_type supersect_type(struct supersect *ss);
 void initialize_supersect_types(struct superbfd *sbfd);
@@ -1057,6 +1058,66 @@ static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 				label_map_set(newsbfd, span->label,
 					      span->match->label);
 			span->label = span->match->label;
+		}
+	}
+}
+
+static int compare_entry_points(const void *va, const void *vb)
+{
+	const struct entry_point *a = va, *b = vb;
+	if (a->offset < b->offset)
+		return -1;
+	else if (a->offset > b->offset)
+		return 1;
+	else
+		return 0;
+}
+
+static void compute_entry_points(struct superbfd *sbfd)
+{
+	asymbol **symp;
+	for (symp = sbfd->syms.data; symp < sbfd->syms.data + sbfd->syms.size;
+	     symp++) {
+		asymbol *sym = *symp;
+		if (bfd_is_const_section(sym->section))
+			continue;
+		struct supersect *old_ss = fetch_supersect(sbfd, sym->section);
+		if ((sym->flags & BSF_GLOBAL) == 0)
+			continue;
+		struct span *span = find_span(old_ss, sym->value);
+		struct entry_point *e = vec_grow(&span->entry_points, 1);
+		e->label = sym->name;
+		e->name = sym->name;
+		e->offset = sym->value - span->start;
+	}
+
+	asection *sect;
+	for (sect = sbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(sbfd, sect);
+		struct span *span;
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			/* First make sure that 0 appears as an entry point */
+			bool found_zero = false;
+			struct entry_point *entry;
+			for (entry = span->entry_points.data;
+			     entry < span->entry_points.data +
+				     span->entry_points.size;
+			     entry++) {
+				if (entry->offset == 0)
+					found_zero = true;
+			}
+			if (!found_zero) {
+				struct entry_point *e =
+				    vec_grow(&span->entry_points, 1);
+				e->label = span->label;
+				e->name = NULL;
+				e->offset = 0;
+			}
+
+			qsort(span->entry_points.data, span->entry_points.size,
+			      sizeof(*span->entry_points.data),
+			      compare_entry_points);
 		}
 	}
 }
@@ -2918,6 +2979,7 @@ static struct span *new_span(struct supersect *ss, bfd_vma start, bfd_vma size)
 	    strstarts(ss->name, ".ksplice_call_fail_apply") ||
 	    strstarts(ss->name, ".ksplice_call_post_remove");
 	span->match = NULL;
+	vec_init(&span->entry_points);
 	span->shift = 0;
 	asymbol **symp = symbolp_scan(ss, span->start);
 	if (symp != NULL) {
@@ -3254,6 +3316,7 @@ static void init_objmanip_superbfd(struct superbfd *sbfd)
 	initialize_supersect_types(sbfd);
 	initialize_spans(sbfd);
 	load_options(sbfd);
+	compute_entry_points(sbfd);
 }
 
 void mangle_section_name(struct superbfd *sbfd, const char *name)

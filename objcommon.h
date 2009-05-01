@@ -179,6 +179,13 @@ DECLARE_VEC_TYPE(struct label_map, label_map_vec);
 DECLARE_HASH_TYPE(struct label_map *, label_mapp_hash, label_mapp_hash_init,
 		  label_mapp_hash_free, label_mapp_hash_lookup);
 
+struct entry_point {
+	const char *label;
+	const char *name;
+	long offset;
+};
+DECLARE_VEC_TYPE(struct entry_point, entry_point_vec);
+
 struct span {
 	struct supersect *ss;
 	asymbol *symbol;
@@ -194,6 +201,7 @@ struct span {
 	bool datapatch;
 	bool precallable;
 	struct span *match;
+	struct entry_point_vec entry_points;
 	bfd_size_type shift;
 };
 DECLARE_VEC_TYPE(struct span, span_vec);
