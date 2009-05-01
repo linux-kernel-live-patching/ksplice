@@ -711,8 +711,7 @@ static void check_global_symbols(struct span *old_span, asymbol *oldsym,
 		return;
 	if (old_span->match != new_span || new_span->match != old_span) {
 		err(new_span->ss->parent, "Global symbol span mismatch: %s "
-		    "%s/%s\n", oldsym->name, old_span->ss->name,
-		    new_span->ss->name);
+		    "%s/%s\n", oldsym->name, old_span->label, new_span->label);
 		DIE;
 	}
 }
