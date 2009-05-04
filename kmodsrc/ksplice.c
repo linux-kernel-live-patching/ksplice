@@ -1524,6 +1524,19 @@ static abort_t finalize_patches(struct ksplice_mod_change *change)
 				p->repladdr = (unsigned long)ksplice_deleted;
 		}
 	}
+
+	for (p = change->patches; p < change->patches_end; p++) {
+		struct ksplice_patch *q;
+		for (q = change->patches; q < change->patches_end; q++) {
+			if (p != q && p->oldaddr <= q->oldaddr &&
+			    p->oldaddr + p->size > q->oldaddr) {
+				ksdebug(change, "Overlapping oldaddrs "
+					"for patches\n");
+				return UNEXPECTED;
+			}
+		}
+	}
+
 	return OK;
 }
 
