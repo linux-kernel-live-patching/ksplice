@@ -323,6 +323,7 @@ void load_options(struct superbfd *sbfd)
 	     (void *)opt < ss->contents.data + ss->contents.size; opt++) {
 		if (opt->type == KSPLICE_OPTION_ASSUME_RODATA) {
 			arelent *reloc = find_reloc(ss, &opt->target);
+			assert(reloc != NULL);
 			struct span *span = reloc_target_span(ss, reloc);
 			assert(span != NULL);
 			assert(span->ss->type == SS_TYPE_DATA);
