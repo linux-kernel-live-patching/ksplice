@@ -357,6 +357,8 @@ static abort_t compare_instructions(struct ksplice_mod_change *change,
 				ksdebug(change, "[ex] ");
 			if (r->howto->type == KSPLICE_HOWTO_BUG)
 				ksdebug(change, "[bug] ");
+			if (r->howto->type == KSPLICE_HOWTO_SYMBOL)
+				ksdebug(change, "[sym] ");
 		}
 		ret = handle_reloc(change, sect, r, (unsigned long)run, mode);
 		if (ret != OK)

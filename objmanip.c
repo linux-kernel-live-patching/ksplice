@@ -1089,6 +1089,7 @@ static void compute_entry_points(struct superbfd *sbfd)
 		e->label = sym->name;
 		e->name = sym->name;
 		e->offset = sym->value - span->start;
+		e->symbol = sym;
 	}
 
 	asection *sect;
@@ -1113,6 +1114,7 @@ static void compute_entry_points(struct superbfd *sbfd)
 				e->label = span->label;
 				e->name = NULL;
 				e->offset = 0;
+				e->symbol = span->symbol;
 			}
 
 			qsort(span->entry_points.data, span->entry_points.size,
@@ -1809,6 +1811,24 @@ static void write_ksplice_nonreloc_howto(struct supersect *ss,
 		    addr_offset(khowto_ss, khowto));
 }
 
+static void write_ksplice_symbol_reloc(struct supersect *ss,
+				       const char *sectname,
+				       unsigned long *addr, asymbol *sym,
+				       const char *label, const char *name)
+{
+	struct supersect *kreloc_ss;
+	kreloc_ss = make_section(ss->parent, ".ksplice_relocs%s", sectname);
+	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
+						 struct ksplice_reloc);
+
+	write_ksplice_symbol_backend(kreloc_ss, &kreloc->symbol, sym, label,
+				     name);
+	write_reloc(kreloc_ss, &kreloc->blank_addr, &ss->symbol,
+		    addr_offset(ss, addr));
+	write_ksplice_nonreloc_howto(kreloc_ss, &kreloc->howto,
+				     KSPLICE_HOWTO_SYMBOL, 0);
+}
+
 static void write_ksplice_section(struct span *span)
 {
 	struct supersect *ss = span->ss;
@@ -1849,6 +1869,18 @@ static void write_ksplice_section(struct span *span)
 
 	write_reloc(ksect_ss, &ksect->address, &ss->symbol,
 		    span->start + span->shift);
+
+	if (mode("keep-old-code")) {
+		/* Write ksplice_symbols for all the entry points */
+		struct entry_point *entry;
+		for (entry = span->entry_points.data;
+		     entry < span->entry_points.data + span->entry_points.size;
+		     entry++)
+			write_ksplice_symbol_reloc
+			    (span->ss, sectname, span->ss->contents.data +
+			     span->start + span->shift + entry->offset,
+			     entry->symbol, entry->label, entry->name);
+	}
 }
 
 static void write_ksplice_patch_reloc(struct supersect *ss,

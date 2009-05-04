@@ -183,6 +183,7 @@ struct entry_point {
 	const char *label;
 	const char *name;
 	long offset;
+	asymbol *symbol;
 };
 DECLARE_VEC_TYPE(struct entry_point, entry_point_vec);
 

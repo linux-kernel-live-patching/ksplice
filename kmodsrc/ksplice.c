@@ -2474,6 +2474,17 @@ static abort_t lookup_reloc(struct ksplice_mod_change *change,
 	return OK;
 }
 
+static abort_t handle_howto_symbol(struct ksplice_mod_change *change,
+				   const struct ksplice_reloc *r,
+				   unsigned long run_addr,
+				   enum run_pre_mode mode)
+{
+	if (mode == RUN_PRE_INITIAL)
+		ksdebug(change, "run-pre: symbol %s at %lx\n", r->symbol->label,
+			run_addr);
+	return create_labelval(change, r->symbol, run_addr, TEMP);
+}
+
 static abort_t handle_reloc(struct ksplice_mod_change *change,
 			    const struct ksplice_section *sect,
 			    const struct ksplice_reloc *r,
@@ -2495,6 +2506,8 @@ static abort_t handle_reloc(struct ksplice_mod_change *change,
 #endif /* LINUX_VERSION_CODE */
 	case KSPLICE_HOWTO_EXTABLE:
 		return handle_extable(change, r, run_addr);
+	case KSPLICE_HOWTO_SYMBOL:
+		return handle_howto_symbol(change, r, run_addr, mode);
 	default:
 		ksdebug(change, "Unexpected howto type %d\n", r->howto->type);
 		return UNEXPECTED;
