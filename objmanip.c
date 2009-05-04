@@ -1532,12 +1532,8 @@ void write_ksplice_reloc(struct supersect *ss, arelent *orig_reloc)
 		     bfd_get_reloc_size(orig_reloc->howto),
 		     orig_reloc->howto->dst_mask);
 
-	struct supersect *kreloc_ss;
-	if (mode("rmsyms"))
-		kreloc_ss = make_section(ss->parent, ".ksplice_init_relocs");
-	else
-		kreloc_ss = make_section(ss->parent, ".ksplice_relocs%s",
-					 ss->name);
+	struct supersect *kreloc_ss =
+	    make_section(ss->parent, ".ksplice_relocs%s", ss->name);
 	struct ksplice_reloc *kreloc = sect_grow(kreloc_ss, 1,
 						 struct ksplice_reloc);
 
