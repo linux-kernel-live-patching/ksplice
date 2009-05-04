@@ -978,11 +978,11 @@ static int ksplice_sysfs_init(struct update *update)
 	ret = kobject_init_and_add(&update->kobj, &update_ktype,
 				   ksplice_kobj, "%s", update->kid);
 #else /* KSPLICE_STANDALONE */
-/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
 	ret = kobject_init_and_add(&update->kobj, &update_ktype,
 				   &THIS_MODULE->mkobj.kobj, "ksplice");
 #endif /* KSPLICE_STANDALONE */
 #else /* LINUX_VERSION_CODE < */
+/* 6d06adfaf82d154023141ddc0c9de18b6a49090b was after 2.6.24 */
 	ret = kobject_set_name(&update->kobj, "%s", "ksplice");
 	if (ret != 0)
 		return ret;
