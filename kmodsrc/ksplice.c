@@ -79,9 +79,9 @@ enum run_pre_mode {
 	RUN_PRE_INITIAL,	/* dry run (only change temp_labelvals) */
 	RUN_PRE_DEBUG,		/* dry run with byte-by-byte debugging */
 	RUN_PRE_FINAL,		/* finalizes the matching */
-#ifdef KSPLICE_STANDALONE
+#ifndef CONFIG_FUNCTION_DATA_SECTIONS
 	RUN_PRE_SILENT,
-#endif /* KSPLICE_STANDALONE */
+#endif /* !CONFIG_FUNCTION_DATA_SECTIONS */
 };
 
 enum { NOVAL, TEMP, VAL };
@@ -2506,8 +2506,7 @@ static abort_t handle_howto_reloc(struct ksplice_mod_change *change,
 	if (r->howto->pcrel)
 		val += run_addr;
 
-#ifdef KSPLICE_STANDALONE
-	/* The match_map is only used in KSPLICE_STANDALONE */
+#ifndef CONFIG_FUNCTION_DATA_SECTIONS
 	if (sym_sect == NULL || sym_sect->match_map == NULL || offset == 0) {
 		;
 	} else if (offset < 0 || offset >= sym_sect->size) {
@@ -2551,7 +2550,7 @@ static abort_t handle_howto_reloc(struct ksplice_mod_change *change,
 		val += r->symbol->value + offset -
 		    (unsigned long)sym_sect->match_map[offset];
 	}
-#endif /* KSPLICE_STANDALONE */
+#endif /* !CONFIG_FUNCTION_DATA_SECTIONS */
 
 	if (mode == RUN_PRE_INITIAL)
 		ksdebug(change, "run-pre: reloc at r_a=%lx p_a=%lx to %s+%lx: "
