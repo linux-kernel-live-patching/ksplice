@@ -91,6 +91,8 @@ static bool nonrelocs_equal(struct span *old_span, struct span *new_span);
 static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 					  struct superbfd *newsbfd);
 static void compute_entry_points(struct superbfd *sbfd);
+static void copy_patched_entry_points(struct superbfd *oldsbfd,
+				      struct superbfd *newsbfd);
 
 enum supersect_type supersect_type(struct supersect *ss);
 void initialize_supersect_types(struct superbfd *sbfd);
@@ -143,7 +145,9 @@ void load_ksplice_symbol_offsets(struct superbfd *sbfd);
 void write_canary(struct supersect *ss, int offset, bfd_size_type size,
 		  bfd_vma dst_mask);
 static void write_ksplice_section(struct span *span);
-void write_ksplice_patch(struct superbfd *sbfd, struct span *span);
+void write_ksplice_patches(struct superbfd *sbfd, struct span *span);
+void write_ksplice_patch(struct superbfd *sbfd, struct span *span,
+			 const char *label);
 void *write_patch_storage(struct supersect *ss, struct ksplice_patch *patch,
 			  size_t size, struct supersect **data_ssp);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
@@ -452,6 +456,8 @@ void do_keep_new_code(struct superbfd *isbfd, const char *pre)
 	handle_deleted_spans(presbfd, isbfd);
 	handle_section_symbol_renames(presbfd, isbfd);
 
+	copy_patched_entry_points(presbfd, isbfd);
+
 	assert(bfd_close(prebfd));
 
 	do {
@@ -527,7 +533,7 @@ void do_keep_new_code(struct superbfd *isbfd, const char *pre)
 			if (span->patch || span->new || span->datapatch)
 				write_ksplice_section(span);
 			if (span->patch || span->datapatch)
-				write_ksplice_patch(isbfd, span);
+				write_ksplice_patches(isbfd, span);
 			if (ss->type == SS_TYPE_EXPORT && span->new)
 				write_ksplice_export(isbfd, span, false);
 		}
@@ -1058,6 +1064,37 @@ static void handle_section_symbol_renames(struct superbfd *oldsbfd,
 				label_map_set(newsbfd, span->label,
 					      span->match->label);
 			span->label = span->match->label;
+		}
+	}
+}
+
+static void copy_patched_entry_points(struct superbfd *oldsbfd,
+				      struct superbfd *newsbfd)
+{
+	asection *sect;
+	struct span *span;
+	for (sect = newsbfd->abfd->sections; sect != NULL; sect = sect->next) {
+		struct supersect *ss = fetch_supersect(newsbfd, sect);
+		for (span = ss->spans.data;
+		     span < ss->spans.data + ss->spans.size; span++) {
+			if (!span->patch)
+				continue;
+			assert(span->match != NULL);
+			vec_init(&span->pre_entry_points);
+
+			struct entry_point *entry;
+			for (entry = span->match->entry_points.data;
+			     entry < span->match->entry_points.data +
+				     span->match->entry_points.size;
+			     entry++) {
+				struct entry_point *e =
+				    vec_grow(&span->pre_entry_points, 1);
+				e->name = entry->name != NULL ?
+				    strdup(entry->name) : NULL;
+				e->label = strdup(entry->label);
+				e->offset = entry->offset;
+				e->symbol = NULL;
+			}
 		}
 	}
 }
@@ -1907,7 +1944,45 @@ static void write_ksplice_patch_reloc(struct supersect *ss,
 	kreloc->insn_addend = 0;
 }
 
-void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
+void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
+{
+	if (span->datapatch) {
+		write_ksplice_patch(sbfd, span, span->label);
+		return;
+	}
+
+	assert(span->patch);
+
+	long prev_offset = LONG_MIN;
+	struct entry_point *entry;
+	for (entry = span->pre_entry_points.data;
+	     entry < span->pre_entry_points.data + span->pre_entry_points.size;
+	     entry++) {
+		if (entry->offset != prev_offset) {
+			debug1(sbfd, "entry point: %s(%s) %lx\n", entry->label,
+			       entry->name, entry->offset);
+
+			if (prev_offset + MAX_TRAMPOLINE_SIZE > entry->offset) {
+				err(sbfd,
+				    "Overlapping trampolines: %s %lx/%lx\n",
+				    span->label, prev_offset, entry->offset);
+				DIE;
+			}
+
+			write_ksplice_patch(sbfd, span, entry->label);
+			prev_offset = entry->offset;
+		}
+	}
+
+	if (prev_offset + MAX_TRAMPOLINE_SIZE > span->size) {
+		err(sbfd, "Trampoline ends outside span: %s %lx/%lx\n",
+		    span->label, prev_offset, (unsigned long)span->size);
+		DIE;
+	}
+}
+
+void write_ksplice_patch(struct superbfd *sbfd, struct span *span,
+			 const char *label)
 {
 	struct supersect *kpatch_ss =
 	    make_section(sbfd, ".ksplice_patches%s", span->ss->name);
@@ -1915,7 +1990,7 @@ void write_ksplice_patch(struct superbfd *sbfd, struct span *span)
 						 struct ksplice_patch);
 
 	write_ksplice_patch_reloc(kpatch_ss, span->ss->name, &kpatch->oldaddr,
-				  sizeof(kpatch->oldaddr), span->label, 0);
+				  sizeof(kpatch->oldaddr), label, 0);
 	if (span->ss->type == SS_TYPE_TEXT) {
 		kpatch->type = KSPLICE_PATCH_TEXT;
 		write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE,

@@ -203,6 +203,7 @@ struct span {
 	bool precallable;
 	struct span *match;
 	struct entry_point_vec entry_points;
+	struct entry_point_vec pre_entry_points;
 	bfd_size_type shift;
 };
 DECLARE_VEC_TYPE(struct span, span_vec);
