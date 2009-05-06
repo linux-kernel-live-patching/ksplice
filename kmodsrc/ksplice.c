@@ -48,11 +48,6 @@
 /* linux/uaccess.h doesn't exist in kernels before 2.6.18 */
 #include <asm/uaccess.h>
 #endif /* LINUX_VERSION_CODE */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
-#include <linux/utsrelease.h>
-#else /* LINUX_VERSION_CODE < */
-/* 63104eec234bdecb55fd9c15467ae00d0a3f42ac was after 2.6.17 */
-#endif /* LINUX_VERSION_CODE */
 #include <linux/vmalloc.h>
 #ifdef KSPLICE_STANDALONE
 #include "ksplice.h"
