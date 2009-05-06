@@ -315,6 +315,7 @@ static abort_t compare_instructions(struct ksplice_mod_change *change,
 {
 	abort_t ret;
 	int i;
+	bool found_bug_entry = false;
 	const unsigned char *pre_start = (const unsigned char *)sect->address;
 	unsigned long pre_offset = pre - pre_start;
 	const struct ksplice_reloc *r;
@@ -339,9 +340,18 @@ static abort_t compare_instructions(struct ksplice_mod_change *change,
 		return UNEXPECTED;
 	}
 
-	ret = lookup_reloc(change, fingerp, (unsigned long)pre, &r);
-	if (ret == OK && (r->howto->type == KSPLICE_HOWTO_EXTABLE ||
-			  r->howto->type == KSPLICE_HOWTO_BUG)) {
+	while (1) {
+		ret = lookup_reloc(change, fingerp, (unsigned long)pre, &r);
+		if (ret == NO_MATCH)
+			break;
+		else if (ret != OK)
+			return ret;
+		else if (r->howto->size != 0)
+			break;
+
+		if (r->howto->type == KSPLICE_HOWTO_BUG)
+			found_bug_entry = true;
+
 		if (mode == RUN_PRE_DEBUG) {
 			if (r->howto->type == KSPLICE_HOWTO_EXTABLE)
 				ksdebug(change, "[ex] ");
@@ -351,18 +361,20 @@ static abort_t compare_instructions(struct ksplice_mod_change *change,
 		ret = handle_reloc(change, sect, r, (unsigned long)run, mode);
 		if (ret != OK)
 			return ret;
-	} else if (ret != NO_MATCH && ret != OK) {
-		return ret;
+		(*fingerp)++;
+	}
+
 #if defined(CONFIG_X86_64) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 /* 91768d6c2bad0d2766a166f13f2f57e197de3458 was after 2.6.19 */
 #else /* !CONFIG_X86_64 || LINUX_VERSION_CODE >= */
-	} else if (run_ud->mnemonic == UD_Iud2) {
 #ifndef do_each_thread_ve		/* OpenVZ */
+	if (run_ud->mnemonic == UD_Iud2 && !found_bug_entry) {
 		ksdebug(change, "Unexpected ud2\n");
 		return NO_MATCH;
+	}
 #endif /* do_each_thread_ve */
 #endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
-	}
+
 	for (i = 0; i < ARRAY_SIZE(run_ud->operand); i++) {
 		ret = compare_operands(change, sect, fingerp, run_start, run,
 				       pre, run_ud, pre_ud, i, mode);
