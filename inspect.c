@@ -322,6 +322,12 @@ static void load_ksplice_reloc_offsets(struct superbfd *sbfd)
 		for (kreloc = ss->contents.data;
 		     (void *)kreloc < ss->contents.data + ss->contents.size;
 		     kreloc++) {
+			const struct ksplice_reloc_howto *khowto =
+			    read_pointer(ss, (void *const *)&kreloc->howto,
+					 NULL);
+			if (khowto->size == 0)
+				continue;
+
 			struct supersect *sym_ss;
 			const void *ptr =
 			    read_pointer(ss, (void *const *)&kreloc->blank_addr,
