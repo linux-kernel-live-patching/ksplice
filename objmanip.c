@@ -1944,6 +1944,24 @@ static void write_ksplice_patch_reloc(struct supersect *ss,
 	kreloc->insn_addend = 0;
 }
 
+/* Assumes symbol is global, aka only one symbol of that name */
+static asymbol *name_to_symbol(struct superbfd *sbfd, const char *name)
+{
+	if (name == NULL)
+		return NULL;
+
+	asymbol **symp;
+	for (symp = sbfd->syms.data;
+	     symp < sbfd->syms.data + sbfd->syms.size; symp++) {
+		asymbol *sym = *symp;
+		if (strcmp(name, sym->name) == 0 &&
+		    ((sym->flags & BSF_GLOBAL) != 0 ||
+		     bfd_is_und_section(sym->section)))
+			return sym;
+	}
+	return NULL;
+}
+
 void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
 {
 	if (span->datapatch) {
@@ -1954,6 +1972,8 @@ void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
 	assert(span->patch);
 
 	long prev_offset = LONG_MIN;
+	asymbol *prev_sym = NULL;
+	const char *prev_label = NULL;
 	struct entry_point *entry;
 	for (entry = span->pre_entry_points.data;
 	     entry < span->pre_entry_points.data + span->pre_entry_points.size;
@@ -1971,6 +1991,21 @@ void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
 
 			write_ksplice_patch(sbfd, span, entry->label);
 			prev_offset = entry->offset;
+			prev_sym = NULL;
+		}
+
+		asymbol *sym = name_to_symbol(sbfd, entry->name);
+		if (prev_sym == NULL) {
+			prev_sym = sym;
+			prev_label = entry->label;
+		} else if (sym != NULL &&
+			   (prev_sym->section != sym->section ||
+			    prev_sym->value != sym->value)) {
+			err(sbfd, "Splitting global symbols in the middle of a "
+			    "span: %s+%lx != %s+%lx!\n",
+			    prev_label, (unsigned long)prev_sym->value,
+			    entry->label, (unsigned long)sym->value);
+			DIE;
 		}
 	}
 
