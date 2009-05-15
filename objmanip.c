@@ -2793,6 +2793,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_IGNORED;
 	if (strstarts(ss->name, "__param"))
 		return SS_TYPE_IGNORED;
+	if (strstarts(ss->name, "__obsparm"))
+		return SS_TYPE_IGNORED;
 	if (strstarts(ss->name, ".exitcall.exit"))
 		return SS_TYPE_IGNORED;
 	if (strstarts(ss->name, ".modinfo"))
