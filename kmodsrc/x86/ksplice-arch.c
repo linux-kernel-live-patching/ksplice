@@ -85,7 +85,7 @@ static long ud_operand_lval(struct ud_operand *operand);
 static int next_run_byte(struct ud *ud);
 static bool is_nop(struct ud *ud);
 static bool is_unconditional_jump(struct ud *ud);
-static bool is_mcount_call(struct ud *ud, unsigned long addr);
+static bool is_mcount_call(struct ud *ud, const unsigned char *addr);
 static void initialize_ksplice_ud(struct ud *ud);
 
 static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
@@ -142,10 +142,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 			ret = NO_MATCH;
 			goto out;
 		}
-		pre_nop = is_nop(&pre_ud) ||
-		    is_mcount_call(&pre_ud, (unsigned long)pre);
-		run_nop = is_nop(&run_ud) ||
-		    is_mcount_call(&run_ud, (unsigned long)run);
+		pre_nop = is_nop(&pre_ud) || is_mcount_call(&pre_ud, pre);
+		run_nop = is_nop(&run_ud) || is_mcount_call(&run_ud, run);
 		if (pre_nop && !run_nop) {
 			if (mode == RUN_PRE_DEBUG) {
 				ksdebug(change, "| nop: ");
@@ -539,18 +537,17 @@ static void initialize_ksplice_ud(struct ud *ud)
 }
 
 #ifdef CONFIG_FTRACE
-static bool is_mcount_call(struct ud *ud, unsigned long addr)
+static bool is_mcount_call(struct ud *ud, const unsigned char *addr)
 {
-	unsigned long target = addr + ud_insn_len(ud) +
-	    ud_operand_lval(&ud->operand[0]);
+	const void *target =
+	    addr + ud_insn_len(ud) + ud_operand_lval(&ud->operand[0]);
 	if (ud->mnemonic == UD_Icall &&
-	    (target == (unsigned long)mcount ||
-	     target == (unsigned long)ftrace_trace_function))
+	    (target == mcount || target == ftrace_trace_function))
 		return true;
 	return false;
 }
 #else /* !CONFIG_FTRACE */
-static bool is_mcount_call(struct ud *ud, unsigned long addr)
+static bool is_mcount_call(struct ud *ud, const unsigned char *addr)
 {
 	return false;
 }
