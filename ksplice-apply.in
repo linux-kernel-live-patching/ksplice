@@ -43,6 +43,7 @@ chdir($ksplice);
 die "No contents file in $file\n" if (!-e "contents");
 open(CONTENTS, '<', "contents");
 my $core;
+my @changes;
 while (<CONTENTS>) {
 	my @line = split(' ', $_);
 	if ($line[0] eq 'core') {
@@ -52,8 +53,20 @@ while (<CONTENTS>) {
 			'file' => $line[2],
 		};
 	}
+	if ($line[0] eq 'change') {
+		my $change = {
+			'target' => $line[1],
+			'new_code' => $line[2],
+			'new_code_file' => $line[3],
+			'old_code' => $line[4],
+			'old_code_file' => $line[5],
+		};
+		push @changes, $change;
+	}
 }
 close(CONTENTS);
+
+die "Update was built using an old version of Ksplice" if (@changes == 0);
 
 my $nounload = runstr("lsmod") =~ m/- $/m;
 
@@ -79,28 +92,25 @@ if (defined $core) {
 	}
 }
 
-my @old_code_mod_files = ();
-foreach my $old_code_mod_file (glob('ksplice-*-old.ko')) {
-	(my $new_code_mod_file = $old_code_mod_file) =~ s/-old\.ko$/-new.ko/;
-	die unless(-e $new_code_mod_file && -e $old_code_mod_file);
-	(my $target = $new_code_mod_file) =~ s/^ksplice-[^_]+_(.*)-new\.ko/$1/;
-	if ($target ne 'vmlinux' && runstr("lsmod") !~ m/^${target}\s/m) {
+foreach my $change (@changes) {
+	die unless (-e $change->{old_code_file} && -e $change->{new_code_file});
+	if ($change->{'target'} ne 'vmlinux' &&
+	    runstr("lsmod") !~ m/^\Q$change->{target}\E\s+/m) {
 		if (!$partial) {
 			cleanup_modules();
 			print_error("target_not_loaded");
-			die "Module $target to be patched not loaded";
+			die "Module $change->{target} to be patched not loaded";
 		}
 	}
-	push @old_code_mod_files, $old_code_mod_file;
 }
-foreach my $old_code_mod_file (@old_code_mod_files) {
-	(my $new_code_mod_file = $old_code_mod_file) =~ s/-old\.ko$/-new.ko/;
-	if(!load_module($new_code_mod_file)) {
-		die "Error loading new code module $new_code_mod_file";
+
+foreach my $change (@changes) {
+	if(!load_module($change->{new_code_file})) {
+		die "Error loading new code module $change->{new_code}";
 	}
-	if(!load_module($old_code_mod_file)) {
+	if(!load_module($change->{old_code_file})) {
 		my $debugfile = get_debug_output("init_$kid", $debug);
-		print STDERR "Error loading old code module $old_code_mod_file\n";
+		print STDERR "Error loading old code module $change->{old_code}\n";
 		cleanup_modules();
 		if($debugon && defined $debugfile) {
 			print("Debugging output saved to $debugfile\n");
@@ -132,11 +142,9 @@ mkpath("/var/run/ksplice/updates/$kid");
 copy("patch", "/var/run/ksplice/updates/$kid/patch") if (-e "patch");
 copy("description", "/var/run/ksplice/updates/$kid/description") if (-e "description");
 if (!$nounload) {
-	foreach my $old_code_mod_file (@old_code_mod_files) {
-		(my $old_code_mod = $old_code_mod_file) =~ s/\.ko$//;
-		(my $new_code_mod = $old_code_mod) =~ s/-old$/-new/;
-		runval('rmmod', $old_code_mod);
-		runval('rmmod', $new_code_mod) if ($partial && refcount($new_code_mod) == 0);
+	foreach my $change (@changes) {
+		runval('rmmod', $change->{old_code});
+		runval('rmmod', $change->{new_code}) if ($partial && refcount($change->{new_code}) == 0);
 	}
 }
 print "Done!\n";
