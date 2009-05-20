@@ -1,5 +1,5 @@
 AC_INIT([Ksplice], [0.9.7], [devel@ksplice.com])
-AC_SUBST([KSPLICE_API_VERSION], [1])
+AC_SUBST([KSPLICE_API_VERSION], [2])
 
 AC_ARG_WITH([libbfd],
   [  --with-libbfd=FILE      path to libbfd.a],

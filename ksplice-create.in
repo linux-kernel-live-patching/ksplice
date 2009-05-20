@@ -305,9 +305,8 @@ foreach my $mod (@modules) {
 	my $mid = "${kid}_$target";
 	my $module = "ksplice-$mid";
 	rename("$tmpdir/ksplice-modules/extra/$module-new.ko", "$ksplice/$module-new.ko");
-	print CONTENTS "new_code $target ksplice_$mid $module-new.ko\n";
 	rename("$tmpdir/ksplice-modules/extra/$module-old.ko", "$ksplice/$module-old.ko");
-	print CONTENTS "old_code $target ksplice_$mid $module-old.ko\n";
+	print CONTENTS "change $target ksplice_${mid}_new $module-new.ko ksplice_${mid}_old $module-old.ko\n";
 }
 if ($standalone) {
 	rename("$tmpdir/ksplice-modules/extra/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko");
@@ -316,7 +315,7 @@ if ($standalone) {
 if ($build_modules) {
 	foreach my $mod (@modulepaths) {
 		(my $target = basename($mod)) =~ s/-/_/g;
-		print CONTENTS "target $target $mod\n";
+		print CONTENTS "module $target $mod\n";
 	}
 }
 
