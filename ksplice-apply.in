@@ -48,8 +48,8 @@ while (<CONTENTS>) {
 	if ($line[0] eq 'core') {
 		die "Multiple core modules in $file!" if (defined $core);
 		$core = {
-			module => $line[1],
-			file => $line[2],
+			'module' => $line[1],
+			'file' => $line[2],
 		};
 	}
 }
