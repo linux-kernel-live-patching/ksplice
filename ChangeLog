@@ -1,3 +1,6 @@
+2009-05-22 : 0.9.7.90
+ - Alpha release 1 for Ksplice 0.9.8
+
 2009-03-10 : 0.9.7
  - Fixed a bug where Ksplice relocations were sometimes written pointing
    to the middle of patched sections
