@@ -151,7 +151,8 @@ void write_ksplice_patch(struct superbfd *sbfd, struct span *span,
 void *write_patch_storage(struct supersect *ss, struct ksplice_patch *patch,
 			  size_t size, struct supersect **data_ssp);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
-				 const char *label, const char *sectname);
+				 const char *label, const char *sectname,
+				 long offset);
 static void write_bugline_patches(struct superbfd *sbfd);
 asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name);
 void filter_table_sections(struct superbfd *isbfd);
@@ -915,7 +916,7 @@ static void handle_deleted_spans(struct superbfd *oldsbfd,
 					DIE;
 				write_ksplice_deleted_patch
 				    (newsbfd, span->symbol->name, span->label,
-				     span->ss->name);
+				     span->ss->name, 0);
 			}
 		}
 	}
@@ -2011,8 +2012,12 @@ void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
 	     entry < span->pre_entry_points.data + span->pre_entry_points.size;
 	     entry++) {
 		asymbol *sym = name_to_symbol(sbfd, entry->name);
-
-		if (entry->offset != prev_offset) {
+		if (sym == NULL && entry->offset != 0) {
+			/* Since it was global, name and label are the same */
+			write_ksplice_deleted_patch
+			    (sbfd, entry->label, entry->label, span->ss->name,
+			     entry->offset);
+		} else if (entry->offset != prev_offset) {
 			debug1(sbfd, "entry point: %s(%s) %lx\n", entry->label,
 			       entry->name, entry->offset);
 
@@ -2114,7 +2119,8 @@ asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name)
 }
 
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
-				 const char *label, const char *sectname)
+				 const char *label, const char *sectname,
+				 long offset)
 {
 	struct supersect *kpatch_ss =
 	    make_section(sbfd, ".ksplice_patches%s", sectname);
@@ -2125,7 +2131,7 @@ void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
 				  sizeof(kpatch->oldaddr), label, 0);
 	kpatch->type = KSPLICE_PATCH_TEXT;
 	asymbol **symp = make_undefined_symbolp(sbfd, strdup(name));
-	write_reloc(kpatch_ss, &kpatch->repladdr, symp, 0);
+	write_reloc(kpatch_ss, &kpatch->repladdr, symp, offset);
 	write_patch_storage(kpatch_ss, kpatch, MAX_TRAMPOLINE_SIZE, NULL);
 }
 
