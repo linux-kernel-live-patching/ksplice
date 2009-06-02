@@ -147,7 +147,7 @@ void write_canary(struct supersect *ss, int offset, bfd_size_type size,
 static void write_ksplice_section(struct span *span);
 void write_ksplice_patches(struct superbfd *sbfd, struct span *span);
 void write_ksplice_patch(struct superbfd *sbfd, struct span *span,
-			 const char *label);
+			 const char *label, long offset);
 void *write_patch_storage(struct supersect *ss, struct ksplice_patch *patch,
 			  size_t size, struct supersect **data_ssp);
 void write_ksplice_deleted_patch(struct superbfd *sbfd, const char *name,
@@ -1965,7 +1965,7 @@ static asymbol *name_to_symbol(struct superbfd *sbfd, const char *name)
 void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
 {
 	if (span->datapatch) {
-		write_ksplice_patch(sbfd, span, span->label);
+		write_ksplice_patch(sbfd, span, span->label, 0);
 		return;
 	}
 
@@ -1978,6 +1978,8 @@ void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
 	for (entry = span->pre_entry_points.data;
 	     entry < span->pre_entry_points.data + span->pre_entry_points.size;
 	     entry++) {
+		asymbol *sym = name_to_symbol(sbfd, entry->name);
+
 		if (entry->offset != prev_offset) {
 			debug1(sbfd, "entry point: %s(%s) %lx\n", entry->label,
 			       entry->name, entry->offset);
@@ -1989,12 +1991,15 @@ void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
 				DIE;
 			}
 
-			write_ksplice_patch(sbfd, span, entry->label);
+			long target_offset = 0;
+			if (sym != NULL)
+				target_offset = sym->value - span->start;
+			write_ksplice_patch(sbfd, span, entry->label,
+					    target_offset);
 			prev_offset = entry->offset;
 			prev_sym = NULL;
 		}
 
-		asymbol *sym = name_to_symbol(sbfd, entry->name);
 		if (prev_sym == NULL) {
 			prev_sym = sym;
 			prev_label = entry->label;
@@ -2017,7 +2022,7 @@ void write_ksplice_patches(struct superbfd *sbfd, struct span *span)
 }
 
 void write_ksplice_patch(struct superbfd *sbfd, struct span *span,
-			 const char *label)
+			 const char *label, long offset)
 {
 	struct supersect *kpatch_ss =
 	    make_section(sbfd, ".ksplice_patches%s", span->ss->name);
@@ -2042,7 +2047,7 @@ void write_ksplice_patch(struct superbfd *sbfd, struct span *span,
 			    addr_offset(data_ss, saved));
 	}
 	write_reloc(kpatch_ss, &kpatch->repladdr, &span->ss->symbol,
-		    span->start + span->shift);
+		    span->start + span->shift + offset);
 }
 
 asymbol **make_undefined_symbolp(struct superbfd *sbfd, const char *name)
