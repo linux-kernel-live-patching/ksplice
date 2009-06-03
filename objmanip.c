@@ -621,6 +621,7 @@ void do_keep_old_code(struct superbfd *isbfd)
 	remove_unkept_spans(isbfd);
 
 	mangle_section_name(isbfd, "__markers");
+	mangle_section_name(isbfd, "__tracepoints");
 	mangle_section_name(isbfd, "__ex_table");
 	for (sect = isbfd->abfd->sections; sect != NULL; sect = sect->next) {
 		struct supersect *ss = fetch_supersect(isbfd, sect);
@@ -2820,6 +2821,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    strstarts(ss->name, ".memexit.rodata") ||
 	    strstarts(ss->name, ".cpuexit.rodata") ||
 	    strstarts(ss->name, ".ref.rodata") ||
+	    strstarts(ss->name, "__tracepoints_strings") ||
 	    strstarts(ss->name, "__markers_strings") ||
 	    (mode("keep-old-code") && strstarts(ss->name, "__ex_table")))
 		return SS_TYPE_RODATA;
@@ -2841,6 +2843,7 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    strstarts(ss->name, ".memexit.data") ||
 	    strstarts(ss->name, ".cpuexit.data") ||
 	    strstarts(ss->name, ".ref.data") ||
+	    strstarts(ss->name, "__tracepoints") ||
 	    strstarts(ss->name, "__markers"))
 		return SS_TYPE_DATA;
 

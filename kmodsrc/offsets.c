@@ -37,6 +37,10 @@
 /* 8256e47cdc8923e9959eb1d7f95d80da538add80 was after 2.6.23 */
 #include <linux/marker.h>
 #endif /* LINUX_VERSION_CODE */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
+/* 97e1c18e8d17bd87e1e383b2e9d9fc740332c8e2 was after 2.6.27 */
+#include <linux/tracepoint.h>
+#endif /* LINUX_VERSION_CODE */
 
 #include <asm/uaccess.h>
 #include "offsets.h"
@@ -115,6 +119,16 @@ const struct table_section table_sections[]
 		.entry_align = __alignof__(struct marker),
 		.other_sect = "__markers_strings",
 		.other_offset = offsetof(struct marker, name),
+	},
+#endif /* LINUX_VERSION_CODE */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
+/* 97e1c18e8d17bd87e1e383b2e9d9fc740332c8e2 was after 2.6.27 */
+	{
+		.sect = "__tracepoints",
+		.entry_size = sizeof(struct tracepoint),
+		.entry_align = __alignof__(struct tracepoint),
+		.other_sect = "__tracepoints_strings",
+		.other_offset = offsetof(struct tracepoint, name),
 	},
 #endif /* LINUX_VERSION_CODE */
 #ifdef CONFIG_PARAVIRT
