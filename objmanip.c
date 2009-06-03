@@ -191,6 +191,7 @@ static void match_global_symbols(struct span *old_span, asymbol *oldsym,
 static void match_symbol_spans(struct span *old_span, asymbol *oldsym,
 			       struct span *new_span, asymbol *newsym);
 static void match_table_spans(struct span *old_span, struct span *new_span);
+static void match_other_spans(struct span *old_span, struct span *new_span);
 
 static struct span *get_crc_span(struct span *span,
 				 const struct table_section *ts);
@@ -445,6 +446,8 @@ void do_keep_new_code(struct superbfd *isbfd, const char *pre)
 	debug1(isbfd, "Matched by label\n");
 	foreach_span_pair(presbfd, isbfd, match_table_spans);
 	debug1(isbfd, "Matched table spans\n");
+	foreach_span_pair(presbfd, isbfd, match_other_spans);
+	debug1(isbfd, "Matched other spans\n");
 
 	do {
 		changed = false;
@@ -2222,6 +2225,30 @@ void filter_table_section(struct superbfd *sbfd, const struct table_section *s)
 			if (span->keep && mode("keep-new-code"))
 				keep_span(crc_span);
 		}
+	}
+}
+
+static void match_other_spans(struct span *old_span, struct span *new_span)
+{
+	const struct table_section *ts = get_table_section(old_span->ss->name);
+	if (ts == NULL)
+		return;
+
+	if (old_span->match == new_span && new_span->match == old_span &&
+	    ts->other_sect != NULL) {
+		void *old_entry = old_span->ss->contents.data + old_span->start;
+		void *new_entry = new_span->ss->contents.data + new_span->start;
+		arelent *old_reloc =
+		    find_reloc(old_span->ss, old_entry + ts->other_offset);
+		arelent *new_reloc =
+		    find_reloc(new_span->ss, new_entry + ts->other_offset);
+		assert(old_reloc != NULL && new_reloc != NULL);
+		struct span *old_other_span =
+		    reloc_target_span(old_span->ss, old_reloc);
+		struct span *new_other_span =
+		    reloc_target_span(new_span->ss, new_reloc);
+		assert(old_other_span != NULL && new_other_span != NULL);
+		match_spans(old_other_span, new_other_span);
 	}
 }
 
