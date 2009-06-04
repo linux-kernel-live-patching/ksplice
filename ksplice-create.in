@@ -262,7 +262,7 @@ sub copy_debug {
 
 mkdir("$tmpdir/objects");
 for (split(/\0/, runstr(qw(find -name *.KSPLICE* ! ( -name *.KSPLICE -empty ) ! -name .*.KSPLICE.cmd -print0)))) {
-	next if (basename($_) =~ m/^(?:vmlinux|vmlinux\.o|\.tmp_vmlinux[0-9]+|\.tmp_kallsyms[0-9]+.o)\.KSPLICE_pre$/);
+	next if (basename($_) =~ m/^(?:vmlinux|vmlinux\.o|\.tmp_vmlinux[0-9]+|\.tmp_kallsyms[0-9]+.o|built-in.o)\.KSPLICE_pre$/);
 	copy_debug($_);
 	copy_debug($1) if (m/^(.*)\.KSPLICE_pre(?:src)?$/);
 }
