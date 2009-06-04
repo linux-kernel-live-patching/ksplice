@@ -701,6 +701,24 @@ void match_spans(struct span *old_span, struct span *new_span)
 	match_spans(old_sym_span, new_sym_span);
 }
 
+void unmatch_span(struct span *old_span)
+{
+	struct span *new_span = old_span->match;
+	old_span->match = NULL;
+	new_span->match = NULL;
+
+	new_span->bugpatch = false;
+
+	if (old_span->ss->type == SS_TYPE_SPECIAL) {
+		const struct table_section *ts =
+		    get_table_section(old_span->ss->name);
+		if (ts != NULL && ts->has_addr)
+			unmatch_addr_spans(old_span, new_span, ts);
+	}
+
+	changed = true;
+}
+
 static void match_global_symbols(struct span *old_span, asymbol *oldsym,
 				 struct span *new_span, asymbol *newsym)
 {
@@ -945,8 +963,7 @@ static void unmatch_addr_spans(struct span *old_span, struct span *new_span,
 			       "to relocations from special section %s/%s\n",
 			       old_sym_span->label, new_sym_span->label,
 			       old_span->label, new_span->label);
-			old_sym_span->match = NULL;
-			new_sym_span->match = NULL;
+			unmatch_span(old_sym_span);
 		}
 		changed = true;
 	}
@@ -971,8 +988,7 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 				debug1(newsbfd, "Unmatching %s and %s due to "
 				       "nonmatching CRCs\n", old_span->label,
 				       new_span->label);
-				old_span->match = NULL;
-				new_span->match = NULL;
+				unmatch_span(old_span);
 			}
 		}
 		return;
@@ -1014,15 +1030,7 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 	} else {
 		debug1(newsbfd, "Unmatching %s and %s due to %s\n",
 		       old_span->label, new_span->label, reason);
-		new_span->bugpatch = false;
-		new_span->match = NULL;
-		old_span->match = NULL;
-		if (old_span->ss->type == SS_TYPE_SPECIAL) {
-			const struct table_section *ts =
-			    get_table_section(old_span->ss->name);
-			if (ts != NULL && ts->has_addr)
-				unmatch_addr_spans(old_span, new_span, ts);
-		}
+		unmatch_span(old_span);
 	}
 	changed = true;
 	if (unchangeable_section(new_span->ss))
