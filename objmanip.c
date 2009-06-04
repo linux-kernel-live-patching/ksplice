@@ -977,15 +977,6 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 		}
 		return;
 	}
-	if (old_span->ss->type == SS_TYPE_BUGTABLE &&
-	    new_span->ss->type == SS_TYPE_BUGTABLE && relocs_match) {
-		if (new_span->bugpatch)
-			return;
-		debug1(newsbfd, "Changing %s due to nonmatching line numbers\n",
-		       new_span->label);
-		new_span->bugpatch = true;
-		return;
-	}
 
 	char *reason;
 	if (new_span->contents_size != old_span->contents_size)
@@ -1001,6 +992,13 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 		new_span->patch = true;
 		debug1(newsbfd, "Changing %s due to %s\n", new_span->label,
 		       reason);
+	} else if (old_span->ss->type == SS_TYPE_BUGTABLE &&
+		   new_span->ss->type == SS_TYPE_BUGTABLE && relocs_match) {
+		if (new_span->bugpatch)
+			return;
+		debug1(newsbfd, "Changing %s due to %s\n",
+		       new_span->label, reason);
+		new_span->bugpatch = true;
 	} else if (new_span->ss->type == SS_TYPE_RODATA &&
 		   new_span->contents_size == old_span->contents_size) {
 		if (new_span->datapatch)
