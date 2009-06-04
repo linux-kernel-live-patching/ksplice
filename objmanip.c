@@ -759,6 +759,20 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 		asymbol *oldsym = *oldsymp;
 		if (bfd_is_const_section(oldsym->section))
 			continue;
+
+		struct supersect *old_ss =
+		    fetch_supersect(oldsbfd, oldsym->section);
+		if (old_ss->type == SS_TYPE_SPECIAL ||
+		    old_ss->type == SS_TYPE_EXPORT)
+			continue;
+
+		struct span *old_span = find_span(old_ss, oldsym->value);
+		if (old_span == NULL) {
+			err(oldsbfd, "Could not find span for %s\n",
+			    oldsym->name);
+			DIE;
+		}
+
 		for (newsymp = newsbfd->syms.data;
 		     newsymp < newsbfd->syms.data + newsbfd->syms.size;
 		     newsymp++) {
@@ -768,25 +782,14 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 			if (strcmp(oldsym->name, newsym->name) != 0)
 				continue;
 
-			struct supersect *old_ss =
-			    fetch_supersect(oldsbfd, oldsym->section);
 			struct supersect *new_ss =
 			    fetch_supersect(newsbfd, newsym->section);
-			if ((old_ss->type != new_ss->type &&
-			     old_ss->type != new_ss->orig_type) ||
-			    old_ss->type == SS_TYPE_SPECIAL ||
-			    old_ss->type == SS_TYPE_EXPORT)
+			if (old_ss->type != new_ss->type &&
+			    old_ss->type != new_ss->orig_type)
 				continue;
 
-			struct span *old_span =
-			    find_span(old_ss, oldsym->value);
 			struct span *new_span =
 			    find_span(new_ss, newsym->value);
-			if (old_span == NULL) {
-				err(oldsbfd, "Could not find span for %s\n",
-				    oldsym->name);
-				DIE;
-			}
 			if (new_span == NULL) {
 				err(newsbfd, "Could not find span for %s\n",
 				    newsym->name);
