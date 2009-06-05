@@ -3195,6 +3195,14 @@ static abort_t check_task(struct update *update,
 		list_add(&conf->list, &update->conflicts);
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
+	if (t->state == TASK_DEAD)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+/* c394cc9fbb367f87faa2228ec2eabacd2d4701c6 was after 2.6.18 */
+	if ((t->flags & PF_DEAD) != 0)
+#endif
+		return OK;
+
 	status = check_address(update, conf, KSPLICE_IP(t));
 	if (t == current) {
 		ret = check_stack(update, conf, task_thread_info(t),
