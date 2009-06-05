@@ -848,7 +848,7 @@ static void mark_new_spans(struct superbfd *sbfd)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			if (span->match == NULL && !span->bugpatch)
+			if (span->match == NULL)
 				span->new = true;
 		}
 	}
@@ -979,10 +979,10 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 	}
 	if (old_span->ss->type == SS_TYPE_BUGTABLE &&
 	    new_span->ss->type == SS_TYPE_BUGTABLE && relocs_match) {
+		if (new_span->bugpatch)
+			return;
 		debug1(newsbfd, "Changing %s due to nonmatching line numbers\n",
 		       new_span->label);
-		new_span->match = NULL;
-		old_span->match = NULL;
 		new_span->bugpatch = true;
 		return;
 	}
@@ -1016,6 +1016,7 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 	} else {
 		debug1(newsbfd, "Unmatching %s and %s due to %s\n",
 		       old_span->label, new_span->label, reason);
+		new_span->bugpatch = false;
 		new_span->match = NULL;
 		old_span->match = NULL;
 		if (old_span->ss->type == SS_TYPE_SPECIAL) {
