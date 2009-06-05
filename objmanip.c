@@ -716,6 +716,10 @@ void unmatch_span(struct span *old_span)
 			unmatch_addr_spans(old_span, new_span, ts);
 	}
 
+	new_span->patch = false;
+	new_span->bugpatch = false;
+	new_span->datapatch = false;
+
 	changed = true;
 }
 
