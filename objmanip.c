@@ -726,7 +726,8 @@ void unmatch_span(struct span *old_span)
 static void match_global_symbols(struct span *old_span, asymbol *oldsym,
 				 struct span *new_span, asymbol *newsym)
 {
-	if ((oldsym->flags & BSF_GLOBAL) == 0 ||
+	if (newsym == NULL ||
+	    (oldsym->flags & BSF_GLOBAL) == 0 ||
 	    (newsym->flags & BSF_GLOBAL) == 0)
 		return;
 	match_spans(old_span, new_span);
@@ -736,13 +737,19 @@ static void check_global_symbols(struct span *old_span, asymbol *oldsym,
 				 struct span *new_span, asymbol *newsym)
 {
 	if ((oldsym->flags & BSF_GLOBAL) == 0 ||
-	    (newsym->flags & BSF_GLOBAL) == 0)
+	    (newsym != NULL && (newsym->flags & BSF_GLOBAL) == 0))
 		return;
 	if (old_span->ss->type == SS_TYPE_IGNORED)
 		return;
-	if (old_span->match != new_span || new_span->match != old_span) {
-		err(new_span->ss->parent, "Global symbol span mismatch: %s "
-		    "%s/%s\n", oldsym->name, old_span->label, new_span->label);
+	if (old_span->match != new_span) {
+		if (new_span != NULL)
+			err(new_span->ss->parent,
+			    "Global symbol span mismatch: %s %s/%s\n",
+			    oldsym->name, old_span->label, new_span->label);
+		else
+			err(old_span->ss->parent,
+			    "Global symbol span mismatch: %s %s/NULL\n",
+			    oldsym->name, old_span->label);
 		DIE;
 	}
 }
@@ -774,6 +781,8 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 			DIE;
 		}
 
+		bool found = false;
+
 		for (newsymp = newsbfd->syms.data;
 		     newsymp < newsbfd->syms.data + newsbfd->syms.size;
 		     newsymp++) {
@@ -790,6 +799,9 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 			    old_ss->type != new_ss->orig_type)
 				continue;
 
+			assert(!found);
+			found = true;
+
 			struct span *new_span =
 			    find_span(new_ss, newsym->value);
 			if (new_span == NULL) {
@@ -799,12 +811,17 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 			}
 			fn(old_span, oldsym, new_span, newsym);
 		}
+
+		if (!found)
+			fn(old_span, oldsym, NULL, NULL);
 	}
 }
 
 static void match_symbol_spans(struct span *old_span, asymbol *oldsym,
 			       struct span *new_span, asymbol *newsym)
 {
+	if (newsym == NULL)
+		return;
 	if (old_span->ss->type == SS_TYPE_SPECIAL)
 		return;
 	if (static_local_symbol(old_span->ss->parent, oldsym) ||
