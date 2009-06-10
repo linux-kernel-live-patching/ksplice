@@ -187,7 +187,7 @@ sub refcount {
 
 sub cleanup_modules {
 	foreach my $module (reverse(@modules_loaded)) {
-		runval("rmmod", $module) if(!$nounload);
+		runval_raw("rmmod", $module) if(!$nounload);
 	}
 }
 
