@@ -46,7 +46,6 @@ if (!update_loaded($kid)
 	rmtree("/var/run/ksplice/updates/$kid") if (-e "/var/run/ksplice/updates/$kid");
 	exit(1);
 }
-my $have_sysfs = update_loaded($kid);
 
 set_debug_level($kid, $debugon);
 my $failed = 0;
@@ -58,6 +57,7 @@ foreach my $module (glob("${update}_*_old")) {
 	}
 }
 
+my $have_sysfs = update_loaded($kid);
 my $stage = ($have_sysfs && get_stage($kid));
 if ($stage ne 'applied') {
 	print "Ksplice id $kid is not applied; just cleaning up\n";
