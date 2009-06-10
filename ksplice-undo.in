@@ -40,7 +40,8 @@ my $nounload = runstr("lsmod") =~ m/- $/m;
 
 chdir("/sys/module");
 
-if (!update_loaded($kid) && !-e $update) {
+if (!update_loaded($kid)
+    && !-e $update && !defined(glob("${update}_*_{old,new}"))) {
 	print "Ksplice id $kid is not present in the kernel\n";
 	exit(1);
 }
