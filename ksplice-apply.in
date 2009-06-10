@@ -120,6 +120,10 @@ foreach my $change (@changes) {
 	}
 }
 
+mkpath("/var/run/ksplice/updates/$kid");
+copy("patch", "/var/run/ksplice/updates/$kid/patch") if (-e "patch");
+copy("description", "/var/run/ksplice/updates/$kid/description") if (-e "description");
+
 set_debug_level($kid, $debugon);
 set_partial($kid, $partial);
 set_stage($kid, "applied");
@@ -128,6 +132,7 @@ if($stage ne 'applied') {
 	my $debugfile = get_debug_output($kid, $debug);
 	my $abort_cause = get_abort_cause($kid);
 	my $conflicts = get_conflicts($kid);
+	rmtree("/var/run/ksplice/updates/$kid") if (-e "/var/run/ksplice/updates/$kid");
 	cleanup_modules();
 	print STDERR "Error applying Ksplice update $kid:\n";
 	print_error($abort_cause);
@@ -139,15 +144,14 @@ if($stage ne 'applied') {
 	}
 	die;
 }
-mkpath("/var/run/ksplice/updates/$kid");
-copy("patch", "/var/run/ksplice/updates/$kid/patch") if (-e "patch");
-copy("description", "/var/run/ksplice/updates/$kid/description") if (-e "description");
+
 if (!$nounload) {
 	foreach my $change (@changes) {
 		runval('rmmod', $change->{old_code});
 		runval('rmmod', $change->{new_code}) if ($partial && refcount($change->{new_code}) == 0);
 	}
 }
+
 print "Done!\n";
 exit(0);
 
@@ -159,6 +163,7 @@ sub handler {
 	die "caught SIG$sig after finished\n"
 	    if (update_loaded($kid) && (get_stage($kid) eq 'applied'));
 	print STDERR "caught SIG$sig, aborting\n";
+	rmtree("/var/run/ksplice/updates/$kid") if (-e "/var/run/ksplice/updates/$kid");
 	cleanup_modules();
 	exit(1);
 }
