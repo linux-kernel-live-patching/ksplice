@@ -58,7 +58,7 @@ foreach my $module (glob("${update}_*_old")) {
 
 my $stage = ($have_sysfs && get_stage($kid));
 if ($stage ne 'applied') {
-	print "Ksplice id $kid is not applied\n";
+	print "Ksplice id $kid is not applied; just cleaning up\n";
 }
 else {
 	set_stage($kid, "reversed");
