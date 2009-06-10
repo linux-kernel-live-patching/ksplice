@@ -18,6 +18,7 @@
 
 use strict;
 use warnings;
+use sigtrap 'handler', \&handler, qw(normal-signals error-signals);
 use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
@@ -152,14 +153,24 @@ exit(0);
 
 my @modules_loaded = qw();
 
+sub handler {
+	my ($sig) = @_;
+	die "caught SIG$sig, abort\n" if (!defined($kid));
+	die "caught SIG$sig after finished\n"
+	    if (update_loaded($kid) && (get_stage($kid) eq 'applied'));
+	print STDERR "caught SIG$sig, aborting\n";
+	cleanup_modules();
+	exit(1);
+}
+
 sub load_module {
 	my ($module, @params) = @_;
+	push @modules_loaded, ($module =~ m/^(.*)\.ko$/);
 	if (runval_raw("insmod", $module, @params) != 0) {
+		pop @modules_loaded;
 		child_error();
 		return 0;
 	}
-	$module =~ s/\.ko//;
-	push @modules_loaded, $module;
 	return 1;
 }
 
