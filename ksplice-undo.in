@@ -43,6 +43,7 @@ chdir("/sys/module");
 if (!update_loaded($kid)
     && !-e $update && !defined(glob("${update}_*_{old,new}"))) {
 	print "Ksplice id $kid is not present in the kernel\n";
+	rmtree("/var/run/ksplice/updates/$kid") if (-e "/var/run/ksplice/updates/$kid");
 	exit(1);
 }
 my $have_sysfs = update_loaded($kid);
