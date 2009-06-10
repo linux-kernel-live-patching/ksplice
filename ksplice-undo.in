@@ -45,6 +45,14 @@ if (!update_loaded($kid)) {
 
 chdir("/sys/module/");
 set_debug_level($kid, $debugon);
+my $failed = 0;
+
+foreach my $module (glob("${update}_*_old")) {
+	if (!$nounload && runval_raw('rmmod', $module) != 0) {
+		child_error();
+		error_die();
+	}
+}
 
 my $stage = get_stage($kid);
 if ($stage ne 'applied') {
@@ -56,7 +64,7 @@ else {
 $stage = get_stage($kid);
 ($stage eq 'reversed') or error_die();
 
-foreach my $module (glob("${update}_*")) {
+foreach my $module (glob("${update}_*_new")) {
 	if (!$nounload && runval_raw('rmmod', $module) != 0) {
 		child_error();
 		error_die();
