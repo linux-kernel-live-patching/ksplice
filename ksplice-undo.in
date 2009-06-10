@@ -85,6 +85,10 @@ rmtree("/var/run/ksplice/updates/$kid");
 exit(0);
 
 sub error_die {
+	if (!update_loaded($kid)) {
+		print STDERR "Error undoing Ksplice update $kid\n";
+		die;
+	}
 	my $debugfile = get_debug_output($kid, $debug);
 	print STDERR "Error undoing Ksplice update $kid:\n";
 	my $abort_cause = get_abort_cause($kid);
