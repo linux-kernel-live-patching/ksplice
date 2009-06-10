@@ -90,7 +90,7 @@ if (-e "/sys/module/$update") {
 	}
 }
 
-rmtree("/var/run/ksplice/updates/$kid");
+rmtree("/var/run/ksplice/updates/$kid") if (-e "/var/run/ksplice/updates/$kid");
 
 exit(0);
 
