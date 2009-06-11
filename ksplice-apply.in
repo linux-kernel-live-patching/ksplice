@@ -46,22 +46,14 @@ open(CONTENTS, '<', "contents");
 my $core;
 my @changes;
 while (<CONTENTS>) {
-	my @line = split(' ', $_);
-	if ($line[0] eq 'core') {
+	my ($type, @args) = split(' ', $_);
+	if ($type eq 'core') {
 		die "Multiple core modules in $file!" if (defined $core);
-		$core = {
-			'module' => $line[1],
-			'file' => $line[2],
-		};
-	}
-	if ($line[0] eq 'change') {
-		my $change = {
-			'target' => $line[1],
-			'new_code' => $line[2],
-			'new_code_file' => $line[3],
-			'old_code' => $line[4],
-			'old_code_file' => $line[5],
-		};
+		$core = {};
+		@$core{qw(module file)} = @args;
+	} elsif ($type eq 'change') {
+		my $change = {};
+		@$change{qw(target new_code new_code_file old_code old_code_file)} = @args;
 		push @changes, $change;
 	}
 }
