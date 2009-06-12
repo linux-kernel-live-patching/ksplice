@@ -888,10 +888,12 @@ EXPORT_SYMBOL_GPL(init_ksplice_mod_change);
  * cleanup_ksplice_mod_change() - Cleans up a change if appropriate
  * @change:	The change to be cleaned up
  *
- * cleanup_ksplice_mod_change is currently called twice for each
- * Ksplice update; once when the old_code module is unloaded, and once
- * when the new_code module is unloaded.  The extra call is used to
- * avoid leaks if you unload the old_code without applying the update.
+ * cleanup_ksplice_mod_change is ordinarily called twice for each
+ * Ksplice update: once when the old_code module is unloaded, and once
+ * when the new_code module is unloaded.  By freeing what can be freed
+ * on each unload, we avoid leaks even in unusual scenarios, e.g. if
+ * several alternative old_code modules are loaded and unloaded
+ * successively.
  */
 void cleanup_ksplice_mod_change(struct ksplice_mod_change *change)
 {
@@ -900,11 +902,6 @@ void cleanup_ksplice_mod_change(struct ksplice_mod_change *change)
 
 	mutex_lock(&module_mutex);
 	if (change->update->stage == STAGE_APPLIED) {
-		/* If the change wasn't actually applied (because we
-		 * only applied this update to loaded modules and this
-		 * target was not loaded), then unregister the change
-		 * from the list of unused changes.
-		 */
 		struct ksplice_mod_change *c;
 		bool found = false;
 
