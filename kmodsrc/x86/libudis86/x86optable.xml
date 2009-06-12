@@ -3165,8 +3165,16 @@
     <opcode> ; 0f a7 /mod=11 /rm=0 /5 ; </opcode>
   </instruction>
 
+  <instruction mnemonic="xgetbv">
+    <opcode> ; 0F 01 /2 /mod=11 /rm=0 ; </opcode>
+  </instruction>
+
   <instruction mnemonic="xrstor">
     <opcode> ; 0F AE /5 /mod=!11 ; M </opcode>
+  </instruction>
+
+  <instruction mnemonic="xsetbv">
+    <opcode> ; 0F 01 /2 /mod=11 /rm=1 ; </opcode>
   </instruction>
 
   <instruction mnemonic="xsave">
