@@ -2742,6 +2742,8 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_IGNORED;
 	if (strstarts(ss->name, ".taglist.init"))
 		return SS_TYPE_IGNORED;
+	if (strstarts(ss->name, ".x86_cpu_dev.init"))
+		return SS_TYPE_IGNORED;
 	if (strstarts(ss->name, ".arch.info.init"))
 		return SS_TYPE_IGNORED;
 	if (strstarts(ss->name, ".proc.info.init"))
