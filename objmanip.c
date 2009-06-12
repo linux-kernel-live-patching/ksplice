@@ -757,7 +757,8 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 	for (oldsymp = oldsbfd->syms.data;
 	     oldsymp < oldsbfd->syms.data + oldsbfd->syms.size; oldsymp++) {
 		asymbol *oldsym = *oldsymp;
-		if (bfd_is_const_section(oldsym->section))
+		if ((oldsym->flags & BSF_DEBUGGING) != 0 ||
+		    bfd_is_const_section(oldsym->section))
 			continue;
 
 		struct supersect *old_ss =
@@ -777,7 +778,8 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 		     newsymp < newsbfd->syms.data + newsbfd->syms.size;
 		     newsymp++) {
 			asymbol *newsym = *newsymp;
-			if (bfd_is_const_section(newsym->section))
+			if ((newsym->flags & BSF_DEBUGGING) != 0 ||
+			    bfd_is_const_section(newsym->section))
 				continue;
 			if (strcmp(oldsym->name, newsym->name) != 0)
 				continue;
@@ -803,9 +805,6 @@ static void foreach_symbol_pair(struct superbfd *oldsbfd, struct superbfd *newsb
 static void match_symbol_spans(struct span *old_span, asymbol *oldsym,
 			       struct span *new_span, asymbol *newsym)
 {
-	if ((oldsym->flags & BSF_DEBUGGING) != 0 ||
-	    (newsym->flags & BSF_DEBUGGING) != 0)
-		return;
 	if (old_span->ss->type == SS_TYPE_SPECIAL)
 		return;
 	if (static_local_symbol(old_span->ss->parent, oldsym) ||
