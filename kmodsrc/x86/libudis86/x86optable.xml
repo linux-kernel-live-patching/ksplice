@@ -3165,6 +3165,14 @@
     <opcode> ; 0f a7 /mod=11 /rm=0 /5 ; </opcode>
   </instruction>
 
+  <instruction mnemonic="xrstor">
+    <opcode> ; 0F AE /5 /mod=!11 ; M </opcode>
+  </instruction>
+
+  <instruction mnemonic="xsave">
+    <opcode> ; 0F AE /4 /mod=!11 ; M </opcode>
+  </instruction>
+
   <instruction mnemonic="xsha1">
     <opcode> ; 0f a6 /mod=11 /rm=0 /1 ; </opcode>
   </instruction>
