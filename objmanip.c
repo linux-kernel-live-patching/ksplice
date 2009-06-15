@@ -3402,7 +3402,10 @@ struct span *reloc_target_span(struct supersect *ss, arelent *reloc)
 	if (bfd_is_const_section(sym_ptr->section))
 		return NULL;
 
-	bfd_vma addend = sym_ptr->value + reloc_target_offset(ss, reloc);
+	bfd_vma addend = sym_ptr->value;
+	if ((sym_ptr->flags & BSF_SECTION_SYM) != 0)
+		addend += reloc_target_offset(ss, reloc);
+
 	struct supersect *sym_ss =
 	    fetch_supersect(ss->parent, sym_ptr->section);
 	struct span *span, *target_span = sym_ss->spans.data;
