@@ -1272,7 +1272,7 @@ bool relocs_equal(struct supersect *old_src_ss, struct supersect *new_src_ss,
 		    fetch_supersect(newsbfd, new_sect)->type == SS_TYPE_TEXT)
 			return false;
 
-		if (!bfd_is_und_section(new_sect) && new_offset != 0 &&
+		if (!bfd_is_und_section(old_sect) && new_offset != 0 &&
 		    fetch_supersect(oldsbfd, old_sect)->type == SS_TYPE_TEXT)
 			return false;
 
