@@ -20,7 +20,11 @@ struct ksplice_symbol {
  * @blank_addr:		The address of the relocation's storage unit
  * @symbol:		The ksplice_symbol associated with this relocation
  * @howto:		The information regarding the relocation type
- * @addend:		The ELF addend of the relocation
+ * @insn_addend:	The part of the ELF addend resulting from quirks of
+ *			the instruction one of whose operands is the relocation.
+ *			For example, this is -4 on x86 pc-relative jumps.
+ * @target_addend:	The rest of the ELF addend.  This is equal to the offset
+ *			against the symbol that the relocation refers to.
  **/
 struct ksplice_reloc {
 	unsigned long blank_addr;
