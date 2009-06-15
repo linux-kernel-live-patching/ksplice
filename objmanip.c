@@ -534,7 +534,7 @@ void do_keep_new_code(struct superbfd *isbfd, const char *pre)
 		struct span *span;
 		for (span = ss->spans.data;
 		     span < ss->spans.data + ss->spans.size; span++) {
-			if (span->keep)
+			if (span->keep || span->bugpatch)
 				write_output = true;
 			if (span->patch || span->new || span->datapatch)
 				write_ksplice_section(span);
