@@ -33,6 +33,8 @@ our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
 
 our $help = 0;
 our $raw_errors = 0;
+our $printed_abort_code;
+
 our @common_options = (
 	"help|?" => \$help,
 	"raw-errors" => \$raw_errors,
@@ -44,6 +46,10 @@ our @common_options = (
 
 $SIG{__DIE__} = sub {
 	die @_ if $^S || !$raw_errors;
+	my ($msg) = @_;
+	if(!$printed_abort_code) {
+		print STDERR "OTHER\n$msg";
+	}
 	exit(-1);
 };
 
@@ -315,6 +321,7 @@ sub print_abort_error {
 			print STDERR get_conflicts($kid);
 		}
 	}
+	$printed_abort_code = 1;
 }
 
 sub print_abort_code {
@@ -325,6 +332,7 @@ sub print_abort_code {
 		$error = "UNKNOWN" if (!exists $errors{$error});
 		print STDERR "\n$errors{$error}\n";
 	}
+	$printed_abort_code = 1;
 }
 
 END {

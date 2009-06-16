@@ -106,12 +106,11 @@ foreach my $change (@changes) {
 	}
 	if(!load_module($change->{old_code_file})) {
 		my $debugfile = get_debug_output("init_$kid", $debug);
-		print STDERR "Error loading old code module $change->{old_code}\n" unless $raw_errors;
 		cleanup_modules();
 		if($debugon && defined $debugfile) {
 			print("Debugging output saved to $debugfile\n");
 		}
-		die;
+		die("Error loading old code module $change->{old_code}\n");
 	}
 }
 
