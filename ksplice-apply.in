@@ -22,6 +22,9 @@ use sigtrap 'handler', \&handler, qw(normal-signals error-signals);
 use lib 'KSPLICE_DATA_DIR';
 use Ksplice;
 
+our %apply_errors;
+initialize_abort_code_table();
+
 my $debug;
 my $debugon = 0;
 my $partial = 0;
@@ -68,13 +71,13 @@ my $update = "ksplice_$kid";
 if(update_loaded($kid)) {
 	my $stage = get_stage($kid);
 	if ($stage eq "applied") {
-		print STDERR "Ksplice update $kid already applied.\n";
+		print STDERR "Ksplice update $kid already applied.\n" unless $raw_errors;
 		exit(0);
 	}
 	die "Reversed Ksplice module $update already loaded!" if ($stage eq "reversed");
 }
 
-runstr_err(qw(modprobe -q ksplice)) eq "" || die;
+runstr_err(qw(modprobe -q ksplice)) eq "" or die("Error loading Ksplice module.\n");
 if (defined $core) {
 	die "Could not find Ksplice core module $core->{file}\n" if (!-e $core->{file});
 	if (runstr("lsmod") =~ m/^\Q$core->{module}\E\s+/) {
@@ -91,7 +94,7 @@ foreach my $change (@changes) {
 	    runstr("lsmod") !~ m/^\Q$change->{target}\E\s+/m) {
 		if (!$partial) {
 			cleanup_modules();
-			print_error("target_not_loaded");
+			print_abort_code("target_not_loaded", %apply_errors);
 			die "Module $change->{target} to be patched not loaded";
 		}
 	}
@@ -103,7 +106,7 @@ foreach my $change (@changes) {
 	}
 	if(!load_module($change->{old_code_file})) {
 		my $debugfile = get_debug_output("init_$kid", $debug);
-		print STDERR "Error loading old code module $change->{old_code}\n";
+		print STDERR "Error loading old code module $change->{old_code}\n" unless $raw_errors;
 		cleanup_modules();
 		if($debugon && defined $debugfile) {
 			print("Debugging output saved to $debugfile\n");
@@ -122,19 +125,15 @@ set_stage($kid, "applied");
 my $stage = get_stage($kid);
 if($stage ne 'applied') {
 	my $debugfile = get_debug_output($kid, $debug);
-	my $abort_cause = get_abort_cause($kid);
-	my $conflicts = get_conflicts($kid);
+	print STDERR "Error applying Ksplice update $kid:\n" unless $raw_errors;
+	print_error($kid);
+
 	rmtree("/var/run/ksplice/updates/$kid") if (-e "/var/run/ksplice/updates/$kid");
 	cleanup_modules();
-	print STDERR "Error applying Ksplice update $kid:\n";
-	print_error($abort_cause);
-	if ($abort_cause eq 'code_busy') {
-		print $conflicts;
-	}
 	if ($debugon && defined $debugfile) {
 		print("Debugging output saved to $debugfile\n");
 	}
-	die;
+	exit(-1);
 }
 
 if (!$nounload) {
@@ -188,9 +187,8 @@ sub cleanup_modules {
 	}
 }
 
-sub print_error {
-	my ($error) = @_;
-	my %errors = (
+sub initialize_abort_code_table {
+	%apply_errors = (
 		"no_match" => <<'END',
 Ksplice has aborted the upgrade because Ksplice has been unable to match the
 object code produced by your current compiler and assembler against the running
@@ -256,8 +254,11 @@ Ksplice has aborted the upgrade for unknown reasons.
 Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
 	);
-	$error = "UNKNOWN" if (!exists $errors{$error});
-	print STDERR "\n$errors{$error}\n";
+}
+
+sub print_error {
+	my ($kid) = @_;
+	print_abort_error($kid, %apply_errors);
 }
 
 =head1 NAME
@@ -295,6 +296,18 @@ Applies the update only to those modules which are loaded.  Any
 modules patched by the update that are not loaded are ignored (without
 this option, Ksplice aborts if any modules patched by the update are
 not loaded).
+
+=item B<--raw-errors>
+
+Print only raw error information designed to be machine-readable on
+standard error (standard output is still intended to be
+human-readable).  If B<ksplice-apply> fails due to an error from the
+Ksplice kernel modules, the first line on standard error will be a
+Ksplice B<abort code> (see the Ksplice source code for documentation
+on these codes).  Further lines will vary depending on the abort code.
+If B<ksplice-apply> fails for any other reason, it will output the
+line C<"OTHER\n">, followed by a human-readable failure message, to
+standard error.
 
 =back
 

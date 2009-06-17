@@ -98,25 +98,19 @@ exit(0);
 
 sub error_die {
 	if (!update_loaded($kid)) {
-		print STDERR "Error undoing Ksplice update $kid\n";
-		die;
+		die("Error undoing Ksplice update $kid\n");
 	}
 	my $debugfile = get_debug_output($kid, $debug);
-	print STDERR "Error undoing Ksplice update $kid:\n";
-	my $abort_cause = get_abort_cause($kid);
-	my $conflicts = get_conflicts($kid);
-	print_error($abort_cause);
-	if ($abort_cause eq 'code_busy') {
-		print $conflicts;
-	}
+	print STDERR "Error undoing Ksplice update $kid:\n" unless $raw_errors;
+	print_error($kid);
 	if($debugon && defined $debugfile) {
 		print("Debugging output saved to $debugfile\n");
 	}
-	die;
+	exit(-1);
 }
 
 sub print_error {
-	my ($error) = @_;
+	my ($kid) = @_;
 	my %errors = (
 		"code_busy" => <<'END',
 Ksplice has aborted the undo operation because it appears that the code that
@@ -161,8 +155,7 @@ Ksplice has aborted the undo operation for unknown reasons.
 Please consider reporting a bug to PACKAGE_BUGREPORT.
 END
 );
-	$error = "UNKNOWN" if (!exists $errors{$error});
-	print STDERR "\n$errors{$error}\n";
+	print_abort_error($kid, %errors);
 }
 
 =head1 NAME
@@ -190,6 +183,18 @@ debugging.
 =item B<--debugfile=>I<filename>
 
 Sets the location where debugging output should be saved.  Implies --debug.
+
+=item B<--raw-errors>
+
+Print only raw error information designed to be machine-readable on
+standard error (standard output is still intended to be
+human-readable).  If B<ksplice-undo> fails due to an error from the
+Ksplice kernel modules, the first line on standard error will be a
+Ksplice B<abort code> (see the Ksplice source code for documentation
+on these codes).  Further lines will vary depending on the abort code.
+If B<ksplice-undo> fails for any other reason, it will output the line
+C<"OTHER\n">, followed by a human-readable failure message, to
+standard error.
 
 =back
 

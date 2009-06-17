@@ -18,28 +18,39 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	Verbose GetOptions pod2usage shellwords
-	$datadir $libexecdir @common_options $help
+	$datadir $libexecdir @common_options $help $raw_errors
 	child_error runval runval_raw runstr runstr_err runval_in runval_infile runval_outfile
 	unpack_update
 	get_stage set_stage set_debug_level set_partial get_abort_cause get_patch update_loaded
-	get_debug_output get_conflicts get_short_description
+	get_debug_output get_conflicts get_raw_conflicts get_short_description
 	read_file write_file
 	abs_path getcwd basename dirname tmpdir
 	copy rename move utime chdir mkdir mkpath unlink rmtree tempfile tempdir
+	print_abort_error print_abort_code
 );
 
 our ($datadir, $libexecdir) = qw(KSPLICE_DATA_DIR KSPLICE_LIBEXEC_DIR);
 
 our $help = 0;
+our $raw_errors = 0;
 our @common_options = (
 	"help|?" => \$help,
+	"raw-errors" => \$raw_errors,
 	"version" => sub { print "Ksplice version PACKAGE_VERSION\n"; exit(0); },
 	"api-version" => sub { print "KSPLICE_API_VERSION\n"; exit(0); },
 	"verbose|v:+" => \$Verbose::level,
 	"quiet|q:+" => sub { $Verbose::level -= $_[1]; },
 );
 
+$SIG{__DIE__} = sub {
+	die @_ if $^S || !$raw_errors;
+	exit(-1);
+};
+
 sub child_error {
+	if($raw_errors) {
+		return ($? != 0);
+	}
 	if($? == -1) {
 		print STDERR "Failed to exec child\n";
 	} elsif(($? & 127) != 0) {
@@ -64,14 +75,25 @@ sub runval_raw {
 	my (@cmd) = @_;
 	my ($out, $err);
 	print "+ @cmd\n" if($Verbose::level >= 1);
-	return system(@cmd);
+	if($raw_errors) {
+		my $pid = open3(fileno STDIN, ">&STDOUT", ">/dev/null", @cmd);
+		waitpid($pid, 0);
+		return $?;
+	} else {
+		return system(@cmd);
+	}
 }
 
 sub runstr {
 	my @cmd = @_;
 	print "+ @cmd\n" if($Verbose::level >= 1);
 	local $/;
-	open PIPE, '-|', @cmd or die "Can't run @cmd: $!";
+	local (*PIPE);
+	if($raw_errors) {
+		open3(fileno STDIN, \*PIPE, ">/dev/null", @cmd);
+	} else {
+		open PIPE, '-|', @cmd or die "Can't run @cmd: $!";
+	}
 	my $output = <PIPE>;
 	close PIPE or $! == 0 or die "Can't run @cmd: $!";
 	return $output;
@@ -85,7 +107,7 @@ sub runstr_err {
 	local $/;
 	my $error = <ERROR>;
 	waitpid($pid, 0);
-	print STDERR $error;
+	print STDERR $error unless $raw_errors;
 	return $error;
 }
 
@@ -93,7 +115,11 @@ sub runval_in {
 	my ($in, @cmd) = @_;
 	print "+ @cmd <<'EOF'\n${in}EOF\n" if($Verbose::level >= 1);
 	local (*WRITE);
-	open(WRITE, '|-', @cmd) or die "Can't run @cmd: $!";
+	if($raw_errors) {
+		open3(\*WRITE, ">&STDOUT", ">/dev/null", @cmd);
+	} else {
+		open(WRITE, '|-', @cmd) or die "Can't run @cmd: $!";
+	}
 	print WRITE $in;
 	close(WRITE) or $! == 0 or die "Can't run @cmd: $!";
 	if(child_error()) {
@@ -106,7 +132,12 @@ sub runval_infile {
 	print "+ @cmd < $infile\n" if($Verbose::level >= 1);
 	local (*INFILE);
 	open(INFILE, '<', $infile) or die "Can't open $infile: $!";
-	my $pid = open2('>&STDOUT', '<&INFILE', @cmd) or die "Can't run @cmd: $!";
+	my $pid;
+	if($raw_errors) {
+		$pid = open3('<&INFILE', '>&STDOUT', ">/dev/null", @cmd);
+	} else {
+		$pid = open2('>&STDOUT', '<&INFILE', @cmd);
+	}
 	waitpid($pid, 0);
 	if(child_error()) {
 		die "Failed during: @cmd";
@@ -118,7 +149,12 @@ sub runval_outfile {
 	print "+ @cmd > $outfile\n" if($Verbose::level >= 1);
 	local (*OUTFILE);
 	open(OUTFILE, '>', $outfile) or die "Can't open $outfile: $!";
-	my $pid = open2('>&OUTFILE', '</dev/null', @cmd) or die "Can't run @cmd: $!";
+	my $pid;
+	if($raw_errors) {
+		$pid = open3('</dev/null', '>&OUTFILE', ">/dev/null", @cmd);
+	} else {
+		$pid = open2('>&OUTFILE', '</dev/null', @cmd);
+	}
 	waitpid($pid, 0);
 	if(child_error()) {
 		die "Failed during: @cmd";
@@ -200,7 +236,7 @@ sub get_debug_output {
 		return ();
 	} else {
 		child_error();
-		die;
+		exit(-1);
 	}
 }
 
@@ -232,6 +268,12 @@ sub get_conflicts {
 	return $out;
 }
 
+sub get_raw_conflicts {
+	my ($kid) = @_;
+	my $conflicts = read_sysfs($kid, "conflicts");
+	return $conflicts;
+}
+
 sub get_patch {
 	my ($kid) = @_;
 	my $result = read_file("/var/run/ksplice/updates/$kid/patch");
@@ -259,6 +301,30 @@ sub set_debug_level {
 sub set_partial {
 	my ($kid, $string) = @_;
 	write_sysfs($kid, "partial", "$string\n");
+}
+
+sub print_abort_error {
+	my ($kid, %errors) = @_;
+	my $error = get_abort_cause($kid);
+
+	print_abort_code($error, %errors);
+	if ($error eq 'code_busy') {
+		if($raw_errors) {
+			print STDERR get_raw_conflicts($kid);
+		} else {
+			print STDERR get_conflicts($kid);
+		}
+	}
+}
+
+sub print_abort_code {
+	my ($error, %errors) = @_;
+	if($raw_errors) {
+		print STDERR "$error\n";
+	} else {
+		$error = "UNKNOWN" if (!exists $errors{$error});
+		print STDERR "\n$errors{$error}\n";
+	}
 }
 
 END {
