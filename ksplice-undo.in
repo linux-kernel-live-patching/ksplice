@@ -100,11 +100,11 @@ sub error_die {
 	if (!update_loaded($kid)) {
 		die("Error undoing Ksplice update $kid\n");
 	}
-	my $debugfile = get_debug_output($kid, $debug);
 	print STDERR "Error undoing Ksplice update $kid:\n" unless $raw_errors;
 	print_error($kid);
-	if($debugon && defined $debugfile) {
-		print("Debugging output saved to $debugfile\n");
+	if($debugon) {
+		my $debugfile = get_debug_output($kid, $debug);
+		print("Debugging output saved to $debugfile\n") if $debugfile;
 	}
 	exit(-1);
 }

@@ -105,11 +105,11 @@ foreach my $change (@changes) {
 		die "Error loading new code module $change->{new_code}";
 	}
 	if(!load_module($change->{old_code_file})) {
-		my $debugfile = get_debug_output("init_$kid", $debug);
-		cleanup_modules();
-		if($debugon && defined $debugfile) {
-			print("Debugging output saved to $debugfile\n");
+		if($debugon) {
+			my $debugfile = get_debug_output("init_$kid", $debug);
+			print("Debugging output saved to $debugfile\n") if $debugfile;
 		}
+		cleanup_modules();
 		die("Error loading old code module $change->{old_code}\n");
 	}
 }
@@ -123,15 +123,17 @@ set_partial($kid, $partial);
 set_stage($kid, "applied");
 my $stage = get_stage($kid);
 if($stage ne 'applied') {
-	my $debugfile = get_debug_output($kid, $debug);
 	print STDERR "Error applying Ksplice update $kid:\n" unless $raw_errors;
 	print_error($kid);
 
+	if ($debugon) {
+		my $debugfile = get_debug_output($kid, $debug);
+		print("Debugging output saved to $debugfile\n") if $debugfile;
+	}
+
 	rmtree("/var/run/ksplice/updates/$kid") if (-e "/var/run/ksplice/updates/$kid");
 	cleanup_modules();
-	if ($debugon && defined $debugfile) {
-		print("Debugging output saved to $debugfile\n");
-	}
+
 	exit(-1);
 }
 
