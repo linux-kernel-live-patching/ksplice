@@ -354,6 +354,8 @@ bool matchable_data_section(struct supersect *ss)
 		return true;
 	if (ss->type == SS_TYPE_EXPORT)
 		return true;
+	if (ss->type == SS_TYPE_BUGTABLE)
+		return true;
 	return false;
 }
 
@@ -975,8 +977,8 @@ static void compare_spans(struct span *old_span, struct span *new_span)
 		}
 		return;
 	}
-	if (strcmp(old_span->ss->name, "__bug_table") == 0 &&
-	    strcmp(new_span->ss->name, "__bug_table") == 0 && relocs_match) {
+	if (old_span->ss->type == SS_TYPE_BUGTABLE &&
+	    new_span->ss->type == SS_TYPE_BUGTABLE && relocs_match) {
 		debug1(newsbfd, "Changing %s due to nonmatching line numbers\n",
 		       new_span->label);
 		new_span->match = NULL;
@@ -1893,7 +1895,7 @@ static void write_ksplice_section(struct span *span)
 	ksect->flags = 0;
 
 	if (ss->type == SS_TYPE_RODATA || ss->type == SS_TYPE_STRING ||
-	    ss->type == SS_TYPE_EXPORT)
+	    ss->type == SS_TYPE_EXPORT || ss->type == SS_TYPE_BUGTABLE)
 		ksect->flags |= KSPLICE_SECTION_RODATA;
 	if (ss->type == SS_TYPE_DATA)
 		ksect->flags |= KSPLICE_SECTION_DATA;
@@ -2756,7 +2758,6 @@ enum supersect_type supersect_type(struct supersect *ss)
 	    strstarts(ss->name, ".cpuexit.rodata") ||
 	    strstarts(ss->name, ".ref.rodata") ||
 	    strstarts(ss->name, "__markers_strings") ||
-	    strstarts(ss->name, "__bug_table") ||
 	    (mode("keep-old-code") && strstarts(ss->name, "__ex_table")))
 		return SS_TYPE_RODATA;
 
@@ -2785,6 +2786,9 @@ enum supersect_type supersect_type(struct supersect *ss)
 		return SS_TYPE_STRING;
 	if (strstarts(ss->name, "__ksymtab"))
 		return SS_TYPE_EXPORT;
+
+	if (strstarts(ss->name, "__bug_table"))
+		return SS_TYPE_BUGTABLE;
 
 	if (is_table_section(ss->name, true, true))
 		return SS_TYPE_SPECIAL;
