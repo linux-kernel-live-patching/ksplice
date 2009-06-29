@@ -103,7 +103,7 @@ CFLAGS_ksplice.o += $(KSPLICE_CFLAGS)
 quiet_cmd_ksplice-rmsyms = RMSYMS  $@
 cmd_ksplice-rmsyms = \
 	$(ksplice-script) rmsyms $< $<.rmsyms && \
-	$(LD) -r -o $@ $<.rmsyms $(src)/ksplice-rmsyms.lds
+	$(LD) --script=$(src)/ksplice-rmsyms.lds -r -o $@ $<.rmsyms
 $(obj)/ksplice-rmsyms.o: $(obj)/ksplice.o $(obj)/offsets.o FORCE
 	$(call if_changed,ksplice-rmsyms)
 endif # KSPLICE_STANDALONE
