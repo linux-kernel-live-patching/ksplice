@@ -96,7 +96,9 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 {
 	abort_t ret;
 	const unsigned char *run, *pre, *run_start, *pre_start, *safety_start;
-	struct ud pre_ud, run_ud;
+	/* struct ud is big so we avoid putting it on the stack.  This
+	 * is safe because we are holding module_mutex. */
+	static struct ud pre_ud, run_ud;
 	const unsigned char **match_map;
 	const struct ksplice_reloc *finger;
 	unsigned long pre_offset, run_offset;
@@ -605,7 +607,9 @@ static bool is_nop(struct ud *ud, const unsigned char *addr)
 		    ud->operand[1].type == UD_NONE &&
 		    ud->operand[2].type == UD_NONE &&
 		    ud_operand_len(&ud->operand[0]) == 1) {
-			struct ud temp_ud;
+			/* struct ud is big so we avoid putting it on the stack.
+			 * This is safe because we are holding module_mutex. */
+			static struct ud temp_ud;
 			int len = ud_operand_lval(&ud->operand[0]);
 			int i;
 
