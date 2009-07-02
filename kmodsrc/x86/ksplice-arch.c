@@ -371,8 +371,15 @@ static abort_t compare_instructions(struct ksplice_mod_change *change,
 #else /* !CONFIG_X86_64 || LINUX_VERSION_CODE >= */
 #ifndef do_each_thread_ve		/* OpenVZ */
 	if (run_ud->mnemonic == UD_Iud2 && !found_bug_entry) {
-		ksdebug(change, "Unexpected ud2\n");
-		return NO_MATCH;
+		if (strcmp(change->target_name, "kvm_intel") == 0 ||
+		    strcmp(change->target_name, "kvm_amd") == 0) {
+			/* KVM has ud2a bugs without a bug table entry. */
+			if (mode == RUN_PRE_DEBUG)
+				ksdebug(change, "[kvm ud2]");
+		} else {
+			ksdebug(change, "Unexpected ud2\n");
+			return NO_MATCH;
+		}
 	}
 #endif /* do_each_thread_ve */
 #endif /* CONFIG_X86_64 && LINUX_VERSION_CODE */
