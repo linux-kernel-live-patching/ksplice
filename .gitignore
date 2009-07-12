@@ -1,0 +1,16 @@
+*~
+/*.8
+/Ksplice.pm
+/autom4te.cache
+/config.log
+/config.status
+/configure
+/inspect
+/kernel-utsname
+/ksplice-apply
+/ksplice-create
+/ksplice-obj.pl
+/ksplice-undo
+/ksplice-view
+/objmanip
+Makefile
