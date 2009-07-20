@@ -515,11 +515,8 @@ static abort_t compare_operands(struct ksplice_mod_change *change,
 		    ud_operand_lval(pre_op);
 		const unsigned char *run_target = run + ud_insn_len(run_ud) +
 		    ud_operand_lval(run_op);
-		if (pre_target == run_target) {
-			/* Paravirt-inserted pcrel jump; OK! */
-			return OK;
-		} else if (pre_target >= pre_start &&
-			   pre_target < pre_start + sect->size) {
+		if (pre_target >= pre_start &&
+		    pre_target < pre_start + sect->size) {
 			/* Jump within the current function.
 			   Check it's to a corresponding place */
 			unsigned long new_pre_offset = pre_target - pre_start;
@@ -538,6 +535,9 @@ static abort_t compare_operands(struct ksplice_mod_change *change,
 				match_map[pre_target - pre_start] = run_target;
 				sect->unmatched++;
 			}
+			return OK;
+		} else if (pre_target == run_target) {
+			/* Paravirt-inserted pcrel jump; OK! */
 			return OK;
 		} else {
 			if (mode == RUN_PRE_DEBUG) {
