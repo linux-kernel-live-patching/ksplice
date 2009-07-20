@@ -2597,6 +2597,7 @@ static abort_t handle_howto_reloc(struct ksplice_mod_change *change,
 	} else if (sect == sym_sect && sect->match_map[offset] == NULL) {
 		sym_sect->match_map[offset] =
 		    (const unsigned char *)r->symbol->value + offset;
+		sym_sect->unmatched++;
 	} else if (sect == sym_sect && (unsigned long)sect->match_map[offset] ==
 		   r->symbol->value + offset) {
 		;

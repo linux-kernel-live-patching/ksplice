@@ -130,11 +130,19 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 	memset(match_map, 0, sizeof(*match_map) * sect->size);
 	match_map[0] = run_start;
 	sect->match_map = match_map;
+	sect->unmatched = 1;
 
 	while (1) {
 		if (pre_nop && ud_disassemble(&pre_ud) == 0) {
 			/* Ran out of pre bytes to match; we're done! */
 			unsigned long safety_offset = run - safety_start;
+			if (sect->unmatched != 0) {
+				if (mode == RUN_PRE_DEBUG)
+					ksdebug(change, "%d unmatched jumps\n",
+						sect->unmatched);
+				ret = NO_MATCH;
+				goto out;
+			}
 			ret = create_safety_record(change, sect, safety_records,
 						   (unsigned long)safety_start,
 						   safety_offset);
@@ -186,7 +194,9 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 
 		if (match_map[pre_offset] == NULL) {
 			match_map[pre_offset] = run;
-		} else if (match_map[pre_offset] != run) {
+		} else if (match_map[pre_offset] == run) {
+			sect->unmatched--;
+		} else {
 			/* There is a discontinuity in the match map.
 			   Check that the last instruction was an
 			   unconditional change of control */
@@ -223,6 +233,8 @@ static abort_t arch_run_pre_cmp(struct ksplice_mod_change *change,
 				ret = NO_MATCH;
 				goto out;
 			}
+
+			sect->unmatched--;
 		}
 		run_offset = run - run_start;
 		run_unconditional = is_unconditional_jump(&run_ud);
@@ -524,6 +536,7 @@ static abort_t compare_operands(struct ksplice_mod_change *change,
 				return NO_MATCH;
 			} else if (match_map[pre_target - pre_start] == NULL) {
 				match_map[pre_target - pre_start] = run_target;
+				sect->unmatched++;
 			}
 			return OK;
 		} else {

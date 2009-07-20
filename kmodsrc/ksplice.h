@@ -86,6 +86,7 @@ struct ksplice_section {
 	unsigned long size;
 	unsigned int flags;
 	const unsigned char **match_map;
+	int unmatched;
 };
 #define KSPLICE_SECTION_TEXT 0x00000001
 #define KSPLICE_SECTION_RODATA 0x00000002
