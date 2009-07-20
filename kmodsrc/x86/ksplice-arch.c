@@ -582,17 +582,15 @@ static bool is_nop(struct ud *ud, const unsigned char *addr)
 	case UD_Inop:
 		return true;
 	case UD_Imov:
-		return ud->operand[0].type == UD_OP_REG &&
-		    ud->operand[1].type == UD_OP_REG &&
-		    ud->operand[2].type == UD_NONE &&
-		    ud->operand[0].base == ud->operand[1].base;
 	case UD_Ixchg:
-		return ud->operand[0].type == UD_OP_REG &&
+		return ud->dis_mode == 32 &&
+		    ud->operand[0].type == UD_OP_REG &&
 		    ud->operand[1].type == UD_OP_REG &&
 		    ud->operand[2].type == UD_NONE &&
 		    ud->operand[0].base == ud->operand[1].base;
 	case UD_Ilea:
-		return ud->operand[0].type == UD_OP_REG &&
+		return ud->dis_mode == 32 &&
+		    ud->operand[0].type == UD_OP_REG &&
 		    ud->operand[1].type == UD_OP_MEM &&
 		    ((ud->operand[1].base == ud->operand[0].base &&
 		      ud->operand[1].index == UD_NONE) ||
