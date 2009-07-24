@@ -302,20 +302,35 @@ if ($description) {
 write_file("$ksplice/api-version", "KSPLICE_API_VERSION\n");
 write_file("$ksplice/timestamp", time() . "\n");
 runval_outfile("$ksplice/utsname", "$libexecdir/ksplice-kernel-utsname", "$kmodsrc/offsets.o");
+
+mkdir("inspect");
+
 open(CONTENTS, ">", "$ksplice/contents");
 foreach my $mod (@modules) {
 	(my $target = $mod) =~ s/-/_/g;
 	my $mid = "${kid}_$target";
 	my $module = "ksplice-$mid";
+	my ($new, $old);
 	unless($ksplice_short_name_hack) {
-		rename("$tmpdir/ksplice-modules/extra/$module-new.ko", "$ksplice/$module-new.ko");
-		rename("$tmpdir/ksplice-modules/extra/$module-old.ko", "$ksplice/$module-old.ko");
-		print CONTENTS "change $target ksplice_${mid}_new $module-new.ko ksplice_${mid}_old $module-old.ko\n";
+		$new = "new";
+		$old = "old";
 	} else {
-		rename("$tmpdir/ksplice-modules/extra/$module-n.ko", "$ksplice/$module-n.ko");
-		rename("$tmpdir/ksplice-modules/extra/$module-o.ko", "$ksplice/$module-o.ko");
-		print CONTENTS "change $target ksplice_${mid}_n $module-n.ko ksplice_${mid}_o $module-o.ko\n";
+		$new = "n";
+		$old = "o";
 	}
+	rename("$tmpdir/ksplice-modules/extra/$module-$new.ko",
+	       "$ksplice/$module-$new.ko");
+	runval_outfile("inspect/$module-$new",
+		       "$libexecdir/ksplice-inspect",
+		       "$ksplice/$module-$new.ko");
+	rename("$tmpdir/ksplice-modules/extra/$module-$old.ko",
+	       "$ksplice/$module-$old.ko");
+	runval_outfile("inspect/$module-$old",
+		       "$libexecdir/ksplice-inspect",
+		       "$ksplice/$module-$old.ko");
+
+	print CONTENTS "change $target ksplice_${mid}_$new $module-$new.ko",
+	                             " ksplice_${mid}_$old $module-$old.ko\n";
 }
 if ($standalone) {
 	rename("$tmpdir/ksplice-modules/extra/ksplice-$kid.ko", "$ksplice/ksplice-$kid.ko");
@@ -330,6 +345,7 @@ if ($build_modules) {
 
 mkdir("$ksplice/debug");
 rename("objects", "$ksplice/debug/objects");
+rename("inspect", "$ksplice/debug/inspect");
 rename("modules", "$ksplice/modules") if ($build_modules);
 rename("$kmodsrc", "$ksplice/debug/kmodsrc");
 
