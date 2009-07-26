@@ -11,6 +11,9 @@ struct ksplice_option {
 };
 
 #ifdef __KERNEL__
+
+#include <linux/gfp.h>
+
 #ifndef __used
 #define __used __attribute_used__
 #endif
