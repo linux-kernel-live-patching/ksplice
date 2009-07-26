@@ -337,7 +337,6 @@ void load_options(struct superbfd *sbfd)
 			assert(span->start == 0 &&
 			       span->size == span->ss->contents.size);
 			span->ss->type = SS_TYPE_RODATA;
-			break;
 		} else {
 			err(sbfd, "Unrecognized Ksplice option %d\n",
 			    opt->type);
