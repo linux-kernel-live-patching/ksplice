@@ -232,16 +232,12 @@ $(obj)/%.o.KSPLICE_old_code: $(obj)/%.o.KSPLICE
 ifeq ($(KSPLICE_MODE),diff)
 
 define ksplice-cow-check
-	$(if $(filter-out %.KSPLICE,$@), \
-	  $(if $(strip $(filter-out $(PHONY),$?) $(filter-out $(cmd_$(1)),$(cmd_$@)) $(filter-out $(cmd_$@),$(cmd_$(1)))), \
-	    $(if $(wildcard $@), \
-	      $(if $(wildcard $@.KSPLICE_pre),, \
-		$(call cmd,ksplice-cow)))))
-
+$(if $(strip $(1)),$(if $(filter-out %.KSPLICE,$@),$(if $(wildcard $@),$(if $(wildcard $@.KSPLICE_pre),,$(call cmd,ksplice-cow)
+))))$(1)
 endef
 
 define ksplice-add-cow-check
-$(v) = $$(ksplice-cow-check)$(value $(v))
+$(v) = $$(call ksplice-cow-check,$(value $(v)))
 
 endef
 
