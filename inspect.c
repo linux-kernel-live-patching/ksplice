@@ -174,6 +174,8 @@ void show_ksplice_section_flags(const struct ksplice_section *ksect)
 		printf(" text");
 	if (ksect->flags & KSPLICE_SECTION_DATA)
 		printf(" data");
+	if (ksect->flags & KSPLICE_SECTION_MATCH_DATA_EARLY)
+		printf(" match_early");
 	printf("\n");
 }
 

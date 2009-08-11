@@ -1947,7 +1947,8 @@ static abort_t match_change_sections(struct ksplice_mod_change *change,
 
 	for (sect = change->old_code.sections;
 	     sect < change->old_code.sections_end; sect++) {
-		if ((sect->flags & KSPLICE_SECTION_DATA) == 0 &&
+		if (((sect->flags & KSPLICE_SECTION_DATA) == 0 ||
+		     (sect->flags & KSPLICE_SECTION_MATCH_DATA_EARLY) != 0) &&
 		    (sect->flags & KSPLICE_SECTION_STRING) == 0 &&
 		    (sect->flags & KSPLICE_SECTION_MATCHED) == 0)
 			remaining++;
@@ -1960,13 +1961,15 @@ static abort_t match_change_sections(struct ksplice_mod_change *change,
 			if ((sect->flags & KSPLICE_SECTION_MATCHED) != 0)
 				continue;
 			if ((!consider_data_sections &&
-			     (sect->flags & KSPLICE_SECTION_DATA) != 0) ||
+			     (sect->flags & KSPLICE_SECTION_DATA) != 0 &&
+			     (sect->flags & KSPLICE_SECTION_MATCH_DATA_EARLY) == 0) ||
 			    (sect->flags & KSPLICE_SECTION_STRING) != 0)
 				continue;
 			ret = find_section(change, sect);
 			if (ret == OK) {
 				sect->flags |= KSPLICE_SECTION_MATCHED;
-				if ((sect->flags & KSPLICE_SECTION_DATA) == 0)
+				if ((sect->flags & KSPLICE_SECTION_DATA) == 0 ||
+				    (sect->flags & KSPLICE_SECTION_MATCH_DATA_EARLY) != 0)
 					remaining--;
 				progress = true;
 			} else if (ret != NO_MATCH) {

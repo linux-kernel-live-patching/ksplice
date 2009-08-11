@@ -92,6 +92,7 @@ struct supersect *fetch_supersect(struct superbfd *sbfd, asection *sect)
 	new->name = sect->name;
 	new->flags = bfd_get_section_flags(sbfd->abfd, sect);
 	new->keep = true;
+	new->match_data_early = false;
 	new->symbol = sect->symbol;
 
 	vec_init(&new->contents);

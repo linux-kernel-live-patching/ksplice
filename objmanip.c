@@ -337,6 +337,15 @@ void load_options(struct superbfd *sbfd)
 			assert(span->start == 0 &&
 			       span->size == span->ss->contents.size);
 			span->ss->type = SS_TYPE_RODATA;
+		} else if (opt->type == KSPLICE_OPTION_MATCH_DATA_EARLY) {
+			arelent *reloc = find_reloc(ss, &opt->target);
+			assert(reloc != NULL);
+			struct span *span = reloc_target_span(ss, reloc);
+			assert(span != NULL);
+			assert(span->ss->type == SS_TYPE_DATA);
+			assert(span->start == 0 &&
+			       span->size == span->ss->contents.size);
+			span->ss->match_data_early = true;
 		} else {
 			err(sbfd, "Unrecognized Ksplice option %d\n",
 			    opt->type);
@@ -1939,6 +1948,8 @@ static void write_ksplice_section(struct span *span)
 
 	if (ss->type == SS_TYPE_STRING)
 		ksect->flags |= KSPLICE_SECTION_STRING;
+	if (ss->match_data_early)
+		ksect->flags |= KSPLICE_SECTION_MATCH_DATA_EARLY;
 
 	write_reloc(ksect_ss, &ksect->address, &ss->symbol,
 		    span->start + span->shift);

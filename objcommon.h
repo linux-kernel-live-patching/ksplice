@@ -243,6 +243,7 @@ struct supersect {
 	bool keep;
 	enum supersect_type type;
 	enum supersect_type orig_type;
+	bool match_data_early;
 };
 
 struct superbfd *fetch_superbfd(bfd *abfd);

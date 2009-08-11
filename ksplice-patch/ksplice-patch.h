@@ -3,6 +3,7 @@
 
 enum ksplice_option_type {
 	KSPLICE_OPTION_ASSUME_RODATA,
+	KSPLICE_OPTION_MATCH_DATA_EARLY,
 };
 
 struct ksplice_option {
@@ -43,6 +44,14 @@ struct ksplice_option {
 	__used __attribute__((__section__(".ksplice_options")))	\
 	assume_rodata_##obj = {					\
 		.type = KSPLICE_OPTION_ASSUME_RODATA,		\
+		.target = (const void *)&obj,			\
+	}
+
+#define ksplice_match_data_early(obj)				\
+	const struct ksplice_option				\
+	__used __attribute__((__section__(".ksplice_options")))	\
+	match_data_early_##obj = {				\
+		.type = KSPLICE_OPTION_MATCH_DATA_EARLY,	\
 		.target = (const void *)&obj,			\
 	}
 
