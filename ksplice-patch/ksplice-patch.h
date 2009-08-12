@@ -1,19 +1,18 @@
 #ifndef _KSPLICE_PATCH_H
 #define _KSPLICE_PATCH_H
 
-enum ksplice_option_type {
-	KSPLICE_OPTION_ASSUME_RODATA,
-	KSPLICE_OPTION_MATCH_DATA_EARLY,
-};
+#define KSPLICE_OPTION_ASSUME_RODATA	0
+#define KSPLICE_OPTION_MATCH_DATA_EARLY	1
 
 struct ksplice_option {
-	enum ksplice_option_type type;
+	int type;
 	const void *target;
-};
+} __attribute__((packed));
 
 #ifdef __KERNEL__
 
 #include <linux/gfp.h>
+#include <linux/stringify.h>
 
 #ifndef __used
 #define __used __attribute_used__
@@ -39,21 +38,24 @@ struct ksplice_option {
 #define ksplice_post_reverse(fn) ksplice_call_void(post_reverse, fn)
 #define ksplice_fail_reverse(fn) ksplice_call_void(fail_reverse, fn)
 
+
 #define ksplice_assume_rodata(obj)				\
-	const struct ksplice_option				\
-	__used __attribute__((__section__(".ksplice_options")))	\
-	assume_rodata_##obj = {					\
-		.type = KSPLICE_OPTION_ASSUME_RODATA,		\
-		.target = (const void *)&obj,			\
-	}
+	ksplice_option(KSPLICE_OPTION_ASSUME_RODATA, obj)
 
 #define ksplice_match_data_early(obj)				\
-	const struct ksplice_option				\
-	__used __attribute__((__section__(".ksplice_options")))	\
-	match_data_early_##obj = {				\
-		.type = KSPLICE_OPTION_MATCH_DATA_EARLY,	\
-		.target = (const void *)&obj,			\
-	}
+	ksplice_option(KSPLICE_OPTION_MATCH_DATA_EARLY, obj)
+
+#if BITS_PER_LONG == 32
+#define KSPLICE_PTR ".long"
+#elif BITS_PER_LONG == 64
+#define KSPLICE_PTR ".quad"
+#endif /* BITS_PER_LONG */
+
+#define ksplice_option(num, obj)				\
+	__asm__(".pushsection \".ksplice_options\", \"a\"\n"	\
+		"\t.long " __stringify(num) "\n"		\
+		"\t" KSPLICE_PTR " " #obj "\n"			\
+		".popsection")
 
 int init_shadow_field_type(int *shadow_key, typeof(GFP_KERNEL) gfp_flags);
 void *init_shadow_field(int *shadow_key, void *obj, int size,
