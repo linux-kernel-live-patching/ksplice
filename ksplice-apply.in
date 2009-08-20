@@ -48,6 +48,7 @@ die "No contents file in $file\n" if (!-e "contents");
 open(CONTENTS, '<', "contents");
 my $core;
 my @changes;
+my $kid;
 while (<CONTENTS>) {
 	my ($type, @args) = split(' ', $_);
 	if ($type eq 'core') {
@@ -58,15 +59,18 @@ while (<CONTENTS>) {
 		my $change = {};
 		@$change{qw(target new_code new_code_file old_code old_code_file)} = @args;
 		push @changes, $change;
+		my ($ckid) = $change->{'new_code'} =~ m/^ksplice_([^-_]+)_/ or die "Bad new_code $change->{'new_code'}";
+		!$kid or $kid eq $ckid or die "Multiple kids";
+		$kid = $ckid;
 	}
 }
+$kid or die "No kid";
 close(CONTENTS);
 
 die "Update was built using an old version of Ksplice" if (@changes == 0);
 
 my $nounload = runstr("lsmod") =~ m/- $/m;
 
-(my $kid = $ksplice) =~s|ksplice[-_]([^-_]+)|$1|;
 my $update = "ksplice_$kid";
 if(update_loaded($kid)) {
 	my $stage = get_stage($kid);
