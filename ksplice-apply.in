@@ -35,14 +35,11 @@ GetOptions(@common_options,
 
 pod2usage(1) if($help || scalar(@ARGV) != 1);
 
-my $file = abs_path($ARGV[0]);
+my $file = $ARGV[0];
 $debugon = 1 if(defined $debug);
 $debug = abs_path($debug) if (defined $debug);
 
-my $tmpdir = tempdir('ksplice-tmp-XXXXXX', TMPDIR => 1, CLEANUP => 1);
-chdir($tmpdir);
-my $ksplice = unpack_update($file);
-chdir($ksplice);
+chdir(unpack_update($file));
 
 die "No contents file in $file\n" if (!-e "contents");
 open(CONTENTS, '<', "contents");

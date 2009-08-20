@@ -169,8 +169,9 @@ sub runval_outfile {
 
 sub unpack_update {
 	my ($file) = @_;
-	runval("tar", "--force-local", "-zxf", $file);
-	my ($ksplice) = glob('*/');
+	my $tmpdir = tempdir('ksplice-tmp-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+	runval("tar", "-C", $tmpdir, "--force-local", "-zxf", $file);
+	my ($ksplice) = glob("$tmpdir/*/");
 	chop($ksplice); # remove the trailing slash
 	return $ksplice;
 }
