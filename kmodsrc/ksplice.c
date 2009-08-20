@@ -4219,21 +4219,30 @@ static ssize_t conflict_show(struct update *update, char *buf)
 {
 	const struct conflict *conf;
 	const struct conflict_addr *ca;
-	int used = 0;
+	int lastused = 0;
 	mutex_lock(&module_mutex);
 	list_for_each_entry(conf, &update->conflicts, list) {
+		int used = lastused;
 		used += snprintf(buf + used, PAGE_SIZE - used, "%s %d",
 				 conf->process_name, conf->pid);
+		if (used >= PAGE_SIZE)
+			goto out;
 		list_for_each_entry(ca, &conf->stack, list) {
 			if (!ca->has_conflict)
 				continue;
 			used += snprintf(buf + used, PAGE_SIZE - used, " %s",
 					 ca->label);
+			if (used >= PAGE_SIZE)
+				goto out;
 		}
 		used += snprintf(buf + used, PAGE_SIZE - used, "\n");
+		if (used >= PAGE_SIZE)
+			goto out;
+		lastused = used;
 	}
+out:
 	mutex_unlock(&module_mutex);
-	return used;
+	return lastused;
 }
 
 /* Used to pass maybe_cleanup_ksplice_update to kthread_run */
