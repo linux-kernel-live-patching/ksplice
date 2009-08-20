@@ -1128,6 +1128,7 @@ out:
 				vfree(s->match_map);
 				s->match_map = NULL;
 			}
+			s->flags &= ~KSPLICE_SECTION_MATCHED;
 		}
 	}
 	if (update->stage == STAGE_PREPARING)
