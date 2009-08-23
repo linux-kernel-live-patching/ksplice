@@ -1,3 +1,8 @@
+2009-08-23 : 0.9.9
+ - Added support for applying an already unpacked update tree
+ - Fixed ksplice-create when installed to a prefix other than /usr/local
+ - Improved stack check completeness for self-restarting syscalls
+
 2009-07-12 : 0.9.8
  - Improved error handling in the Ksplice perl utilities
  - Updated Ksplice for kernel 2.6.30
