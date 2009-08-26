@@ -4371,9 +4371,10 @@ static int init_ksplice(void)
 	change->update->debug = debug;
 	change->update->abort_cause =
 	    apply_relocs(change, ksplice_init_relocs, ksplice_init_relocs_end);
-	if (change->update->abort_cause == OK)
+	if (change->update->abort_cause == OK) {
 		bootstrapped = true;
-	cleanup_ksplice_update(bootstrap_mod_change.update);
+		cleanup_ksplice_update(bootstrap_mod_change.update);
+	}
 #else /* !KSPLICE_STANDALONE */
 	ksplice_kobj = kobject_create_and_add("ksplice", kernel_kobj);
 	if (ksplice_kobj == NULL)
@@ -4384,7 +4385,10 @@ static int init_ksplice(void)
 
 static void cleanup_ksplice(void)
 {
-#ifndef KSPLICE_STANDALONE
+#ifdef KSPLICE_STANDALONE
+	if (!bootstrapped)
+		cleanup_ksplice_update(bootstrap_mod_change.update);
+#else /* !KSPLICE_STANDALONE */
 	kobject_put(ksplice_kobj);
 #endif /* KSPLICE_STANDALONE */
 }
