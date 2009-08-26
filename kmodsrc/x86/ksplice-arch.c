@@ -43,13 +43,17 @@ EXTRACT_SYMBOL(thread_return);
 
 #ifndef CONFIG_FUNCTION_DATA_SECTIONS
 #include "udis86.h"
-#ifdef CONFIG_FTRACE
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28) && defined(CONFIG_FTRACE)
+/* 606576ce816603d9fe1fb453a88bc6eea16ca709 was after 2.6.27 */
+#define CONFIG_FUNCTION_TRACER 1
+#endif /* LINUX_VERSION_CODE && CONFIG_FTRACE */
+#ifdef CONFIG_FUNCTION_TRACER
 #include <asm/ftrace.h>
 #include <linux/ftrace.h>
 
 extern ftrace_func_t ftrace_trace_function;
 EXTRACT_SYMBOL(ftrace_trace_function);
-#endif /* CONFIG_FTRACE */
+#endif /* CONFIG_FUNCTION_TRACER */
 
 #define N_BITS(n) ((n) < sizeof(long) * 8 ? ~(~0L << (n)) : ~0L)
 
@@ -581,7 +585,7 @@ static void initialize_ksplice_ud(struct ud *ud)
 	ud_set_vendor(ud, UD_VENDOR_ANY);
 }
 
-#ifdef CONFIG_FTRACE
+#ifdef CONFIG_FUNCTION_TRACER
 static bool is_mcount_call(struct ud *ud, const unsigned char *addr)
 {
 	const void *target =
@@ -591,12 +595,12 @@ static bool is_mcount_call(struct ud *ud, const unsigned char *addr)
 		return true;
 	return false;
 }
-#else /* !CONFIG_FTRACE */
+#else /* !CONFIG_FUNCTION_TRACER */
 static bool is_mcount_call(struct ud *ud, const unsigned char *addr)
 {
 	return false;
 }
-#endif /* CONFIG_FTRACE */
+#endif /* CONFIG_FUNCTION_TRACER */
 
 static bool is_nop(struct ud *ud, const unsigned char *addr)
 {
