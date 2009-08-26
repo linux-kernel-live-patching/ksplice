@@ -15,22 +15,31 @@
  *  02110-1301, USA.
  */
 
-#if defined(_ASM_X86_PROCESSOR_H) || \
-    defined(__ASM_X86_PROCESSOR_H)	/* New unified x86 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+
+#ifdef CONFIG_X86_64
+extern const char thread_return[];
+EXTRACT_SYMBOL(thread_return);
+#define KSPLICE_IP(x) ((unsigned long)thread_return)
+#else /* !CONFIG_X86_64 */
 #define KSPLICE_IP(x) ((x)->thread.ip)
+#endif /* CONFIG_X86_64 */
 #define KSPLICE_SP(x) ((x)->thread.sp)
-#elif defined(CONFIG_X86_64)	/* Old x86 64-bit */
-/* The IP is on the stack, so we don't need to check it separately.
- * Instead, we need to prevent Ksplice from patching thread_return.
- */
+
+#else /* LINUX_VERSION_CODE < */
+/* faca62273b602ab482fb7d3d940dbf41ef08b00e was after 2.6.24 */
+
+#ifdef CONFIG_X86_64
 extern const char thread_return[];
 EXTRACT_SYMBOL(thread_return);
 #define KSPLICE_IP(x) ((unsigned long)thread_return)
 #define KSPLICE_SP(x) ((x)->thread.rsp)
-#else /* Old x86 32-bit */
+#else /* !CONFIG_X86_64 */
 #define KSPLICE_IP(x) ((x)->thread.eip)
 #define KSPLICE_SP(x) ((x)->thread.esp)
-#endif /* __ASM_X86_PROCESSOR_H */
+#endif /* CONFIG_X86_64 */
+
+#endif /* LINUX_VERSION_CODE */
 
 #ifndef CONFIG_FUNCTION_DATA_SECTIONS
 #include "udis86.h"
